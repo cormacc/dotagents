@@ -29,15 +29,7 @@ function same(actual: unknown, expected: unknown, message: string): void {
 
 const tools = new Map<string, Tool>();
 const execCalls: string[][] = [];
-const setupCalls: string[] = [];
-let setupStatus = { ready: true, version: "0.1.69", reason: null as string | null };
-let setupFailure = false;
 let backendRefusal = false;
-let setupKilled = false;
-let setupOutput: string | undefined;
-const setupOptions: Array<Record<string, unknown>> = [];
-let cancelInstall = false;
-const lifecycle = new Map<string, () => void>();
 const execOptions: Array<Record<string, unknown> | undefined> = [];
 type Command = { handler: (args: string, ctx: any) => Promise<void>; getArgumentCompletions?: (prefix: string) => unknown };
 const commands = new Map<string, Command>();
@@ -45,7 +37,6 @@ const entryRenderers = new Map<string, unknown>();
 const entries: Array<{ type: string; data: any }> = [];
 
 register({
-  on(event: string, handler: () => void) { lifecycle.set(event, handler); },
   registerTool(tool: Tool) {
     tools.set(tool.name, tool);
   },
@@ -59,18 +50,7 @@ register({
     entries.push({ type, data });
   },
   async exec(_bin: string, args: string[], options?: Record<string, unknown>) {
-    if (_bin.endsWith("quota-axi-setup")) {
-      setupCalls.push(args[0]!);
-      setupOptions.push(options ?? {});
-      if (setupFailure) throw new Error("SECRET-private-npm-config");
-      if (cancelInstall && args[0] === "install") {
-        lifecycle.get("session_shutdown")!();
-        ok((options?.signal as AbortSignal)?.aborted, "session shutdown cancels the owned setup process");
-        return { stdout: JSON.stringify({ ready: true, version: "0.1.69" }), stderr: "SECRET-private-npm-config", code: 0, killed: false };
-      }
-      if (args[0] === "install") setupStatus = { ready: true, version: "0.1.69", reason: null };
-      return { stdout: setupOutput ?? JSON.stringify(setupStatus), stderr: "SECRET-private-npm-config", code: 0, killed: setupKilled };
-    }
+    ok(_bin.endsWith("oh"), "only the oh launcher is executed");
     execCalls.push(args);
     execOptions.push(options);
     if (backendRefusal) return { stdout: JSON.stringify({ ok: false, schema: "herdr-orch/v1", error: { message: "backend-mismatch: fixture" } }), stderr: "", code: 1, killed: false };
@@ -218,8 +198,8 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
     [
       ["roster --format markdown", 30_000],
       ["roster --format markdown --detail", 30_000],
-      ["usage --format markdown", 75_000],
-      ["usage --format markdown --detail", 75_000],
+      ["usage --format markdown", 30_000],
+      ["usage --format markdown --detail", 30_000],
     ].sort(),
     "bare /oh assigns the quota budget to each command regardless of render order",
   );
@@ -240,7 +220,7 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
     ["usage", "--format", "markdown"],
     ["usage", "--format", "markdown", "--detail"],
   ], "TUI: usage calls the CLI's compact and detailed Markdown forms");
-  same(execOptions.slice(-2).map((options) => options?.timeout), [75_000, 75_000], "/oh usage gives compact and detail reads the quota budget");
+  same(execOptions.slice(-2).map((options) => options?.timeout), [30_000, 30_000], "/oh usage gives compact and detail reads the quota budget");
   same(entries.at(-1)?.data, {
     section: "usage",
     herdr: process.env.HERDR_ENV === "1",
@@ -279,7 +259,7 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   same(composeHelp("workflows", "- `flow` -- description\n", false), "- `flow` -- description", "workflow section adds no delegation framing");
 }
 
-// An unsupported or mismatched host must be refused before quota setup can run.
+// Every listing uses the CLI's common backend gate; there is no installer path.
 {
   const saved = process.env.HC_TERMINAL_ID;
   process.env.HC_TERMINAL_ID = "t:fixture";
@@ -287,10 +267,8 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   try {
     const notices: string[] = [];
     const ctx = { mode: "rpc", hasUI: true, cwd: "/proj", ui: { notify: (message: string) => notices.push(message) } };
-    for (const section of ["", "usage", "setup", "personas"]) {
-      const beforeSetup = setupCalls.length;
+    for (const section of ["", "usage", "personas"]) {
       await commands.get("oh")!.handler(section, ctx);
-      same(setupCalls.length, beforeSetup, `${section || "help"}: backend refusal precedes setup`);
       ok(notices.at(-1)?.includes("backend-mismatch"), `${section || "help"}: backend refusal reaches the user`);
     }
     let refused = false;
@@ -298,9 +276,8 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
     catch (error) { refused = error instanceof Error && error.message.includes("backend-mismatch"); }
     ok(refused, "raw tool propagates the common CLI gate refusal");
     backendRefusal = false;
-    const beforeSetup = setupCalls.length;
-    await commands.get("oh")!.handler("setup", ctx);
-    same(setupCalls.length, beforeSetup + 1, "supported hc context is not rejected by variable presence");
+    await commands.get("oh")!.handler("usage", ctx);
+    ok(notices.at(-1)?.includes("all_models") || notices.at(-1)?.includes("remaining unknown"), "supported hc context is not rejected by variable presence");
   } finally {
     backendRefusal = false;
     if (saved === undefined) delete process.env.HC_TERMINAL_ID;
@@ -308,90 +285,23 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   }
 }
 
-// Shared setup runs once before parallel renderings and never from tool routing.
 {
   const oh = commands.get("oh")!;
   const notices: string[] = [];
   let prompts = 0;
-  let consent = false;
-  const ctx = (mode = "tui", hasUI = true) => ({ mode, hasUI, cwd: "/proj", ui: {
-    notify: (text: string) => notices.push(text),
-    confirm: async (_title: string, text: string) => {
-      prompts++;
-      ok(text.includes("quota-axi@0.1.69") && text.includes("lifecycle scripts are disabled") && text.includes("Network"), "confirmation explains pin, network and lifecycle suppression");
-      return consent;
-    },
-  } });
-  for (const reason of ["missing-executable", "wrong-version"]) {
-    setupStatus = { ready: false, version: "0.1.69", reason };
-    setupCalls.length = 0;
-    const before = prompts;
-    await oh.handler("", ctx());
-    same(setupCalls, ["check"], "decline/cancel never installs");
-    same(prompts, before + 1, "compact/detail help asks only once");
-  }
-  consent = true;
-  setupCalls.length = 0;
-  await oh.handler("usage", ctx());
-  same(setupCalls, ["check", "install"], "confirmed usage installs once before rendering");
-  setupStatus = { ready: false, version: "0.1.69", reason: "wrong-version" };
-  setupCalls.length = 0;
-  const beforeUsage = execCalls.length;
-  await oh.handler("setup", ctx());
-  same(setupCalls, ["check", "install"], "explicit setup uses shared installer");
-  same(execCalls.length, beforeUsage, "explicit setup does not read quotas");
-  for (const [mode, hasUI] of [["rpc", true], ["print", false], ["json", false]] as const) {
-    setupStatus = { ready: false, version: "0.1.69", reason: "missing-executable" };
-    setupCalls.length = 0;
-    const before = prompts;
-    let stderr = "";
-    const write = process.stderr.write;
-    process.stderr.write = ((text: string) => { stderr += text; return true; }) as typeof write;
-    try { await oh.handler("setup", ctx(mode, hasUI)); } finally { process.stderr.write = write; }
-    same(setupCalls, hasUI ? ["check"] : [], `${mode}: explicit setup cannot install`);
-    same(prompts, before, `${mode}: no blind confirmation wait`);
-    ok((hasUI ? notices.at(-1) : stderr)?.includes("quota-axi-setup install"), `${mode}: manual instructions`);
-  }
-  setupCalls.length = 0;
-  await tools.get("herdr_agent")!.execute("call", { action: "start", kind: "pi" });
-  same(setupCalls, [], "routing tools never run setup");
-  setupFailure = true;
-  await oh.handler("setup", ctx());
-  ok(!notices.at(-1)?.includes("SECRET"), "setup process errors are sanitised");
-  setupFailure = false;
-  for (const output of ["SECRET-malformed", JSON.stringify({ ready: true, version: "0.1.69", reason: "SECRET".repeat(1024) })]) {
-    setupOutput = output;
-    setupCalls.length = 0;
-    const before = prompts;
-    await oh.handler("setup", ctx());
-    same(setupCalls, ["check"], "invalid or oversized setup status cannot install");
-    same(prompts, before, "invalid or oversized setup status cannot prompt");
-    ok(notices.at(-1)?.includes("Quota setup failed") && !notices.at(-1)?.includes("SECRET"), "invalid or oversized setup status is sanitised and never ready");
-  }
-  setupOutput = JSON.stringify({ ready: true, version: "0.1.69" }).padEnd(4096);
-  await oh.handler("setup", ctx());
-  ok(notices.at(-1) === "quota-axi@0.1.69 is ready.", "a valid 4 KiB status is accepted on supported Pi");
-  setupOutput = JSON.stringify({ ready: true, version: "0.1.69", reason: "é".repeat(2048) });
-  await oh.handler("setup", ctx());
-  ok(notices.at(-1)?.includes("Quota setup failed"), "setup status size is bounded in UTF-8 bytes, not characters");
-  setupOutput = undefined;
-  setupKilled = true;
-  setupStatus = { ready: true, version: "0.1.69", reason: null };
-  await oh.handler("setup", ctx());
-  ok(notices.at(-1)?.includes("Quota setup failed") && !notices.at(-1)?.includes("SECRET"), "a killed setup cannot report ready even with valid status");
-  setupKilled = false;
-  ok(setupOptions.every((options) => Object.keys(options).sort().join(",") === "cwd,signal,timeout"), "setup uses only supported Pi exec options");
-  ok(setupOptions.every((options) => options.cwd === "/proj" && options.timeout === 140_000 && options.signal instanceof AbortSignal), "setup retains cwd, timeout and cancellation on supported Pi");
-  ok(!tools.has("quota_setup"), "no model-visible installer tool");
-  cancelInstall = true;
-  setupStatus = { ready: false, version: "0.1.69", reason: "missing-executable" };
-  setupCalls.length = 0;
-  await oh.handler("setup", ctx());
-  same(setupCalls, ["check", "install"], "cancellation belongs to the one confirmed install");
-  ok(notices.at(-1)?.includes("Quota setup failed") && !notices.at(-1)?.includes("SECRET"), "cancelled setup never reports ready or raw output");
-  setupCalls.length = 0;
-  await oh.handler("setup", ctx());
-  same(setupCalls, [], "an already cancelled setup flow cannot spawn again");
+  const ctx = { mode: "tui", hasUI: true, cwd: "/proj", ui: {
+    notify: (message: string) => notices.push(message),
+    confirm: async () => { prompts++; throw new Error("unexpected authentication or installation prompt"); },
+  } };
+  const before = execCalls.length;
+  await oh.handler("usage", ctx);
+  same(execCalls.length, before + 2, "usage runs only the two listing renderings");
+  same(prompts, 0, "missing authentication is reported without a setup prompt");
+  const beforeSetup = execCalls.length;
+  await oh.handler("setup", ctx);
+  same(execCalls.length, beforeSetup, "retired setup command runs nothing");
+  ok(notices.at(-1)?.includes("Unknown /oh section"), "retired setup command reports the valid sections");
+  same(oh.getArgumentCompletions!("s"), null, "setup is not completed");
 }
 
 {

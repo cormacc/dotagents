@@ -17,9 +17,9 @@ toml_command="'$oh' usage --format status"
 cat <<EOF
 # Add to the [ui] table of ~/.config/herdr/config.toml, then run:
 #   herdr config check && herdr server reload-config
-# The 75 s timeout exceeds oh usage's 60 s collection budget.
+# The 30 s timeout covers two bounded provider reads and cache coordination.
 # Set tab_bar_position = "bottom" to show the tab row as a footer.
 tab_bar_right = [
-  { type = "command", command = "$toml_command", interval_seconds = 60, timeout_seconds = 75 },
+  { type = "command", command = "$toml_command", interval_seconds = 60, timeout_seconds = 30 },
 ]
 EOF

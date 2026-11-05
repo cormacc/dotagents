@@ -46,7 +46,7 @@
         prompt-file (str (fs/path dir "prompt"))
         state (str (fs/path dir "state"))]
     (fs/create-dirs home)
-    ;; quota-env! installs the fake collector and native vendor tripwires.
+    ;; quota-env! isolates auth and installs native vendor tripwires.
     (fs/create-sym-link (fs/path dir "herdr") fake)
     {:dir (str dir) :log log :env-file env-file :prompt-file prompt-file :state state
      :env (merge {"PATH" (str dir ":" (System/getenv "PATH"))
@@ -62,7 +62,7 @@
            "FAKE_HERDR_STATE_DIR" state
            "CLJ_CACHE" @shared-clj-cache
            "CLJ_CONFIG" @shared-clj-cache}
-                 (support/quota-env! dir (fs/path root "skills/herdr-orch/scripts/test/fixtures/quota-axi"))
+                 (support/quota-env! dir)
                  {"PATH" (str dir ":" (fs/path dir "quota-bin") ":" (System/getenv "PATH"))})}))
 
 (defn- write-persona! [dir name body]

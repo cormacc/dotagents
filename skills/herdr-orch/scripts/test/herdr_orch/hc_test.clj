@@ -9,7 +9,7 @@
             [herdr-orch.hc :as hc]))
 
 (defn hc-env
-  "Reuse cli/fake-env's support/quota-env! installation before any model routing."
+  "Reuse cli/fake-env's isolated auth/cache environment before model routing."
   ([] (hc-env {}))
   ([overrides]
    (let [{:keys [dir] :as fixture} (cli/fake-env {})

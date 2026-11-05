@@ -6,7 +6,7 @@ Herdr plugin `cormacc.herdr-orch`. It is an adapter over the `herdr-orch` skill 
 
 - Herdr 0.9.1 or later, on Linux or macOS.
 - Babashka (`bb`) and Bash on the `PATH` of the Herdr server.
-- For quota data: `quota-axi` 0.1.69 and Node 22.19 or later. Install quota-axi explicitly with `skills/herdr-orch/scripts/quota-axi-setup install`; neither the plugin nor `oh` installs it. Sign in to each provider's native CLI. On macOS, grant Keychain access once with `quota-axi --provider claude --allow-keychain-prompt` and choose "Always Allow".
+- For quota data: valid Anthropic or OpenAI Codex subscription credentials in Pi's file store (`PI_CODING_AGENT_DIR` or `~/.pi/agent`). The owned Babashka collector needs no npm package. It does not refresh, prompt or fall back to native credentials. Explicit native reporting and unsupported OS stores are described in [../skills/herdr-orch/scripts/docs/contract.md#Usage](../skills/herdr-orch/scripts/docs/contract.md#usage).
 
 ## Install
 
@@ -42,7 +42,7 @@ The popup shows `oh usage --format text` and refreshes every 60 s. Press `q` to 
 
 ## Tab-bar status
 
-Herdr plugin v1 cannot add tab-bar or footer items. The status line is a `[ui] tab_bar_right` command entry in Herdr's own config that runs `oh usage --format status`, for example `anthropic 4%s 64%w | openai-codex 12%w`. Each number is the percentage of the window already used, as the vendors' usage pages show it. The suffix gives the window kind: `s` session, `w` weekly, `m` monthly; a window of unknown kind shows its length instead, for example `30d` or `5h`; `~` marks stale data. `auth?`, `rl?` and `err?` mark a provider without usable data, `?` a provider whose data has no window that the line can show, and `quota: setup?` means that quota-axi is missing or is the wrong version.
+Herdr plugin v1 cannot add tab-bar or footer items. The status line is a `[ui] tab_bar_right` command entry in Herdr's own config that runs `oh usage --format status`, for example `anthropic 4%s 64%w | openai-codex 12%w`. Each number is the percentage of the window already used, as the vendors' usage pages show it. The suffix gives the window kind: `s` session, `w` weekly, `m` monthly; a window of unknown kind shows its length instead, for example `30d` or `5h`; `~` marks stale data. `auth?`, `rl?` and `err?` mark a provider without usable data, `?` a provider whose data has no window that the line can show.
 
 To get the entry for this checkout:
 
@@ -51,7 +51,7 @@ herdr plugin action invoke cormacc.herdr-orch.quota-stanza
 herdr plugin log list --plugin cormacc.herdr-orch
 ```
 
-The action only prints the stanza. Add it to the `[ui]` table of `~/.config/herdr/config.toml`, then run:
+The action only prints the stanza, with a 30 s command timeout. Add it to the `[ui]` table of `~/.config/herdr/config.toml`, then run:
 
 ```sh
 herdr config check

@@ -15,7 +15,7 @@ const HELP_ENTRY = "herdr-orch-help";
 // roster's spawn defaults without putting either rendering in model context.
 type HelpEntry = { section: Section; herdr: boolean; compact: string; detail: string; usage?: { compact: string; detail: string } };
 
-const USAGE_TIMEOUT_MS = 75_000;
+const USAGE_TIMEOUT_MS = 30_000;
 
 type OhEnvelope = {
   ok: boolean;
@@ -162,9 +162,6 @@ function outputText(result: unknown): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  const setupAbort = new AbortController();
-  pi.on("session_shutdown", () => setupAbort.abort());
-
   async function execute(args: string[], signal?: AbortSignal, options: { cwd?: string; timeout?: number } = {}) {
     const result = await pi.exec(launcherPath(), args, { signal, ...options });
     if (signal?.aborted || result.killed) throw new Error("Aborted");
@@ -202,20 +199,15 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("oh", {
-    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context: ${SECTIONS.join(" | ")} | setup`,
+    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context: ${SECTIONS.join(" | ")}`,
     getArgumentCompletions: (prefix) => {
-      const items = [...SECTIONS, "setup" as const].filter((section) => section.startsWith(prefix.trim()))
-        .map((section) => ({ value: section, label: section, description: section === "setup" ? "Confirmed user-local quota-axi setup" : SECTION_DESCRIPTIONS[section] }));
+      const items = SECTIONS.filter((section) => section.startsWith(prefix.trim()))
+        .map((section) => ({ value: section, label: section, description: SECTION_DESCRIPTIONS[section] }));
       return items.length ? items : null;
     },
     handler: async (args, ctx) => {
-      const setup = args.trim() === "setup";
-      const manual = `Run ${join(dirname(launcherPath()), "quota-axi-setup")} install explicitly (Node >=22.19 and npm required).`;
-      if (!ctx.hasUI) {
-        if (setup) process.stderr.write(`${manual}\n`);
-        return;
-      }
-      const section = setup ? "usage" : parseSection(args);
+      if (!ctx.hasUI) return;
+      const section = parseSection(args);
       if (!section) {
         ctx.ui.notify(`Unknown /oh section "${args.trim()}". Use one of: ${SECTIONS.join(", ")}`, "warning");
         return;
@@ -233,38 +225,6 @@ export default function (pi: ExtensionAPI) {
       };
       const herdr = process.env.HERDR_ENV === "1";
       try {
-        if (setup || section === "usage" || section === "help") {
-          // Setup bypasses the listing route, so apply oh's host gate before it can run.
-          if (process.env.HC_TERMINAL_ID) {
-            await execute(["roster", "--format", "json"], ctx.signal, { cwd: ctx.cwd, timeout: 30_000 });
-          }
-          const script = join(dirname(launcherPath()), "quota-axi-setup");
-          const runSetup = async (operation: "check" | "install") => {
-            try {
-              const signal = ctx.signal ? AbortSignal.any([ctx.signal, setupAbort.signal]) : setupAbort.signal;
-              signal.throwIfAborted();
-              // The shared script bounds subprocess output, discards diagnostics and emits
-              // fixed status fields; Pi's supported exec API only owns timeout/cancellation.
-              const result = await pi.exec(script, [operation], { cwd: ctx.cwd, signal, timeout: 140_000 });
-              if (signal.aborted || result.code !== 0 || result.killed || Buffer.byteLength(result.stdout, "utf8") > 4096) throw new Error();
-              const status = parseJson(result.stdout) as { ready?: boolean; version?: string; reason?: string } | null;
-              if (typeof status?.ready !== "boolean" || !/^\d+\.\d+\.\d+$/.test(status.version ?? "")) throw new Error();
-              return status;
-            } catch { throw new Error("Quota setup failed; run the quota-axi-setup script explicitly."); }
-          };
-          let status = await runSetup("check");
-          if (!status.ready && (setup || status.reason === "missing-executable" || status.reason === "wrong-version")) {
-            if (ctx.mode === "tui" && ctx.hasUI && await ctx.ui.confirm("Set up subscription reporting?",
-              `Download quota-axi@${status.version} with npm to XDG_DATA_HOME (or HOME/.local/share)/herdr-orch/quota-axi? Network access is required; package lifecycle scripts are disabled. No provider authentication or quota read occurs during setup.`, { timeout: 60_000 })) {
-              status = await runSetup("install");
-              if (!status.ready) ctx.ui.notify(`Quota setup failed. ${manual}`, "warning");
-            } else if (!setup) ctx.ui.notify(manual, "info");
-          }
-          if (setup) {
-            ctx.ui.notify(status.ready ? `quota-axi@${status.version} is ready.` : `Quota setup is not ready. ${manual}`, status.ready ? "info" : "warning");
-            return;
-          }
-        }
         if (ctx.mode === "tui") {
           const [compact, detail] = await Promise.all([render(false), render(true)]);
           pi.appendEntry<HelpEntry>(HELP_ENTRY, {

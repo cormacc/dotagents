@@ -1,0 +1,179 @@
+#+TITLE: Replace quota-axi with an owned quota collector
+#+DATE: 2026-11-05 Thu
+#+PARENT: [[archive:4d770990-2725-4b7d-905a-888db5d9c2a7][Consider replacing quota-axi with direct Babashka quota queries]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/README.md]]
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+#+SPEC: [[proj:herdr-plugin/README.md]]
+#+SPEC: [[proj:README.md]]
+
+* Intent
+Replace quota-axi with direct Babashka subscription collection for Anthropic and OpenAI. Use credentials belonging to the consuming harness, leave refresh with that harness, and remove quota-specific npm installation and process supervision.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+One read-only Babashka collector owns HTTP, provider normalisation and a bounded cache; quota-axi and its setup/deployment path are removed. The consuming harness selects the credential context; routing consumes fresh validated subscription evidence. Kimi, Qwen and Z.AI are deferred.
+
+** Scope
+*** In scope
+- Anthropic subscription usage and OpenAI Codex subscription usage; existing local-provider behaviour.
+- Pi-aligned credential detection, explicit native harness contexts, credential expiry, model scopes, window duration, cache/backoff and concurrent callers.
+- CLI JSON/text/markdown/status reporting, Pi user-only usage entries, Herdr quota pane and tab-bar consumers.
+- Living contracts listed above: update credential ownership, evidence shape, provider configuration, setup removal and reporting prerequisites.
+- Dotfiles integration: remove quota-driven root dependency installation from =/home/cormacc/dotfiles/agents.nix=; review =/home/cormacc/dotfiles/README.org= and =/home/cormacc/dotfiles/AGENTS.md= for corresponding instructions.
+*** Out of scope
+- New providers or routing candidates; multi-account discovery, profile switching or a credential-management service.
+- Owned OAuth exchanges, refresh-token writes, login flows or vendor CLI refresh delegates.
+- Changes to rank/reserve policy, explicit-model bypass, harness restrictions or terminal ownership rules.
+- Removal of Node, development tooling or npm installation needed by unrelated Pi extensions.
+
+** Decisions
+- Chose direct Babashka adapters :: two required providers do not justify an npm collector, installer and process supervisor. Reuse reviewed parts of =usage.clj= at =b8e5e99^= rather than restore that revision wholesale.
+  Rejected:
+  - Retain quota-axi and simplify discovery: retains the external schema, process and credential-selection boundaries.
+  - Exact historical revert: restores provider-keyed output, implicit store fallback and normalisation rules that do not match the chosen contract.
+- Harness-owned credentials and refresh :: the collector reads the active harness store but never refreshes it. Missing, expired or unreadable credentials return fixed unknown/authentication reasons. A later read can use credentials refreshed through normal harness operation; no quota read launches a harness merely to refresh.
+- Source selection :: Pi reporting defaults to the active Pi credential context, respecting its supported location overrides. Routed launches select the destination harness context. Standalone native reporting requires an explicit context; neither missing credentials nor an expired token permits silent fallback to another harness. Background status defaults to Pi unless explicitly configured otherwise.
+- Small credential boundary :: verified file-store rules match the installed consumers within the documented limits. Detected native OS stores return unknown without prompting or falling back. Public evidence has no account identifiers or credential paths. SDK in-memory and per-request overrides are outside this process's visibility.
+- Owned evidence :: retain the =herdr-orch/v1= envelope and providers-array structure. Keep fresh/unknown state, safe windows, exact effective scopes and fixed reasons; remove the claim that an owned report is quota-axi schema 5/6. Update consumers and migration documentation in the same change. Do not maintain a second legacy output shape.
+- Subscription semantics :: account bounds apply to each applicable model scope; explicit model bounds add constraints. Keep duration separate from scope. A Codex base window of 2,592,000 seconds remains an account bound rather than losing numeric credit because its duration is unfamiliar. A present Anthropic limits array is authoritative; malformed or unresolved entries cannot silently fall back to more generous flat buckets. Unrecognised scope relationships remain unknown; monetary credits and code-review-only budgets do not grant ordinary model-routing credit.
+- Cache :: keep TTL reuse, negative caching, =Retry-After= and cross-process request coalescing. Associate snapshots with the selected credential context; detect credential changes before reuse. Expired credentials invalidate numeric credit. Stale evidence is diagnostic only. =--fresh= bypasses normal reuse without bypassing in-flight coordination or provider-directed rate-limit backoff.
+- Deployment :: remove quota-axi discovery, setup, guardian and npm dependency. Remove =/oh setup= and its automatic readiness checks; ordinary usage reports explain authentication failures instead. Do not delete an existing user-local install or modify harness credentials during migration.
+
+** Acceptance
+*** Core functionality
+- [X] Anthropic quota comes from the owned HTTP adapter.
+- [X] OpenAI Codex quota comes from the owned HTTP adapter.
+- [X] Pi usage selects the same credential location and provider entry as the active Pi configuration.
+- [X] Routed collection selects the destination harness credential context.
+- [X] Explicit native reporting uses the same context-selection path as routed collection.
+- [X] Existing rank/reserve routing results are preserved for equivalent fresh evidence.
+- [X] Explicit model selection performs no quota collection.
+- [X] JSON output documents the owned evidence contract.
+- [X] Text, markdown and status renderings remain covered by fixtures.
+- [X] Pi usage entries stay outside model context.
+- [X] The Herdr quota pane and tab-bar scripts consume the replacement successfully in offline tests.
+- [X] The runtime package dependency on quota-axi is removed.
+- [X] Quota-specific root npm installation is removed from Home Manager activation.
+- [X] The six listed repository contracts describe the replacement.
+*** Edge cases
+- [X] Missing or expired selected credentials never cause cross-harness fallback.
+- [X] A harness-refreshed credential is recognised on the next read.
+- [X] A credential-context change prevents reuse of the previous context's snapshot.
+- [X] Five-hour, weekly and 720-hour Codex base windows retain their reported durations.
+- [X] The 720-hour base-window fixture grants the expected fresh numeric credit.
+- [X] Anthropic flat and limits-array responses follow a documented precedence rule tested with both present.
+- [X] Model-scoped limits constrain only their documented scope.
+- [X] Unknown scope relationships grant no numeric credit.
+- [X] Non-finite or out-of-range percentages grant no numeric credit.
+- [X] Whole-response timeout and body-size bounds produce fixed unknown reasons.
+- [X] Authentication failures cannot reuse cached numeric credit.
+- [X] Stale snapshots cannot grant numeric routing credit.
+- [X] Repeated failures respect negative-cache expiry and provider-directed backoff.
+- [X] Concurrent callers coalesce one fetch within a credential context.
+- [X] Unwritable cache storage does not prevent an otherwise valid read.
+*** Anti-criteria
+- [X] Must not: refresh, rotate or write harness credentials.
+- [X] Must not: invoke native refresh commands or an OAuth exchange from collection.
+- [X] Must not: read real credentials or contact providers in automated tests.
+- [X] Must not: leak tokens, identity, credential paths, raw bodies or raw exception data into output or cache.
+- [X] Must not: introduce a new runtime package dependency for collection.
+- [X] Must not: remove unrelated extension dependency installation or development dependencies.
+- [X] Must not: automatically remove external user-local installs or their state.
+- [X] Must not: add Kimi, Qwen or Z.AI work to the required delivery.
+
+** Shipped
+- MODIFIED :: =skills/herdr-orch/scripts/docs/contract.md= defines the owned evidence, credential selection, cache/backoff and HTTP bounds; =skills/herdr-orch/README.org= and =skills/herdr-orch/scripts/README.md= describe the same reporting and routing contract.
+- MODIFIED :: =pi/extensions/herdr-orch/README.md= documents usage without readiness/installation flows; =herdr-plugin/README.md= documents Pi-default credentials and the 30-second stanza budget. =README.md= and the parent dotfiles =agents.nix=, =README.org= and =AGENTS.md= remove quota-only npm deployment requirements while retaining unrelated tooling.
+
+** Risks
+- Harness auth formats and location overrides can change :: verify against installed consumers, preserve synthetic store fixtures and document ownership. Native OS-store access needs explicit host coverage; Linux file fixtures do not establish macOS behaviour.
+- Provider endpoints and payloads can change :: retain redacted provider-response fixtures, reject unsupported shapes and treat live endpoint availability as unverified unless an operator approves a separate check.
+- Harness-owned refresh can leave an idle native store expired :: accepted. Report authentication state honestly rather than refreshing a different store or falling back to another account.
+- Cache complexity can erase the simplification :: keep one snapshot/backoff/coalescing mechanism; do not retain quota-axi or add a service as a second backend.
+- Dotagents and dotfiles are separate Git repositories :: verify the parent activation change independently; sequence the submodule update only after the collector no longer needs quota-axi.
+
+** Follow-ups
+- Native macOS/OS-store reporting: task:5bc40e83-4ac3-40c7-9209-9d6a6091fae3. Pi file-store reporting does not depend on this work.
+
+** Evidence
+- Comparison baseline: =b8e5e99^:skills/herdr-orch/scripts/src/herdr_orch/usage.clj=. The replacement keeps direct reads but not its implicit cross-store fallback, provider-keyed output or discarded window durations.
+- Earlier integration decisions are recorded in [[file:2026-11-04-quota-axi-backend.org]]. Their broader provider and delegated-refresh scope is not the scope of this replacement.
+
+* Plan
+** DONE Define and test harness credential selection
+CLOSED: [2026-11-05 Thu 15:09]
+:PROPERTIES:
+:CUSTOM_ID: 36f3ebda-a3e4-4997-b59e-a16da114d6a8
+:CREATED: [2026-11-05 Thu 14:38]
+:STARTED: [2026-11-05 Thu 14:58]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:38]
+- State "STARTED" from "TODO" [2026-11-05 Thu 14:58]
+- State "DONE" from "STARTED" [2026-11-05 Thu 15:09]
+:END:
+
+** DONE Replace collection and integrate owned subscription evidence
+CLOSED: [2026-11-05 Thu 15:39]
+:PROPERTIES:
+:CUSTOM_ID: eb7bc572-89fe-4dec-aaaa-96ac88032df5
+:CREATED: [2026-11-05 Thu 14:38]
+:BLOCKED-BY: task:36f3ebda-a3e4-4997-b59e-a16da114d6a8
+:STARTED: [2026-11-05 Thu 15:09]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:38]
+- State "STARTED" from "TODO" [2026-11-05 Thu 15:09]
+- State "DONE" from "STARTED" [2026-11-05 Thu 15:39]
+:END:
+
+** DONE Remove quota-axi setup and deployment wiring
+CLOSED: [2026-11-05 Thu 15:48]
+:PROPERTIES:
+:CUSTOM_ID: 861b0efd-8b5b-4456-9a1e-317637e46b26
+:CREATED: [2026-11-05 Thu 14:38]
+:BLOCKED-BY: task:eb7bc572-89fe-4dec-aaaa-96ac88032df5
+:STARTED: [2026-11-05 Thu 15:35]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:38]
+- State "STARTED" from "TODO" [2026-11-05 Thu 15:35]
+- State "DONE" from "STARTED" [2026-11-05 Thu 15:48]
+:END:
+
+** DONE Verify the replacement across consumers and installation routes
+CLOSED: [2026-11-05 Thu 16:05]
+:PROPERTIES:
+:CUSTOM_ID: 3ffe1ab1-c70e-4be9-a641-5f3012e08a10
+:CREATED: [2026-11-05 Thu 14:38]
+:BLOCKED-BY: task:861b0efd-8b5b-4456-9a1e-317637e46b26
+:STARTED: [2026-11-05 Thu 15:48]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:38]
+- State "STARTED" from "TODO" [2026-11-05 Thu 15:48]
+- State "DONE" from "STARTED" [2026-11-05 Thu 16:05]
+:END:
+
+* Implementation
+- =herdr-orch.quota-credentials/credentials= is a private, read-only boundary. Its ready result is never serialised; its credential-generation digest selects the cache and OS file lock. One lock mechanism coalesces callers, including independent fresh requests. Failure snapshots retain labelled diagnostic windows for at most one hour, never effective routing credit.
+- Verified Pi 1.5.0 =getAgentDir=, =ReadOnlyAuthStorage= and =normalizePath= from installed source, and Claude Code 2.1.317 file/override rules from embedded installed source. Codex 0.166.0 binary identifiers and current OpenAI =codex-rs/login/src/auth/storage.rs= establish the file/config boundary; the installed-version source URL was unavailable, so exact source equivalence is not claimed.
+- Offline consumers use a test-only file-backed HTTP transport. Production code has no fixture environment hooks. Loopback tests exercise whole-response deadlines, body bounds, socket closure, redirects and two independent Babashka callers; credential and process guards have passing and known-bad controls.
+
+* Validation
+- =bash scripts/check.sh= ran the changed collector, credentials, core, CLI and smoke namespaces in its full Clojure stage: 889 tests, 8,619 assertions, zero failures/errors. Installed-Pi adapters (Pi 1.5.0), repository script tests and every extension runner passed. The aggregate command exited 1 at the pre-existing =TASKS.org:27= heading link =herdr-orch-support-herdr-app-herdr-core--hc=; the complete section-link report has one problem. The skipped skill validation/packaging stage passed separately: 29 skills, zero gating failures, one vendored warning, and a non-empty package artefact. Evidence: =.tmp/owned-quota-step4/root-check.log=, =validate-skills.log= and =package-skill.log= in the same directory.
+- Duration, scope and credential-context fixtures include the 720-hour account window with 98% remaining, authoritative mixed Anthropic payloads, missing/expired Pi credentials despite valid native stores, and explicit native reporting/routing. Diagnostic-window tests exercise both direct failure and cached-failure paths immediately before and at the one-hour ceiling; the stale-label assertions failed before the fix and passed afterwards.
+- Parent configuration evaluated without activation: =cd /home/cormacc/dotfiles && nix eval --impure '.#homeConfigurations.default.activationPackage.drvPath' --raw=. Tracked and new-file source sweeps retain positive =usage-for= controls and find no active quota-axi dependency, discovery or setup path. Historical records are retained.
+- No live provider, native refresh or Home Manager activation check was run. Native macOS/Keychain, native Codex OS stores, managed/CLI storage overrides and SDK in-memory Pi credentials are not covered; detected OS-store modes return unknown without a fallback. In-memory and per-request overrides are outside the collector's visibility.
+
+* Open questions
+** DECIDED Should native macOS/OS-store quota reporting be a follow-up?
+:PROPERTIES:
+:DECIDED: [2026-11-05 Thu 16:46]
+:END:
+Owner decision: defer to task:5bc40e83-4ac3-40c7-9209-9d6a6091fae3. Pi file-store reporting is sufficient for this delivery; detected native OS stores return unknown without prompting or cross-harness fallback.

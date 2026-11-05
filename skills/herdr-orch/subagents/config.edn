@@ -24,9 +24,9 @@
 ;; router chooses among them at spawn from each provider's remaining allowance. A candidate
 ;; takes at most one string-alias hop and never names another vector alias.
 ;;
-;; `:providers` maps a local provider prefix to its exact quota-axi `:quota-provider`
+;; `:providers` maps a local provider prefix to its owned adapter `:quota-provider`
 ;; and optional `:reserve` fraction. Empty rows describe local providers.
-;; Kimi and Z.AI reporting requires an explicit provider override; no alias names them.
+;; Claude and Codex adapters are supported; additional adapters are deferred.
 ;; `:harnesses <kind> :providers` is the set of providers that kind can run; a kind without
 ;; it accepts every provider.
 ;;

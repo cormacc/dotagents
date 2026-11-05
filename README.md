@@ -58,7 +58,7 @@ The root `package.json` exposes four Pi extensions, four skills, and the Hermes 
 - `skills/{org-tasks,org-plan,org-jira,herdr-orch}`
 - `hermes/org-tasks/{desktop,plugin}`
 
-Its only runtime dependency is `quota-axi`, the subscription-usage collector of `herdr-orch`. Pi installs it into the package's `node_modules` when it installs the package. The `herdr-orch` extension runs the `oh` launcher of the bundled skill when `~/.agents/skills/herdr-orch` does not exist. The skill stays installable without Pi through the generic skill route; then run `skills/herdr-orch/scripts/quota-axi-setup install` for usage reporting. See [skills/herdr-orch/scripts/docs/contract.md#Usage](skills/herdr-orch/scripts/docs/contract.md#usage).
+Subscription reporting uses an owned Babashka collector for Anthropic and OpenAI Codex, with no npm collector dependency. It reads the selected harness's credentials and leaves refresh to that harness. The `herdr-orch` extension runs the `oh` launcher of the bundled skill when `~/.agents/skills/herdr-orch` does not exist. The generic skill route uses the same collector without Pi or a separate setup step. See [skills/herdr-orch/scripts/docs/contract.md#Usage](skills/herdr-orch/scripts/docs/contract.md#usage).
 
 Install from git or a checkout:
 
@@ -90,7 +90,7 @@ The consuming `agents.nix` links:
 
 Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > home (`~/.agents/subagents/`) > packaged (`skills/herdr-orch/subagents/`). Home Manager manages `~/.agents/subagents/` (out-of-store, from this repo's `subagents/`) so the harness permission overrides ship to every host; it holds home overrides only, never the packaged persona defaults. The parallel `config.edn` chain replaces complete model-ID rows in the same precedence order and never uses a model or weight alias to select kind. The packaged weights are `heavy`, `middle`, `light`, and `feather`; their per-kind values are enumerated once, in [skills/herdr-orch/scripts/docs/contract.md#Model resolution](skills/herdr-orch/scripts/docs/contract.md#model-resolution).
 
-Activation fails early when the submodule is uninitialized. It runs `npm ci --ignore-scripts` in the checkout root when `package-lock.json` changes, which installs the package dependency `quota-axi` beside the root validation tools. It installs local npm dependencies for chromium, pi-clojure, and dataspex, with lifecycle scripts disabled, when their manifests change. Chromium and pi-clojure now carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
+Activation fails early when the submodule is uninitialized. It installs local npm dependencies for chromium, pi-clojure, and dataspex, with lifecycle scripts disabled, when their manifests change. It does not install root validation dependencies; run `npm ci --ignore-scripts` explicitly for development. Chromium and pi-clojure carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
 
 This editable route intentionally preserves owner-local settings ownership: tracked `pi/settings.json` is live-linked and may be edited in the submodule. A clone-local `pi-settings` clean filter removes configured volatile fields (`lastChangelogVersion`, `deviceId`) before commit; it requires `jq` on PATH and is declared `required = true`. `defaultProvider` and `defaultModel` are tracked: pi saves them only when you press Ctrl+S on a model in `/model`. Under the dotfiles Home Manager wiring, activation runs the installer on every switch, so a changed field list reaches every clone; on any other clone run `./install-git-filter.sh` from the checkout root (idempotent; it exits early when the filter is current). A git command that rewrites the working tree (`git stash`, `git reset --hard`, `git checkout -- pi/settings.json`) writes back the committed copy without the stripped fields. The package route, by contrast, ships no settings.
 
@@ -105,7 +105,7 @@ The third-party `git:github.com/DietrichGebert/ponytail` package is no longer in
 - **Babashka (`bb`)** for `ot`; copying the scripts does not provide the runtime.
 - **Emacs/emacsclient** for Emacs-backed tools and task edit actions. Edit/open actions probe the server and can start `emacs --daemon`; direct eval/read/write tools still report connection/startup failures.
 - **Atlassian MCP** configured in `pi/mcp.json` (linked to `~/.pi/agent/mcp.json`; sign in with `pi mcp login atlassian`) for Jira network workflows.
-- Root npm dependencies (`npm ci`), and extension-local npm dependencies for chromium, pi-clojure, and dataspex, on the editable route.
+- Extension-local npm dependencies for chromium, pi-clojure, and dataspex on the editable route. Root npm dependencies (`npm ci --ignore-scripts`) are development and validation tooling, not quota-reporting requirements.
 
 ## Validation
 

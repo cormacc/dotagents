@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Test-only CLI entry point with a file-backed HTTP transport.
+set -euo pipefail
+export HERDR_ORCH_BIN="${ORCH_TEST_ROOT:?}/skills/herdr-orch/scripts/oh"
+exec "${ORCH_TEST_BB:?}" --config "$ORCH_TEST_ROOT/bb.edn" --deps-root "$ORCH_TEST_ROOT" \
+  -cp "$ORCH_TEST_ROOT/skills/herdr-orch/scripts/src:$ORCH_TEST_ROOT/skills/org-tasks/scripts/src:$ORCH_TEST_ROOT/skills/herdr-orch/scripts/test" \
+  -m herdr-orch.fixture-cli -- "$@"

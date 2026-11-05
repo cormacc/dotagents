@@ -46,10 +46,10 @@
     (spit (str bb-shim) "#!/usr/bin/env bash\nprintf '%s\\037' \"$@\" >>\"$BB_ARGV_LOG\"\nprintf '\\n' >>\"$BB_ARGV_LOG\"\nexec \"$REAL_BB\" \"$@\"\n")
     (fs/set-posix-file-permissions bb-shim "rwxr-xr-x")
     (fs/create-dirs (fs/path dir "empty-home"))
-    ;; Install the fake collector before the packaged vector alias can route.
+    ;; Isolate auth before the packaged vector alias can route.
     (let [log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) bb-log (str (fs/path dir "bb-argv"))]
       {:dir dir :caller (str caller) :log log :env-file env-file :bb-log bb-log
-       :env (merge (support/quota-env! dir (fs/path scripts-dir "test/fixtures/quota-axi"))
+       :env (merge (support/quota-env! dir)
                    {"PATH" (str shim ":" (System/getenv "PATH"))
              "HOME" (str (fs/path dir "empty-home"))
              "FAKE_QUOTA_REPORT" (str (fs/path dir "usage-report.json"))
@@ -65,7 +65,7 @@
   [h bin cwd]
   (let [proc @(process/process (into ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin] ["task" "start" "worker" "--task" "launcher matrix"])
                                {:out :string :err :string :env (:env h) :dir cwd})]
-    (is (fs/exists? (fs/path (:dir h) "quota-calls")) "the fake collector answered routing")
+    (is (not (fs/exists? (fs/path (:dir h) "quota-calls"))) "missing fixture credentials require no HTTP")
     (is (not (fs/exists? (fs/path (:dir h) "vendor-escapes"))) "no native CLI escaped")
     proc))
 

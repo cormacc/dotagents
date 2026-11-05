@@ -1,7 +1,7 @@
 #!/usr/bin/env bb
 ;; Smoke test for herdr-plugin/: runs the quota pane and stanza entrypoints the way
 ;; Herdr does (plugin directory as cwd, HERDR_PLUGIN_ROOT set) against the offline
-;; quota-axi fixture, in a disposable HOME.
+;; owned HTTP fixture, in a disposable HOME.
 
 (require '[babashka.fs :as fs]
          '[babashka.process :as process]
@@ -12,29 +12,30 @@
 (def root (str/trim (:out (process/shell {:out :string} "git" "rev-parse" "--show-toplevel"))))
 (def plugin (str (fs/path root "herdr-plugin")))
 (def oh (str (fs/path root "skills" "herdr-orch" "scripts" "oh")))
-(def fixture (str (fs/path root "skills" "herdr-orch" "scripts" "test" "fixtures" "quota-axi")))
-
-(defn quota-row [provider remaining]
-  {:provider provider :state {:status "fresh" :stale false}
-   :windows [{:id "five_hour" :kind "session" :percentUsed (- 100 remaining) :percentRemaining remaining}]
-   :quotaSemantics {:status "known"
-                    :effectiveAvailability [{:scope "all_models" :status "known"
-                                             :effectivePercentRemaining remaining :boundedBy ["five_hour"]}]}})
-
 (defn with-env
-  "Call f with an isolated environment whose PATH finds the fixture as quota-axi."
+  "Call f with isolated credentials and a test-only, file-backed HTTP transport."
   [f]
-  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "herdr-plugin-"})))]
+  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "herdr-plugin-"})))
+        real-bb (str (fs/which "bb"))]
     (try
-      (let [bin (fs/path dir "bin") home (fs/path dir "home") report (str (fs/path dir "report.json"))]
+      (let [bin (fs/path dir "bin") home (fs/path dir "home") report (str (fs/path dir "report.json"))
+            agent (fs/path home ".pi/agent")]
         (fs/create-dirs bin)
-        (fs/create-dirs home)
-        (fs/copy fixture (fs/path bin "quota-axi"))
-        (fs/set-posix-file-permissions (fs/path bin "quota-axi") "rwxr-xr-x")
-        (spit report (json/generate-string {:schemaVersion 6 :providers [(quota-row "claude" 61) (quota-row "codex" 42)]}))
+        (fs/create-dirs agent)
+        ;; The real oh launcher remains under test. Only its final bb invocation is replaced.
+        (spit (str (fs/path bin "bb"))
+              (str "#!/usr/bin/env bash\nset -euo pipefail\n"
+                   "[ \"${1:-}\" = --config ] && [ \"${5:-}\" = -m ] && [ \"${6:-}\" = herdr-orch.cli ] && [ \"${7:-}\" = -- ] || exit 96\n"
+                   "shift 7\nexec \"$ORCH_TEST_ROOT/skills/herdr-orch/scripts/test/fixtures/http-oh\" \"$@\"\n"))
+        (fs/set-posix-file-permissions (fs/path bin "bb") "rwxr-xr-x")
+        (spit report (json/generate-string {:claude {:body {:five_hour {:utilization 39}}}
+                                           :codex {:body {:rate_limit {:primary_window {:used_percent 58 :limit_window_seconds 18000}}}}}))
+        (spit (str (fs/path agent "auth.json"))
+              (json/generate-string {:anthropic {:type "oauth" :refresh "fixture" :access "fixture-claude" :expires 4102444800000}
+                                     :openai-codex {:type "oauth" :refresh "fixture" :access "fixture-codex" :expires 4102444800000 :accountId "fixture-account"}}))
         (f {"PATH" (str bin ":" (System/getenv "PATH")) "HOME" (str home)
-            "XDG_DATA_HOME" (str (fs/path home ".local/share"))
-            "HERDR_ORCH_PACKAGE_ROOT" (str (fs/path dir "package"))
+            "XDG_CACHE_HOME" (str (fs/path home ".cache"))
+            "ORCH_TEST_ROOT" root "ORCH_TEST_BB" real-bb
             "FAKE_QUOTA_REPORT" report "FAKE_QUOTA_LOG" (str (fs/path dir "quota-calls"))
             "HERDR_PLUGIN_ROOT" plugin}))
       (finally (fs/delete-tree dir)))))
@@ -48,7 +49,7 @@
       (let [{:keys [exit out err]} (run! env "bash" "quota-stanza.sh")]
         (is (zero? exit) err)
         (is (str/includes? out (str "command = \"'" (fs/canonicalize oh) "' usage --format status\"")) out)
-        (is (str/includes? out "interval_seconds = 60, timeout_seconds = 75") out)
+        (is (str/includes? out "interval_seconds = 60, timeout_seconds = 30") out)
         (is (str/includes? out "tab_bar_position = \"bottom\"") out)
         (testing "the stanza command itself prints the status line"
           (let [cmd (second (re-find #"command = \"(.*)\", interval" out))

@@ -453,7 +453,7 @@
                     ledger/assignment-root (constantly (str dir))
                     cli/launcher-bin (constantly launcher)
                     usage/usage-for (fn [_ options]
-                                      (when-not (= {:providers ["anthropic" "openai-codex"]} options)
+                                      (when-not (= {:providers ["anthropic" "openai-codex"] :harness :pi} options)
                                         (throw (ex-info "UNEXPECTED USAGE REQUEST" {:options options})))
                                       (swap! usage-calls conj options)
                                       fixture-usage)
@@ -472,8 +472,8 @@
             (is (= ["--model" model] (:model-args explicit)))
             (is (= (if persona "overlay" "snapshot") (get-in explicit [:fork :role-source])))
             (is (= (if persona 600000 1800000) (:timeout explicit)))))
-        (is (= [{:providers ["anthropic" "openai-codex"]}
-                {:providers ["anthropic" "openai-codex"]}]
+        (is (= [{:providers ["anthropic" "openai-codex"] :harness :pi}
+                {:providers ["anthropic" "openai-codex"] :harness :pi}]
                @usage-calls)
             "only implicit vector aliases reach the offline usage fixture"))
       (finally (fs/delete-tree dir)))))

@@ -89,7 +89,7 @@
       :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_ORCH_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file "FAKE_HERDR_STATE_DIR" (str (fs/path dir "state"))
                    "HOME" (str home) "ORCH_ASSIGNMENT_ROOT" (str dir)
                    "CLJ_CACHE" @shared-clj-cache "CLJ_CONFIG" @shared-clj-cache}
-                  (support/quota-env! dir (fs/path root "skills/herdr-orch/scripts/test/fixtures/quota-axi"))
+                  (support/quota-env! dir)
                   {"PATH" (str dir ":" (fs/path dir "quota-bin") ":" (System/getenv "PATH"))}
                   overrides)})))
 
@@ -108,17 +108,25 @@
 ;; `bb test` itself runs from. That temp dir is deliberately *not* a git repository unless
 ;; a test explicitly makes it one, so an unintended trigger fails loudly (`git` has no
 ;; repository there) instead of silently creating a real worktree.
-(defn call! [env & argv] @(process/process (into [bin] argv) {:out :string :err :string :env env :dir (or (get env "ORCH_ASSIGNMENT_ROOT") root)}))
+(defn- fixture-command [env]
+  (if (get env "FAKE_QUOTA_REPORT")
+    ["bb" "--config" (str root "/bb.edn") "--deps-root" root
+     "-cp" (str/join fs/path-separator (map #(str root % )
+                  ["/skills/herdr-orch/scripts/src" "/skills/org-tasks/scripts/src"
+                   "/skills/herdr-orch/scripts/test"]))
+     "-m" "herdr-orch.fixture-cli" "--"]
+    [bin]))
+(defn call! [env & argv] @(process/process (into (fixture-command env) argv) {:out :string :err :string :env env :dir (or (get env "ORCH_ASSIGNMENT_ROOT") root)}))
 ;; Explicit-`:dir` variant for the worktree tests that must exercise the subprocess's own
 ;; source cwd apart from `ORCH_ASSIGNMENT_ROOT` (task f49a63f5's criterion), rather than
 ;; `call!`'s own convention of deriving `:dir` from the env map.
-(defn call-in! [dir env & argv] @(process/process (into [bin] argv) {:out :string :err :string :env env :dir dir}))
+(defn call-in! [dir env & argv] @(process/process (into (fixture-command env) argv) {:out :string :err :string :env env :dir dir}))
 (defn- concurrent-call [dir env gate & argv]
   (process/process
    (into ["bash" "-c"
           "ready=$1.ready.$$; : >\"$ready\"; while [ ! -e \"$1\" ]; do :; done; shift; exec \"$@\""
-          "reservation-barrier" gate bin]
-         argv)
+          "reservation-barrier" gate]
+         (concat (fixture-command env) argv))
    {:out :string :err :string :env env :dir dir}))
 
 (defn- release-concurrent-calls! [gate expected]
@@ -8744,39 +8752,50 @@
             (is (re-find #"setsid" (slurp stderr)) "the real cause is in that file"))))
       (finally (fs/delete-tree dir)))))
 
-;; --- subscription routing and fake CLI evidence ----------------------------------------
+;; --- subscription routing and direct HTTP fixture evidence -----------------------------
 (def ^:private anthropic-secret "sk-fixture-ANTHROPIC-SECRET-0001")
 (def ^:private codex-secret "sk-fixture-CODEX-SECRET-0002")
 (def ^:private far-future-ms 4102444800000)
 (defn- usage-body [{:keys [anthropic-used codex-used scoped fable-used]}]
-  {:schemaVersion 5
-   :providers
-   (vec (for [[provider used] [["claude" anthropic-used] ["codex" codex-used]]
-              :when (some? used)]
-          {:provider provider :state {:status "fresh" :stale false}
-           :windows [{:id "five_hour" :kind "session" :percentUsed used :percentRemaining (- 100 used) :resetsAt "2030-01-01T00:00:00Z"}]
-           :quotaSemantics {:status "known"
-                            :effectiveAvailability
-                            ;; Claude also reports a `model:fable` scope, which the packaged
-                            ;; config maps; `scoped` lowers it below the account scope.
-                            (cond-> [{:scope "all_models" :status "known" :effectivePercentRemaining (- 100 used) :boundedBy ["five_hour"]}]
-                              (= provider "claude")
-                              (conj {:scope (if (some? scoped) "seven_day_fable" "model:fable")
-                                     :status "known"
-                                     :effectivePercentRemaining (- 100 (or scoped fable-used used))
-                                     :boundedBy ["five_hour"]}))}}))})
+  (cond-> {}
+    (some? anthropic-used)
+    (assoc :claude {:body {:five_hour {:utilization anthropic-used :resets_at "2030-01-01T00:00:00Z"}
+                          :seven_day_fable {:utilization (or scoped fable-used anthropic-used)}}})
+    (some? codex-used)
+    (assoc :codex {:body {:rate_limit {:primary_window {:used_percent codex-used
+                                                       :limit_window_seconds 18000
+                                                       :reset_at 1893456000}}}})))
+(defn- seed-subscription-stores! [fixture]
+  (let [home (fs/path (:dir fixture) "home")
+        jwt (str codex-secret "."
+                 (.encodeToString (.withoutPadding (java.util.Base64/getUrlEncoder))
+                                  (.getBytes (json/generate-string {:exp (/ far-future-ms 1000)}) "UTF-8"))
+                 ".signature")]
+    (doseq [[relative data]
+            [[".pi/agent/auth.json" {:anthropic {:type "oauth" :refresh "fixture-refresh" :access anthropic-secret :expires far-future-ms}
+                                     :openai-codex {:type "oauth" :refresh "fixture-refresh" :access codex-secret :expires far-future-ms :accountId "fixture-account"}}]
+             [".claude/.credentials.json" {:claudeAiOauth {:accessToken anthropic-secret :expiresAt far-future-ms}}]
+             [".codex/auth.json" {:tokens {:access_token jwt :account_id "fixture-account"}}]]]
+      (let [path (fs/path home relative)]
+        (fs/create-dirs (fs/parent path))
+        (spit (str path) (json/generate-string data))))
+    fixture))
 (defn- routed-fixture
   ([report] (routed-fixture report {} nil))
   ([report overrides personas]
-   (let [fixture (fake-env overrides personas)]
+   (let [fixture (seed-subscription-stores! (fake-env overrides personas))]
      (spit (get-in fixture [:env "FAKE_QUOTA_REPORT"]) (json/generate-string report))
      fixture)))
-(defn- usage-cache-dir [dir] (fs/path dir "quota-calls"))
-(defn- made-usage-call? [dir] (fs/exists? (usage-cache-dir dir)))
+(defn- usage-call-log [dir] (fs/path dir "quota-calls"))
+(defn- clear-usage! [dir]
+  (fs/delete-if-exists (usage-call-log dir))
+  (fs/delete-tree (fs/path dir "home/.cache/herdr-orch/quota-v1")))
+(defn- made-usage-call? [dir] (fs/exists? (usage-call-log dir)))
 (defn- leaked-secrets [dir & texts]
-  (let [auth (str (fs/path dir "home" ".pi" "agent" "auth.json"))
+  (let [stores (set (map #(str (fs/path dir "home" %))
+                         [".pi/agent/auth.json" ".claude/.credentials.json" ".codex/auth.json"]))
         corpus (concat texts
-                       (for [p (fs/glob dir "**" {:max-depth 12}) :when (and (fs/regular-file? p) (not= auth (str p)))]
+                       (for [p (fs/glob dir "**" {:max-depth 12}) :when (and (fs/regular-file? p) (not (stores (str p))))]
                          (try (slurp (str p)) (catch Exception _ ""))))]
     (vec (filter (fn [secret] (some #(str/includes? (str %) secret) corpus)) [anthropic-secret codex-secret]))))
 
@@ -8796,7 +8815,7 @@
     (is (zero? (:exit proc)) (:out proc))
     (is (true? (:ok (result proc))))
     (is (= "herdr-orch/v1" (:schema (result proc))))
-    (is (= 5 (:schemaVersion evidence)))
+    (is (not (contains? evidence :schemaVersion)))
     (is (= #{"anthropic" "openai-codex" "lemonade"} (set (map :localProvider (:providers evidence)))))
     (is (empty? (calls log)))
     (is (made-usage-call? dir))
@@ -8817,19 +8836,11 @@
     (is (= [] (leaked-secrets dir (:out proc) (:err proc))))
     (let [help (call! env "usage" "--help")]
       (is (zero? (:exit help)))
-      (is (str/includes? (:out help) "usage [--provider NAME]* [--fresh] [--format json|markdown|text|status] [--detail]")))
-    (is (str/includes? (:out (call! env "--help")) "oh usage [--provider NAME]* [--fresh]"))))
+      (is (str/includes? (:out help) "usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]")))
+    (is (str/includes? (:out (call! env "--help")) "oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh]"))))
 
-(deftest usage-rendering-reports-allowlisted-provider-evidence
-  (let [rows (mapv (fn [[provider remaining status]]
-                     {:provider provider :state {:status status :stale false}
-                      :windows [{:id "session" :kind "session" :percentUsed (- 100 remaining)
-                                 :percentRemaining remaining :resetsAt "2030-01-01T00:00:00Z"}]
-                      :quotaSemantics {:status "known"
-                                       :effectiveAvailability [{:scope "all_models" :status "known"
-                                                                :effectivePercentRemaining remaining :boundedBy ["session"]}]}})
-                   [["claude" 72 "fresh"] ["codex" 60 "fresh"] ["kimi" 48 "fresh"] ["zai" 0 "fresh"]])
-        {:keys [env dir]} (routed-fixture {:schemaVersion 6 :providers rows} {"HERDR_ENV" "0"} nil)
+(deftest usage-rendering-reports-owned-provider-evidence
+  (let [{:keys [env dir]} (routed-fixture (usage-body {:anthropic-used 28 :codex-used 40}) {"HERDR_ENV" "0"} nil)
         project-config (fs/path dir ".agents" "subagents" "config.edn")
         _ (fs/create-dirs (fs/parent project-config))
         _ (spit (str project-config) (pr-str {:providers {"kimi" {:quota-provider "kimi"}
@@ -8838,34 +8849,31 @@
         compact (:out (call! env "usage" "--format" "markdown"))
         detail (:out (call! env "usage" "--format" "markdown" "--detail"))
         text (:out (call! env "usage" "--format" "text"))]
-    (is (= 6 (:schemaVersion json-result)))
+    (is (not (contains? json-result :schemaVersion)))
     (is (= ["anthropic" "kimi" "lemonade" "openai-codex" "zai"]
            (mapv :localProvider (:providers json-result))))
     (doseq [[local evidence] [["anthropic" "all_models 72% remaining"]
                              ["openai-codex" "all_models 60% remaining"]
-                             ["kimi" "all_models 48% remaining"]
-                             ["zai" "all_models exhausted"]
+                             ["kimi" "unsupported-provider"]
+                             ["zai" "unsupported-provider"]
                              ["lemonade" "remaining unknown"]]]
       (is (str/includes? compact (str "**" local "**")) local)
       (is (str/includes? compact evidence) evidence))
     (is (not (str/includes? compact "resets")))
-    (is (str/includes? detail "bounded by session"))
+    (is (str/includes? detail "bounded by five_hour"))
     (is (str/includes? detail "resets 2030-01-01T00:00:00Z"))
     (testing "text is one heading per provider with one line per scope and window"
-      (is (str/includes? text "anthropic (fresh)\n- all_models :: 72% remaining, bounded by session\n- window session (session) :: 28% used, resets 2030-01-01 00:00 UTC\n- quota provider :: claude\n\n") text)
-      (is (str/includes? text "zai (fresh)\n- all_models :: exhausted") text)
+      (is (str/includes? text "anthropic (fresh)\n- all_models :: 72% remaining, bounded by five_hour") text)
+      (is (str/includes? text "- window five_hour (session) :: 28% used, resets 2030-01-01 00:00 UTC") text)
+      (is (str/includes? text "kimi (unavailable)") text)
       (is (str/includes? text "\n\nlemonade (local)\n\n") text)
       (is (not (str/includes? text "**")) text))))
 
 (deftest usage-status-renders-one-line-for-a-status-bar
-  (let [window (fn [id kind remaining] {:id id :kind kind :percentUsed (- 100 remaining) :percentRemaining remaining})
-        row (fn [provider status stale windows]
-              {:provider provider :state {:status status :stale stale} :windows windows
-               :quotaSemantics {:status "known" :effectiveAvailability []}})
-        rows [(row "claude" "fresh" false [(window "five_hour" "session" 68.4) (window "seven_day" "weekly" 39)
-                                           (window "model:fable" "model" 85)])
-              (row "codex" "auth_required" false [])]
-        {:keys [env dir]} (routed-fixture {:schemaVersion 6 :providers rows} {"HERDR_ENV" "0"} nil)
+  (let [report {:claude {:body {:five_hour {:utilization 31.6} :seven_day {:utilization 61}
+                                :seven_day_fable {:utilization 15}}}
+                :codex {:status 401}}
+        {:keys [env dir]} (routed-fixture report {"HERDR_ENV" "0"} nil)
         status (fn [& argv] (apply call! env "usage" "--format" "status" argv))
         proc (status)]
     (is (zero? (:exit proc)) (:out proc))
@@ -8876,14 +8884,17 @@
     (is (= 2 (:exit (status "--detail"))) "--detail stays markdown-only")
     (testing "unusable evidence keeps one line and exit 0"
       (spit (get env "FAKE_QUOTA_REPORT") "{")
-      (fs/delete-if-exists (usage-cache-dir dir))
+      (clear-usage! dir)
       (let [p (status)]
         (is (zero? (:exit p)))
         (is (= "anthropic err? | openai-codex err?\n" (:out p)))))
-    (testing "a missing or wrong-version quota-axi is one setup marker"
-      (let [p (apply call! (assoc env "FAKE_QUOTA_VERSION" "0.0.1") ["usage" "--format" "status"])]
+    (testing "selected missing credentials produce authentication markers without HTTP"
+      (fs/delete (fs/path dir "home/.pi/agent/auth.json"))
+      (clear-usage! dir)
+      (let [p (status)]
         (is (zero? (:exit p)))
-        (is (= "quota: setup?\n" (:out p)))))))
+        (is (= "anthropic auth? | openai-codex auth?\n" (:out p)))
+        (is (not (made-usage-call? dir)))))))
 
 (deftest usage-status-markers-cover-every-state
   (let [row (fn [local status stale windows] {:localProvider local :provider local :state {:status status :stale stale} :windows windows})]
@@ -8899,11 +8910,8 @@
                                           (row "d" "fresh" false [{:kind "credits" :percentUsed 3}])
                                           {:localProvider "l" :local true :state {:status "fresh" :stale false} :windows []}]})))
     (is (= "quota: none" (cli/usage-status {:providers [{:localProvider "l" :local true}]})))
-    (is (= "quota: setup?" (cli/usage-status {:providers [(assoc (row "a" "unavailable" false []) :reason "missing-executable")
-                                                           (assoc (row "b" "unavailable" false []) :reason "wrong-version")]})))
-    (is (= "a err? | b err?" (cli/usage-status {:providers [(assoc (row "a" "unavailable" false []) :reason "missing-executable")
-                                                            (assoc (row "b" "unavailable" false []) :reason "timeout")]}))
-        "one setup marker only when every row needs setup")))
+    (is (= "a err? | b err?" (cli/usage-status {:providers [(assoc (row "a" "unavailable" false []) :reason "unsupported-provider")
+                                                            (assoc (row "b" "unavailable" false []) :reason "timeout")]})))))
 
 (deftest usage-unknown-provider-fails-before-any-credential-read-or-request
   (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10 :codex-used 10}))
@@ -8916,17 +8924,40 @@
     (call! env "usage" "--provider" "anthropic")
     (is (made-usage-call? dir))))
 
-(deftest usage-delegates-reuse-and-fresh-age-to-upstream
+(deftest reporting-and-routing-select-the-requested-harness-store
+  (let [{:keys [env dir]} (routed-fixture (usage-body {:codex-used 40}) {} heavy-persona)
+        native (json/parse-string (slurp (str (fs/path dir "home/.codex/auth.json"))) true)
+        report (assoc-in (usage-body {:codex-used 40}) [:codex :expectedAuthorization]
+                         (str "Bearer " (get-in native [:tokens :access_token])))
+        collect (fn [& args] (apply call! env "usage" "--provider" "openai-codex" args))]
+    (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string report))
+    (let [bad (collect "--harness" "other")]
+      (is (= 2 (:exit bad)))
+      (is (not (made-usage-call? dir)) "invalid contexts fail before HTTP"))
+    (let [native-report (collect "--harness" "codex")]
+      (is (zero? (:exit native-report)) (:out native-report))
+      (is (= 60 (get-in (result native-report) [:result :providers 0 :quotaSemantics :effectiveAvailability 0 :effectivePercentRemaining]))))
+    (let [pi-report (collect)]
+      (is (zero? (:exit pi-report)) (:out pi-report))
+      (is (= "auth" (get-in (result pi-report) [:result :providers 0 :reason])) "Pi does not reuse the native cache or token"))
+    (let [preview (call! env "task" "run" "codex-heavy" "--task" "x" "--print-prompt")]
+      (is (zero? (:exit preview)) (:out preview))
+      (is (= 0.6 (get-in (route-of preview) [:candidates 0 :remaining])) "routing uses its destination harness"))
+    (clear-usage! dir)
+    (fs/delete (fs/path dir "home/.pi/agent/auth.json"))
+    (let [missing (collect)]
+      (is (zero? (:exit missing)) (:out missing))
+      (is (= "missing-credentials" (get-in (result missing) [:result :providers 0 :reason])))
+      (is (not (made-usage-call? dir)) "no fallback to the valid native store"))))
+
+(deftest usage-reuses-owned-cache-until-fresh-request
   (let [{:keys [env dir]} (routed-fixture (usage-body {:anthropic-used 28}))
         remaining #(-> (result (apply call! env "usage" "--provider" "anthropic" %&)) :result :providers first :quotaSemantics :effectiveAvailability first :effectivePercentRemaining)]
     (is (= 72 (remaining)))
     (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 60})))
-    (is (= 40 (remaining)) "no local cache")
+    (is (= 72 (remaining)) "successful evidence is reused within its TTL")
     (is (= 40 (remaining "--fresh")))
-    (let [calls (slurp (str (usage-cache-dir dir)))]
-      (is (str/includes? calls "\"--max-age\" \"5m\""))
-      (is (str/includes? calls "\"--max-age\" \"0\"")))))
-
+    (is (= ["claude" "claude"] (str/split-lines (slurp (str (usage-call-log dir))))))))
 
 (deftest vector-alias-preview-reports-the-routed-choice
   (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 28.0 :codex-used 40}) {} heavy-persona)
@@ -8947,19 +8978,20 @@
     (is (= [] (leaked-secrets dir (:out proc) (:err proc))))
     (testing "larger remaining fraction wins at equal rank, and the model args follow the choice"
       (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 90.0 :codex-used 40})))
-      (fs/delete-if-exists (usage-cache-dir dir))
+      (clear-usage! dir)
       (let [other (preview (assoc env "ORCH_ASSIGNMENT_ROOT" (str dir)) "pi-heavy")]
         (is (= astra (get-in (result other) [:result :model-route :chosen])))
         (is (= ["--model" astra] (get-in (result other) [:result :model-args])))))
     (testing "the exact Fable scope wins over account-wide credit"
       (spit (get env "FAKE_QUOTA_REPORT")
             (json/generate-string (usage-body {:anthropic-used 10.0 :fable-used 100.0 :codex-used 80})))
+      (clear-usage! dir)
       (let [route (route-of (preview env "pi-heavy"))]
         (is (= astra (:chosen route)))
         (is (= 0.0 (:remaining (first (:candidates route)))))))
     (testing "unmapped model scopes do not inherit account-wide credit"
       (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 10.0 :codex-used 80 :scoped 100.0})))
-      (fs/delete-if-exists (usage-cache-dir dir))
+      (clear-usage! dir)
       (is (= astra (get-in (result (preview env "pi-heavy")) [:result :model-route :chosen]))
           "fable's exhausted model:fable scope wins over its 90% all_models scope"))))
 
@@ -8974,7 +9006,7 @@
       (is (= ["--model" "gpt-6-astra"] (:model-args codex)) "native codex spelling"))
     (testing "an exhausted own-provider candidate refuses even when the other provider has credit"
       (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 100.0 :codex-used 5})))
-      (fs/delete-if-exists (usage-cache-dir dir))
+      (clear-usage! dir)
       (let [proc (call! env "task" "start" "claude-heavy" "--task" "filtered")]
         (is (= 1 (:exit proc)))
         (is (re-find #"no candidate of model alias 'heavy' has allowance for kind claude" (:out proc)) (:out proc))
@@ -9014,17 +9046,17 @@
         route (route-of proc)]
     (is (zero? (:exit proc)) (:out proc))
     (is (= fable (:chosen route)) "rank 1, first in config order")
-    (is (= [["unknown" "missing-provider"] ["unknown" "missing-provider"]] (map (juxt :status :reason) (:candidates route))))
+    (is (= [["unknown" "missing-credentials"] ["unknown" "missing-credentials"]] (map (juxt :status :reason) (:candidates route))))
     (is (re-find #"unknown" (:reason route)))
-    (is (made-usage-call? dir) "the fake CLI supplies missing-provider evidence")))
+    (is (not (made-usage-call? dir)) "missing credentials prevent HTTP")))
 
 (deftest a-missing-fixture-response-never-falls-through-to-the-network
   (let [{:keys [env dir]} (routed-fixture {} {} heavy-persona)
         proc (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")
         route (route-of proc)]
     (is (zero? (:exit proc)) (:out proc))
-    (is (= [["unknown" "malformed-output"] ["unknown" "malformed-output"]] (map (juxt :status :reason) (:candidates route)))
-        "malformed CLI evidence stays unknown without another collector")
+    (is (= [["unknown" "invalid-response"] ["unknown" "invalid-response"]] (map (juxt :status :reason) (:candidates route)))
+        "missing HTTP fixture data stays unknown without a network fallback")
     (is (= [] (leaked-secrets dir (:out proc) (:err proc))))))
 
 (deftest routed-refusal-names-each-candidate-and-mutates-nothing
@@ -9045,7 +9077,7 @@
       (is (= 1 (:exit (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")))))
     (testing "control: with allowance restored the same launch succeeds"
       (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 10.0 :codex-used 95})))
-      (fs/delete-if-exists (usage-cache-dir dir))
+      (clear-usage! dir)
       (is (zero? (:exit (call! env "task" "start" "pi-heavy" "--task" "allowed")))))))
 
 (deftest reserve-excludes-a-candidate-at-or-below-it
@@ -9092,13 +9124,9 @@
           (is (not (made-usage-call? (:dir child)))))))))
 
 (deftest measurement-launch-routes-before-allocation
-  (let [fixture (measurement-fixture)
-        dir (str (:dir fixture))
-        auth (fs/path dir "home" ".pi" "agent" "auth.json")]
-    (fs/create-dirs (fs/parent auth))
-    (spit (str auth) (json/generate-string {:anthropic {:access anthropic-secret :expires far-future-ms}
-                                            :openai-codex {:access codex-secret :expires far-future-ms}}))
-    (let [use! (fn [usage] (spit (get-in fixture [:env "FAKE_QUOTA_REPORT"]) (json/generate-string usage)) (when (fs/exists? (usage-cache-dir dir)) (fs/delete-if-exists (usage-cache-dir dir))))
+  (let [fixture (seed-subscription-stores! (measurement-fixture))
+        dir (str (:dir fixture))]
+    (let [use! (fn [usage] (spit (get-in fixture [:env "FAKE_QUOTA_REPORT"]) (json/generate-string usage)) (clear-usage! dir))
           preview #(measure! fixture "run" "--model" "heavy" "--print-prompt" "--task" "x")]
       (use! (usage-body {:anthropic-used 28.0 :codex-used 40}))
       (let [proc (preview) res (:result (result proc))]

@@ -55,7 +55,7 @@ The parent integrates. =oh= never merges, rebases, pushes, deletes a branch, or 
 - [[https://babashka.org][Babashka]] on =PATH=.
 - Herdr TUI with =HERDR_ENV=1= and Herdr 0.9.1 or newer on both client and running server, or local herdr-app with =HC_TERMINAL_ID=. The nearest host in process ancestry selects the runtime; mismatched addressing variables are refused. Variable presence alone does not select it. hc measurement and remote machines are out of scope.
 - Pi 1.5.0 or newer, for a Pi parent or child. The repository SDK is pinned to 1.5.0; installed-runtime adapter tests verify provider request encoding separately.
-- =quota-axi@0.1.69= with Node >=22.19 for subscription reporting. The repository =package.json= declares it, so a Pi package install or =npm ci= in the checkout provides it. Without Pi, run =scripts/quota-axi-setup install= explicitly, or confirm Pi =/oh setup=. Setup installs in a user-local prefix with lifecycle scripts disabled; collection and routing never install. Discovery prefers the package dependency, then the managed install, then =PATH=. See [[file:scripts/docs/contract.md]] section 'Usage'.
+- For subscription reporting, sign in through the harness whose credentials will be used: Pi by default for =oh usage=, or the destination harness for routing. The owned Babashka collector needs no npm package or setup step. See [[file:scripts/docs/contract.md]] section 'Usage' for supported stores and explicit native reporting.
 - Optional: the =org-plan= and =org-tasks= skills in this repository.
 
 The selected runtime is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md][upstream Herdr skill]] is vendored at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience. =oh= does not need it, so a standalone install works.
@@ -286,7 +286,7 @@ The preview reports:
 
 - =kind=
 - =model= (before the alias hop) and =model-canonical= (after it, or the routed choice for a vector alias)
-- =model-route= (only for a vector alias): the alias, each candidate's rank, provider, allowance and status, the chosen canonical ID and the reason. A preview of a vector alias collects the same current upstream evidence as a start, so name an explicit canonical ID to preview without collection
+- =model-route= (only for a vector alias): the alias, each candidate's rank, provider, allowance and status, the chosen canonical ID and the reason. A preview of a vector alias collects the same current subscription evidence as a start, so name an explicit canonical ID to preview without collection
 - =model-args=, the translated args that the harness receives
 - =effort=, =effort-source=, and =effort-args=
 - =placement=, =retro= and =retro-source=, and =spawns= and =spawns-source=
@@ -295,16 +295,17 @@ To find a model miss, compare the model fields. If =model-canonical= still shows
 
 ** Subscription allowance and model routing
 
-A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and =all_models= is the default. Give a model that has its own quota scope (for example =model:fable=) that selector, or it is routed on account-wide credit. The packaged provider map contains Anthropic, Codex and local Lemonade. Kimi and Z.AI reporting requires an explicit provider override; neither has a shipped routing candidate. Fable selects =model:fable= explicitly; Opus, Sonnet and Haiku use =all_models=. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
+A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and =all_models= is the default. Give a model that has its own quota scope (for example =model:fable=) that selector, or it is routed on account-wide credit. The packaged provider map contains Anthropic, Codex and local Lemonade. Kimi, Qwen and Z.AI adapters are deferred. Fable selects =model:fable= explicitly; Opus, Sonnet and Haiku use =all_models=. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
 
 #+begin_src sh
-oh usage                                    # JSON envelope with schema-5/6 providers array
+oh usage                                    # owned providers array, using Pi credentials
 oh usage --format markdown --detail         # scope bounds and reset times
 oh usage --format status                    # one line for a status bar, e.g. anthropic 4%s 64%w (percent used)
-oh usage --provider anthropic --fresh       # request fresh upstream evidence
+oh usage --provider anthropic --fresh       # bypass successful cache TTL, not backoff
+oh usage --harness codex --provider openai-codex  # explicit native credential context
 #+end_src
 
-The operator keeps Pi and native CLI logins on one subscription per provider; =oh= does not verify identity. quota-axi runs with delegated credential refresh enabled: an expired native Claude or Codex token is renewed by the vendor's own CLI, so native logins stay current without a standalone session. Upstream owns five-minute reuse and fresh-zero behaviour. There is no local cache, backoff, or stale guarantee. A string alias or canonical ID (=--model opus=, =--model anthropic/claude-opus-5-5=) is never routed and makes no usage call.
+Reporting reads the selected harness's credentials; routing uses the destination harness's store. Missing or expired selected credentials grant no numeric credit and never cause a fallback to another harness. The collector never refreshes or writes credentials, starts a vendor CLI or prompts for authentication; normal harness operation owns refresh. A credential-context cache provides TTL reuse, negative caching, provider backoff and concurrent request coalescing. Stale windows are diagnostic only. Native OS-store access is unavailable without prompting; see [[file:scripts/docs/contract.md]] section 'Owned credential boundary'. A string alias or canonical ID (=--model opus=, =--model anthropic/claude-opus-5-5=) is never routed and makes no usage call.
 
 ** Listing personas, traits, models, and workflows
 
