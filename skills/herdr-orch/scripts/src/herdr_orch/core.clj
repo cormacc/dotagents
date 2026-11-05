@@ -249,17 +249,17 @@
             v))))
 
 (defn candidate-remaining
-  "Validated evidence -> a candidate's fraction, or nil. No fuzzy scope joins or
-  account fallback from multi-scope evidence are permitted."
+  "Validated evidence -> a candidate's fraction, or nil. The candidate's exact
+  `:quota-scope` selects the scope, defaulting to `all_models`. There is no fuzzy
+  model-name join, so a model with its own scope needs a selector in config, or it
+  receives account-wide credit."
   [evidence {:keys [provider quota-scope]}]
   (when-let [row (first (filter #(= provider (:localProvider %)) (:providers evidence)))]
     (if (:local row)
       1.0
       (when (and (= "fresh" (get-in row [:state :status])) (false? (get-in row [:state :stale])))
         (let [scopes (get-in row [:quotaSemantics :effectiveAvailability])
-              scope (if (and quota-scope (not= "all_models" quota-scope))
-                      (first (filter #(= quota-scope (:scope %)) scopes))
-                      (when (and (= 1 (count scopes)) (= "all_models" (:scope (first scopes)))) (first scopes)))]
+              scope (first (filter #(= (or quota-scope "all_models") (:scope %)) scopes))]
           (when (= "known" (:status scope)) (/ (:effectivePercentRemaining scope) 100.0)))))))
 
 (defn- annotate [evidence candidate]

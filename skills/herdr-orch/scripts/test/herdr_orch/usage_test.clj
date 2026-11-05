@@ -91,15 +91,15 @@
       (doseq [p [-1 101 "73" nil]]
         (is (nil? (remaining (collect env (report [(assoc-in (row) [:quotaSemantics :effectiveAvailability 0 :effectivePercentRemaining] p)])))))))))
 
-(deftest exact-model-scope-and-conflict-cannot-inherit-account-credit
+(deftest exact-model-scope-and-account-default
   (with-fixture
     (fn [_ env]
       (let [model (assoc (scope) :scope "seven_day_opus" :effectivePercentRemaining 4)
             data (report [(assoc-in (row) [:quotaSemantics :effectiveAvailability] [(scope) model])])
             result (collect env data)]
         (is (= 0.04 (remaining result "seven_day_opus")))
-        (is (nil? (remaining result)) "multi-scope evidence needs reviewed mapping")
-        (is (nil? (remaining result "all_models")) "an account selector cannot bypass model evidence")
+        (is (= 0.73 (remaining result)) "no selector defaults to all_models in multi-scope evidence")
+        (is (= 0.73 (remaining result "all_models")) "an explicit all_models selector is exact")
         (doseq [s ["opus" "SEVEN_DAY_OPUS" "seven_day_fable"]]
           (is (nil? (remaining result s)) s))
         (is (nil? (remaining (collect env (assoc-in data [:providers 0 :quotaSemantics :effectiveAvailability 1 :status] "unknown")) "seven_day_opus")))))))

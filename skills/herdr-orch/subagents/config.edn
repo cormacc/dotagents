@@ -19,9 +19,8 @@
 ;;
 ;; `:aliases` maps a short name to its canonical ID, or a weight name to a vector of ranked
 ;; candidates `{:model <short name or canonical ID> :rank n}` with an optional exact
-;; `:quota-scope` selector. An unscoped candidate uses `all_models` only when it is the
-;; sole effective scope. Give a model with its own quota scope (for example `model:fable`)
-;; that exact selector. Lower rank is preferred; the
+;; `:quota-scope` selector, which defaults to `all_models`. Give a model with its own
+;; quota scope (for example `model:fable`) that selector. Lower rank is preferred; the
 ;; router chooses among them at spawn from each provider's remaining allowance. A candidate
 ;; takes at most one string-alias hop and never names another vector alias.
 ;;

@@ -8673,6 +8673,8 @@
            :windows [{:id "five_hour" :kind "session" :percentUsed used :percentRemaining (- 100 used) :resetsAt "2030-01-01T00:00:00Z"}]
            :quotaSemantics {:status "known"
                             :effectiveAvailability
+                            ;; Claude also reports a `model:fable` scope, which the packaged
+                            ;; config maps; `scoped` lowers it below the account scope.
                             (cond-> [{:scope "all_models" :status "known" :effectivePercentRemaining (- 100 used) :boundedBy ["five_hour"]}]
                               (= provider "claude")
                               (conj {:scope (if (some? scoped) "seven_day_fable" "model:fable")
@@ -8823,7 +8825,7 @@
       (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 10.0 :codex-used 80 :scoped 100.0})))
       (fs/delete-if-exists (usage-cache-dir dir))
       (is (= astra (get-in (result (preview env "pi-heavy")) [:result :model-route :chosen]))
-          "the unmapped fable evidence is unknown, so the known rank-1 sibling is chosen"))))
+          "fable's exhausted model:fable scope wins over its 90% all_models scope"))))
 
 (deftest routing-filters-candidates-by-the-resolved-kind
   (let [fixture (routed-fixture (usage-body {:anthropic-used 28.0 :codex-used 40}) {} heavy-persona)

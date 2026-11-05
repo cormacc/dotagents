@@ -295,7 +295,7 @@ To find a model miss, compare the model fields. If =model-canonical= still shows
 
 ** Subscription allowance and model routing
 
-A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and a sole =all_models= scope is the only default. The packaged provider map contains Anthropic, Codex and local Lemonade. Kimi and Z.AI reporting requires an explicit provider override; neither has a shipped routing candidate. Fable selects =model:fable= explicitly; Opus uses the unscoped rule. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
+A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and =all_models= is the default. Give a model that has its own quota scope (for example =model:fable=) that selector, or it is routed on account-wide credit. The packaged provider map contains Anthropic, Codex and local Lemonade. Kimi and Z.AI reporting requires an explicit provider override; neither has a shipped routing candidate. Fable selects =model:fable= explicitly; Opus, Sonnet and Haiku use =all_models=. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
 
 #+begin_src sh
 oh usage                                    # JSON envelope with schema-5/6 providers array

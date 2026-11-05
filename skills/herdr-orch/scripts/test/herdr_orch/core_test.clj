@@ -961,7 +961,10 @@
                           {:scope "seven_day_sonnet" :status "known" :effectivePercentRemaining 80})
         rem #(core/candidate-remaining (evidence {"anthropic" %1}) %2)]
     (is (= 0.6 (rem row cand)))
-    (is (nil? (rem scoped cand)) "no implicit model-name join")
+    (is (= 0.6 (rem scoped cand)) "no selector uses all_models, not a model-name join")
+    (is (= 0.6 (rem scoped (assoc cand :quota-scope "all_models"))) "an explicit all_models selector is exact")
+    (is (nil? (rem (assoc-in row [:quotaSemantics :effectiveAvailability 0 :scope] "seven_day_sonnet") cand))
+        "no all_models scope leaves an unscoped candidate unknown")
     (is (= 0.8 (rem scoped (assoc cand :quota-scope "seven_day_sonnet"))) "no local minimum")
     (doseq [selector ["sonnet" "SEVEN_DAY_SONNET" "seven_day_sonne" "seven_day_sonnet_extra"]]
       (is (nil? (rem scoped (assoc cand :quota-scope selector)))))
