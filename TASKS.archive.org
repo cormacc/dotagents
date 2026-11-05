@@ -4829,3 +4829,42 @@ CLOSED: [2026-11-05 Thu 08:12]
 :END:
 #+IMPORT: [[plan:2026-11-05-herdr-orch-quota-widget.org]]
 Show subscription quota for each herdr-orch `config.edn` provider that has a `:quota-provider`, through the same quota-axi executable and allowlisted evidence as `oh usage`. Display in the Herdr tab-bar right status area (`[ui] tab_bar_right` command entry; `tab_bar_position = "bottom"` gives a footer). Prior art: https://github.com/danielpradilla/herdr-quota-meter. Related: 9f667467 (herdr plugin wrapper for herdr-orch), which plans the `herdr-plugin/` package.
+
+** DONE Apply the AXI guidelines to CLI tooling
+CLOSED: [2026-11-05 Thu 08:38]
+:PROPERTIES:
+:CUSTOM_ID: a88aea76-e767-4722-807c-2f91324d1b30
+:CREATED: [2026-11-05 Thu 00:01]
+:STARTED: [2026-11-05 Thu 00:37]
+:HANDOFF: AXI CLI implementation and reference integration delivered. Remaining Linux measurement validation is tracked independently as task:4a0def2b-75d2-4995-8cf0-ecbf934263ca; roster regeneration maintenance is task:fbf2c697-64a5-4d8d-94d7-1cd8377d9cfb.
+:ARCHIVED: [2026-11-05 Thu 08:38]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 00:01]
+- State "STARTED" from "TODO" [2026-11-05 Thu 00:37]
+- State "DONE" from "STARTED" [2026-11-05 Thu 08:38]
+:END:
+#+IMPORT: [[plan:2026-11-05-axi-cli-guidelines.org]]
+Review the AXI guidelines at [[https://axi.md]] and apply the relevant guidance to repository-maintained CLI tooling. Identify the affected tools and propose a scoped plan before implementation.
+
+** DONE Evaluate quota-axi as the usage collection backend
+CLOSED: [2026-11-04 Wed 17:21]
+:PROPERTIES:
+:CUSTOM_ID: 72e7144f-c94a-4c41-bb51-1537f5136be1
+:CREATED: [2026-11-04 Wed 17:06]
+:STARTED: [2026-11-04 Wed 17:08]
+:HANDOFF: Owner follow-up relaxes prior blockers: accept one account per provider and native Codex credential refresh; document that native and Pi logins must use that same account. Owner accepts adopting quota-axi before reported upstream Claude/Pi credential PR lands, with periodic native Claude authentication as interim support. PR identity/status not independently verified. These replace the evaluation no-go assumptions, not its measured evidence. Next: draft single-CLI replacement plan with net deletion measurement, unknown-on-missing-credentials behaviour and offline tests; propose design/log/2026-11-04-quota-axi-backend.org before scaffolding. No live provider probe or commit authorised. Both evaluation children closed; reports under .tmp/quota-axi-eval.
+:ARCHIVED: [2026-11-04 Wed 17:21]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 17:06]
+- State "STARTED" from "TODO" [2026-11-04 Wed 17:08]
+- State "DONE" from "STARTED" [2026-11-04 Wed 17:21]
+:END:
+Compare a pinned quota-axi release with the committed subscription-usage backend using source inspection and isolated offline fixtures. Prefer replacement over an additional configurable backend. The owner permits contract changes where they reduce maintained code and enable more providers; make each proposed change and remaining integration cost explicit. Preserve read-only credential handling, no inference spend, routing ownership and safe test isolation. Deliver a measured deletion/replacement inventory, account/source compatibility, additional-provider mapping, and a go/no-go recommendation. No live provider calls, real credential reads, production switch or new commit is authorised by this evaluation.
+
+Outcome: do not replace production collection with unmodified quota-axi 0.1.69 (npm gitHead 5734c41eee52eb9a80ba67f47269ebc06c0c41fc). Root source checks confirmed Claude credential discovery covers environment/native/Keychain rather than Pi Anthropic, and Codex reaches an app-server fallback without a refresh-option gate; the published README states that fallback can renew auth.json. Root repeated isolated filesystem/network controls and the snapshot CLI: schema 6, Claude/Codex/Kimi rows, unavailable Z.AI, exit 0, empty stderr. This proves the executable boundary, not raw vendor normalisation or credential behaviour. Measured gross replacement surface is 460 production lines and 642 collector-test lines; net savings remain unmeasured. The scratch mapper omits account identity/effective-scope validation and is not an integration candidate.
+
+Recommended direction: retain local collection until upstream supports Pi Anthropic account lanes and a genuinely no-refresh Codex path, then use one pinned CLI backend with no local credential reader, provider normaliser or second cache. Accept upstream cache/status semantics, stale-as-unknown routing evidence and a changed allowlisted usage envelope; retain local routing policy, explicit account/scope joins, process/output bounds and secret isolation. The source review identifies Kimi and Z.AI as conditional additional subscription coverage, subject to credential-source alignment; no models are enabled. Reports: [[file:.tmp/quota-axi-eval/source-report.md]] and [[file:.tmp/quota-axi-eval/runtime-report.md]] (scratch evidence, not durable specifications). Both evaluation children were captured and closed. No production migration or commit was made.

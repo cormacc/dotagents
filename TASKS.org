@@ -18,19 +18,18 @@
   - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
   - [[#re-evaluate-pi-context-with-a-week-of-session-data-after-2026-11-10][Re-evaluate pi-context with a week of session data (after 2026-11-10)]]
   - [[#reconcile-pi-managed-npm-dependencies-after-advisory-research][Reconcile Pi managed npm dependencies after advisory research]]
-  - [[#evaluate-quota-axi-as-the-usage-collection-backend][Evaluate quota-axi as the usage collection backend]]
 - [[#improvements][Improvements]]
   - [[#started-b-herdr-plugin-wrapper-for-herdr-orch][STARTED [#B] herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#started-b-traits-probe-backlog][STARTED [#B] traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
   - [[#review-pi-development-pin-advisories-before-upgrade][Review Pi development pin advisories before upgrade]]
-  - [[#started-apply-the-axi-guidelines-to-cli-tooling][STARTED Apply the AXI guidelines to CLI tooling]]
   - [[#herdr-orch-support-herdr-app-herdr-core--hc][herdr-orch: support herdr-app (herdr-core / hc)]]
 - [[#fixes][Fixes]]
   - [[#adapt-herdr-mods-quota-for-the-herdr-cli][Adapt herdr-mods quota for the Herdr CLI]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
+  - [[#validate-axi-cli-changes-on-linux-without-measurement-exclusions][Validate AXI CLI changes on Linux without measurement exclusions]]
 - [[#agent-feedback][Agent feedback]]
   - [[#started-guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][STARTED Guard against a parallel tool batch that writes and reads the same path]]
   - [[#started-stop-parallel-claude-trigger-evals-picking-another-workers-candidate][STARTED Stop parallel claude trigger evals picking another worker's candidate]]
@@ -123,25 +122,6 @@ pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) afte
 - Created [2026-11-04 Wed 00:43]
 :END:
 Research task:3d7ea3e7-fc22-49a1-824d-3c400671ee70 found a fresh pi-web-access@0.46.0 resolution with its existing MCP SDK 1.32.1 pin audits clean; the live managed lock still has eight vulnerable packages. Before touching ~/.pi/agent/npm, choose and document the reconciliation mechanism, snapshot the previous package and lock state, retain lifecycle-script suppression, verify other managed packages remain present, and run the runtime audit plus isolated loading checks. Pi 1.4.0 skips unchanged top-level versions during update; its same-source install path does not pass --ignore-scripts. Do not replace the extension or enable automatic provider routing as part of this maintenance. Live provider calls need a separate approved scope.
-
-** DONE Evaluate quota-axi as the usage collection backend
-CLOSED: [2026-11-04 Wed 17:21]
-:PROPERTIES:
-:CUSTOM_ID: 72e7144f-c94a-4c41-bb51-1537f5136be1
-:CREATED: [2026-11-04 Wed 17:06]
-:STARTED: [2026-11-04 Wed 17:08]
-:HANDOFF: Owner follow-up relaxes prior blockers: accept one account per provider and native Codex credential refresh; document that native and Pi logins must use that same account. Owner accepts adopting quota-axi before reported upstream Claude/Pi credential PR lands, with periodic native Claude authentication as interim support. PR identity/status not independently verified. These replace the evaluation no-go assumptions, not its measured evidence. Next: draft single-CLI replacement plan with net deletion measurement, unknown-on-missing-credentials behaviour and offline tests; propose design/log/2026-11-04-quota-axi-backend.org before scaffolding. No live provider probe or commit authorised. Both evaluation children closed; reports under .tmp/quota-axi-eval.
-:END:
-:LOGBOOK:
-- Created [2026-11-04 Wed 17:06]
-- State "STARTED" from "TODO" [2026-11-04 Wed 17:08]
-- State "DONE" from "STARTED" [2026-11-04 Wed 17:21]
-:END:
-Compare a pinned quota-axi release with the committed subscription-usage backend using source inspection and isolated offline fixtures. Prefer replacement over an additional configurable backend. The owner permits contract changes where they reduce maintained code and enable more providers; make each proposed change and remaining integration cost explicit. Preserve read-only credential handling, no inference spend, routing ownership and safe test isolation. Deliver a measured deletion/replacement inventory, account/source compatibility, additional-provider mapping, and a go/no-go recommendation. No live provider calls, real credential reads, production switch or new commit is authorised by this evaluation.
-
-Outcome: do not replace production collection with unmodified quota-axi 0.1.69 (npm gitHead 5734c41eee52eb9a80ba67f47269ebc06c0c41fc). Root source checks confirmed Claude credential discovery covers environment/native/Keychain rather than Pi Anthropic, and Codex reaches an app-server fallback without a refresh-option gate; the published README states that fallback can renew auth.json. Root repeated isolated filesystem/network controls and the snapshot CLI: schema 6, Claude/Codex/Kimi rows, unavailable Z.AI, exit 0, empty stderr. This proves the executable boundary, not raw vendor normalisation or credential behaviour. Measured gross replacement surface is 460 production lines and 642 collector-test lines; net savings remain unmeasured. The scratch mapper omits account identity/effective-scope validation and is not an integration candidate.
-
-Recommended direction: retain local collection until upstream supports Pi Anthropic account lanes and a genuinely no-refresh Codex path, then use one pinned CLI backend with no local credential reader, provider normaliser or second cache. Accept upstream cache/status semantics, stale-as-unknown routing evidence and a changed allowlisted usage envelope; retain local routing policy, explicit account/scope joins, process/output bounds and secret isolation. The source review identifies Kimi and Z.AI as conditional additional subscription coverage, subject to credential-source alignment; no models are enabled. Reports: [[file:.tmp/quota-axi-eval/source-report.md]] and [[file:.tmp/quota-axi-eval/runtime-report.md]] (scratch evidence, not durable specifications). Both evaluation children were captured and closed. No production migration or commit was made.
 
 * Improvements
 
@@ -284,20 +264,6 @@ Acceptance criteria:
 - Trial any approved version in an isolated fixture with lifecycle scripts disabled; run installed-runtime, adapter and extension checks against the intended version.
 - Update package and lockfile together only after the compatibility and version-policy decision. Do not use npm audit fix --force or change the live Pi installation as an audit shortcut.
 
-** STARTED Apply the AXI guidelines to CLI tooling
-:PROPERTIES:
-:CUSTOM_ID: a88aea76-e767-4722-807c-2f91324d1b30
-:CREATED: [2026-11-05 Thu 00:01]
-:STARTED: [2026-11-05 Thu 00:37]
-:HANDOFF: Seven AXI implementation tasks and separate routing-config integration are committed. The routing-aligned isolated tree passes 737 selected Clojure tests; 28 measurement-block tests remain excluded on macOS. Linux measurement validation is the remaining integration check. Evidence .tmp/routing-plan-commits-1/tree-1-portable.out.
-:END:
-:LOGBOOK:
-- Created [2026-11-05 Thu 00:01]
-- State "STARTED" from "TODO" [2026-11-05 Thu 00:37]
-:END:
-#+IMPORT: [[plan:2026-11-05-axi-cli-guidelines.org]]
-Review the AXI guidelines at [[https://axi.md]] and apply the relevant guidance to repository-maintained CLI tooling. Identify the affected tools and propose a scoped plan before implementation.
-
 ** TODO [#B] herdr-orch: support herdr-app (herdr-core / hc) :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 5968bca7-7fb8-4548-b627-f0adc1060a14
@@ -329,6 +295,23 @@ Adapt the quota module at [[https://github.com/Lakris2407/herdr-mods/tree/main/q
 * Upstream issues
 
 * Chores
+** TODO Validate AXI CLI changes on Linux without measurement exclusions :test:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 4a0def2b-75d2-4995-8cf0-ecbf934263ca
+:CREATED: [2026-11-05 Thu 08:36]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 08:36]
+:END:
+Complete the platform-specific validation deferred when closing [[archive:a88aea76-e767-4722-807c-2f91324d1b30][Apply the AXI guidelines to CLI tooling]]. The macOS run passed 737 selected Clojure tests (7,068 assertions), but excluded 28 tests from the measurement block; this is not a full Linux-suite result.
+
+Acceptance criteria:
+- Run bb test-clojure on Linux with the HERDR_ORCH_* environment variables unset and no test exclusions.
+- The measurement-block tests execute in their disposable fixtures.
+- Record the exit status and complete failure/error summary; fix failures or create scoped follow-ups before claiming a green suite.
+
+Evidence: design/log/2026-11-05-axi-cli-guidelines.org and .tmp/routing-plan-commits-1/tree-1-portable.out.
+
 * Agent feedback
 
 ** STARTED Guard against a parallel tool batch that writes and reads the same path :agents_md:

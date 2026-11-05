@@ -1,8 +1,8 @@
 #+TITLE: Apply the AXI guidelines to CLI tooling
 #+DATE: 2026-11-05 Thu
-#+PARENT: [[task:a88aea76-e767-4722-807c-2f91324d1b30][Apply the AXI guidelines to CLI tooling]]
+#+PARENT: [[archive:a88aea76-e767-4722-807c-2f91324d1b30][Apply the AXI guidelines to CLI tooling]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Active
+#+STATUS: Complete
 #+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
 #+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
 #+SPEC: [[proj:skills/org-tasks/SKILL.md]]
@@ -16,7 +16,7 @@ Make `ot` and `oh` cheaper and more reliable for agents to read, by applying the
 * Summary
 *Level:* production · *Tests:* thorough · *Docs:* README
 
-`ot` and `oh` return compact default listings with counts; full graph consumers explicitly request `--full`. `oh` has a bounded read-only home view, usage exit codes and selective hints. AXI is vendored unchanged as an on-demand reference behind local contract exceptions. Seven implementation tasks are complete. Routing defaults, fixtures and generated documentation are aligned in the separate routing commit; final integration remains open for Linux measurement checks.
+`ot` and `oh` return compact default listings with counts; full graph consumers explicitly request `--full`. `oh` has a bounded read-only home view, usage exit codes and selective hints. AXI is vendored unchanged as an on-demand reference behind local contract exceptions. The seven implementation tasks are complete and committed. Linux measurement validation is retained as a separate follow-up; closure does not claim a full Linux-suite pass.
 
 ** Scope
 *** In scope
@@ -69,21 +69,10 @@ Make `ot` and `oh` cheaper and more reliable for agents to read, by applying the
 - [X] Must not: suggest collection after a final `oh task run` result.
 
 ** Decisions
-- Keep JSON as the machine format :: field selection gave the large byte reduction in the baseline; TOON token savings have not been measured here. The pi `tasks` extension, the Hermes backend, the `oh` envelopes, the tests, and the `jq` rule in `home/AGENTS.md` depend on JSON.
-  Rejected:
-  - TOON default: breaks the JSON contracts and has no parser in the toolchain; axi.md claims about 40% token saving over JSON, not measured here.
-- Compact default with `--full` opt-in (AXI principles 2 and 3) :: an agent gets the small payload without knowing a flag; programs that need the full graph name it.
-  Rejected:
-  - Keep the full default and only change skill guidance: an agent that runs the bare command still reads the full payload.
-  - A `--fields` selector: no consumer needs a partial set yet; add it when one does.
-- Program consumers opt in within the same task as the default change :: the change is a contract break, and splitting it would leave a red suite between tasks.
-- `oh task status <full-task-uuid>` stays full :: a direct lookup is the place where an agent wants detail.
-- `ot` errors stay on stderr :: the pi harness captures both streams, and `pi/extensions/tasks/ot.ts` `runOtResult` already reads the stderr envelope. AXI principle 6 asks for stdout; the change has no measured benefit here.
-- Vendor upstream AXI unchanged as on-demand reference material :: reviewed [[https://github.com/kunchenguid/axi/blob/a8a320cc426a5f136a797a5ad138b84cb88bd172/.agents/skills/axi/SKILL.md][upstream SKILL.md]] at `kunchenguid/axi` revision `a8a320cc426a5f136a797a5ad138b84cb88bd172`; the repository MIT licence permits redistribution with its copyright and notice. Keep provenance and licence beside the reference. The skill is one document, not bundled npm scaffolding.
-- Keep a short local exceptions guide in skill-creator :: retain JSON contracts and existing error channels; do not generate workflow skills wholesale from a home view, require extra harness integrations, add transcript capture, or adopt a JavaScript SDK for these Babashka CLIs. Link the entry point from skill-creator and both CLI developer guides; load it for CLI design/review, not normal CLI use.
-- Add a bounded read-only `oh` home view :: scope assignments to the current checkout or caller; show counts and concise discovery hints; missing context is explicit.
-- Add selective contextual hints :: lists suggest detail lookups, truncation names the expansion command, argument errors include valid options or concise help, and pending delegation suggests collection. Omit hints for final results and self-contained confirmations. Hints do not prescribe extra workflow steps.
-- Already conformant, no work :: `ot` exits 2 on unknown options; empty states are explicit (`ot issue list` prints `(no linked issues)`, `oh --format text` prints `none`); both CLIs have per-command `--help`; `oh` read verbs already omit the raw `text` blob unless `--raw` is given.
+- Keep JSON machine contracts and reduce fields first. TOON remains an optional experiment requiring an actual token/correctness comparison; byte counts are not token evidence.
+- Compact listings are the default; `--full` supplies the detailed graph. The standalone TUI, pi tasks and Hermes opt in explicitly. A compact opt-in alone would leave bare agent invocations returning the full payload.
+- Preserve existing error channels, direct UUID detail lookups and workflow-skill ownership. Contextual hints are separate from result data and do not prescribe extra actions after a final result.
+- Vendor the pinned AXI document unchanged with its MIT notice, behind an on-demand local exceptions guide rather than a broadly triggered standalone skill. Do not add hooks, transcript capture or JavaScript dependencies merely for upstream compliance.
 
 ** Shipped
 - MODIFIED :: `skills/org-tasks/scripts/docs/contract.md`, `skills/org-tasks/references/ot-cli.md` and `skills/org-tasks/SKILL.md`: compact listing, full-consumer migration, terminal styling and contextual hints.
@@ -91,10 +80,12 @@ Make `ot` and `oh` cheaper and more reliable for agents to read, by applying the
 - MODIFIED :: `skills/skill-creator/SKILL.md`: on-demand CLI-design reference, linked from both CLI developer guides.
 - ADDED :: `skills/skill-creator/references/cli-design.md`, `axi-upstream.md` and `axi-LICENSE`: local exceptions, pinned unchanged upstream document and MIT notice.
 
-** Risks
-- A script outside this repository parses `ot list --format json` and needs `tree` or `sources`: accepted; a missing key may fail silently in a permissive consumer. Inventory repository callers and update them together; document `--full` as the migration path.
-- `System/console` under Babashka may not report a pipe as non-terminal on every JDK: the `ot` ANSI task verifies with a piped probe, not by reading the code.
-- Repository graph consumers must request the detailed payload. The broad test run found the standalone TUI consumer in addition to pi and Hermes; it explicitly requests full output, and the entire org-tasks namespace set passes.
+** Gotchas
+- Program consumers that require `tree` or `sources` must request `--full`; permissive consumers can otherwise fail silently. The in-process standalone TUI needs the same opt-in as external callers.
+
+** Follow-ups
+- [[task:4a0def2b-75d2-4995-8cf0-ecbf934263ca][Validate AXI CLI changes on Linux without measurement exclusions]].
+- [[task:fbf2c697-64a5-4d8d-94d7-1cd8377d9cfb][Make roster regeneration replace complete mixed-format results]].
 
 * Plan
 
@@ -112,17 +103,6 @@ CLOSED: [2026-11-05 Thu 01:22]
 - State "STARTED" from "DONE" [2026-11-05 Thu 01:20]
 - State "DONE" from "STARTED" [2026-11-05 Thu 01:22]
 :END:
-Acceptance criteria:
-- `ot list --format json` returns `root`, `selectedId`, `count`, and `rows` with only `id`, `parentId`, `status`, `priority`, `summary`.
-- `ot list --full --format json` returns the pre-change payload.
-- `ot list --format edn` follows the same default and `--full` rule.
-- Text-mode `ot list` prints a count line.
-- `pi/extensions/tasks/ot.ts` `otList` passes `--full`, and `pi/extensions/tasks/test.sh` passes.
-- `hermes/org-tasks/plugin/dashboard/backend.py` `tree` passes `--full`, and `hermes/org-tasks/tests/test_backend.py` passes.
-- `skills/org-tasks/scripts/docs/contract.md`, `skills/org-tasks/references/ot-cli.md`, and the `ot list --format json` line in `skills/org-tasks/SKILL.md` describe the new default.
-- Must not: change `ot show`, `ot scan`, or `ot selected` payloads.
-
-Add the option through the `list` spec in `commands/registry.clj`; help and coercion derive from it.
 
 ** DONE [#A] Make routine oh task listings compact by default :herdr_orch:
 CLOSED: [2026-11-05 Thu 00:47]
@@ -136,13 +116,6 @@ CLOSED: [2026-11-05 Thu 00:47]
 - State "STARTED" from "TODO" [2026-11-05 Thu 00:41]
 - State "DONE" from "STARTED" [2026-11-05 Thu 00:47]
 :END:
-Acceptance criteria:
-- Routine `oh task list` and `oh task status` entries carry only `task`, `child`, `pane-id`, `status`, `captured-at`, and the envelope `summary`.
-- Their envelopes carry `counts` (status to number) beside `result`.
-- `--full` returns the pre-change entries, and `--raw` keeps its current meaning.
-- `--format text` output is unchanged.
-- `skills/herdr-orch/scripts/docs/contract.md` section 'JSON output' and `skills/herdr-orch/scripts/README.md` describe the default, `--full`, and `counts`.
-- Must not: change `oh task status <full-task-uuid>`, `collect`, or `harvest` output.
 
 ** DONE [#B] Stop ot ANSI styling when stdout is not a terminal :ot:
 CLOSED: [2026-11-05 Thu 00:49]
@@ -156,15 +129,6 @@ CLOSED: [2026-11-05 Thu 00:49]
 - State "STARTED" from "TODO" [2026-11-05 Thu 00:47]
 - State "DONE" from "STARTED" [2026-11-05 Thu 00:49]
 :END:
-Acceptance criteria:
-- `ot list | od -c` shows no `033` byte.
-- `ot show selected | od -c` shows no `033` byte.
-- `ot list` in a terminal shows colour.
-- `--no-color` and `NO_COLOR` still disable colour in a terminal.
-- The `org-tasks.output` `color-enabled?` docstring states the terminal rule.
-- Must not: change the TUI colour path (`tui.clj` `:color?`).
-
-Verify the terminal check with a real pipe under `bb`; do not infer it from `System/console` documentation.
 
 ** DONE [#C] Make oh exit 2 on argument errors :herdr_orch:
 CLOSED: [2026-11-05 Thu 01:06]
@@ -178,14 +142,6 @@ CLOSED: [2026-11-05 Thu 01:06]
 - State "STARTED" from "TODO" [2026-11-05 Thu 00:49]
 - State "DONE" from "STARTED" [2026-11-05 Thu 01:06]
 :END:
-Acceptance criteria:
-- `oh` exits 2 with an `ok: false` envelope on an unknown command.
-- `oh` exits 2 with an `ok: false` envelope on an unknown option.
-- `oh` exits 2 on an invalid `--format` value.
-- Domain failures still exit 1.
-- `skills/herdr-orch/scripts/docs/contract.md` section 'JSON output' states the exit codes.
-
-`skills/herdr-orch/scripts/src/herdr_orch/cli.clj` separates tagged `usage-error` from domain `fail`; the process boundary uses the tag.
 
 ** DONE [#B] Add a bounded read-only oh home view
 CLOSED: [2026-11-05 Thu 01:11]
@@ -199,11 +155,6 @@ CLOSED: [2026-11-05 Thu 01:11]
 - State "STARTED" from "TODO" [2026-11-05 Thu 01:08]
 - State "DONE" from "STARTED" [2026-11-05 Thu 01:11]
 :END:
-Acceptance criteria:
-- Bare oh returns a bounded, read-only assignment summary scoped to the current checkout or caller.
-- The home view includes counts and concise discovery hints.
-- Missing context produces an explicit state with guidance.
-- Must not: start agents, create panes, alter selection, or query unrelated workspaces.
 
 ** DONE [#B] Add selective contextual CLI hints
 CLOSED: [2026-11-05 Thu 01:16]
@@ -217,13 +168,6 @@ CLOSED: [2026-11-05 Thu 01:16]
 - State "STARTED" from "TODO" [2026-11-05 Thu 01:11]
 - State "DONE" from "STARTED" [2026-11-05 Thu 01:16]
 :END:
-Acceptance criteria:
-- List output offers a detail lookup when useful.
-- Truncated output names the expansion command.
-- Argument errors include valid options or concise command help.
-- Pending delegation output suggests collection.
-- Hints are separate from result data.
-- Must not: suggest collection after a final task run result, or add hints to self-contained confirmations.
 
 ** DONE [#B] Add a CLI-design reference to skill-creator :docs:
 CLOSED: [2026-11-05 Thu 01:22]
@@ -237,66 +181,15 @@ CLOSED: [2026-11-05 Thu 01:22]
 - State "STARTED" from "TODO" [2026-11-05 Thu 01:16]
 - State "DONE" from "STARTED" [2026-11-05 Thu 01:22]
 :END:
-Acceptance criteria:
-- The upstream AXI skill document is vendored unchanged as on-demand reference material, with its source revision and MIT notice.
-- `skills/skill-creator/references/cli-design.md` links to the vendored source instead of restating its ten principles.
-- The local guide states the exceptions in Decisions, including JSON contracts, error channels, workflow-skill ownership and opt-in integrations.
-- It names `ot` and `oh` as local examples where applicable.
-- Must not: install the upstream document as a broadly triggered standalone skill.
-- `skills/skill-creator/SKILL.md` `## Reference files` lists it.
-- `skills/org-tasks/scripts/AGENTS.md` and `skills/herdr-orch/scripts/AGENTS.md` link to it.
-- The skill-creator entry in `skills/README.org` names the new local reference.
-- `scripts/check-section-links.bb` passes.
-
-Write it after the CLI tasks, so the examples describe shipped behaviour.
 
 * Implementation
-** Compact ot listings
-`ot list` returns compact rows and the filtered count by default in JSON and EDN. `--full` retains the full graph payload; the standalone TUI, pi tasks extension and Hermes dashboard request it explicitly. Text output includes the returned task count. Lookup payloads are unchanged.
-
-Validation: 44 list/show and CLI tests (1,101 assertions), 66 archive/publish/create/move tests (748 assertions), the complete pi tasks runner (including its `ot.ts` integration and RPC tests), and 17 Hermes backend tests passed. The pi runner initially refused stale local dependencies; `npm ci` restored the existing lockfile closure without changing manifests. Evidence: `.tmp/axi-implementation-1/`. No reachable project nREPL was found; validation used Babashka and the shipped CLI.
-
-** Compact oh listings
-Routine JSON listings return six recorded fields and top-level status counts without live probes. `--full` retains detailed live evidence; `--raw` implies full output and preserves access to the recorded text blob. UUID lookups and text output retain their payloads. Eight focused CLI tests (110 assertions) and 38 core tests (491 assertions) passed; evidence is under `.tmp/axi-implementation-2/`.
-
-The complete CLI namespace ran 372 tests (3,371 assertions) with 16 failures and 27 errors. Its report includes Linux-only detached-measurement failures (`setsid` and `/proc` are unavailable on this macOS host); the suite is not green, and Linux validation remains outstanding. No measurement behaviour was changed.
-
-** Terminal styling
-Automatic `ot` styling requires an attached console; explicit TUI colour options retain precedence. Piped list and selected-task output contain no escape byte, while a pseudo-terminal positive control contains ANSI styling; `NO_COLOR=1` and `--no-color` suppress it there. Forty-nine styling/list/show/CLI tests (1,140 assertions) passed. Evidence: `.tmp/axi-implementation-3/`.
-
-** Usage errors
-CLI-owned argument validations throw tagged usage errors and exit 2; runtime/domain refusals retain exit 1. Tags, not message matching, determine the exit code. A scratch selection using the repository's parallel runner passed 345 CLI tests (3,340 assertions), including listing, argument validation and measurement-option checks; 28 tests from the measurement block were excluded on macOS. Repository test definitions remain enabled. Evidence: `.tmp/axi-implementation-4/portable-final.out` and its selection script. Linux measurement validation remains outstanding.
-
-** Home view and hints
-The home view reads existing ledger files without allocation or Herdr calls, limits output to ten recent records, and caps summary previews at 240 characters. A caller pane narrows the selection; otherwise the assignment root is the scope. Counts precede truncation. JSON hints are separate from result data; argument errors include concise help, while final delegation results omit collection advice. Text listing compatibility is retained for `oh`. Four focused home/list tests passed 76 assertions; six focused home/list/hint/error tests passed 117 assertions. The scratch test harness was also triggered with a known-bad assertion and returned exit 1. Evidence: `.tmp/axi-implementation-5/` and `.tmp/axi-implementation-6/`.
-
-** CLI design reference
-`skills/skill-creator/references/axi-upstream.md` and `axi-LICENSE` match the pinned upstream downloads byte-for-byte. The local entry point carries provenance and exceptions; it is linked by skill-creator and both CLI developer guides. No standalone AXI skill or new Babashka dependency was installed.
-
-** Catalogue review
-[[file:2026-11-05-axi-cli-guidelines/catalog-review.md]] records the 113-entry catalogue screen, candidate evidence and adoption recommendations. Proposed read-only pilots for glab-axi and gh-axi are separate follow-on work, not approval to install tools or change existing skill routing. quota-axi is already integrated; the other candidates do not justify replacing current backends on the evidence reviewed.
-
-** Baseline (2026-11-05, this checkout)
-- `ot list --format json`: 422,085 bytes for 48 rows; `sources` 256,803, `tree` 71,284, `rows` 69,920 (compact JSON per key). Each row has 22 fields.
-- Same payload as compact JSON: 398,363 bytes. Three fields per row as JSON: 5,779 bytes; as CSV rows: 4,529 bytes.
-- `oh task list`: 739,709 bytes for 151 entries, 32 keys per entry; `--format text` 12,796 bytes. The earlier 12,228-byte projection selected only `task`, `status`, and a null `child` derived from a non-existent `child-name` key; it is not evidence for the proposed six-field schema.
-- `ot list` text output: 6,933 bytes for 49 lines, with ANSI codes when piped.
-- `oh` with no arguments, or with an unknown option: `ok: false` envelope on stdout, exit 1.
-- `ot` with an unknown option: `argument-error`, exit 2.
+- Compact `ot` JSON/EDN listings and explicit full-graph consumers preserve detail workflows; automatic text styling requires an attached console and retains explicit TUI overrides.
+- Compact `oh` listings use recorded fields without live probes. Its read-only home view limits output to ten records and 240-character summary previews; counts cover the selection before truncation. Usage errors exit 2, and domain failures exit 1.
+- The pinned AXI document and licence are retained byte-for-byte. Local exceptions and developer-guide links keep the existing CLI contracts authoritative.
+- [[file:2026-11-05-axi-cli-guidelines/catalog-review.md]] preserves the catalogue assessment. glab-axi and gh-axi remain proposed read-only pilots, not installed dependencies or approved routing replacements.
 
 * Validation
-- Final full org-tasks run: 351 tests, 3,199 assertions, no failures/errors; includes the corrected standalone TUI full-graph consumer. Pi tasks integration/RPC runner and 17 Hermes backend tests also pass.
-- Focused org-tasks output/CLI/styling and herdr-orch core run: 88 tests, 1,641 assertions, no failures/errors. Focused `oh` home/list/hint/usage checks pass separately (six tests, 117 assertions).
-- The broader selected run executed 737 tests with 40 failures and one error, excluding 28 measurement-block tests on macOS. It exposed the TUI regression corrected above and mismatches between the separately edited routing config, packaged routing expectations and generated README listings. The separate routing commit aligns those defaults, fixtures and generated listings. This earlier run is not a green whole-suite result; see the subsequent routing validation below.
-- Skill validation passes for 29 skills with zero gating failures and one vendored frontmatter warning. The first invocation lacked PyYAML; an isolated environment with the declared PyYAML 6.0.2 dependency ran the shipped validator successfully. Section-link validation passes; the upstream document/licence byte comparisons and `git diff --check` pass.
-- Isolated intermediate commit trees passed: the org-tasks tree ran 351 tests (3,199 assertions), the pi tasks runner and 17 Hermes tests; the subsequent Herdr tree with committed routing configuration ran 737 selected Clojure tests (7,084 assertions) with no failures/errors. The same 28 measurement-block tests remain excluded on macOS. The separate routing configuration edits are not part of these commits.
-- Routing-aligned tree: 737 selected tests, 7,068 assertions, no failures/errors. The tests cover exact Fable quota selection, exhausted-scope refusal, optional Kimi/Z.AI overrides and the short-alias roster. The same 28 measurement-block tests remain excluded on macOS.
-- Evidence: `.tmp/axi-implementation-7/`, `.tmp/axi-commits-1/` and `.tmp/routing-plan-commits-1/tree-1-portable.out`. The parent remains active with a handoff for Linux validation.
-
-* Open questions
-** DECIDED Should `oh` with no arguments show a routine task summary?
-Yes: bounded, read-only and scoped to the current checkout or caller, with counts and concise discovery hints. Missing context is explicit.
-** DECIDED Should commands append next-step hints?
-Yes, selectively: use a separate structured field; omit hints for self-contained outputs and do not suggest collection after a final result.
-** DECIDED Should we add `--format toon`?
-Defer. First reduce fields, then compare actual token counts and task correctness for compact JSON, existing text output and TOON on identical data. The JSON-parsing rule is not a prohibition on TOON; AXI's overall benchmark does not isolate its contribution.
+- Delivery checks passed: 351 org-tasks tests (3,199 assertions), the pi tasks integration/RPC runner and 17 Hermes tests. The routing-aligned isolated tree passed 737 selected Clojure tests (7,068 assertions); 28 measurement-block tests were excluded on macOS. This is historical delivery evidence, not a complete current Linux-suite result.
+- Real pipes produced no ANSI escape byte; a pseudo-terminal positive control produced colour, and `NO_COLOR=1`/`--no-color` suppressed it. Vendored-source byte comparisons and section-link checks passed. Skill validation had zero gating failures, with one vendored frontmatter warning.
+- Subsequent quota/status work is outside the delivery snapshot. Full Linux validation is tracked by [[task:4a0def2b-75d2-4995-8cf0-ecbf934263ca]] rather than silently treating excluded tests as covered.
+- Evidence: `.tmp/axi-implementation-7/`, `.tmp/axi-commits-1/` and `.tmp/routing-plan-commits-1/tree-1-portable.out`.
