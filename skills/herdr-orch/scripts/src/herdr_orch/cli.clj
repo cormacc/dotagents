@@ -3721,17 +3721,18 @@
 (defn usage-status
   "One plain line for a terminal status bar such as Herdr's `tab_bar_right`.
   Local providers are omitted. A provider with session, weekly or monthly windows
-  shows each window's remaining percentage, labelled by kind, with `~` when stale;
+  shows each window's used percentage, as the vendors report it, labelled by kind,
+  with `~` when stale;
   otherwise it shows `auth?`, `rl?` or `err?` from its state, or `?` when fresh
   evidence has no such window. When the quota-axi
   executable is missing or the wrong version, the whole line is `quota: setup?`."
   [result]
   (let [rows (remove :local (:providers result))
-        window-text (fn [{:keys [kind percentRemaining]} stale?]
-                      (str (Math/round (double percentRemaining)) "%" (status-window-labels kind) (when stale? "~")))
+        window-text (fn [{:keys [kind percentUsed]} stale?]
+                      (str (Math/round (double percentUsed)) "%" (status-window-labels kind) (when stale? "~")))
         row-text (fn [{:keys [localProvider state windows]}]
                    (let [stale? (or (:stale state) (= "stale" (:status state)))
-                         shown (filter #(and (status-window-labels (:kind %)) (some? (:percentRemaining %))) windows)]
+                         shown (filter #(and (status-window-labels (:kind %)) (some? (:percentUsed %))) windows)]
                      (str localProvider " "
                           (cond
                             (and (seq shown) (#{"fresh" "stale"} (:status state)))

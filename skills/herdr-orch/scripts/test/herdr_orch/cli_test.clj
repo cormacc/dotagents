@@ -8794,9 +8794,9 @@
         status (fn [& argv] (apply call! env "usage" "--format" "status" argv))
         proc (status)]
     (is (zero? (:exit proc)) (:out proc))
-    (is (= "anthropic 68%s 39%w | openai-codex auth?\n" (:out proc))
+    (is (= "anthropic 32%s 61%w | openai-codex auth?\n" (:out proc))
         "one line; local and model windows omitted")
-    (is (= "anthropic 68%s 39%w\n" (:out (status "--provider" "anthropic"))))
+    (is (= "anthropic 32%s 61%w\n" (:out (status "--provider" "anthropic"))))
     (is (= "quota: none\n" (:out (status "--provider" "lemonade"))))
     (is (= 2 (:exit (status "--detail"))) "--detail stays markdown-only")
     (testing "unusable evidence keeps one line and exit 0"
@@ -8814,9 +8814,9 @@
   (let [row (fn [local status stale windows] {:localProvider local :provider local :state {:status status :stale stale} :windows windows})]
     (is (= "a rl? | b 50%m~ 7%w~ | c err? | d ?"
            (cli/usage-status {:providers [(row "a" "rate_limited" false [])
-                                          (row "b" "stale" true [{:kind "monthly" :percentRemaining 50} {:kind "weekly" :percentRemaining 7.4}])
+                                          (row "b" "stale" true [{:kind "monthly" :percentUsed 50} {:kind "weekly" :percentUsed 7.4}])
                                           (row "c" "error" false [])
-                                          (row "d" "fresh" false [{:kind "credits" :percentRemaining 3}])
+                                          (row "d" "fresh" false [{:kind "credits" :percentUsed 3}])
                                           {:localProvider "l" :local true :state {:status "fresh" :stale false} :windows []}]})))
     (is (= "quota: none" (cli/usage-status {:providers [{:localProvider "l" :local true}]})))
     (is (= "quota: setup?" (cli/usage-status {:providers [(assoc (row "a" "unavailable" false []) :reason "missing-executable")

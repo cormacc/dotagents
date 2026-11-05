@@ -13,7 +13,7 @@ Show the remaining subscription quota of each herdr-orch provider in the Herdr t
 * Summary
 *Level:* MVP · *Tests:* smoke · *Docs:* README
 
-Herdr plugin v1 cannot add tab-bar or footer items, so the display is a `[ui] tab_bar_right` command entry that runs `oh usage --format status` (for example `anthropic 96%s 36%w | openai-codex 88%w`); `tab_bar_position = "bottom"` turns the tab row into a footer. The `cormacc.herdr-orch` plugin adds a popup pane with `oh usage --format text` as a per-provider list, and an action that prints the config stanza for installs that Home Manager does not manage. On this machine, Home Manager links `~/.config/herdr/config.toml` out of store to `agents/herdr/config.toml`. Routing gives an unscoped candidate the `all_models` scope, so Opus, Sonnet and Haiku receive quota credit without config.
+Herdr plugin v1 cannot add tab-bar or footer items, so the display is a `[ui] tab_bar_right` command entry that runs `oh usage --format status` (for example `anthropic 4%s 64%w | openai-codex 12%w`, percent used); `tab_bar_position = "bottom"` turns the tab row into a footer. The `cormacc.herdr-orch` plugin adds a popup pane with `oh usage --format text` as a per-provider list, and an action that prints the config stanza for installs that Home Manager does not manage. On this machine, Home Manager links `~/.config/herdr/config.toml` out of store to `agents/herdr/config.toml`. Routing gives an unscoped candidate the `all_models` scope, so Opus, Sonnet and Haiku receive quota credit without config.
 
 ** Scope
 *** In scope
@@ -36,7 +36,7 @@ Herdr plugin v1 cannot add tab-bar or footer items, so the display is a `[ui] ta
 - [X] `oh usage --format status` prints exactly one line and exits 0 when the evidence is fresh → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `usage-status-renders-one-line-for-a-status-bar`
 - [X] Each provider with a `:quota-provider` row is shown with its `localProvider` name.
 - [X] Rows with no `:quota-provider` (for example `lemonade`) are not shown → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `usage-status-markers-cover-every-state`
-- [X] A fresh provider shows `percentRemaining` for each `session`, `weekly` and `monthly` window, labelled by kind, for example `anthropic 82%s 64%w`.
+- [X] A fresh provider shows `percentUsed` (changed from `percentRemaining` on 2026-11-05 at the operator's request) for each `session`, `weekly` and `monthly` window, labelled by kind, for example `anthropic 18%s 36%w`.
 - [X] A provider with `auth_required` status shows `auth?`.
 - [X] A provider with `rate_limited` status shows `rl?`.
 - [X] A provider that is unavailable for any other reason shows `err?`.
@@ -74,6 +74,8 @@ Herdr plugin v1 cannot add tab-bar or footer items, so the display is a `[ui] ta
   - No plugin: no detail pane, and no stanza help for installs without Home Manager.
 - Unavailable providers show a short marker :: a silent blank hides a broken setup. Herdr clears the entry after a non-zero exit, so `status` exits 0 for every marker. Fresh evidence without a session, weekly or monthly window shows `?`. Rejected:
   - Hide unavailable providers.
+- The status line shows percent used :: both vendor APIs report use (Claude `utilization`, Codex `used_percent`) and quota-axi derives remaining; the Anthropic usage page shows use. Rejected:
+  - Percent remaining: matched routing and the prior art, but inverted the vendor number.
 - Window labels come from `kind` (`s`, `w`, `m`) :: the evidence has no window duration, so `5h` or `7d` labels would be guesses. `model` windows show only in the pane, to keep the line short.
 - `text` is a heading per provider with `- name :: value` lines and UTC reset times :: chosen by the operator for the pane. Rejected:
   - A two-column table: reset times wrap in the popup.

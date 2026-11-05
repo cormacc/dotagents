@@ -53,8 +53,8 @@
           (let [cmd (second (re-find #"command = \"(.*)\", interval" out))
                 status (run! env "/bin/sh" "-c" cmd)]
             (is (zero? (:exit status)) (:err status))
-            (is (str/includes? (:out status) "anthropic 61%s") (:out status))
-            (is (str/includes? (:out status) "openai-codex 42%s") (:out status))))))))
+            (is (str/includes? (:out status) "anthropic 39%s") (:out status))
+            (is (str/includes? (:out status) "openai-codex 58%s") (:out status))))))))
 
 (deftest pane-prints-text-usage-once
   (with-env

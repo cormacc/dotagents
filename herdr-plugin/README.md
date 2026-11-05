@@ -32,7 +32,7 @@ The popup shows `oh usage --format text` and refreshes every 60 s. Press `q` to 
 
 ## Tab-bar status
 
-Herdr plugin v1 cannot add tab-bar or footer items. The status line is a `[ui] tab_bar_right` command entry in Herdr's own config that runs `oh usage --format status`, for example `anthropic 68%s 39%w | openai-codex 88%w`. The suffix gives the window kind: `s` session, `w` weekly, `m` monthly; `~` marks stale data. `auth?`, `rl?` and `err?` mark a provider without usable data, `?` a provider whose data has no session, weekly or monthly window, and `quota: setup?` means that quota-axi is missing or is the wrong version.
+Herdr plugin v1 cannot add tab-bar or footer items. The status line is a `[ui] tab_bar_right` command entry in Herdr's own config that runs `oh usage --format status`, for example `anthropic 4%s 64%w | openai-codex 12%w`. Each number is the percentage of the window already used, as the vendors' usage pages show it. The suffix gives the window kind: `s` session, `w` weekly, `m` monthly; `~` marks stale data. `auth?`, `rl?` and `err?` mark a provider without usable data, `?` a provider whose data has no session, weekly or monthly window, and `quota: setup?` means that quota-axi is missing or is the wrong version.
 
 To get the entry for this checkout:
 
