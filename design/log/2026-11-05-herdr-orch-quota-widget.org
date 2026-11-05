@@ -66,7 +66,7 @@ Herdr plugin v1 cannot add tab-bar or footer items. The display is therefore a `
 ** Decisions
 - Display through a `tab_bar_right` command entry :: plugin v1 has no native tab-bar or footer API; `tab_bar_position = "bottom"` is the footer option. Rejected:
   - Plugin-provided footer or tab-bar widget: not in plugin v1.
-- Render in `oh` as `--format status` :: one renderer beside `usage-text`, covered by the herdr-orch suite; the plugin stays an adapter. Rejected:
+- Render in `oh` as `--format status` :: one renderer beside the other `oh usage` renderers, covered by the herdr-orch suite; the plugin stays an adapter. Rejected:
   - Plugin-local Babashka script over `oh usage --format json`: a second renderer outside the herdr-orch tests.
   - Direct quota-axi call, as in the prior art: duplicates discovery, version pinning, bounds and the allowlist.
 - Quota parts ship inside the `cormacc.herdr-orch` wrapper plugin :: one plugin per skill; the wrapper scaffold task extends this manifest. Rejected:

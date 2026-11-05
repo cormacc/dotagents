@@ -3744,9 +3744,39 @@
       (empty? rows) "quota: none"
       (every? #(setup-reasons (:reason %)) rows) "quota: setup?"
       :else (str/join " | " (map row-text rows)))))
-(defn usage-text [result format detail?]
-  (let [bold (if (= format "markdown") #(str "**" % "**") identity)
-        detail? (or detail? (= format "text"))
+(defn- reset-time
+  "An ISO instant as `yyyy-MM-dd HH:mm UTC`, or the input when it does not parse."
+  [s]
+  (try (.format (java.time.format.DateTimeFormatter/ofPattern "yyyy-MM-dd HH:mm 'UTC'")
+                (.atZone (java.time.Instant/parse s) java.time.ZoneOffset/UTC))
+       (catch Exception _ s)))
+(defn usage-tree
+  "Readable multi-line text: one heading per provider with its state, then one
+  `- name :: value` line per effective scope, window, reason and quota provider."
+  [result]
+  (if (empty? (:providers result))
+    "No providers configured."
+    (str/join
+     "\n\n"
+     (for [{:keys [localProvider provider state windows quotaSemantics reason local]} (:providers result)]
+       (str/join
+        "\n"
+        (concat
+         [(str localProvider " (" (if local "local" (str (:status state) (when (:stale state) ", stale"))) ")")]
+         (for [{:keys [scope status effectivePercentRemaining boundedBy]} (:effectiveAvailability quotaSemantics)]
+           (str "- " scope " :: "
+                (cond (not (and (= "known" status) (some? effectivePercentRemaining))) "remaining unknown"
+                      (zero? effectivePercentRemaining) "exhausted"
+                      :else (str effectivePercentRemaining "% remaining"))
+                (when (seq boundedBy) (str ", bounded by " (str/join ", " boundedBy)))))
+         (for [{:keys [id kind percentUsed resetsAt]} windows]
+           (str "- window " id " (" kind ") :: "
+                (if (some? percentUsed) (str percentUsed "% used") "use unknown")
+                (when resetsAt (str ", resets " (reset-time resetsAt)))))
+         (when reason [(str "- reason :: " reason)])
+         (when provider [(str "- quota provider :: " provider)])))))))
+(defn usage-markdown [result detail?]
+  (let [bold #(str "**" % "**")
         scope-text (fn [{:keys [scope status effectivePercentRemaining boundedBy]}]
                      (str scope " "
                           (if (and (= "known" status) (some? effectivePercentRemaining))
@@ -3786,7 +3816,8 @@
       (case format
         "json" result
         "status" (usage-status result)
-        (usage-text result format detail?)))))
+        "text" (usage-tree result)
+        (usage-markdown result detail?)))))
 (defn spawn-command! [opts positional]
   (let [[command] (require-positionals positional 1 "spawn")]
     (when (some #{command} (available-personas))

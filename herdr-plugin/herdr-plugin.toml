@@ -11,7 +11,7 @@ id = "quota"
 title = "Subscription quota"
 placement = "popup"
 width = "80%"
-height = 16
+height = "70%"
 command = ["bash", "quota-pane.sh"]
 
 [[actions]]

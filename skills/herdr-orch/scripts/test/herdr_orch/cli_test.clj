@@ -8776,7 +8776,11 @@
     (is (not (str/includes? compact "resets")))
     (is (str/includes? detail "bounded by session"))
     (is (str/includes? detail "resets 2030-01-01T00:00:00Z"))
-    (is (str/includes? text "resets 2030-01-01T00:00:00Z"))))
+    (testing "text is one heading per provider with one line per scope and window"
+      (is (str/includes? text "anthropic (fresh)\n- all_models :: 72% remaining, bounded by session\n- window session (session) :: 28% used, resets 2030-01-01 00:00 UTC\n- quota provider :: claude\n\n") text)
+      (is (str/includes? text "zai (fresh)\n- all_models :: exhausted") text)
+      (is (str/includes? text "\n\nlemonade (local)\n\n") text)
+      (is (not (str/includes? text "**")) text))))
 
 (deftest usage-status-renders-one-line-for-a-status-bar
   (let [window (fn [id kind remaining] {:id id :kind kind :percentUsed (- 100 remaining) :percentRemaining remaining})

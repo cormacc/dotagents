@@ -62,7 +62,7 @@
       (let [{:keys [exit out err]} (run! (assoc env "QUOTA_PANE_ONCE" "1") "bash" "quota-pane.sh")]
         (is (zero? exit) err)
         (is (str/includes? out "Subscription quota") out)
-        (is (str/includes? out "anthropic -- fresh; all_models 61% remaining") out)))))
+        (is (str/includes? out "anthropic (fresh)\n- all_models :: 61% remaining") out)))))
 
 (deftest entrypoints-refuse-without-herdr-plugin-root
   (with-env
