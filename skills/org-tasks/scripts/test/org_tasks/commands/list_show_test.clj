@@ -1,17 +1,19 @@
 (ns org-tasks.commands.list-show-test
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [clojure.edn :as edn]
+            [cheshire.core :as json]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.commands.test-util :refer :all]
             [org-tasks.parser :as parser]
             [org-tasks.styling :as styling]))
 
-(deftest list-emits-tree-and-rows
+(deftest full-list-emits-tree-and-rows
   (with-temp-dir
     (fn [root]
       (bootstrap-graph! root)
       (let [{:keys [out exit]}
-            (run-cli! "--root" root "--format" "json" "list")
+            (run-cli! "--root" root "--format" "json" "list" "--full")
             r (parse-json-result out)]
         (is (zero? exit))
         (is (= 2 (count (:rows r))))
@@ -24,6 +26,53 @@
           (is (= ["backend"] (:tags first-row)))
           (is (= "STARTED" (:status second-row))))))))
 
+(deftest compact-list-contract-and-format-parity
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (doseq [full? [false true]]
+        (let [args (concat ["--root" root "list"] (when full? ["--full"]))
+              json-run (apply run-cli! (concat args ["--format" "json"]))
+              edn-run (apply run-cli! (concat args ["--format" "edn"]))
+              envelope (json/parse-string (:out json-run) true)
+              r (:result envelope)]
+          (is (zero? (:exit json-run)))
+          (is (zero? (:exit edn-run)))
+          (is (true? (:ok envelope)))
+          (is (= [(str "ot --root '" root "' show <id>")] (:help envelope)))
+          (is (not (contains? r :help)))
+          (is (= envelope (json/parse-string
+                           (json/generate-string (edn/read-string (:out edn-run))) true)))
+          (is (= (if full?
+                   #{:root :selectedId :rows :tree :files :sources}
+                   #{:root :selectedId :count :rows})
+                 (set (keys r))))
+          (when-not full?
+            (is (= 2 (:count r)))
+            (doseq [row (:rows r)]
+              (is (= #{:id :parentId :status :priority :summary}
+                     (set (keys row)))))))))))
+
+(deftest compact-list-empty-and-filtered-counts
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (doseq [[status expected] [["TODO" 1] ["DONE" 0]]]
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "list" "--status-filter" status "--format" "json")
+              envelope (json/parse-string out true)]
+          (is (zero? exit))
+          (is (true? (:ok envelope)))
+          (is (= expected (get-in envelope [:result :count])))
+          (is (= expected (count (get-in envelope [:result :rows]))))))
+      (spit (str (fs/path root "TASKS.org")) "* Improvements\n")
+      (let [{:keys [out exit]} (run-cli! "--root" root "list" "--format" "json")
+            envelope (json/parse-string out true)]
+        (is (zero? exit))
+        (is (true? (:ok envelope)))
+        (is (= 0 (get-in envelope [:result :count])))
+        (is (= [] (get-in envelope [:result :rows])))))))
+
 (deftest list-text-output
   (with-temp-dir
     (fn [root]
@@ -32,7 +81,8 @@
         (is (zero? exit))
         (is (str/includes? out "TODO"))
         (is (str/includes? out "STARTED"))
-        (is (str/includes? out "★"))))))
+        (is (str/includes? out "★"))
+        (is (str/includes? out "2 tasks"))))))
 
 (deftest list-levels-zero-shows-only-top-level
   (with-temp-dir

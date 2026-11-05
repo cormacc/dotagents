@@ -4,6 +4,8 @@
 
 Bare `ot` launches the standalone TUI when an interactive terminal is available. `ot --help`, `ot -h`, and `ot help` render the command index; `ot <command> --help` (or `ot help <command>`) renders that command's specific options plus the globals. Bare non-TTY `ot` and bare `ot --format json` emit the persisted selected-task JSON envelope without launching the TUI.
 
+Text output uses ANSI styling only with an attached terminal console. Redirected or piped output is plain text. `--no-color` or a non-blank `NO_COLOR` disables automatic styling; the TUI retains its explicit colour setting.
+
 The pi tasks extension remains a pi-specific UI/event wrapper around `ot`: overlay rendering, keybindings, prompts, confirmations, file watching, compact widgets, and agent follow-up prompts stay in pi; durable protocol mutations go through `ot`.
 
 ## Install
@@ -87,6 +89,8 @@ ot uuid --count 3
 ```
 
 Surplus positional arguments fail with `argument-error` and exit 2 before the command runs. Blocker and issue add/remove each take one token. Options can precede the command or follow its expected positionals, but options after surplus input are not parsed: put `--root` and `--format` before that input. Errors use an already-parsed format, or text if no format was parsed. Options followed by `-- <summary>` remain valid for create, including dash-led summaries.
+
+List output includes a next-step hint for `ot show <id>`, carrying explicit protocol-path selectors. JSON/EDN hints live in a top-level `help` array, outside `result`; text mode prints `Next:` lines. Argument errors include concise command help when the command is resolved. Domain errors and self-contained confirmations remain unchanged.
 
 ## Task bodies from `ot create`
 
@@ -178,7 +182,9 @@ The in-tree, directory-symlink, and bare-skill launchers preserve the caller's w
 
 `ot root` prints the resolved absolute project root on one line. Only `--root` changes that value: `--tasks <path>` and `--archive <path>` override protocol file paths exposed by `ot list`, not project-root resolution. There is no global `--local <path>` override. `ot create "New task" --local` selects `<root>/TASKS.local.org`; parent/after/relative-to anchors still determine the owning file. An option not accepted by the selected command, such as `ot list --local`, fails with `argument-error` and exit 2.
 
-`ot list --format json` returns both the resolved `root` and absolute protocol `files`:
+`ot list --format json` returns `{root, selectedId, count, rows}`. Rows contain only `id`, `parentId`, `status`, `priority`, and `summary`; `count` is the number of returned rows after filters. EDN has the same compact default. Text output includes a task count. Use `--full` for full task rows, the nested `tree`, shared `sources`, and absolute protocol `files`:
+
+`ot list --full --format json` includes:
 
 ```json
 {
@@ -191,7 +197,7 @@ The in-tree, directory-symlink, and bare-skill launchers preserve the caller's w
 }
 ```
 
-The pi tasks extension shares CLI root resolution by spawning `ot list` from the workspace cwd and using these returned `root` / `files` fields.
+The pi tasks extension shares CLI root resolution by spawning `ot list --full` from the workspace cwd and using these returned `root` / `files` fields.
 
 ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of at least four characters. `ot list` and `ot scan` print the first 8 characters of each id as an `id` column; that prefix can be pasted back into any id-accepting command. Ambiguous values fail with `ambiguous-id` and include matching candidates. For blockers, write `task:<UUID>`; existing bare full-UUID tokens also resolve as task dependencies without being rewritten, while all other bare text remains opaque.
 

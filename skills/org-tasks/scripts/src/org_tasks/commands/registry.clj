@@ -111,7 +111,8 @@
              :ref "<uuid>" :coerce :string}})
 
 (def ^:private list-spec
-  {:status-filter {:desc "Filter by status (repeatable)" :coerce []
+  {:full          {:desc "Include full task rows, tree, files and sources" :coerce :boolean}
+   :status-filter {:desc "Filter by status (repeatable)" :coerce []
                    :alias :S}
    :levels        {:desc (str "Limit hierarchy depth (0 = top-level only, "
                               "1 = top-level + direct children, …). "

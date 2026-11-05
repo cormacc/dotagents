@@ -108,7 +108,7 @@ class OrgTasksBackend:
 
     def tree(self, cwd: Path | str) -> dict:
         root = self._resolve_root(cwd, write=False)
-        result, warnings = self._run_ot(root, "list")
+        result, warnings = self._run_ot(root, "list", "--full")
         tree = result.get("tree")
         rows = result.get("rows")
         if not isinstance(tree, list) or not isinstance(rows, list):

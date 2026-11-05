@@ -107,7 +107,6 @@
 
 (defn list-cmd [{:keys [opts]}]
   (let [{:keys [project-root tasks selected-id files]} (load-context opts)
-        sources    (task/collect-sources tasks)
         wire-tasks (mapv #(task/task->wire % nil {:include-content? false}) tasks)
         rows       (task/flatten-tree wire-tasks)
         status-filter (set (:status-filter opts))
@@ -124,15 +123,23 @@
         tree-prefixes (compute-tree-prefixes kept)]
     (out/emit-result
       opts
-      {:tree wire-tasks
-       :rows kept
-       :selectedId selected-id
-       :root project-root
-       :files files
-       :sources sources
-       :text/lines (cons "   STATUS    id        task"
-                         (map #(format-list-row opts %2 %1 selected-id)
-                              kept tree-prefixes))})))
+      (with-meta (assoc (if (:full opts)
+               {:tree wire-tasks
+                :rows kept
+                :selectedId selected-id
+                :root project-root
+                :files files
+                :sources (task/collect-sources tasks)}
+               {:root project-root
+                :selectedId selected-id
+                :count (count kept)
+                :rows (mapv #(select-keys % [:id :parentId :status :priority :summary])
+                            kept)})
+             :text/lines (concat [(str (count kept) " tasks")
+                                  "   STATUS    id        task"]
+                                 (map #(format-list-row opts %2 %1 selected-id)
+                                      kept tree-prefixes)))
+        {:help [(out/command-hint opts "show <id>")]}))))
 
 ;; ── ot show ─────────────────────────────────────────────────────────
 

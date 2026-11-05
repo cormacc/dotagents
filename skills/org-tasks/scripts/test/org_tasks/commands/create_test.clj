@@ -72,7 +72,7 @@
       (let [opts (into {} (map (fn [k] [k (str (fs/path dir (str (name k) ".org")))])
                                [:tasks :local :archive]))]
         (is (= opts (root/resolve-protocol-files opts dir)))
-        (let [{:keys [out exit]} (run-cli! "--root" dir "--format" "json" "list"
+        (let [{:keys [out exit]} (run-cli! "--root" dir "--format" "json" "list" "--full"
                                           "--tasks" (:tasks opts) "--archive" (:archive opts))
               files (:files (parse-json-result out))]
           (is (zero? exit))

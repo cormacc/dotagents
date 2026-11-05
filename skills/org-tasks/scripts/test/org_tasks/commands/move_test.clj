@@ -148,7 +148,7 @@
           (is (str/includes? after "Child A1 body.")))
         (testing "levels agree with the reloaded graph"
           (let [rows (:rows (parse-json-result
-                              (:out (run-cli! "--root" root "--format" "json" "list"))))
+                              (:out (run-cli! "--root" root "--format" "json" "list" "--full"))))
                 by-id (into {} (map (juxt :id identity)) rows)]
             (is (= 4 (:level (get by-id child-a1))))
             (is (= 5 (:level (get by-id grandchild))))
@@ -176,7 +176,7 @@
                (str/index-of after "** STARTED Child A1")))
         (testing "it left its old parent"
           (let [rows (:rows (parse-json-result
-                              (:out (run-cli! "--root" root "--format" "json" "list"))))
+                              (:out (run-cli! "--root" root "--format" "json" "list" "--full"))))
                 row (first (filter #(= child-a1 (:id %)) rows))]
             (is (nil? (:parentId row)))
             (is (= 2 (:level row)))))))))
@@ -509,7 +509,7 @@
               (is (= [group-id] (mapv :id (:ancestors r))))))
           (testing "the record file remains the plan child's only writable node"
             (let [rows (:rows (parse-json-result
-                                (:out (run-cli! "--root" root "--format" "json" "list"))))]
+                                (:out (run-cli! "--root" root "--format" "json" "list" "--full"))))]
               (is (= 1 (count (filter #(= linked-plan-child-id (:id %)) rows))))
               (is (= record (:sourcePath (first (filter #(= linked-plan-child-id (:id %))
                                                         rows))))))))))))

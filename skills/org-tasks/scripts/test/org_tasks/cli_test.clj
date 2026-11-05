@@ -49,6 +49,18 @@
      :err  (str err)
      :exit (or @exit 0)}))
 
+(deftest usage-errors-include-command-reference-outside-error
+  (let [{:keys [err exit]} (capture #(cli/-main "list" "--format" "json" "--bogus"))
+        response (json/parse-string err true)]
+    (is (= 2 exit))
+    (is (false? (:ok response)))
+    (is (str/includes? (first (:help response)) "ot list"))
+    (is (str/includes? (first (:help response)) "--full"))
+    (is (not (contains? (:error response) :help))))
+  (is (= "ot --root '/a/b' --tasks 'user'\\''s.org' --archive '/a/$archive' show <id>"
+         (out/command-hint {:root "/a/b" :tasks "user's.org" :archive "/a/$archive"}
+                           "show <id>"))))
+
 (deftest surplus-arguments-rejected-before-handlers
   (let [calls (atom [])
         entries (mapv #(assoc % :fn (fn [result] (swap! calls conj result))) registry/commands)]
@@ -316,7 +328,7 @@
         (fs/create-dirs nested)
         (spit (str (fs/path dir "TASKS.org")) "* TODO Root task\n:PROPERTIES:\n:CUSTOM_ID: 11111111-1111-4111-8111-111111111111\n:END:\n")
         (let [{:keys [out exit]} (capture #(with-user-dir (str nested)
-                                             (fn [] (apply cli/-main ["--format" "json" "list"]))))
+                                             (fn [] (apply cli/-main ["--format" "json" "list" "--full"]))))
               envelope (json/parse-string out true)]
           (is (zero? exit))
           (is (= (str (fs/absolutize dir)) (get-in envelope [:result :root])))

@@ -301,7 +301,7 @@ export interface OtDoctorResult<TFinding = unknown> {
 }
 
 export function otList<TTask = unknown>(opts: RunOtOptions = {}): Promise<OtListResult<TTask>> {
-  return runOtResult<OtListResult<TTask>>(["list"], opts);
+  return runOtResult<OtListResult<TTask>>(["list", "--full"], opts);
 }
 
 export function otSelectTask(id: string | null, opts: RunOtOptions = {}): Promise<unknown> {

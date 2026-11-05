@@ -107,22 +107,23 @@
    (mapv (fn [{:keys [cmds args->opts] :as entry}]
            (cond-> {:cmds cmds
                     :fn   (fn [{:keys [opts args] :as result}]
-                            (validate-options! opts (registry/effective-spec entry) args->opts)
-                            ;; Raw fallback keeps fixed indices; mapped keys do not
-                            ;; shift later arguments into an earlier raw slot.
-                            (let [surplus (keep-indexed
-                                            (fn [index arg]
-                                              (let [k (nth args->opts index nil)]
-                                                (when (or (nil? k) (contains? opts k))
-                                                  arg)))
-                                            args)]
-                              (when (seq surplus)
-                                (out/emit-error opts
-                                                {:code "argument-error"
-                                                 :message (str "Unexpected arguments: "
-                                                               (str/join " " surplus))}
-                                                2))
-                              ((:fn entry) result)))
+                            (binding [out/*usage-help* (format-command-help entry)]
+                              (validate-options! opts (registry/effective-spec entry) args->opts)
+                              ;; Raw fallback keeps fixed indices; mapped keys do not
+                              ;; shift later arguments into an earlier raw slot.
+                              (let [surplus (keep-indexed
+                                              (fn [index arg]
+                                                (let [k (nth args->opts index nil)]
+                                                  (when (or (nil? k) (contains? opts k))
+                                                    arg)))
+                                              args)]
+                                (when (seq surplus)
+                                  (out/emit-error opts
+                                                  {:code "argument-error"
+                                                   :message (str "Unexpected arguments: "
+                                                                 (str/join " " surplus))}
+                                                  2))
+                                ((:fn entry) result))))
                     :spec (registry/effective-spec entry)}
              args->opts (assoc :args->opts args->opts)))
          registry/commands)
@@ -150,26 +151,29 @@
 
 (defn -main [& args]
   (let [args (vec args)]
-    ;; Honour `--help` as a top-level flag regardless of position so
-    ;; `ot --help`, `ot -h`, and `ot help` all do the same thing.
-    (cond
-      (some #{"-h" "--help" "help"} args)
-      (if-let [entry (command-entry-for args)]
-        (do (println (format-command-help entry))
-            (out/*exit-fn* 0))
-        (help-cmd nil))
+    (binding [out/*usage-help* (if-let [entry (command-entry-for args)]
+                               (format-command-help entry)
+                               "ot --help")]
+      ;; Honour `--help` as a top-level flag regardless of position so
+      ;; `ot --help`, `ot -h`, and `ot help` all do the same thing.
+      (cond
+        (some #{"-h" "--help" "help"} args)
+        (if-let [entry (command-entry-for args)]
+          (do (println (format-command-help entry))
+              (out/*exit-fn* 0))
+          (help-cmd nil))
 
-      (or (empty? args)
-          (= ["--format" "json"] args)
-          (= ["--format=json"] args))
-      (if (and (empty? args) (tui/interactive-terminal?))
-        (tui/run! {:format :json})
-        (tui-tasks/selected-json! {:format :json}))
+        (or (empty? args)
+            (= ["--format" "json"] args)
+            (= ["--format=json"] args))
+        (if (and (empty? args) (tui/interactive-terminal?))
+          (tui/run! {:format :json})
+          (tui-tasks/selected-json! {:format :json}))
 
-      :else
-      ;; known-limit: dash-led separate option values are parsed as flags; use
-      ;; --body=<text>. Revisit if the parser supports literal separate values.
-      (cli/dispatch (dispatch-table) args
-                    {:error-fn cli-error-fn
-                     :coerce   registry/dispatch-coerce
-                     :alias    registry/dispatch-aliases}))))
+        :else
+        ;; known-limit: dash-led separate option values are parsed as flags; use
+        ;; --body=<text>. Revisit if the parser supports literal separate values.
+        (cli/dispatch (dispatch-table) args
+                      {:error-fn cli-error-fn
+                       :coerce   registry/dispatch-coerce
+                       :alias    registry/dispatch-aliases})))))

@@ -282,7 +282,7 @@ class TaskTreeTests(unittest.TestCase):
 
             result = backend.tree(root)
 
-            self.assertEqual(json.loads(argv_log.read_text(encoding="utf-8"))[-1], "list")
+            self.assertEqual(json.loads(argv_log.read_text(encoding="utf-8"))[-2:], ["list", "--full"])
             self.assertEqual(result["selectedId"], child_id)
             self.assertTrue(result["writable"])
             self.assertEqual(result["tree"][0]["children"][0]["id"], child_id)

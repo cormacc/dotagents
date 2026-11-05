@@ -25,6 +25,20 @@
   (with-redefs [out/*getenv* (fn [k] (when (= k "NO_COLOR") "1"))]
     (is (not (ansi? (styling/tag-cluster {} ["org-tasks"]))))))
 
+(deftest automatic-styling-requires-a-terminal
+  (doseq [terminal? [true false]
+          no-color? [true false]
+          env-color [nil "" "1"]]
+    (binding [out/*terminal?* (constantly terminal?)
+              out/*getenv* (fn [_] env-color)]
+      (is (= (and terminal? (not no-color?) (not= "1" env-color))
+             (ansi? (styling/status {:no-color no-color?} "TODO")))
+          (str {:terminal terminal? :no-color no-color? :NO_COLOR env-color}))))
+  (binding [out/*terminal?* (constantly false)
+            out/*getenv* (constantly "1")]
+    (is (ansi? (styling/status {:color? true} "TODO")) "explicit TUI styling wins")
+    (is (not (ansi? (styling/status {:color? false} "TODO"))))))
+
 (deftest known-statuses-and-priorities-render-plain-text-when-disabled
   (is (= "TODO" (styling/status {:color? false} "TODO")))
   (is (= "[#A]" (styling/priority {:color? false} "A")))

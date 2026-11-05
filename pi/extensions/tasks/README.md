@@ -8,7 +8,7 @@ call `ot section` / `ot scan`, `/tasks doctor` calls `ot doctor`,
 selection/status/archive/publish/unpublish use
 `ot select|status|archive|publish|unpublish`, `insertTaskIntoFile` and the
 interactive overlay create flow shell through `ot create`, and the overlay task
-graph loads from `ot list --format json`. The extension always passes canonical
+graph loads from `ot list --full --format json`. The extension always passes canonical
 full UUIDs to `ot`; CLI prefix resolution is a shell-user convenience and does
 not affect overlay or tool-call behaviour.
 

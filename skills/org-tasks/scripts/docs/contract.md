@@ -48,6 +48,7 @@ This document pins the JSON / EDN contract every machine-readable `ot` command e
 - `message` is a single-line human-readable summary.
 - `file` and `line` are populated when locatable; otherwise `null`.
 - `details` may carry command-specific extra context.
+- Optional top-level `help` is an array of contextual hints, separate from `result` or `error`. `list` suggests `show <id>` and carries explicit `--root`, `--tasks` and `--archive` selectors with shell-quoted values; text mode appends `Next:` lines. Argument errors include the resolved command's concise reference, or `ot --help` when unresolved. Domain errors and ordinary confirmations do not gain hints. Error envelopes remain on stderr.
 - The process exit code is `0` on success, `1` on domain failure, and `2` on argument or option parse failure.
 - Registry positional arguments and value-taking options default to strings, so text such as `1e3` is preserved. Explicit boolean, numeric, enum, and repeatable coercions take precedence, both before and after command names. A dash-led body must use `--body=<text>`; the separate-argument form remains unsupported.
 - Surplus positional arguments fail with `argument-error` before the selected command handler runs. The message echoes the surplus tokens. The error uses an already-parsed `--format json|edn`; options after surplus input are not parsed or recovered.
@@ -97,7 +98,7 @@ Id-accepting commands resolve exact `:CUSTOM_ID:` values first, then accept any 
 
 ## Common task shape (`Task`)
 
-Returned by `list` (`rows[]` and within `tree[]`), `show`, `create`, `status`, and as the `task` field of related result payloads.
+Returned by `list --full` (`rows[]` and within `tree[]`), `show`, `create`, `status`, and as the `task` field of related result payloads.
 
 ```jsonc
 {
@@ -125,7 +126,7 @@ Returned by `list` (`rows[]` and within `tree[]`), `show`, `create`, `status`, a
 }
 ```
 
-Tree form additionally carries `"children": [Task]` and an `"importChildren": [Task]` array populated when an `#+IMPORT:` change-record is resolvable. `ot show` / `ot selected` omit `sourceContent` and `effectiveSourceContent` by default; pass `ot show <id> --include-content` to include those raw strings on the returned task tree. `ot list` deduplicates large source strings into its `result.sources` map instead.
+Tree form additionally carries `"children": [Task]` and an `"importChildren": [Task]` array populated when an `#+IMPORT:` change-record is resolvable. `ot show` / `ot selected` omit `sourceContent` and `effectiveSourceContent` by default; pass `ot show <id> --include-content` to include those raw strings on the returned task tree. `ot list --full` deduplicates large source strings into its `result.sources` map instead.
 
 ## Default invocation and TUI stdout contract
 
@@ -140,8 +141,13 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren": [T
 
 ### `ot list`
 
+The JSON and EDN default result is `{root, selectedId, count, rows}`. Each row contains only `id`, `parentId`, `status`, `priority`, and `summary`. `count` is the number of returned rows after status and depth filters; an empty result has `count: 0` and `rows: []`. Default results omit `tree`, `files`, and `sources`.
+
+`--full` returns the full graph payload below, without `count`:
+
 ```json
 "result": {
+  "root":         "/repo",
   "tree":         [Task],
   "rows":         [Task],
   "selectedId":   "uuid | null",
@@ -163,7 +169,7 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren": [T
 - `rows` is the same tasks flattened in walker order, each carrying `parentId`.
 - `selectedId` echoes `#+SELECTED:` from `TASKS.local.org`.
 - `sources` is keyed by absolute source path and carries file content once per path so UI clients can resolve link templates or preserve org text without duplicating large strings on every task row.
-- `--format text` renders an `id` column showing the first 8 characters of each `:CUSTOM_ID:`. The prefix is pasteable into any id-accepting command because it satisfies the ≥ 4-char minimum; collisions surface as `ambiguous-id` at lookup time (see `ot doctor`'s `:patterned-sibling-ids` for prevention).
+- `--format text` prints a task count and renders an `id` column showing the first 8 characters of each `:CUSTOM_ID:`. The prefix is pasteable into any id-accepting command because it satisfies the ≥ 4-char minimum; collisions surface as `ambiguous-id` at lookup time (see `ot doctor`'s `:patterned-sibling-ids` for prevention).
 
 Options:
 
@@ -535,7 +541,7 @@ All commands accept:
 | `--archive <path>` | `<root>/TASKS.archive.org`                            |                                                    |
 | `--dry-run`      | false                                                   | Mutation commands print the proposed result without writing. |
 | `--yes`, `-y`    | false                                                   | Skips confirmation prompts on destructive commands. |
-| `--no-color`     | false                                                   | Disables ANSI styling in `--format text`.          |
+| `--no-color`     | false                                                   | Disables automatic terminal ANSI styling in `--format text`; redirected output is always plain. |
 | `--help`, `-h`   | n/a                                                     | Renders dispatch + spec-derived help.              |
 
 ## Exit codes

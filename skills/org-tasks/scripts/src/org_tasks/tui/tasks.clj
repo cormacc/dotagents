@@ -10,7 +10,7 @@
      error envelope arrives through `output/*exit-fn*` — nothing is
      re-parsed from printed JSON.
   2. Tree/state model — pure functions over the wire-shaped task rows
-     returned by `ot list --format json` (camelCase keys such as
+     returned by `ot list --full --format json` (camelCase keys such as
      `:parentId`; contrast with `org-tasks.task`, which operates on the
      internal kebab-case tree). Includes visibility under the
      `:expanded` set, cursor addressing, and post-mutation reload.
@@ -49,8 +49,10 @@
 (defn selected-json! [opts]
   (list-show/selected-cmd {:opts (assoc opts :format :json)}))
 
-(defn load-tasks [opts]
-  (let [{:keys [exit envelope]} (call-command list-show/list-cmd opts)]
+(defn load-tasks
+  "Return the full graph required by TUI navigation and source-aware actions."
+  [opts]
+  (let [{:keys [exit envelope]} (call-command list-show/list-cmd (assoc opts :full true))]
     (if (zero? exit)
       (:result envelope)
       (throw (ex-info (get-in envelope [:error :message] "Unable to load tasks")

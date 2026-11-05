@@ -4,8 +4,8 @@
   Every command emits a result via [[emit-result]] or [[emit-error]],
   which renders one of three formats:
 
-    * `:text` (default, human-readable; ANSI styling unless
-      `--no-color` is set or `NO_COLOR` is in the environment)
+    * `:text` (default, human-readable; ANSI styling only with an
+      attached console, unless `--no-color` or `NO_COLOR` disables it)
     * `:json` (the contract documented in
       `skills/org-tasks/scripts/docs/contract.md`)
     * `:edn`  (the same envelope rendered as EDN)
@@ -42,16 +42,21 @@
   handling without mutating the process environment."
   (fn [k] (System/getenv k)))
 
+(def ^:dynamic *terminal?*
+  "Indirection for the attached-console check used by CLI text rendering."
+  (fn [] (boolean (System/console))))
+
 (defn color-enabled?
   "Return true when text renderers should emit ANSI styling.
 
-  Explicit `:color?` opts win for tests and focused callers. Otherwise
-  `--no-color` disables styling, and the ambient NO_COLOR environment
-  variable is honoured."
+  Explicit `:color?` opts win for tests and TUI callers. Otherwise an
+  attached terminal console is required; redirected stdout is unstyled.
+  `--no-color` and non-blank NO_COLOR disable automatic styling."
   [opts]
   (if (contains? opts :color?)
     (boolean (:color? opts))
-    (and (not (:no-color opts))
+    (and (*terminal?*)
+         (not (:no-color opts))
          (str/blank? (*getenv* "NO_COLOR")))))
 
 (defn- strip-internal-keys
@@ -65,11 +70,22 @@
         v))
     x))
 
+(def ^:dynamic *usage-help*
+  "Command-specific reference attached to argument errors by the CLI boundary."
+  "ot --help")
+
+(defn command-hint
+  "Build a command template carrying the caller's explicit protocol paths."
+  [opts command]
+  (let [quote-value (fn [s] (str "'" (str/replace (str s) "'" "'\\''") "'"))]
+    (str "ot"
+         (apply str (for [k [:root :tasks :archive] :let [v (get opts k)] :when v]
+                      (str " --" (name k) " " (quote-value (if (keyword? v) (name v) v)))))
+         " " command)))
+
 (defn- success-envelope [result warnings]
-  {:ok       true
-   :schema   schema
-   :result   result
-   :warnings (vec warnings)})
+  (cond-> {:ok true :schema schema :result result :warnings (vec warnings)}
+    (seq (:help (meta result))) (assoc :help (:help (meta result)))))
 
 (defn- error-envelope [error]
   {:ok     false
@@ -97,7 +113,8 @@
 
 (defn emit-result
   "Emit a success envelope. `result` is the per-command payload.
-  Optional `:warnings` is a sequence of warning maps.
+  Optional `:warnings` is a sequence of warning maps. Result metadata `:help`
+  supplies contextual hints outside the command payload.
 
   Returns the public (internal-keys-stripped) envelope so in-process
   callers such as the TUI bridge can consume command results as data
@@ -111,6 +128,7 @@
        :json (println (pp-json public))
        :edn  (println (str/trim-newline (pp-edn public)))
        :text (do (println (render-text-result result))
+                 (doseq [hint (:help public)] (println "Next:" hint))
                  (doseq [w warnings]
                    (binding [*out* *err*]
                      (println "warning:" (:message w))))))
@@ -120,15 +138,19 @@
   "Emit a failure envelope and exit with `:exit` (default 1).
 
   `error` is a map with at minimum `:code` and `:message`; `:file`,
-  `:line`, and `:details` are surfaced when present."
+  `:line`, and `:details` are surfaced when present. Usage errors include
+  the CLI's command-specific reference as top-level help."
   ([opts error]
    (emit-error opts error 1))
   ([opts error exit-code]
-   (let [envelope (error-envelope error)
+   (let [envelope (cond-> (error-envelope error)
+                    (= 2 exit-code) (assoc :help [*usage-help*]))
          public   (strip-internal-keys envelope)]
      (case (fmt opts)
        :json (binding [*out* *err*] (println (pp-json public)))
        :edn  (binding [*out* *err*] (println (str/trim-newline (pp-edn public))))
-       :text (binding [*out* *err*] (println (render-text-error error))))
+       :text (binding [*out* *err*]
+               (println (render-text-error error))
+               (doseq [hint (:help public)] (println hint))))
      (*exit-fn* exit-code public)
      public)))
