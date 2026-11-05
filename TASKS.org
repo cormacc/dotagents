@@ -279,6 +279,16 @@ Acceptance criteria:
 #+IMPORT: [[plan:2026-11-04-herdr-orch-herdr-app-support.org]]
 Let oh delegate from a herdr-app terminal, and refuse when leaked Herdr TUI variables name the wrong session. Plan in the linked change-record.
 
+** TODO Consider replacing quota-axi with direct Babashka quota queries :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 4d770990-2725-4b7d-905a-888db5d9c2a7
+:CREATED: [2026-11-05 Thu 09:46]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 09:46]
+:END:
+Evaluate whether herdr-orch should return to querying subscription quota directly from Babashka, as `usage.clj` did before b8e5e99, and remove the quota-axi dependency. The quota-axi integration needs a Node >=22.19 runtime, an npm package dependency, a root `npm ci` in Home Manager activation, setup and discovery code (`quota_setup.clj`, `quota-axi-setup`, the `/oh setup` flow), a process supervisor (`quota_process.mjs`), output allowlisting, and delegated credential refresh through vendor CLIs. Compare that cost with a maintained Babashka collector for the providers in use (Anthropic, Codex): endpoint stability, credential reading and refresh ownership, window semantics (for example the Codex 720h `unknown` window), and test coverage. Inputs: [[proj:design/log/2026-11-04-quota-axi-backend.org]] and the pre-quota-axi `usage.clj` at b8e5e99^.
+
 * Fixes
 
 * Upstream issues
