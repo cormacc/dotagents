@@ -8785,28 +8785,41 @@
                :quotaSemantics {:status "known" :effectiveAvailability []}})
         rows [(row "claude" "fresh" false [(window "five_hour" "session" 68.4) (window "seven_day" "weekly" 39)
                                            (window "model:fable" "model" 85)])
-              (row "codex" "auth_required" false [])
-              (row "kimi" "rate_limited" false [])
-              (row "zai" "stale" true [(window "monthly" "monthly" 50)])]
+              (row "codex" "auth_required" false [])]
         {:keys [env dir]} (routed-fixture {:schemaVersion 6 :providers rows} {"HERDR_ENV" "0"} nil)
         status (fn [& argv] (apply call! env "usage" "--format" "status" argv))
         proc (status)]
     (is (zero? (:exit proc)) (:out proc))
-    (is (= "anthropic 68%s 39%w | kimi rl? | openai-codex auth? | zai 50%m~\n" (:out proc))
+    (is (= "anthropic 68%s 39%w | openai-codex auth?\n" (:out proc))
         "one line; local and model windows omitted")
     (is (= "anthropic 68%s 39%w\n" (:out (status "--provider" "anthropic"))))
     (is (= "quota: none\n" (:out (status "--provider" "lemonade"))))
-    (is (= 1 (:exit (status "--detail"))) "--detail stays markdown-only")
+    (is (= 2 (:exit (status "--detail"))) "--detail stays markdown-only")
     (testing "unusable evidence keeps one line and exit 0"
       (spit (get env "FAKE_QUOTA_REPORT") "{")
       (fs/delete-if-exists (usage-cache-dir dir))
       (let [p (status)]
         (is (zero? (:exit p)))
-        (is (= "anthropic err? | kimi err? | openai-codex err? | zai err?\n" (:out p)))))
+        (is (= "anthropic err? | openai-codex err?\n" (:out p)))))
     (testing "a missing or wrong-version quota-axi is one setup marker"
       (let [p (apply call! (assoc env "FAKE_QUOTA_VERSION" "0.0.1") ["usage" "--format" "status"])]
         (is (zero? (:exit p)))
         (is (= "quota: setup?\n" (:out p)))))))
+
+(deftest usage-status-markers-cover-every-state
+  (let [row (fn [local status stale windows] {:localProvider local :provider local :state {:status status :stale stale} :windows windows})]
+    (is (= "a rl? | b 50%m~ 7%w~ | c err? | d ?"
+           (cli/usage-status {:providers [(row "a" "rate_limited" false [])
+                                          (row "b" "stale" true [{:kind "monthly" :percentRemaining 50} {:kind "weekly" :percentRemaining 7.4}])
+                                          (row "c" "error" false [])
+                                          (row "d" "fresh" false [{:kind "credits" :percentRemaining 3}])
+                                          {:localProvider "l" :local true :state {:status "fresh" :stale false} :windows []}]})))
+    (is (= "quota: none" (cli/usage-status {:providers [{:localProvider "l" :local true}]})))
+    (is (= "quota: setup?" (cli/usage-status {:providers [(assoc (row "a" "unavailable" false []) :reason "missing-executable")
+                                                           (assoc (row "b" "unavailable" false []) :reason "wrong-version")]})))
+    (is (= "a err? | b err?" (cli/usage-status {:providers [(assoc (row "a" "unavailable" false []) :reason "missing-executable")
+                                                            (assoc (row "b" "unavailable" false []) :reason "timeout")]}))
+        "one setup marker only when every row needs setup")))
 
 (deftest usage-unknown-provider-fails-before-any-credential-read-or-request
   (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10 :codex-used 10}))

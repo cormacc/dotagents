@@ -3722,7 +3722,8 @@
   "One plain line for a terminal status bar such as Herdr's `tab_bar_right`.
   Local providers are omitted. A provider with session, weekly or monthly windows
   shows each window's remaining percentage, labelled by kind, with `~` when stale;
-  otherwise it shows `auth?`, `rl?` or `err?` from its state. When the quota-axi
+  otherwise it shows `auth?`, `rl?` or `err?` from its state, or `?` when fresh
+  evidence has no such window. When the quota-axi
   executable is missing or the wrong version, the whole line is `quota: setup?`."
   [result]
   (let [rows (remove :local (:providers result))
@@ -3737,6 +3738,7 @@
                             (str/join " " (map #(window-text % stale?) shown))
                             (= "auth_required" (:status state)) "auth?"
                             (= "rate_limited" (:status state)) "rl?"
+                            (#{"fresh" "stale"} (:status state)) "?"
                             :else "err?"))))]
     (cond
       (empty? rows) "quota: none"
