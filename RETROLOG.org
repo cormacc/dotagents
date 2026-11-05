@@ -5,6 +5,14 @@ Historic evidence for the rules in [[file:home/AGENTS.md][home/AGENTS.md]] and [
 
 The [[file:skills/retro/SKILL.md][retro]] skill appends to this file. Group each entry under the rule heading that the evidence supports, and use the rule's own instruction-file heading text so a reader can find the rule.
 
+* 2026-11-04 Wed -- quota-axi validation
+
+** Tests
+
+Rules added to =skills/herdr-orch/scripts/AGENTS.md= after owner approval. The final validator reported that rediscovering Babashka through its prepended wrapper directory selected the wrapper itself and caused recursion. A separate bounded synthetic control selected the wrapper after PATH modification but retained the real delegate when its absolute path was resolved first. Evidence: =.tmp/quota-axi-impl/pi15-validation.md= and =.tmp/quota-axi-impl/retro-path-control.clj=.
+
+The full-suite runner requires runtime roots outside the checkout because root-discovery fixtures inspect ancestor directories. An isolated runtime root below the checkout caused three discovery assertions to fail. A controlled rendering comparison passed with a short temporary path and failed with a longer nested path reporting Chromium =Socket path too long=. The complete suite passed under a short owned outside-checkout runtime root. Authored runners and evidence stayed under repository =.tmp/=. Evidence: =scripts/isolated-test-run.bb= and =.tmp/quota-axi-impl/pi15-validation.md=, with =mermaid-boundary.log= and =boundary-long.log= in its same-stem scratch directory.
+
 * 2026-10-31 Sat -- skill and extension consolidation
 
 ** Assignment premises / Trusting a result / Closure-time refresh and prune
