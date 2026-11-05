@@ -129,7 +129,8 @@
         (collect env (report [(row)]) {:providers ["anthropic"] :fresh true})
         (let [calls (slurp (str (fs/path dir "quota-calls")))]
           (is (str/includes? calls "[\"--version\"]"))
-          (is (str/includes? calls "[\"--json\" \"--full\" \"--no-credential-refresh\" \"--max-age\" \"5m\" \"--provider\" \"claude\"]"))
+          (is (str/includes? calls "[\"--json\" \"--full\" \"--max-age\" \"5m\" \"--provider\" \"claude\"]"))
+          (is (not (str/includes? calls "--no-credential-refresh")) "delegated credential refresh stays enabled")
           (is (str/includes? calls "\"--max-age\" \"0\"")))))))
 
 (deftest timeout-cleans-owned-descendants-only

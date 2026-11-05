@@ -163,7 +163,10 @@
          executable (when (seq remote) (executable))
          failure (when (seq remote) (version-failure executable))
          collected (when (and (seq remote) (not failure))
-                     (execute executable ["--json" "--full" "--no-credential-refresh" "--max-age" (if fresh "0" "5m")
+                     ;; Delegated refresh stays enabled: native CLIs rarely run here, so their tokens
+                     ;; would otherwise expire. quota-axi runs each delegate in its own process
+                     ;; group, so cleanup of the collector's group cannot interrupt a refresh.
+                     (execute executable ["--json" "--full" "--max-age" (if fresh "0" "5m")
                                           "--provider" (str/join "," remote)] collection-budget-ms))
          report (when (:out collected) (try (json/parse-string (:out collected) true) (catch Exception _ nil)))
          failure (or failure (:reason collected)

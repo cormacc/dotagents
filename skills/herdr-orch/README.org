@@ -304,7 +304,7 @@ oh usage --format status                    # one line for a status bar, e.g. an
 oh usage --provider anthropic --fresh       # request fresh upstream evidence
 #+end_src
 
-The operator keeps Pi and native CLI logins on one subscription per provider; =oh= does not verify identity. quota-axi runs with =--no-credential-refresh=, but pinned upstream Codex can refresh native credentials. Claude's separate delegate remains disabled, so authenticate native Claude periodically until upstream Pi support is available; no verified upstream PR is required. Upstream owns five-minute reuse and fresh-zero behaviour. There is no local cache, backoff, or stale guarantee. A string alias or canonical ID (=--model opus=, =--model anthropic/claude-opus-5-5=) is never routed and makes no usage call.
+The operator keeps Pi and native CLI logins on one subscription per provider; =oh= does not verify identity. quota-axi runs with delegated credential refresh enabled: an expired native Claude or Codex token is renewed by the vendor's own CLI, so native logins stay current without a standalone session. Upstream owns five-minute reuse and fresh-zero behaviour. There is no local cache, backoff, or stale guarantee. A string alias or canonical ID (=--model opus=, =--model anthropic/claude-opus-5-5=) is never routed and makes no usage call.
 
 ** Listing personas, traits, models, and workflows
 
