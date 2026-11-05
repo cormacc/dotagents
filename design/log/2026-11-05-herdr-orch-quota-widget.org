@@ -91,11 +91,12 @@ Herdr plugin v1 cannot add tab-bar or footer items, so the display is a `[ui] ta
 ** Shipped
 - MODIFIED :: `skills/herdr-orch/scripts/docs/contract.md` -- 'Usage' defines the `status` and `text` formats; 'Routing' makes `all_models` the default scope.
 - MODIFIED :: `skills/herdr-orch/README.org`, `skills/herdr-orch/scripts/README.md` -- the status format, the `all_models` default, and a pointer to the plugin.
-- ADDED :: `herdr-plugin/` with `README.md`; `herdr/config.toml`; `scripts/test-herdr-plugin.bb` in `bb test`.
+- ADDED :: `herdr-plugin/` with `README.md`; `herdr/config.toml`, which also binds `prefix+u` to the quota pane; `scripts/test-herdr-plugin.bb` in `bb test`.
 - MODIFIED :: `skills/org-tasks/scripts/docs/test-map.md`, `skills/herdr-orch/scripts/AGENTS.md` -- `^:linux-only` skipping.
 - MODIFIED :: dotfiles `agents.nix` and `AGENTS.md` -- the Herdr config link.
 
 ** Gotchas
+- Herdr has no default key for a plugin pane, and a `keys.command` cannot open one directly. The binding is `type = "shell"` running `"$HERDR_BIN_PATH" plugin pane open ...`.
 - On macOS, Claude Code keeps its live credential in the Keychain, and `~/.claude/.credentials.json` can be stale. quota-axi reports `auth_required` until the operator runs `quota-axi --provider claude --allow-keychain-prompt` once and chooses "Always Allow"; later reads without the flag then succeed.
 - Herdr runs tab-bar commands through `/bin/sh -lc` with the server's environment. On nix-darwin, `/etc/profile` rebuilds `PATH` from `$USER`, so `bb` and `node` come from `/etc/profiles/per-user/<user>/bin`.
 
