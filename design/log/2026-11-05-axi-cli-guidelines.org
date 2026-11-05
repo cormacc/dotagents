@@ -16,7 +16,7 @@ Make `ot` and `oh` cheaper and more reliable for agents to read, by applying the
 * Summary
 *Level:* production · *Tests:* thorough · *Docs:* README
 
-`ot` and `oh` return compact default listings with counts; full graph consumers explicitly request `--full`. `oh` has a bounded read-only home view, usage exit codes and selective hints. AXI is vendored unchanged as an on-demand reference behind local contract exceptions. Seven implementation tasks are complete; final integration remains open for Linux measurement checks and the separate routing-configuration/test mismatches.
+`ot` and `oh` return compact default listings with counts; full graph consumers explicitly request `--full`. `oh` has a bounded read-only home view, usage exit codes and selective hints. AXI is vendored unchanged as an on-demand reference behind local contract exceptions. Seven implementation tasks are complete. Routing defaults, fixtures and generated documentation are aligned in the separate routing commit; final integration remains open for Linux measurement checks.
 
 ** Scope
 *** In scope
@@ -287,10 +287,11 @@ The home view reads existing ledger files without allocation or Herdr calls, lim
 * Validation
 - Final full org-tasks run: 351 tests, 3,199 assertions, no failures/errors; includes the corrected standalone TUI full-graph consumer. Pi tasks integration/RPC runner and 17 Hermes backend tests also pass.
 - Focused org-tasks output/CLI/styling and herdr-orch core run: 88 tests, 1,641 assertions, no failures/errors. Focused `oh` home/list/hint/usage checks pass separately (six tests, 117 assertions).
-- The broader selected run executed 737 tests with 40 failures and one error, excluding 28 measurement-block tests on macOS. It exposed the TUI regression corrected above and mismatches between the separately edited routing config, packaged routing expectations and generated README listings. Those configuration edits are preserved. This run is not a green whole-suite result; Linux measurement validation and routing integration remain outstanding.
+- The broader selected run executed 737 tests with 40 failures and one error, excluding 28 measurement-block tests on macOS. It exposed the TUI regression corrected above and mismatches between the separately edited routing config, packaged routing expectations and generated README listings. The separate routing commit aligns those defaults, fixtures and generated listings. This earlier run is not a green whole-suite result; see the subsequent routing validation below.
 - Skill validation passes for 29 skills with zero gating failures and one vendored frontmatter warning. The first invocation lacked PyYAML; an isolated environment with the declared PyYAML 6.0.2 dependency ran the shipped validator successfully. Section-link validation passes; the upstream document/licence byte comparisons and `git diff --check` pass.
 - Isolated intermediate commit trees passed: the org-tasks tree ran 351 tests (3,199 assertions), the pi tasks runner and 17 Hermes tests; the subsequent Herdr tree with committed routing configuration ran 737 selected Clojure tests (7,084 assertions) with no failures/errors. The same 28 measurement-block tests remain excluded on macOS. The separate routing configuration edits are not part of these commits.
-- Evidence: `.tmp/axi-implementation-7/` and `.tmp/axi-commits-1/`. The parent remains active with a handoff for Linux validation and separate routing integration.
+- Routing-aligned tree: 737 selected tests, 7,068 assertions, no failures/errors. The tests cover exact Fable quota selection, exhausted-scope refusal, optional Kimi/Z.AI overrides and the short-alias roster. The same 28 measurement-block tests remain excluded on macOS.
+- Evidence: `.tmp/axi-implementation-7/`, `.tmp/axi-commits-1/` and `.tmp/routing-plan-commits-1/tree-1-portable.out`. The parent remains active with a handoff for Linux validation.
 
 * Open questions
 ** DECIDED Should `oh` with no arguments show a routine task summary?

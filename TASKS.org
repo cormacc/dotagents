@@ -18,18 +18,23 @@
   - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
   - [[#re-evaluate-pi-context-with-a-week-of-session-data-after-2026-11-10][Re-evaluate pi-context with a week of session data (after 2026-11-10)]]
   - [[#reconcile-pi-managed-npm-dependencies-after-advisory-research][Reconcile Pi managed npm dependencies after advisory research]]
+  - [[#evaluate-quota-axi-as-the-usage-collection-backend][Evaluate quota-axi as the usage collection backend]]
 - [[#improvements][Improvements]]
   - [[#started-b-herdr-plugin-wrapper-for-herdr-orch][STARTED [#B] herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#started-b-traits-probe-backlog][STARTED [#B] traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
   - [[#review-pi-development-pin-advisories-before-upgrade][Review Pi development pin advisories before upgrade]]
+  - [[#started-apply-the-axi-guidelines-to-cli-tooling][STARTED Apply the AXI guidelines to CLI tooling]]
+  - [[#herdr-orch-support-herdr-app-herdr-core--hc][herdr-orch: support herdr-app (herdr-core / hc)]]
 - [[#fixes][Fixes]]
+  - [[#adapt-herdr-mods-quota-for-the-herdr-cli][Adapt herdr-mods quota for the Herdr CLI]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
 - [[#agent-feedback][Agent feedback]]
   - [[#started-guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][STARTED Guard against a parallel tool batch that writes and reads the same path]]
   - [[#started-stop-parallel-claude-trigger-evals-picking-another-workers-candidate][STARTED Stop parallel claude trigger evals picking another worker's candidate]]
+  - [[#make-roster-regeneration-replace-complete-mixed-format-results][Make roster regeneration replace complete mixed-format results]]
 
 * Explorations
 
@@ -284,7 +289,7 @@ Acceptance criteria:
 :CUSTOM_ID: a88aea76-e767-4722-807c-2f91324d1b30
 :CREATED: [2026-11-05 Thu 00:01]
 :STARTED: [2026-11-05 Thu 00:37]
-:HANDOFF: Seven implementation tasks complete. Isolated commit trees pass 737 selected Clojure tests, pi tasks and Hermes checks; 28 measurement-block tests remain excluded on macOS. Linux validation remains outstanding. Separate routing config edits remain outside the AXI commits and disagree with packaged tests/README listings. Evidence .tmp/axi-commits-1/ and .tmp/axi-implementation-7/.
+:HANDOFF: Seven AXI implementation tasks and separate routing-config integration are committed. The routing-aligned isolated tree passes 737 selected Clojure tests; 28 measurement-block tests remain excluded on macOS. Linux measurement validation is the remaining integration check. Evidence .tmp/routing-plan-commits-1/tree-1-portable.out.
 :END:
 :LOGBOOK:
 - Created [2026-11-05 Thu 00:01]
@@ -292,6 +297,24 @@ Acceptance criteria:
 :END:
 #+IMPORT: [[plan:2026-11-05-axi-cli-guidelines.org]]
 Review the AXI guidelines at [[https://axi.md]] and apply the relevant guidance to repository-maintained CLI tooling. Identify the affected tools and propose a scoped plan before implementation.
+
+** TODO [#B] herdr-orch: support herdr-app (herdr-core / hc) :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 5968bca7-7fb8-4548-b627-f0adc1060a14
+:CREATED: [2026-11-04 Wed 22:02]
+:STARTED: [2026-11-04 Wed 22:15]
+:HANDOFF: Parked 2026-11-04: record Accepted, all open questions DECIDED. Resume after the parallel oh work lands: re-verify the record's pinned references (herdr.clj, cli.clj parent-identity/preflight!, contract.md sections) against HEAD, then start 47b47249 (backend detection) and 7f838268 (runtime protocol extraction). oh cannot delegate from a herdr-app terminal until 47b47249 and the hc runtime exist.
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 22:02]
+- State "STARTED" from "TODO" [2026-11-04 Wed 22:15]
+- State "WAITING" from "STARTED" [2026-11-04 Wed 22:36]
+- State "TODO" from "WAITING" [2026-11-04 Wed 22:38]
+:END:
+#+IMPORT: [[plan:2026-11-04-herdr-orch-herdr-app-support.org]]
+Let oh delegate from a herdr-app terminal, and refuse when leaked Herdr TUI variables name the wrong session. Plan in the linked change-record.
+
+* Fixes
 
 ** TODO Adapt herdr-mods quota for the Herdr CLI
 :PROPERTIES:
@@ -302,8 +325,6 @@ Review the AXI guidelines at [[https://axi.md]] and apply the relevant guidance 
 - Created [2026-11-04 Wed 17:47]
 :END:
 Adapt the quota module at [[https://github.com/Lakris2407/herdr-mods/tree/main/quota]] for use with the Herdr CLI rather than the Herdr desktop app. Follow on from task:d0852ffd-78fd-4bf0-9cce-37e9776498df once the quota-axi backend is available. Inspect the upstream module and CLI integration surface before proposing a scoped implementation plan; prefer reusing the quota-axi collection boundary over another collector. This task does not authorise implementation of the adaptation or live provider checks.
-
-* Fixes
 
 * Upstream issues
 
@@ -346,3 +367,27 @@ Evidence:
 :END:
 #+IMPORT: [[plan:2026-11-04-trigger-eval-isolation.org]]
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
+
+** TODO Make roster regeneration replace complete mixed-format results :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: fbf2c697-64a5-4d8d-94d7-1cd8377d9cfb
+:CREATED: [2026-11-05 Thu 01:45]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 01:45]
+:END:
+Make bb readme-roster idempotent for model results containing an Org table followed by ranked-alias paragraphs and lists. Preserve the whole generated result boundary instead of replacing only the table.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: main
+- timestamp: [2026-11-05 Thu 01:44]
+- sender: agent
+
+Evidence:
+Running bb readme-roster after alias changes replaced the model table but retained the earlier ranked list below the replacement, producing duplicate ranked-alias sections. The shipped readme-roster-listings-are-current test detected the stale output. Clearing the complete generated model block before regeneration restored exact output. Evidence: .tmp/routing-plan-commits-1/portable.out and readme-roster.out.
+
+Acceptance criteria:
+- Two consecutive regeneration runs leave the README byte-identical after the first run.
+- A configuration change replaces the old ranked aliases instead of appending another list.
+- Maintainer instructions use the supported regeneration path without manual result edits.
