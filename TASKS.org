@@ -13,20 +13,23 @@
 
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
-  - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
-  - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
-  - [[#explore-agent-memory-options][Explore agent memory options]]
+  - [[#started-b-herdr-orch-llm-usage-limit-fallback][STARTED [#B] herdr-orch: LLM usage limit fallback]]
+  - [[#started-d-evaluate-rpiv-pi-workflow-setup][STARTED [#D] Evaluate rpiv-pi workflow setup]]
+  - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
+  - [[#re-evaluate-pi-context-with-a-week-of-session-data-after-2026-11-10][Re-evaluate pi-context with a week of session data (after 2026-11-10)]]
+  - [[#reconcile-pi-managed-npm-dependencies-after-advisory-research][Reconcile Pi managed npm dependencies after advisory research]]
 - [[#improvements][Improvements]]
-  - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
+  - [[#started-b-herdr-plugin-wrapper-for-herdr-orch][STARTED [#B] herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
-  - [[#traits-probe-backlog][traits: probe backlog]]
+  - [[#started-b-traits-probe-backlog][STARTED [#B] traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
+  - [[#review-pi-development-pin-advisories-before-upgrade][Review Pi development pin advisories before upgrade]]
 - [[#fixes][Fixes]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
 - [[#agent-feedback][Agent feedback]]
-  - [[#guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][Guard against a parallel tool batch that writes and reads the same path]]
-  - [[#stop-parallel-claude-trigger-evals-picking-another-workers-candidate][Stop parallel claude trigger evals picking another worker's candidate]]
+  - [[#started-guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][STARTED Guard against a parallel tool batch that writes and reads the same path]]
+  - [[#started-stop-parallel-claude-trigger-evals-picking-another-workers-candidate][STARTED Stop parallel claude trigger evals picking another worker's candidate]]
 
 * Explorations
 
