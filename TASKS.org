@@ -289,6 +289,16 @@ Let oh delegate from a herdr-app terminal, and refuse when leaked Herdr TUI vari
 :END:
 Evaluate whether herdr-orch should return to querying subscription quota directly from Babashka, as `usage.clj` did before b8e5e99, and remove the quota-axi dependency. The quota-axi integration needs a Node >=22.19 runtime, an npm package dependency, a root `npm ci` in Home Manager activation, setup and discovery code (`quota_setup.clj`, `quota-axi-setup`, the `/oh setup` flow), a process supervisor (`quota_process.mjs`), output allowlisting, and delegated credential refresh through vendor CLIs. Compare that cost with a maintained Babashka collector for the providers in use (Anthropic, Codex): endpoint stability, credential reading and refresh ownership, window semantics (for example the Codex 720h `unknown` window), and test coverage. Inputs: [[proj:design/log/2026-11-04-quota-axi-backend.org]] and the pre-quota-axi `usage.clj` at b8e5e99^.
 
+** TODO Warn when native CLI and Pi logins use different subscriptions :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 159d1d5f-878c-44c6-a842-c92bbc600ad8
+:CREATED: [2026-11-05 Thu 09:55]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 09:55]
+:END:
+herdr-orch assumes that Pi and each native CLI log in to one subscription per provider, and `oh` does not verify identity ([[proj:skills/herdr-orch/scripts/docs/contract.md]] section Usage). On 2026-11-05 the Linux Codex CLI login (`~/.codex/auth.json`) was a free ChatGPT account while Pi `openai-codex` used a `self_serve_business_prolite` account, so the status line showed a 30-day window and routing read the wrong quota, with no warning. Add a check (for example in `oh usage`, `oh doctor` or the status line) that compares the account quota-axi reads with the Pi login for each provider: Codex `chatgpt_account_id` or plan type in the token claims, and the Claude equivalent. Report a mismatch without printing tokens or identities, and treat it as unknown evidence for routing. Consider how this interacts with task:4d770990-2725-4b7d-905a-888db5d9c2a7 (a Babashka collector could read the Pi credential directly).
+
 * Fixes
 
 * Upstream issues
