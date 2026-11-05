@@ -28,6 +28,16 @@ herdr plugin install cormacc/dotagents/herdr-plugin
 herdr plugin pane open --plugin cormacc.herdr-orch --entrypoint quota
 ```
 
+Herdr has no default key for a plugin pane. To bind one, add a custom command to `config.toml`; `type = "shell"` runs the CLI detached, because a `keys.command` cannot open a plugin pane directly:
+
+```toml
+[[keys.command]]
+key = "prefix+u"
+type = "shell"
+command = "\"$HERDR_BIN_PATH\" plugin pane open --plugin cormacc.herdr-orch --entrypoint quota"
+description = "subscription quota"
+```
+
 The popup shows `oh usage --format text` and refreshes every 60 s. Press `q` to close it, or any other key to refresh. It runs from `$HOME`, so it reads the packaged and home herdr-orch config layers, not a project layer.
 
 ## Tab-bar status

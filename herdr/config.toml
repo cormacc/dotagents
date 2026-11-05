@@ -20,3 +20,11 @@ enabled = false
 
 [ui.toast]
 delivery = "system"
+
+# Open the herdr-orch quota pane. A keys.command cannot open a plugin pane
+# directly, so a detached shell asks the CLI to open it.
+[[keys.command]]
+key = "prefix+u"
+type = "shell"
+command = "\"$HERDR_BIN_PATH\" plugin pane open --plugin cormacc.herdr-orch --entrypoint quota"
+description = "subscription quota"
