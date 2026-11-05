@@ -19,7 +19,12 @@
 
   Any test mutating in-process state (with-redefs, shared atoms/refs outside
   its own isolated counters, global env/fs fixtures not itself
-  concurrency-safe) must be marked `^:serial` in an opted-in namespace."
+  concurrency-safe) must be marked `^:serial` in an opted-in namespace.
+
+  A var marked `^:linux-only` tests behaviour that the code under test
+  supports only on Linux. On any other `os.name` the runner does not run it,
+  and prints one `skipped N Linux-only tests` line that names each var, so a
+  partial run cannot pass for a complete one."
   (:require [babashka.classpath :as cp]
             [babashka.fs :as fs]
             [clojure.java.io :as io]
@@ -86,6 +91,24 @@
 
 (defn- test-var? [v] (boolean (:test (meta v))))
 (defn- serial-var? [v] (boolean (:serial (meta v))))
+
+(defn- platform-skipped-vars
+  "Test vars in `nses` that must not run on `os-name`."
+  [nses os-name]
+  (when (not= "Linux" os-name)
+    (->> nses
+         (mapcat #(vals (ns-interns (the-ns %))))
+         (filter #(and (test-var? %) (:linux-only (meta %))))
+         (sort-by #(str (symbol %))))))
+
+(defn- skip-vars!
+  "Remove `:test` from each var, so that neither `clojure.test/test-ns` nor
+  `run-parallel-ns` runs it, and report the skip on stdout."
+  [vars os-name]
+  (when (seq vars)
+    (doseq [v vars] (alter-meta! v dissoc :test))
+    (println (str "test-runner: skipped " (count vars) " Linux-only tests on " os-name ": "
+                  (str/join ", " (map #(str (symbol %)) vars))))))
 
 (def ^:private unsafe-global-var-mutators
   "The deliberately narrow set of definite global-var mutation forms."
@@ -235,6 +258,8 @@
             (println "test-runner: no test namespaces found"))
           (System/exit 1))
       (do (doseq [n nses] (require n))
+          (let [os-name (System/getProperty "os.name")]
+            (skip-vars! (platform-skipped-vars nses os-name) os-name))
           (let [parallel? (fn [n] (boolean (:parallel-tests (meta (find-ns n)))))
                 pool (when (some parallel? nses) (Executors/newFixedThreadPool (pool-size)))]
             (try

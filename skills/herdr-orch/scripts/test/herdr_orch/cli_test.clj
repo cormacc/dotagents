@@ -7723,7 +7723,7 @@
 (defn- mutating-calls [log] (filterv mutating? (calls log)))
 (defn- live-members [entry] (measurement/session-members (get-in entry [:supervisor :sid])))
 
-(deftest successful-measurement-publishes-supervisor-owned-evidence-without-a-pane
+(deftest ^:linux-only successful-measurement-publishes-supervisor-owned-evidence-without-a-pane
   (let [{:keys [dir log] :as fixture} (measurement-fixture)
         assignment "/literal @file -flag {{template}} $HOME"
         first-run (measure! fixture "run" "--task" assignment)
@@ -7832,7 +7832,7 @@
   (let [proc (apply measure! fixture "run" args)]
     (assert (zero? (:exit proc)) (:out proc))
     (:result (result proc))))
-(deftest measurement-success-needs-exit-zero-valid-evidence-an-ok-audit-and-expected-outputs
+(deftest ^:linux-only measurement-success-needs-exit-zero-valid-evidence-an-ok-audit-and-expected-outputs
   (doseq [[mode pattern] [["exit-nonzero" #"subject exited with status 3"]
                           ["malformed" #"terminal evidence is malformed"]
                           ["harness-failed" #"harness reported failure: harness error"]
@@ -7853,7 +7853,7 @@
       (is (= 1 (count (:artifact-links out))))
       (is (fs/exists? (fs/path dir "answer.txt"))))))
 
-(deftest pre-existing-expected-output-is-refused-before-launch
+(deftest ^:linux-only pre-existing-expected-output-is-refused-before-launch
   (let [{:keys [env dir log] :as fixture} (measurement-fixture {} {"expectedOutputs" ["answer.txt"]})
         _ (spit (str (fs/path dir "answer.txt")) "already here\n")
         proc (measure! fixture "start" "--task" "x")]
@@ -7861,7 +7861,7 @@
     (is (re-find #"expectedOutputs` target already exists" (:out proc)) (:out proc))
     (is (no-measurement-allocation? (str dir) log fixture))))
 
-(deftest measurement-hard-limit-fails-after-owned-process-cleanup
+(deftest ^:linux-only measurement-hard-limit-fails-after-owned-process-cleanup
   (let [{:keys [dir] :as fixture} (measurement-fixture {"FAKE_PI_MEASURE" "hang"} {"hardTimeoutMs" 1500})
         started (System/currentTimeMillis)
         out (measured-failure fixture "--task" "x")
@@ -7886,7 +7886,7 @@
             :when (and (not= excluded (str (fs/file-name f))) (not (fs/exists? link {:nofollow-links true})))]
       (fs/create-sym-link link f))
     (str dir ":" bin)))
-(deftest unsupported-detachment-fails-before-any-subject-launch
+(deftest ^:linux-only missing-setsid-fails-before-any-subject-launch
   (let [{:keys [env dir log] :as fixture} (measurement-fixture)
         control (measure! fixture "run" "--task" "control")
         _ (is (= "COMPLETE" (get-in (result control) [:result :status])) (:out control))
@@ -7895,7 +7895,16 @@
         proc (apply call! env ["task" "start" "--context" "measurement" "--measurement-config" (:config fixture) "--task" "x"])]
     (is (= 1 (:exit proc)))
     (is (re-find #"needs `setsid` on PATH" (:out proc)) (:out proc))
-    (is (no-measurement-allocation? (str (:dir fixture)) (:log fixture) fixture)))
+    (is (no-measurement-allocation? (str (:dir fixture)) (:log fixture) fixture))))
+
+(deftest unsupported-detachment-fails-before-any-subject-launch
+  (when (not= "Linux" (System/getProperty "os.name"))
+    (testing "this non-Linux platform refuses a real launch before any allocation"
+      (let [fixture (measurement-fixture)
+            proc (measure! fixture "start" "--task" "x")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"Linux only; this platform is " (:out proc)) (:out proc))
+        (is (no-measurement-allocation? (str (:dir fixture)) (:log fixture) fixture)))))
   (testing "a non-Linux platform is refused rather than assumed to detach the same way"
     (is (re-find #"Linux only; this platform is Mac OS X" (measurement/detach-refusal {:os-name "Mac OS X" :setsid "/usr/bin/setsid" :proc? true})))
     (is (nil? (measurement/detach-refusal {:os-name "Linux" :setsid "/usr/bin/setsid" :proc? true})))))
@@ -7918,7 +7927,7 @@
 (defn- background [{:keys [env dir]} & argv]
   (process/process (into [bin] argv) {:out :string :err :string :env env :dir (str dir)}))
 
-(deftest headless-single-result-waiting-follows-execution-liveness
+(deftest ^:linux-only headless-single-result-waiting-follows-execution-liveness
   (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
         start (measure! fixture "start" "--task" "held")
         task (started-task start)]
@@ -7937,7 +7946,7 @@
         (let [done (deref waiter 30000 nil)]
           (is (= "COMPLETE" (get-in (result done) [:result :status])) (:out done)))))))
 
-(deftest headless-fan-in-waits-while-an-eligible-execution-is-live
+(deftest ^:linux-only headless-fan-in-waits-while-an-eligible-execution-is-live
   (let [{:keys [env] :as fixture} (gated (measurement-fixture))
         a (started-task (measure! fixture "start" "--task" "sample a"))
         b (started-task (measure! fixture "start" "--task" "sample b"))
@@ -7954,7 +7963,7 @@
     (testing "with every execution stopped and collected, fan-in reports no candidates"
       (is (= "no-candidates" (get-in (result (call! env "task" "collect" "--any" "--wait" "--timeout" "1000")) [:result :reason]))))))
 
-(deftest concurrent-measurements-publish-independently-of-open-siblings
+(deftest ^:linux-only concurrent-measurements-publish-independently-of-open-siblings
   (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
         sibling (call! env "task" "start" "worker" "--task" "unrelated open interactive child")
         a (started-task (measure! fixture "start" "--task" "sample a"))
@@ -7974,7 +7983,7 @@
         (is (= (get-in entry [:worktree :path]) (:work-root entry)))
         (is (re-find #"CHECKPOINT: [0-9a-f]{40}" (slurp (:result entry))))))))
 
-(deftest invoker-process-group-termination-leaves-an-acknowledged-sample-collectable
+(deftest ^:linux-only invoker-process-group-termination-leaves-an-acknowledged-sample-collectable
   (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
         out-file (str (fs/path dir "invoker.out"))
         marker (str (fs/path dir "acknowledged"))
@@ -7997,7 +8006,7 @@
       (finally
         (when (.isAlive ^Process (:proc invoker)) (kill-group! pgid))))))
 
-(deftest supervisor-loss-is-diagnosable-and-prune-needs-the-owned-session-stopped
+(deftest ^:linux-only supervisor-loss-is-diagnosable-and-prune-needs-the-owned-session-stopped
   (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
         task (started-task (measure! fixture "start" "--task" "held"))
         entry (ledger-entry* (str dir) task)
@@ -8032,7 +8041,7 @@
         (doseq [file ["run.json" "supervisor.json" "subject.json" "supervisor.log" "fake-subject.env"]]
           (is (fs/exists? (evidence-path (str dir) task file)) file))))))
 
-(deftest measurement-lifecycle-verbs-are-execution-aware
+(deftest ^:linux-only measurement-lifecycle-verbs-are-execution-aware
   (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
         task (started-task (measure! fixture "start" "--task" "held"))]
     (doseq [[argv pattern] [[["task" "continue" task "--task" "again"] #"cannot be continued"]
@@ -8083,7 +8092,7 @@
 
 (defn- monitor-command [log]
   (some #(when (= ["pane" "run"] (vec (take 2 %))) (nth % 3)) (calls log)))
-(deftest measurement-monitor-is-separate-read-only-and-replacement-safe
+(deftest ^:linux-only measurement-monitor-is-separate-read-only-and-replacement-safe
   (let [{:keys [env dir log] :as fixture} (gated (measurement-fixture))
         start (measure! fixture "start" "--tab" "--task" "watched")
         task (started-task start)
@@ -8139,7 +8148,7 @@
           (is (= expected (get-in closed [:monitor :status])) (str closed))
           (is (= (not replaced?) (boolean (some #(= ["pane" "close" pane] (vec (take 3 %))) (calls log)))) (str expected)))))))
 
-(deftest worktree-teardown-refuses-a-checkout-of-a-live-measurement
+(deftest ^:linux-only worktree-teardown-refuses-a-checkout-of-a-live-measurement
   (let [{:keys [env dir] :as fixture} (gated (measurement-fixture {"FAKE_PI_ENV_DELAY_MS" "300"} {}))
         task (started-task (measure! fixture "start" "--worktree" "new" "--task" "held"))
         entry (ledger-entry* (str dir) task)]
@@ -8170,7 +8179,7 @@
       (is (= "removed" (get-in (result proc) [:result :status]))))))
 
 ;; In-process because publication identity is a function argument here, not a CLI surface.
-(deftest ^:serial process-start-identity-prevents-ownership-after-pid-reuse
+(deftest ^:serial ^:linux-only process-start-identity-prevents-ownership-after-pid-reuse
   (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "pid-reuse-"})))
         holder (process/process ["sleep" "30"])
         live (measurement/process-identity (.pid ^Process (:proc holder)))
@@ -8211,7 +8220,7 @@
                 {:ip "127.0.0.1" :port 0 :legacy-return-value? false})]
     {:url (str "http://127.0.0.1:" ((requiring-resolve 'org.httpkit.server/server-port) server))
      :requests requests :stop #((requiring-resolve 'org.httpkit.server/server-stop!) server)}))
-(deftest measurement-through-the-real-installed-pi-adapter
+(deftest ^:linux-only measurement-through-the-real-installed-pi-adapter
   (let [fake (fake-anthropic!)]
     (try
       (let [fixture (measurement-fixture)
@@ -8244,7 +8253,7 @@
 
 ;; The environment a real subject received, replayed: every orchestration verb refuses before
 ;; any Herdr call, so no root or focused-pane identity can be resolved on the subject's behalf.
-(deftest subject-side-orchestration-is-refused-in-the-recorded-subject-environment
+(deftest ^:linux-only subject-side-orchestration-is-refused-in-the-recorded-subject-environment
   (let [{:keys [env dir log] :as fixture} (measurement-fixture)
         task (get-in (result (measure! fixture "run" "--task" "x")) [:result :task])
         recorded (into {} (keep #(when-let [[_ k v] (re-matches #"((?:HERDR|ORCH)_[A-Z_]+)=(.*)" %)] [k v])
@@ -8289,7 +8298,7 @@
 
 ;; The liveness of a headless execution is read before the stream snapshot, as `agent list`
 ;; is, so a supervisor that publishes and exits at that boundary is captured on the same call.
-(deftest ^:serial headless-fan-in-captures-a-result-published-at-the-liveness-boundary
+(deftest ^:serial ^:linux-only headless-fan-in-captures-a-result-published-at-the-liveness-boundary
   (let [original cli/execution-state
         ;; `when` decides, per execution-state call, whether this call is the injection point;
         ;; `before?` places the publish-and-exit before the real liveness read (it then reads
@@ -8371,7 +8380,7 @@
 (defn- backdate! [dir entry]
   (patch-entry! dir entry :created-at (str (.minusSeconds (java.time.Instant/now) 600))))
 
-(deftest ^:serial stale-launch-snapshots-honour-the-current-acknowledgement
+(deftest ^:serial ^:linux-only stale-launch-snapshots-honour-the-current-acknowledgement
   (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
         {:keys [entered release]} (hold-preparation! fixture)
         gate (str (fs/path dir "supervisor-start-release"))
@@ -8431,7 +8440,7 @@
                        (not (contains? (set [(:sid own) (:pgid own)]) (:sid id))))
               (measurement/stop-session! (:sid id) -1))))))))
 
-(deftest ^:serial orphan-prune-rechecks-execution-inside-its-final-update
+(deftest ^:serial ^:linux-only orphan-prune-rechecks-execution-inside-its-final-update
   (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "orphan-ack-"})))
         holder (session-holder!)]
     (try
@@ -8461,7 +8470,7 @@
           (is (= "not-started" (:prune-reason (ledger/read! (:task stopped)))))))
       (finally (process/destroy-tree (:proc holder)) (fs/delete-tree dir)))))
 
-(deftest ^:serial a-launch-refresh-error-is-not-proof-of-death
+(deftest ^:serial ^:linux-only a-launch-refresh-error-is-not-proof-of-death
   (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "refresh-error-"})))
         holder (session-holder!)]
     (try
@@ -8489,7 +8498,7 @@
           (is (false? (:live? (cli/execution-state entry))) "control: a successful refresh proves the dead launch stopped")))
       (finally (process/destroy-tree (:proc holder)) (fs/delete-tree dir)))))
 
-(deftest slow-launch-preparation-is-owned-by-its-live-launcher
+(deftest ^:linux-only slow-launch-preparation-is-owned-by-its-live-launcher
   (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
         {:keys [entered release]} (hold-preparation! fixture)
         launcher (background fixture "task" "start" "--context" "measurement" "--measurement-config" config "--worktree" "new" "--task" "held")]
@@ -8516,7 +8525,7 @@
           (is (= "COMPLETE" (get-in (result (call! env "task" "collect" task "--wait" "--timeout" "30000")) [:result :status])))))
       (finally (spit release "go") (deref launcher 60000 nil)))))
 
-(deftest a-round-retired-during-launch-is-never-resurrected
+(deftest ^:linux-only a-round-retired-during-launch-is-never-resurrected
   (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
         {:keys [entered release]} (hold-preparation! fixture)
         launcher (background fixture "task" "start" "--context" "measurement" "--measurement-config" config "--worktree" "new" "--task" "held")]
@@ -8539,7 +8548,7 @@
           (is (not (fs/exists? (evidence-path (str dir) task "subject.json"))) "no subject was launched")))
       (finally (spit release "go") (deref launcher 60000 nil)))))
 
-(deftest ^:serial a-dead-launcher-leaves-a-prunable-not-started-round
+(deftest ^:serial ^:linux-only a-dead-launcher-leaves-a-prunable-not-started-round
   (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
         {:keys [entered release]} (hold-preparation! fixture)
         ;; A disposable launcher leading its own session, so the whole launch (git and the
@@ -8564,7 +8573,7 @@
       (finally (spit release "go")
                (when (.isAlive ^Process (:proc launcher)) (kill-group! pgid))))))
 
-(deftest publication-failure-is-pruned-as-such-with-its-evidence
+(deftest ^:linux-only publication-failure-is-pruned-as-such-with-its-evidence
   (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
         task (started-task (measure! fixture "start" "--task" "held"))
         entry (ledger-entry* (str dir) task)]
@@ -8582,7 +8591,7 @@
     (doseq [file ["execution.json" "publication-error.json" "supervisor.log" "subject.json" "run.json"]]
       (is (fs/exists? (evidence-path (str dir) task file)) file))))
 
-(deftest orphaned-captured-measurement-closes-only-once-its-owner-has-ended
+(deftest ^:linux-only orphaned-captured-measurement-closes-only-once-its-owner-has-ended
   (let [{:keys [env dir log source] :as fixture} (measurement-fixture)
         plain (get-in (result (measure! fixture "run" "--task" "x")) [:result :task])
         watched (get-in (result (measure! fixture "run" "--tab" "--task" "y")) [:result :task])
@@ -8618,7 +8627,7 @@
       (is (= #{} (listed {})) "closed rounds are no longer orphans"))))
 
 ;; In-process because the publication body is a function argument here, not a CLI surface.
-(deftest ^:serial execution-publication-validates-the-body-before-checkpointing
+(deftest ^:serial ^:linux-only execution-publication-validates-the-body-before-checkpointing
   (let [{:keys [dir] :as fixture} (gated (measurement-fixture))
         dir (str dir)
         task (started-task (measure! fixture "start" "--worktree" "new" "--task" "held"))
@@ -8646,7 +8655,7 @@
         (release! fixture task)
         (await! #(fs/exists? (evidence-path dir task "execution.json")) 30000)))))
 
-(deftest ^:serial an-early-supervisor-failure-names-its-stderr
+(deftest ^:serial ^:linux-only an-early-supervisor-failure-names-its-stderr
   (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "early-supervisor-"})))]
     (try
       (with-redefs-fn {#'cli/supervisor-command (fn [& _] ["--not-a-setsid-option"])}

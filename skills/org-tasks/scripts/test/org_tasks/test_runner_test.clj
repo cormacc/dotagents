@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.test-runner :as runner]
+            [org-tasks.test-runner-platform-fixture]
             [org-tasks.test-runner-serial-fixture]
             [org-tasks.test-runner-unsafe-fixture])
   (:import [java.util.concurrent Executors]))
@@ -25,6 +26,23 @@
       (is (= 1 (:exit proc)) (:err proc))
       (is (str/includes? (:err proc) "Usage: bb test [namespace ...]"))
       (is (not (str/includes? (:err proc) "Could not locate"))))))
+
+(deftest linux-only-vars-are-skipped-and-reported-off-linux
+  (let [nses ['org-tasks.test-runner-platform-fixture]
+        tagged #'org-tasks.test-runner-platform-fixture/linux-only-fixture
+        skipped #(#'runner/platform-skipped-vars nses %)]
+    (testing "Linux runs every var"
+      (is (empty? (skipped "Linux"))))
+    (testing "another platform skips only the tagged var"
+      (is (= [tagged] (vec (skipped "Mac OS X")))))
+    (testing "a skipped var loses :test and is named in the report line"
+      (let [test-fn (:test (meta tagged))]
+        (try
+          (let [out (with-out-str (#'runner/skip-vars! [tagged] "Mac OS X"))]
+            (is (nil? (:test (meta tagged))))
+            (is (str/includes? out "skipped 1 Linux-only tests on Mac OS X: org-tasks.test-runner-platform-fixture/linux-only-fixture") out))
+          (finally (alter-meta! tagged assoc :test test-fn)))))
+    (is (some? (:test (meta #'org-tasks.test-runner-platform-fixture/portable-fixture))))))
 
 (deftest serial-and-local-mutation-fixture-is-accepted
   (is (nil? (assert-serial-global-var-mutations!

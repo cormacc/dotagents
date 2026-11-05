@@ -20,6 +20,8 @@ Run only the main Herdr orchestration namespace from the repository root:
 bb test-clojure herdr-orch.cli-test
 ```
 
+Measurement-launch tests are tagged `^:linux-only`, because the contract refuses measurement on every platform other than Linux. On macOS the runner skips them and names them in one `skipped N Linux-only tests` line; a macOS pass is therefore not evidence for measurement behaviour.
+
 The Herdr tests use fake processes and per-test `ORCH_ASSIGNMENT_ROOT` directories. They must not write to the live `<git-root>/.tmp/herdr-orch/` tree.
 
 Before you cite a suite result, run it with the `HERDR_ORCH_*` variables unset, for example `env -u HERDR_ORCH_TASK bb test-clojure herdr-orch.cli-test`. A delegated child inherits those variables, and they can hide a test's dependence on them.
