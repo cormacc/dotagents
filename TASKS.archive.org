@@ -4887,3 +4887,24 @@ Compare a pinned quota-axi release with the committed subscription-usage backend
 Outcome: do not replace production collection with unmodified quota-axi 0.1.69 (npm gitHead 5734c41eee52eb9a80ba67f47269ebc06c0c41fc). Root source checks confirmed Claude credential discovery covers environment/native/Keychain rather than Pi Anthropic, and Codex reaches an app-server fallback without a refresh-option gate; the published README states that fallback can renew auth.json. Root repeated isolated filesystem/network controls and the snapshot CLI: schema 6, Claude/Codex/Kimi rows, unavailable Z.AI, exit 0, empty stderr. This proves the executable boundary, not raw vendor normalisation or credential behaviour. Measured gross replacement surface is 460 production lines and 642 collector-test lines; net savings remain unmeasured. The scratch mapper omits account identity/effective-scope validation and is not an integration candidate.
 
 Recommended direction: retain local collection until upstream supports Pi Anthropic account lanes and a genuinely no-refresh Codex path, then use one pinned CLI backend with no local credential reader, provider normaliser or second cache. Accept upstream cache/status semantics, stale-as-unknown routing evidence and a changed allowlisted usage envelope; retain local routing policy, explicit account/scope joins, process/output bounds and secret isolation. The source review identifies Kimi and Z.AI as conditional additional subscription coverage, subject to credential-source alignment; no models are enabled. Reports: [[file:.tmp/quota-axi-eval/source-report.md]] and [[file:.tmp/quota-axi-eval/runtime-report.md]] (scratch evidence, not durable specifications). Both evaluation children were captured and closed. No production migration or commit was made.
+
+** DONE [#B] herdr-orch: support herdr-app (herdr-core / hc) :herdr_orch:
+CLOSED: [2026-11-05 Thu 14:11]
+:PROPERTIES:
+:CUSTOM_ID: 5968bca7-7fb8-4548-b627-f0adc1060a14
+:CREATED: [2026-11-04 Wed 22:02]
+:STARTED: [2026-11-04 Wed 22:15]
+:HANDOFF: Delivery accepted DONE; all plan tasks done and all owned delegated agents closed. Final code/conformance approvals and native/fixture limits in canonical record Validation; reports .tmp/herdr-app-execution/final-{code-validation,conformance}-report.md. No commits/staging. Only external disposition remains: five empty isolated cores retained under no-stop/no-signal rule, root reverified with root-core-audit.clj; final-core-*-{status,list}.json under .tmp/herdr-app-execution. Sessions/PIDs/runtime dirs: c294e5/2886232/.tmp/ac294e54c/r; b41d84/2887576/.tmp/ab41d8452/r; f12e33/2889104/.tmp/af12e33a/r;53f817/3345501(holder3345764)/.tmp/a53f817c/r;5f4b3a/3423153(holder3423757)/.tmp/a5f4b3a7/r. Preserve live scratch state. Synthetic fork session retained at real Pi path recorded in live-smoke-retry-report.md. Preserve unrelated bb.edn/Clojure/logic-pro/package/settings edits. No active delegation or implementation next step.
+:ARCHIVED: [2026-11-05 Thu 14:11]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 22:02]
+- State "STARTED" from "TODO" [2026-11-04 Wed 22:15]
+- State "WAITING" from "STARTED" [2026-11-04 Wed 22:36]
+- State "TODO" from "WAITING" [2026-11-04 Wed 22:38]
+- State "STARTED" from "TODO" [2026-11-05 Thu 09:58]
+- State "DONE" from "STARTED" [2026-11-05 Thu 14:11]
+:END:
+#+IMPORT: [[plan:2026-11-04-herdr-orch-herdr-app-support.org]]
+Let oh delegate from a herdr-app terminal, and refuse when leaked Herdr TUI variables name the wrong session. Plan in the linked change-record.

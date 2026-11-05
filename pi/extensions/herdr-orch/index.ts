@@ -234,6 +234,10 @@ export default function (pi: ExtensionAPI) {
       const herdr = process.env.HERDR_ENV === "1";
       try {
         if (setup || section === "usage" || section === "help") {
+          // Setup bypasses the listing route, so apply oh's host gate before it can run.
+          if (process.env.HC_TERMINAL_ID) {
+            await execute(["roster", "--format", "json"], ctx.signal, { cwd: ctx.cwd, timeout: 30_000 });
+          }
           const script = join(dirname(launcherPath()), "quota-axi-setup");
           const runSetup = async (operation: "check" | "install") => {
             try {

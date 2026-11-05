@@ -26,6 +26,7 @@
     (or (git-toplevel) (throw (ex-info "cannot resolve repo root" {})))))
 (def bin (str root "/skills/herdr-orch/scripts/oh"))
 (def fake (str root "/skills/herdr-orch/scripts/test/fixtures/fake-herdr"))
+(def fake-hc (str root "/skills/herdr-orch/scripts/test/fixtures/fake-hc"))
 (defn calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
 ;; One shared per-run dir for babashka's deps.clj-honoured `CLJ_CACHE` (user classpath
 ;; cache override, normally `~/.clojure/.cpcache`) and `CLJ_CONFIG` (user config-dir
@@ -59,6 +60,7 @@
    (let [dir (fs/canonicalize (fs/create-temp-dir {:prefix "fake-herdr-"})) log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) prompt-file (str (fs/path dir "prompt"))
          home (fs/path dir "home") roster (fs/path dir ".agents" "subagents") skills (fs/path dir "skills")]
      (fs/create-sym-link (fs/path dir "herdr") fake)
+     (fs/create-sym-link (fs/path dir "hc") fake-hc)
      (fs/create-dirs home)
      (fs/create-dirs (fs/parent roster))
      ;; `dir` doubles as `ORCH_ASSIGNMENT_ROOT` and, via `call!`'s pinned `:dir`, the
@@ -154,6 +156,79 @@
   @(process/process (into [fake "agent" "start" "child" "--kind" "pi" "--pane" "w:child" "--"] native-args)
                     {:out :string :err :string :env env}))
 (defn result [proc] (json/parse-string (:out proc) true))
+
+(deftest backend-selection-uses-nearest-ancestor-and-refuses-hc-before-tui-action
+  (let [{:keys [env log] :as fixture} (fake-env {"HC_TERMINAL_ID" "t:hc" "FAKE_SHELL_PID" "111"
+                                                  "FAKE_HC_PID" "222" "FAKE_ANCESTOR_PIDS" "222,111"})
+        hc-log (str (fs/path (:dir fixture) "hc-calls"))
+        proc (call! (assoc env "FAKE_HC_LOG" hc-log) "pane" "current")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"backend-mismatch: raw TUI control requires a Herdr caller" (:out proc)))
+    (is (some #(= ["get" "t:hc"] %) (calls hc-log)))
+    (is (not-any? #(= ["pane" "current"] (vec (take 2 %))) (calls log))))
+  (let [{:keys [env log]} (fake-env {"HC_TERMINAL_ID" "t:outer" "FAKE_SHELL_PID" "111"
+                                      "FAKE_HC_PID" "222" "FAKE_ANCESTOR_PIDS" "111,222"})
+        hc-log (str (fs/path (get env "ORCH_ASSIGNMENT_ROOT") "hc-calls"))
+        proc (call! (assoc env "FAKE_HC_LOG" hc-log) "pane" "current")]
+    (is (zero? (:exit proc)))
+    (is (some #(= ["pane" "current"] (vec (take 2 %))) (calls log)))))
+
+(deftest unresolved-hosts-refuse-before-offline-or-raw-dispatch
+  (doseq [[shell-pid hc-pid ancestry] [["111" "null" "333"] ["null" "null" "333"]
+                                      ["111" "222" "333"] ["111" "null" "111,333"]]
+          command [["pane" "run" "w:p" "echo wrong-runtime"] ["roster"] ["task" "list"]]]
+    (let [{:keys [env log dir]} (fake-env {"HC_TERMINAL_ID" "t:inner" "FAKE_SHELL_PID" shell-pid
+                                         "FAKE_HC_PID" hc-pid "FAKE_ANCESTOR_PIDS" ancestry})
+          proc (apply call! (assoc env "FAKE_HC_LOG" (str (fs/path dir "hc-calls"))) command)]
+      (is (= 1 (:exit proc)) [shell-pid hc-pid ancestry command (:out proc)])
+      (is (str/includes? (:out proc) "backend-mismatch"))
+      (is (not-any? #(or (mutating? %) (= ["pane" "run"] (vec (take 2 %)))) (calls log))))))
+
+(deftest supported-hc-allows-offline-extension-entry-paths
+  (doseq [command [["roster" "--format" "json"] ["task" "list"]]]
+    (let [{:keys [env dir]} (fake-env {"HC_TERMINAL_ID" "t:inner" "FAKE_SHELL_PID" "111"
+                                    "FAKE_HC_PID" "222" "FAKE_ANCESTOR_PIDS" "222,111"})
+          proc (apply call! (assoc env "FAKE_HC_LOG" (str (fs/path dir "hc-calls"))) command)]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (true? (:ok (result proc)))))))
+
+(deftest no-host-launch-refuses-but-offline-roster-remains-valid
+  (let [{:keys [env log]} (fake-env {"HERDR_ENV" "0"})
+        proc (call! env "task" "start" "scout" "--task" "fixture only")]
+    (is (= 1 (:exit proc)) (:out proc))
+    (is (str/includes? (:out proc) "HERDR_ENV=1"))
+    (is (empty? (calls log)))
+    (is (zero? (:exit (call! env "roster"))))))
+
+(deftest deferred-runtime-delivers-delegation-without-tui-operations
+  (let [{:keys [env dir]} (fake-env {"HC_TERMINAL_ID" "t:inner" "FAKE_SHELL_PID" "111"
+                                   "FAKE_HC_PID" "222" "FAKE_ANCESTOR_PIDS" "222,111"})
+        proc @(process/process ["bb" "-cp" (str root "/skills/herdr-orch/scripts/src")
+                                (str root "/skills/herdr-orch/scripts/test/fixtures/semantic-runtime.clj")]
+                               {:out :string :err :string :dir (str dir)
+                                :env (assoc env "FAKE_HC_LOG" (str (fs/path dir "hc-calls")))})]
+    (is (zero? (:exit proc)) (:err proc))
+    (when (zero? (:exit proc))
+      (let [value (json/parse-string (:out proc) true)]
+        (is (= "COMPLETE" (get-in value [:result :status])))
+        (is (= "closed" (get-in value [:closed :status])))
+        (is (= "semantic transcript" (:transcript value)))
+        (is (str/includes? (:raw-error value) "backend-mismatch"))
+        (is (= 1 (count (filter #{"launch"} (:events value)))))
+        (is (= 1 (count (filter #{"prompt"} (:events value)))))
+        (is (every? (set (:events value)) ["identity" "place" "launch" "prompt" "wait" "read" "status" "close" "notify"]))))))
+
+(deftest real-babashka-parent-walk-selects-nearest-host
+  (doseq [[outer-key inner-key expected] [["FAKE_SHELL_PID" "FAKE_HC_PID" 1]
+                                         ["FAKE_HC_PID" "FAKE_SHELL_PID" 0]]]
+    (let [{:keys [env log dir]} (fake-env {"HC_TERMINAL_ID" "t:inner"})
+          outer (str "export " outer-key "=$$; bash -c \"$1\" child \"${@:2}\"; status=$?; exit \"$status\"")
+          inner (str "export " inner-key "=$$; \"$@\"; status=$?; exit \"$status\"")
+          proc @(process/process ["bash" "-c" outer "parent" inner bin "pane" "current"]
+                                 {:out :string :err :string :dir (str dir)
+                                  :env (assoc env "FAKE_HC_LOG" (str (fs/path dir "hc-calls")))})]
+      (is (= expected (:exit proc)) (:out proc))
+      (is (= (zero? expected) (boolean (some #(= ["pane" "current"] (vec (take 2 %))) (calls log))))))))
 
 ;; Mutates global with-redefs state (ledger/assignment-root, cli/home-directory,
 ;; cli/packaged-personas-directory, cli/launcher-bin) -- must run serially.

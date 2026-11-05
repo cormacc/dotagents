@@ -263,22 +263,6 @@ Acceptance criteria:
 - Trial any approved version in an isolated fixture with lifecycle scripts disabled; run installed-runtime, adapter and extension checks against the intended version.
 - Update package and lockfile together only after the compatibility and version-policy decision. Do not use npm audit fix --force or change the live Pi installation as an audit shortcut.
 
-** TODO [#B] herdr-orch: support herdr-app (herdr-core / hc) :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 5968bca7-7fb8-4548-b627-f0adc1060a14
-:CREATED: [2026-11-04 Wed 22:02]
-:STARTED: [2026-11-04 Wed 22:15]
-:HANDOFF: Parked 2026-11-04: record Accepted, all open questions DECIDED. Resume after the parallel oh work lands: re-verify the record's pinned references (herdr.clj, cli.clj parent-identity/preflight!, contract.md sections) against HEAD, then start 47b47249 (backend detection) and 7f838268 (runtime protocol extraction). oh cannot delegate from a herdr-app terminal until 47b47249 and the hc runtime exist.
-:END:
-:LOGBOOK:
-- Created [2026-11-04 Wed 22:02]
-- State "STARTED" from "TODO" [2026-11-04 Wed 22:15]
-- State "WAITING" from "STARTED" [2026-11-04 Wed 22:36]
-- State "TODO" from "WAITING" [2026-11-04 Wed 22:38]
-:END:
-#+IMPORT: [[plan:2026-11-04-herdr-orch-herdr-app-support.org]]
-Let oh delegate from a herdr-app terminal, and refuse when leaked Herdr TUI variables name the wrong session. Plan in the linked change-record.
-
 ** TODO Consider replacing quota-axi with direct Babashka quota queries :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 4d770990-2725-4b7d-905a-888db5d9c2a7

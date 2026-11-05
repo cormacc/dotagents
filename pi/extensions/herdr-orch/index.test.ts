@@ -32,6 +32,7 @@ const execCalls: string[][] = [];
 const setupCalls: string[] = [];
 let setupStatus = { ready: true, version: "0.1.69", reason: null as string | null };
 let setupFailure = false;
+let backendRefusal = false;
 let setupKilled = false;
 let setupOutput: string | undefined;
 const setupOptions: Array<Record<string, unknown>> = [];
@@ -72,6 +73,7 @@ register({
     }
     execCalls.push(args);
     execOptions.push(options);
+    if (backendRefusal) return { stdout: JSON.stringify({ ok: false, schema: "herdr-orch/v1", error: { message: "backend-mismatch: fixture" } }), stderr: "", code: 1, killed: false };
     // `oh roster` and `oh usage` markdown output are renderings, not envelopes.
     if (args[0] === "roster") return { stdout: `LISTING ${args.join(" ")}\n`, stderr: "", code: 0, killed: false };
     if (args[0] === "usage") {
@@ -275,6 +277,35 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   ok(help.includes("does not run it or grant permission to delegate"), "catalogue membership does not grant execution authority");
   same(composeHelp("traits", "- `a` -- b\n", true), "- `a` -- b", "a section is the oh listing alone");
   same(composeHelp("workflows", "- `flow` -- description\n", false), "- `flow` -- description", "workflow section adds no delegation framing");
+}
+
+// An unsupported or mismatched host must be refused before quota setup can run.
+{
+  const saved = process.env.HC_TERMINAL_ID;
+  process.env.HC_TERMINAL_ID = "t:fixture";
+  backendRefusal = true;
+  try {
+    const notices: string[] = [];
+    const ctx = { mode: "rpc", hasUI: true, cwd: "/proj", ui: { notify: (message: string) => notices.push(message) } };
+    for (const section of ["", "usage", "setup", "personas"]) {
+      const beforeSetup = setupCalls.length;
+      await commands.get("oh")!.handler(section, ctx);
+      same(setupCalls.length, beforeSetup, `${section || "help"}: backend refusal precedes setup`);
+      ok(notices.at(-1)?.includes("backend-mismatch"), `${section || "help"}: backend refusal reaches the user`);
+    }
+    let refused = false;
+    try { await tools.get("herdr_pane")!.execute("call", { action: "run", pane: "leaked", command: "echo wrong" }); }
+    catch (error) { refused = error instanceof Error && error.message.includes("backend-mismatch"); }
+    ok(refused, "raw tool propagates the common CLI gate refusal");
+    backendRefusal = false;
+    const beforeSetup = setupCalls.length;
+    await commands.get("oh")!.handler("setup", ctx);
+    same(setupCalls.length, beforeSetup + 1, "supported hc context is not rejected by variable presence");
+  } finally {
+    backendRefusal = false;
+    if (saved === undefined) delete process.env.HC_TERMINAL_ID;
+    else process.env.HC_TERMINAL_ID = saved;
+  }
 }
 
 // Shared setup runs once before parallel renderings and never from tool routing.

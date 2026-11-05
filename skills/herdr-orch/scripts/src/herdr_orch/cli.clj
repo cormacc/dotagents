@@ -7,7 +7,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [herdr-orch.core :as core]
-            [herdr-orch.herdr :as herdr]
+            [herdr-orch.runtime :as herdr]
             [herdr-orch.ledger :as ledger]
             [herdr-orch.measurement :as measurement]
             [herdr-orch.pi-adapter :as pi-adapter]
@@ -276,11 +276,10 @@
       (when (= "pi" parent-kind)
         (System/getenv "PI_REASONING_LEVEL"))))
 (defn parent-identity []
-  (let [agent (herdr/agent! (System/getenv "HERDR_PANE_ID"))]
-    {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)
-     :parent-session-kind (get-in agent [:agent_session :kind])
-     :parent-model (parent-model (:agent agent))
-     :parent-effort (parent-effort (:agent agent))}))
+  (let [identity (herdr/identity! (herdr/selected!))]
+    (assoc identity
+           :parent-model (parent-model (:parent-kind identity))
+           :parent-effort (parent-effort (:parent-kind identity)))))
 ;; Composed from the resolved spawn policy, not the persona name: any persona whose
 ;; policy is non-empty gets the delegation sentence, everyone else the leaf sentence.
 ;; The closing sentence is the one lifecycle rule a child must be *told*, because it is the
@@ -597,6 +596,7 @@
 ;; `:preview` is the exact treatment the subject's system prompt carries; the assignment is the
 ;; only user message and travels as literal text, so it is reported beside it.
 (defn- measurement-preview! [opts]
+  (herdr/require-tui!)
   (herdr/preflight!)
   (let [{:keys [resolved treatment kind model effort model-canonical model-route model-args effort-args monitor timeout]} (resolve-measurement opts)]
     (cond-> {:preview treatment :assignment (task-text opts)
@@ -929,7 +929,7 @@
     ;; A headless round has no agent whose transcript Herdr could report.
     (headless? entry) parsed
     :else
-    (do (record-session! (:task entry) (:agent_session (try (herdr/agent! (:child entry)) (catch Exception _ nil))))
+    (do (record-session! (:task entry) (:agent_session (try (herdr/status! (herdr/selected!) {:scope :agent :target (:child entry)}) (catch Exception _ nil))))
         parsed)))
 ;; A headless waiter polls the result stream and the execution's own liveness, never Herdr: it
 ;; keeps waiting while the execution lives and stops early only once the execution is proved
@@ -962,11 +962,11 @@
             ;; produced respawns that discarded finished work.
             (if (<= remaining 0) {:status "pending" :terminal? false :reason "timeout"
                                   :child-status (or (:agent_status
-                                                     (try (herdr/agent! (:child entry))
+                                                     (try (herdr/status! (herdr/selected!) {:scope :agent :target (:child entry)})
                                                           (catch Exception _ nil)))
                                                     "unknown")
                                   :task (:task entry) :pane-id (:pane-id entry)}
-                (let [outcome (herdr/wait! (:child entry) remaining)
+                (let [outcome (herdr/wait-runtime! (herdr/selected!) (:child entry) remaining [])
                       ;; The wait outcome already carries the AgentInfo: no extra Herdr call.
                       _ (record-session! (:task entry) (get-in outcome [:value :result :agent :agent_session]))
                       current (capture! entry)]
@@ -987,7 +987,7 @@
 ;; inspected, which ends any agent that could still write into it.
 (defn safe-cleanup! [entry phase]
   (ledger/update! (:task entry) assoc :status "failed" :failed-at (now) :failure-phase (name phase))
-  (when (and (:pane-id entry) (#{"split" "rename" "start"} (name phase))) (try (herdr/close! (:pane-id entry)) (catch Exception _)))
+  (when (and (:pane-id entry) (#{"split" "rename" "start"} (name phase))) (try (herdr/close-runtime! (herdr/selected!) (:pane-id entry)) (catch Exception _)))
   (cleanup-failed-checkout! entry phase))
 ;; --- worktree checkout creation ------------------------------------------------------
 ;; "In flight" means genuinely unfinished, not merely unclosed: a round whose newest item
@@ -1235,7 +1235,7 @@
         ;; The lock protects only target decision and bounded local entry construction.
         assignment (task-text opts)
         caller-persona (own-persona)
-        parent-label (:label (herdr/pane! (:parent-pane ident)))
+        parent-label (:label (herdr/status! (herdr/selected!) {:scope :terminal :target (:parent-pane ident)}))
         bin (launcher-bin)
         ;; The OS file lock serialises target decision and ledger reservation across
         ;; processes sharing this assignment root. It is released by the kernel on a
@@ -1355,9 +1355,7 @@
                   model (assoc "HERDR_ORCH_MODEL" model-effective)
                   role-absent (assoc "HERDR_ORCH_ANONYMOUS" "1"))
             ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
-            pane-placement (if (= placement "tab")
-                             (herdr/tab-create! {:cwd child-cwd :label label :env env :focus false})
-                             (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd child-cwd :env env}))
+            pane-placement (herdr/place! (herdr/selected!) {:mode (keyword placement) :cwd child-cwd :label label :env env :focus false})
             persisted (ledger/update! task assoc :pane-id (:pane_id pane-placement) :tab-id (:tab-id pane-placement) :status "split")
             ;; Best-effort, exactly like `record-session!`: never fails a spawn. This is
             ;; the identity witness `close` falls back to when a resume has released the
@@ -1367,22 +1365,34 @@
             ;; Recorded now, on the bare freshly-split shell, rather than after `start!`:
             ;; the value is identical either way (it is the shell, never the foreground
             ;; process), so there is no reason to wait.
-            _ (try (when-let [pid (:shell_pid (herdr/process-info! (:pane-id persisted)))]
-                     (ledger/update! task assoc :shell-pid pid))
+            _ (try (when-let [target (:pane-id persisted)]
+                     (when-let [pid (:shell_pid (herdr/status! (herdr/selected!) {:scope :process :target target}))]
+                       (ledger/update! task assoc :shell-pid pid)))
                    (catch Exception _ nil))]
         (try
-          (let [renamed (herdr/rename! (:pane-id persisted) label)]
-            (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
+          (let [renamed (when-let [target (:pane-id persisted)]
+                          (herdr/place! (herdr/selected!) {:target target :label label}))]
+            (when (and (:pane-id persisted) (not= label (:label renamed)))
+              (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
             (ledger/update! task assoc :status "renamed")
             (let [native (concat (:model-args entry)
                                  (:effort-args entry)
                                  (core/harness-extra-args config kind)
                                  (when persona-path (core/persona-args kind persona-path))
                                  (when fork? ["--session" (:sessionFile @fork-created)]))]
-              (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
-              (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path persona-path :role-absent role-absent :fork? fork? :kind kind :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro) :worktree worktree})]
+              (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path persona-path :role-absent role-absent :fork? fork? :kind kind :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro) :worktree worktree})
+                    launched (herdr/launch! (herdr/selected!) {:name name :kind kind :pane (:pane-id persisted)
+                                                             :native-args native :prompt prompt :placement pane-placement})]
+                (when-let [target (:pane_id launched)]
+                  (ledger/update! task (fn [current]
+                                         (cond-> (assoc current :pane-id target)
+                                           (contains? launched :tab-id) (assoc :tab-id (:tab-id launched))))))
+                (when-let [pid (:shell_pid launched)]
+                  (ledger/update! task assoc :shell-pid pid))
+                (record-session! task (:agent_session launched))
                 (ledger/update! task assoc :status "started" :started-at (now))
-                (herdr/prompt! name prompt)
+                (when-not (:prompt-delivered? launched)
+                  (herdr/prompt-runtime! (herdr/selected!) name prompt {}))
                 (ledger/update! task assoc :status "prompted" :prompted-at (now)))))
           (catch Exception e
             (safe-cleanup! (ledger/read! task) :start)
@@ -1439,13 +1449,13 @@
         label (str (:label entry) "-monitor")]
     (try
       (let [pane (if (= "tab" placement)
-                   (herdr/tab-create! {:cwd (:work-root entry) :label label :env {} :focus false})
-                   (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd (:work-root entry) :env {}}))
+                   (herdr/raw :tab-create! {:cwd (:work-root entry) :label label :env {} :focus false})
+                   (herdr/raw :split! {:direction (core/direction (herdr/raw :caller-rect!)) :cwd (:work-root entry) :env {}}))
             pane-id (:pane_id pane)
-            shell-pid (try (:shell_pid (herdr/process-info! pane-id)) (catch Exception _ nil))]
+            shell-pid (try (:shell_pid (herdr/status! (herdr/selected!) {:scope :process :target pane-id})) (catch Exception _ nil))]
         (ledger/update! task assoc :monitor {:pane-id pane-id :tab-id (:tab-id pane) :shell-pid shell-pid :placement placement})
-        (try (herdr/rename! pane-id label) (catch Exception _ nil))
-        (herdr/pane-run! pane-id (str/join " " (map shell-quote (supervisor-command "monitor" (get-in entry [:measurement :evidence-dir])))))
+        (try (herdr/place! (herdr/selected!) {:target pane-id :label label}) (catch Exception _ nil))
+        (herdr/raw :pane-run! pane-id (str/join " " (map shell-quote (supervisor-command "monitor" (get-in entry [:measurement :evidence-dir])))))
         (ledger/read! task))
       (catch Exception e
         (ledger/update! task assoc :monitor-error (.getMessage e))))))
@@ -1460,6 +1470,7 @@
                                             :launch-retired true})))
                          (apply assoc current kvs))))
 (defn- spawn-measurement! [opts waiting-policy]
+  (herdr/require-tui!)
   (herdr/preflight!)
   (let [{:keys [resolved treatment ident kind model effort model-canonical model-route model-args effort-args monitor timeout requested-target]} (resolve-measurement opts)
         _ (when-let [refusal (measurement/detach-refusal (measurement/platform))]
@@ -1601,10 +1612,10 @@
   (try
     (let [pane (:parent-pane entry)
           send! (fn [extra]
-                  (try (herdr/prompt! pane (push-text (launcher-bin) child task status work-root artifacts))
+                  (try (herdr/prompt-runtime! (herdr/selected!) pane (push-text (launcher-bin) child task status work-root artifacts) {})
                        (merge {:push "sent" :parent-pane pane} extra)
                        (catch Exception e {:push "error" :parent-pane pane :reason "prompt-failed" :message (.getMessage e)})))
-          probe (try {:agent (herdr/agent! pane)} (catch Exception e {:error (.getMessage e)}))]
+          probe (try {:agent (herdr/status! (herdr/selected!) {:scope :agent :target pane})} (catch Exception e {:error (.getMessage e)}))]
       (if (:error probe)
         {:push "error" :parent-pane pane :reason "probe-failed" :message (:error probe)}
         (let [decision (push-decision entry (:agent probe))]
@@ -1612,7 +1623,7 @@
             "send" (send! nil)
             ;; `:waited` records only that a settle wait preceded the outcome — never that
             ;; the parent settled, which the post-wait re-check may still reject.
-            "wait" (let [outcome (herdr/wait-settled! pane timeout)
+            "wait" (let [outcome (herdr/wait-runtime! (herdr/selected!) pane timeout ["idle" "done"])
                          observed (get-in outcome [:value :result :agent])
                          code (get-in outcome [:error :response :error :code])
                          ;; Re-checked on the freshly observed AgentInfo. `agent wait` pins
@@ -1757,8 +1768,8 @@
 ;; wrapper every ledger-backed and manual publish shares; the toast is best-effort and never
 ;; masks or changes the underlying failure.
 (defn- publish-failure-toast! [child task e]
-  (try (herdr/notify! "Subagent publish failed"
-                      (str "child=" child " pane=" (or (System/getenv "HERDR_PANE_ID") "unknown")
+  (try (herdr/notify-runtime! (herdr/selected!) "Subagent publish failed"
+                      (str "child=" child " pane=" (or (:parent-pane (herdr/identity! (herdr/selected!) {:local? true})) "unknown")
                            " task=" task " error=" (.getMessage e)))
        (catch Exception _ nil)))
 (defn- publish-round! [opts child task]
@@ -1827,7 +1838,7 @@
       (let [{:keys [checkpoint released-children]} committed
             item (:published committed)
             notification (when (= policy "non-blocking")
-                           (try (herdr/notify! (str "Subagent " child " published")
+                           (try (herdr/notify-runtime! (herdr/selected!) (str "Subagent " child " published")
                                               (str "child=" child " task=" task " result=" (:result item)))
                                 (catch Exception e {:notification-error (.getMessage e)})))
             ;; WAITING reports are intentionally toast-only. Terminal reports retain the
@@ -2130,12 +2141,12 @@
                                         (fail "close refused: an item was published during the settle wait" {:task task}))
                                       (when-not (= task (:task (newest-round (ledger/entries) child)))
                                         (fail "close refused: a newer round appeared during the settle wait" {:task task :child child}))
-                                      (when-not abandon? (herdr/close! (:pane-id current)))
+                                      (when-not abandon? (herdr/close-runtime! (herdr/selected!) (:pane-id current)))
                                       (cond-> (assoc current :closed-at (now))
                                         abandon? (assoc :pane-abandoned true))))))]
     (cond-> {:status (if abandon? "abandoned" "closed") :task task :child child :pane-id pane-id :closed-at (:closed-at updated)}
       abandon? (assoc :reason "pane-left-to-operator"))))
-(defn- pane-alive? [pane] (try (boolean (herdr/pane! pane)) (catch Exception _ false)))
+(defn- pane-alive? [pane] (try (boolean (herdr/status! (herdr/selected!) {:scope :terminal :target pane})) (catch Exception _ false)))
 ;; `pane-alive?` answers a *two*-way question with a `catch`-all, so every failure -- an
 ;; unreachable server, a malformed request, a daemon mid-restart -- reads as `false`, the
 ;; same as a pane that is provably gone. Where absence is merely one branch of a decision
@@ -2144,10 +2155,10 @@
 ;; separate so the caller can refuse it (contract.md section 'Close': an unreadable inspection is
 ;; unusable evidence and fails closed).
 (defn- pane-absence [pane]
-  (try (if (herdr/pane! pane) :present :unknown)
+  (try (if (herdr/status! (herdr/selected!) {:scope :terminal :target pane}) :present :unknown)
        (catch Exception e
          (if (= "pane_not_found" (get-in (ex-data e) [:response :error :code])) :absent :unknown))))
-(defn- pane-process-info! [pane] (try (herdr/process-info! pane) (catch Exception _ nil)))
+(defn- pane-process-info! [pane] (try (herdr/status! (herdr/selected!) {:scope :process :target pane}) (catch Exception _ nil)))
 (defn- pane-shell-pid! [pane] (:shell_pid (pane-process-info! pane)))
 ;; A foreground process group that differs from the pane's own shell means something is
 ;; actively running there *right now* -- an operator's build, tail, or REPL, invisible to
@@ -2216,11 +2227,11 @@
 ;; which that name-only index drops entirely -- so both are captured from the one call
 ;; this already makes, rather than a second `agent list` just to see nameless entries.
 (defn- agents-snapshot []
-  (try (when-let [agents (herdr/agents)]
+  (try (when-let [agents (herdr/status! (herdr/selected!) {:scope :agents})]
          {:agents agents :index (into {} (keep #(when-let [name (:name %)] [name %])) agents)})
        (catch Exception _ nil)))
 (defn- settle-and-list! [verb entry]
-  (try (herdr/wait! (:child entry) (settle-close-ms)) (catch Exception _ nil))
+  (try (herdr/wait-runtime! (herdr/selected!) (:child entry) (settle-close-ms) []) (catch Exception _ nil))
   (or (agents-snapshot) (fail (str verb " refused: agent list is unusable; liveness is unknown") {:task (:task entry)})))
 (defn- settle-then-close! [entry]
   (close-observed! entry (settle-and-list! "close" entry)))
@@ -2374,7 +2385,7 @@
                                         (when (:closed-at current) (fail "close refused: already closed" {:task task}))
                                         (when (seq (unconsumed-items current))
                                           (fail "close refused: an item was published during the check" {:task task}))
-                                        (when (= "closed" (:status monitor)) (herdr/close! (:pane-id monitor)))
+                                        (when (= "closed" (:status monitor)) (herdr/close-runtime! (herdr/selected!) (:pane-id monitor)))
                                         (cond-> (assoc current :closed-at (now))
                                           monitor (assoc :monitor-closure monitor))))))]
       (cond-> {:status "closed" :task task :child child :closed-at (:closed-at updated)}
@@ -2488,7 +2499,7 @@
 ;; unusable. A recorded owner is either a session value or, when Herdr tracked no session for
 ;; it, a bare pane id, so both are collected.
 (defn- attached-owners []
-  (try (when-let [agents (herdr/agents)]
+  (try (when-let [agents (herdr/status! (herdr/selected!) {:scope :agents})]
          (into #{} (mapcat #(remove nil? [(get-in % [:agent_session :value]) (:pane_id %)])) agents))
        (catch Exception _ nil)))
 (defn orphans! [opts]
@@ -2933,7 +2944,7 @@
                      {:task task :child child :recorded (:pane-id current) :observed (:pane_id agent)}))
              (when-not (contains? #{"idle" "done"} (:agent_status agent))
                (fail "poke refused: the child is not settled" {:task task :child child :agent-status (:agent_status agent)}))
-             (herdr/prompt! child (poke-prompt task (:result current) (:worktree current)))
+             (herdr/prompt-runtime! (herdr/selected!) child (poke-prompt task (:result current) (:worktree current)) {})
              (ledger/update! task update :pokes (fnil inc 0))
              {:status "poked" :task task :child child :pane-id (:pane-id current)
               :pokes (inc (or (:pokes current) 0))})))))))
@@ -3062,7 +3073,7 @@
           ;; the `continue`, or `close` the prior round. No pane is touched: unlike a spawn
           ;; failure, the pane here predates this verb and belongs to a healthy child.
           (try
-            (herdr/prompt! child (continuation-prompt {:assignment assignment :task task :result result :waiting-policy waiting-policy :worktree worktree :kind kind}))
+            (herdr/prompt-runtime! (herdr/selected!) child (continuation-prompt {:assignment assignment :task task :result result :waiting-policy waiting-policy :worktree worktree :kind kind}) {})
             (catch Exception e
               (ledger/update! task assoc :status "failed" :failed-at (now) :failure-phase "continue-prompt")
               (throw e)))
@@ -3114,7 +3125,7 @@
 ;; silently classify every candidate as vanished on an exit-0 payload with no `agents` key.
 ;; A genuine empty listing is `[]`, which is truthy, so zero live agents still short-circuits.
 (defn live-agents []
-  (try (when-let [agents (herdr/agents)]
+  (try (when-let [agents (herdr/status! (herdr/selected!) {:scope :agents})]
          (into {} (keep #(when-let [name (:name %)] [name %])) agents))
        (catch Exception _ nil)))
 ;; `agent wait` takes a single target, so N children cannot be awaited in one call:
@@ -3178,7 +3189,7 @@
 ;; recorded, so gating `record-session!` on its absence discarded an observation this call
 ;; already paid for, for free -- see `finish-capture!`'s identical fix.
 (defn- live-interactive [entry]
-  (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))
+  (let [agent (try (herdr/status! (herdr/selected!) {:scope :agent :target (:child entry)}) (catch Exception _ nil))
         entry (or (record-session! (:task entry) (:agent_session agent)) entry)]
     (with-reconciliation entry (assoc entry :live-agent agent
                                       :context (core/entry-context entry) :execution (core/entry-execution entry)))))
@@ -3356,43 +3367,43 @@
     ;; An explicit `--pane` is the split's source *and* the pane whose geometry infers an
     ;; omitted direction. `--focus` is honoured here only; delegation never passes it.
     "split" (let [pane (one opts :pane)]
-              (herdr/split! {:pane pane :direction (or (one opts :direction) (core/direction (herdr/caller-rect! pane)))
+              (herdr/raw :split! {:pane pane :direction (or (one opts :direction) (core/direction (herdr/raw :caller-rect! pane)))
                              :cwd (or (one opts :cwd) (current-cwd)) :env (parse-env (all opts :env)) :focus (boolean (one opts :focus))}))
-    "run" (let [[pane command] (require-positionals positional 2 "pane run")] (herdr/pane-run! pane command))
-    "read" (let [[pane] (require-positionals positional 1 "pane read")] (herdr/pane-read! pane {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
+    "run" (let [[pane command] (require-positionals positional 2 "pane run")] (herdr/raw :pane-run! pane command))
+    "read" (let [[pane] (require-positionals positional 1 "pane read")] (herdr/raw :pane-read! pane {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
     "wait-output" (let [[pane] (require-positionals positional 1 "pane wait-output")
                          match (one opts :match) regex (one opts :regex)]
                      (when (= (boolean match) (boolean regex))
                        (usage-error "pane wait-output requires exactly one of --match or --regex" {}))
-                     (herdr/pane-wait-output! pane (assoc {:source (one opts :source) :lines (one opts :lines) :timeout (one opts :timeout) :raw (one opts :raw)} (if regex :regex :match) (or regex match))))
-    "send-text" (let [[pane text] (require-positionals positional 2 "pane send-text")] (herdr/pane-send-text! pane text))
+                     (herdr/raw :pane-wait-output! pane (assoc {:source (one opts :source) :lines (one opts :lines) :timeout (one opts :timeout) :raw (one opts :raw)} (if regex :regex :match) (or regex match))))
+    "send-text" (let [[pane text] (require-positionals positional 2 "pane send-text")] (herdr/raw :pane-send-text! pane text))
     "send-keys" (let [[pane & keys] positional]
                   (when (or (nil? pane) (empty? keys)) (usage-error "pane send-keys requires a pane and at least one key" {}))
-                  (herdr/pane-send-keys! pane keys))
-    "close" (let [[pane] (require-positionals positional 1 "pane close")] (herdr/close! pane))
+                  (herdr/raw :pane-send-keys! pane keys))
+    "close" (let [[pane] (require-positionals positional 1 "pane close")] (herdr/raw :close! pane))
     "list" (do (require-positionals positional 0 "pane list")
-                 (let [items (herdr/pane-list! (one opts :workspace))]
-                   (herdr/render-panes items (:pane_id (herdr/current-pane!)))))
-    "current" (do (require-positionals positional 0 "pane current") (herdr/current-pane!))
-    "get" (let [[pane] (require-positionals positional 1 "pane get")] (herdr/pane! pane))
-    "layout" (let [[pane] (require-positionals positional 1 "pane layout")] (herdr/pane-layout! pane))
-    "rename" (let [[pane label] (require-positionals positional 2 "pane rename")] (herdr/rename! pane label))
+                 (let [items (herdr/raw :pane-list! (one opts :workspace))]
+                   (herdr/raw :render-panes items (:pane_id (herdr/raw :current-pane!)))))
+    "current" (do (require-positionals positional 0 "pane current") (herdr/raw :current-pane!))
+    "get" (let [[pane] (require-positionals positional 1 "pane get")] (herdr/raw :pane! pane))
+    "layout" (let [[pane] (require-positionals positional 1 "pane layout")] (herdr/raw :pane-layout! pane))
+    "rename" (let [[pane label] (require-positionals positional 2 "pane rename")] (herdr/raw :rename! pane label))
     (usage-error "unknown pane command" {:command op})))
 (defn raw-tab! [op opts positional]
   (case op
     "create" (do (require-positionals positional 0 "tab create")
-                  (herdr/tab-create! {:workspace (one opts :workspace) :cwd (or (one opts :cwd) (current-cwd))
+                  (herdr/raw :tab-create! {:workspace (one opts :workspace) :cwd (or (one opts :cwd) (current-cwd))
                                       :label (one opts :label) :env (parse-env (all opts :env)) :focus (boolean (one opts :focus))}))
-    "list" (do (require-positionals positional 0 "tab list") (herdr/tab-list! (one opts :workspace)))
-    "focus" (let [[tab] (require-positionals positional 1 "tab focus")] (herdr/tab-focus! tab))
+    "list" (do (require-positionals positional 0 "tab list") (herdr/raw :tab-list! (one opts :workspace)))
+    "focus" (let [[tab] (require-positionals positional 1 "tab focus")] (herdr/raw :tab-focus! tab))
     (usage-error "unknown tab command" {:command op})))
 (defn raw-workspace! [op opts positional]
   (case op
     "create" (do (require-positionals positional 0 "ws create")
-                  (herdr/workspace-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (one opts :label)
+                  (herdr/raw :workspace-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (one opts :label)
                                             :env (parse-env (all opts :env)) :focus (boolean (one opts :focus))}))
-    "list" (do (require-positionals positional 0 "ws list") (herdr/workspace-list!))
-    "focus" (let [[workspace] (require-positionals positional 1 "ws focus")] (herdr/workspace-focus! workspace))
+    "list" (do (require-positionals positional 0 "ws list") (herdr/raw :workspace-list!))
+    "focus" (let [[workspace] (require-positionals positional 1 "ws focus")] (herdr/raw :workspace-focus! workspace))
     (usage-error "unknown ws command" {:command op})))
 (defn raw-agent! [op opts positional]
   (case op
@@ -3400,26 +3411,26 @@
     ;; local allow-list would refuse a kind the runtime accepts (`qwen`, `letta`, `muse`).
     "start" (let [[name] (require-positionals positional 1 "agent start") kind (one opts :kind) pane (or (one opts :pane) (usage-error "agent start requires --pane" {}))]
               (when (str/blank? kind) (usage-error "agent start requires a nonblank --kind" {:kind kind}))
-              (herdr/start! name kind pane (:native opts)))
+              (herdr/launch! (herdr/selected!) {:name name :kind kind :pane pane :native-args (:native opts)}))
     ;; `--until`/`--timeout` are wait-only: without `--wait` they are refused rather than
     ;; silently dropped or silently promoted into a wait the caller did not ask for.
     "prompt" (let [[target text] (require-positionals positional 2 "agent prompt")
                    wait? (boolean (one opts :wait)) until (all opts :until) timeout (one opts :timeout)]
                (when (and (not wait?) (or (seq until) timeout))
                  (usage-error "agent prompt --until and --timeout require --wait" {:until until :timeout timeout}))
-               (herdr/prompt! target text {:wait wait? :until until :timeout (some->> timeout (core/timeout-value! "--timeout" nil))}))
-    "wait" (let [[target] (require-positionals positional 1 "agent wait")] (herdr/agent-wait! target (Long/parseLong (or (one opts :timeout) "600000")) (all opts :until)))
-    "read" (let [[target] (require-positionals positional 1 "agent read")] (herdr/agent-read! target {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
+               (herdr/prompt-runtime! (herdr/selected!) target text {:wait wait? :until until :timeout (some->> timeout (core/timeout-value! "--timeout" nil))}))
+    "wait" (let [[target] (require-positionals positional 1 "agent wait")] (herdr/wait-runtime! (herdr/selected!) target (Long/parseLong (or (one opts :timeout) "600000")) (all opts :until)))
+    "read" (let [[target] (require-positionals positional 1 "agent read")] (herdr/read-runtime! (herdr/selected!) target {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
     "send-keys" (let [[target & keys] positional]
                   (when (or (nil? target) (empty? keys)) (usage-error "agent send-keys requires a target and at least one key" {}))
-                  (herdr/agent-send-keys! target keys))
-    "focus" (let [[target] (require-positionals positional 1 "agent focus")] (herdr/agent-focus! target))
+                  (herdr/raw :agent-send-keys! target keys))
+    "focus" (let [[target] (require-positionals positional 1 "agent focus")] (herdr/raw :agent-focus! target))
     "rename" (let [[target name] positional clear? (boolean (one opts :clear))]
                (when (or (nil? target) (and (not clear?) (nil? name)) (and clear? name))
                  (usage-error "agent rename requires <target> <name> or <target> --clear" {}))
-               (herdr/agent-rename! target name clear?))
-    "list" (do (require-positionals positional 0 "agent list") (herdr/render-agents (herdr/agents)))
-    "get" (let [[target] (require-positionals positional 1 "agent get")] (herdr/agent! target))
+               (herdr/raw :agent-rename! target name clear?))
+    "list" (do (require-positionals positional 0 "agent list") (herdr/raw :render-agents (herdr/raw :agents)))
+    "get" (let [[target] (require-positionals positional 1 "agent get")] (herdr/status! (herdr/selected!) {:scope :agent :target target}))
     (usage-error "unknown agent command" {:command op})))
 (defn- listing-entries [opts]
   (let [entries (ledger/entries)]
@@ -3446,7 +3457,7 @@
 (defn- home-view []
   (let [root (ledger/assignment-root)
         directory (fs/path root ".tmp" "herdr-orch" "ledger")
-        pane (some-> (System/getenv "HERDR_PANE_ID") str/trim not-empty)
+        pane (some-> (:parent-pane (herdr/identity! (herdr/selected!) {:local? true})) str/trim not-empty)
         entries (if (fs/directory? directory)
                   (->> (fs/glob directory "*.json")
                        (map #(json/parse-string (slurp (str %)) true))
@@ -3832,8 +3843,8 @@
   (let [[command] (require-positionals positional 1 "spawn")]
     (when (some #{command} (available-personas))
       (usage-error "spawn only runs shell commands; use `oh task run <persona>` for delegation" {:persona command}))
-    (let [pane (herdr/tab-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (or (one opts :label) "spawn") :env {} :focus false})]
-      (herdr/pane-run! (:pane_id pane) command)
+    (let [pane (herdr/raw :tab-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (or (one opts :label) "spawn") :env {} :focus false})]
+      (herdr/raw :pane-run! (:pane_id pane) command)
       {:pane-id (:pane_id pane) :tab-id (:tab-id pane)})))
 ;; A measurement subject carries a task-bound marker and no routing authority. Every command
 ;; except help refuses it before any code falls back to the root or focused-pane identity.
@@ -3843,10 +3854,13 @@
     (fail "refused: a measurement subject cannot run orchestration commands"
           {:command (str/join " " (remove nil? [group op])) :subject-task task})))
 (defn execute [argv]
-  (let [[group op & args] argv]
+  (herdr/call-context
+   (fn []
+    (let [[group op & args] argv]
     (if (help-request? group op args)
       (help-text group op)
       (let [_ (refuse-subject! group op)
+            _ (herdr/gate!)
             parse-args (if (#{"spawn" "roster" "usage"} group) (cons op args) args)
             opts (option-map parse-args (boolean-flags-for group op) known-options)
             positional (:_ opts)]
@@ -3861,7 +3875,7 @@
           "spawn" (spawn-command! opts positional)
           "roster" (roster! opts positional)
           "usage" (usage! opts positional)
-          (usage-error "unknown oh command" {:command group}))))))
+          (usage-error "unknown oh command" {:command group}))))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))
        (catch Exception e

@@ -1,0 +1,93 @@
+#!/usr/bin/env bb
+(require '[babashka.fs :as fs]
+         '[cheshire.core :as json]
+         '[clojure.edn :as edn]
+         '[clojure.string :as str])
+(def argv (vec *command-line-args*))
+(def log (System/getenv "FAKE_HC_LOG"))
+(spit log (str (str/join "\u001f" argv) "\u001f\n") :append true)
+(def state-path (str (or (System/getenv "FAKE_HC_STATE_DIR") (str log ".state")) "/terminals.edn"))
+(def parent (or (System/getenv "HC_TERMINAL_ID") "t1"))
+(defn env [key default] (or (System/getenv key) default))
+(defn reply [value] (println (json/generate-string value)))
+(defn fail! [kind code]
+  (binding [*out* *err*] (reply {:kind kind :message (str "fake hc " kind)}))
+  (System/exit code))
+(defn parent-terminal []
+  {:address parent :created_ms 1000 :pid (parse-long (env "FAKE_HC_PID" "9001"))
+   :labels (if (= "1" (System/getenv "FAKE_HC_NO_LABELS")) {} {:herdr.space "space-parent" :herdr.tab "tab-parent"})
+   :argv ["zsh" "-l"] :cwd (System/getProperty "user.dir") :state "live"
+   :status (when-not (= "1" (System/getenv "FAKE_HC_NO_STATUS"))
+             {:app (env "FAKE_HC_KIND" "pi") :state (env "FAKE_HC_PARENT_STATUS" "idle")})
+   :foreground {:pid 9002 :argv ["pi"]}})
+(def state (atom (if (fs/exists? state-path) (edn/read-string (slurp state-path)) {})))
+(defn save! [] (fs/create-dirs (fs/parent state-path)) (spit state-path (pr-str @state)))
+(defn find-terminal [target]
+  (or (get @state target)
+      (some #(when (= target (:name %)) %) (vals @state))
+      (when (= target parent) (parent-terminal))
+      (fail! "not_found" 4)))
+(defn put! [terminal] (swap! state assoc (:address terminal) terminal) (save!) terminal)
+(defn option [flag] (second (drop-while #(not= flag %) argv)))
+(defn publish! [terminal]
+  (when-let [round (:round-env terminal)]
+    (let [result (round "HERDR_ORCH_RESULT") task (round "HERDR_ORCH_TASK") child (round "HERDR_ORCH_CHILD")]
+      (when (and result (not (fs/exists? result)))
+        (fs/create-dirs (fs/parent result))
+        (spit result (str "--- HERDR RESULT v1 ---\nCHILD: " child "\nTASK: " task
+                          "\nRESULT: " result "\nWORK-ROOT: " (round "HERDR_ORCH_WORK_ROOT")
+                          "\nSTATUS: COMPLETE\nSUMMARY: fake hc completed\nARTIFACTS:\n- none\nFINDINGS:\n- none\nNEXT: none\n--- END HERDR RESULT ---\n"))))))
+(case (first argv)
+  "get" (reply (find-terminal (second argv)))
+  "run" (let [command (vec (rest (drop-while #(not= "--" %) argv)))
+              assignments (take-while #(re-matches #"[A-Z_]+=.*" %) (rest command))
+              round-env (into {} (map #(str/split % #"=" 2)) assignments)
+              native (vec (drop (inc (count assignments)) command))
+              kind (first native)
+              labels (into {} (keep-indexed (fn [i x] (when (= x "--label") (str/split (get argv (inc i)) #"=" 2))) argv))
+              address (str "t" (+ 2 (count @state)))
+              status (env "FAKE_HC_START_STATUS" "working")
+              terminal {:address address :created_ms (+ 2000 (count @state)) :pid (+ 10000 (count @state))
+                        :name (option "--name") :parent (option "--parent") :cwd (option "--cwd")
+                        :labels (into {} (map (fn [[k v]] [(keyword k) v]) labels))
+                        :state (if (= status "exited") "finished" "live")
+                        :argv command :round-env round-env :prompts [(peek native)]
+                        :die_with_parent (not (some #{"--outlive-parent"} argv))
+                        :notify (not (some #{"--no-notify"} argv))
+                        :status (when-not (= status "unknown") {:app (env "FAKE_HC_START_KIND" (if (= kind "claude") "claude-code" kind)) :state status})
+                        :foreground {:pid (+ 10000 (count @state)) :argv native}}]
+          (reply (put! terminal)))
+  "label" (let [terminal (find-terminal (second argv))
+                labels (into {} (map (fn [x] (let [[k v] (str/split x #"=" 2)] [(keyword k) v])) (drop 2 argv)))]
+            (reply (put! (update terminal :labels merge labels))))
+  "read" (do (find-terminal (second argv)) (reply {:text "fake hc transcript" :complete true :how "screen"}))
+  "send" (let [terminal (find-terminal (second argv))]
+           (when-let [delay (System/getenv "FAKE_HC_SEND_DELAY_MS")]
+             (Thread/sleep (parse-long delay)))
+           (when (= "finished" (:state terminal)) (fail! "finished" 5))
+           (when (= "blocked" (get-in terminal [:status :state])) (fail! "blocked" 9))
+           (put! (-> terminal (update :prompts (fnil conj []) (nth argv 2)) (assoc-in [:status :state] "working")))
+           (reply {:turn 1 :started (when (some #{"--wait"} argv) true)
+                   :wait (when (some #{"--wait"} argv)
+                           (if (= "1" (System/getenv "FAKE_HC_SEND_WAIT_TIMEOUT"))
+                             {:reason "timeout" :status "working" :ended false}
+                             {:reason "status" :status "idle" :ended true}))}))
+  "wait" (let [terminal (find-terminal (second argv))
+               state (get-in terminal [:status :state])
+               terminal (if (= state "working") (assoc-in terminal [:status :state] "idle") terminal)]
+           (when-not (= "0" (env "FAKE_HC_PUBLISH" "1")) (publish! terminal))
+           (put! terminal)
+           (reply {:terminal (:address terminal) :ended (not= state "unknown") :reason "status" :turn 1 :children []}))
+  "ls" (do
+         (when-let [next-child (first (:publish-queue @state))]
+           (publish! (find-terminal next-child))
+           (swap! state update :publish-queue #(vec (rest %)))
+           (save!))
+         (reply {:terminals (into [(parent-terminal)] (filter map? (vals (dissoc @state :publish-queue)))) :hidden_finished 0 :machines []}))
+  "kill" (let [terminal (find-terminal (second argv))
+               stopped (assoc terminal :state "finished" :status nil :reason "killed" :pid nil :foreground nil)]
+           (doseq [child (vals @state)
+                   :when (and (= (:address terminal) (:parent child)) (:die_with_parent child))]
+             (put! (assoc child :state "finished" :status nil :reason "parent_exited" :pid nil :foreground nil)))
+           (reply (put! stopped)))
+  (fail! "invalid_params" 2))

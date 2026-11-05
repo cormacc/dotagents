@@ -30,14 +30,14 @@ A harness-agnostic orchestration framework for agent-assisted development. You d
 
 My own use is mostly human-in-the-loop and low fan-out: subagents manage context and token cost, not swarm development. That is preference, not prescription. Other orchestration models need only different persona definitions.
 
-Developed against =pi=, and verified against Claude Code and Codex. Other harnesses are configurable ([[*Harness configuration]]). The scripts use Babashka (Clojure).
+Developed against =pi=, and verified against Claude Code and Codex. Other harnesses are configurable ([[*Harness configuration]]). The scripts use Babashka (Clojure). =oh= has one delegation contract over two runtimes: Herdr TUI and local herdr-app / herdr-core (=hc=). Runtime facts are in [[file:scripts/docs/contract.md]] section 'Preconditions'.
 
 * Subagent lifecycle
 
 The parent owns both ends of a round: it chooses where the child works, and it owns everything the child produces.
 
 - Target :: Before the child exists, the parent resolves one checkout: its own, an attached checkout in the same repository (=--worktree <path>=), or a new managed checkout (=--worktree new=). Without the flag, a read-only child or the first write-enabled child shares the caller's checkout, and each additional concurrent write-enabled child gets a managed one. A managed checkout starts from the source =HEAD= on branch =orch/<task-prefix>=, before any pane exists.
-- Spawn :: =oh task run= blocks for the result. =oh task start= returns at once. The child's cwd is the resolved checkout. The persona does not describe the topology, and the child has no commit permission. The persona is optional: a persona-less child gets the assignment, any explicit =--trait= selections and the launcher guidance, but no role and no authority. =--context fresh= is the default ("spawn a subagent"); =--context fork= ("fork a subagent") starts a Pi child that inherits the completed earlier turns of the caller's own Pi session, not the current turn that delegates; the assignment carries any same-turn findings. =--context measurement= runs a headless Pi sample under a detached supervisor that publishes its result; it opens no pane unless =--tab= or =--split= asks for a read-only monitor.
+- Spawn :: =oh task run= blocks for the result. =oh task start= returns at once. The child's cwd is the resolved checkout. The persona does not describe the topology, and the child has no commit permission. The persona is optional: a persona-less child gets the assignment, any explicit =--trait= selections and the launcher guidance, but no role and no authority. =--context fresh= is the default ("spawn a subagent"); =--context fork= ("fork a subagent") starts a Pi child that inherits the completed earlier turns of the caller's own Pi session, not the current turn that delegates; the assignment carries any same-turn findings. On the TUI runtime only, =--context measurement= runs a headless Pi sample under a detached supervisor that publishes its result; it opens no pane unless =--tab= or =--split= asks for a read-only monitor.
 - Publish :: =oh task publish= appends immutable items to the round's stream, including interim reports and monitor observations. A terminal status (=COMPLETE=, =BLOCKED=, =FAILED=) seals the round. In a non-shared checkout, publication commits pending non-ignored changes and records the tip as =CHECKPOINT=, so recovery does not depend on the child committing. In the shared checkout, publication does not touch Git. Publication from a read-only child with uncommitted changes is refused.
 - Collect and reconcile :: =oh task collect= captures published items. =collect --any= takes the first in-flight child to publish. For a child with its own checkout, =collect=, =status=, and =oh worktree list= also report base, branch, tip, and checkout state, with committed, dirty, and ignored paths as separate sets.
 - Close, continue, or tear down :: Capture never closes a pane. =oh task close= closes a settled child's pane. =oh task continue= gives the same child another round in the same checkout. =oh worktree remove= deletes only a managed checkout that is owned, unreferenced, and clean. A failed launch removes the pristine managed checkout that it created. The branch always stays.
@@ -53,12 +53,12 @@ The parent integrates. =oh= never merges, rebases, pushes, deletes a branch, or 
 ** Requirements
 
 - [[https://babashka.org][Babashka]] on =PATH=.
-- Herdr 0.9.1 or newer, client and server.
+- Herdr TUI with =HERDR_ENV=1= and Herdr 0.9.1 or newer on both client and running server, or local herdr-app with =HC_TERMINAL_ID=. The nearest host in process ancestry selects the runtime; mismatched addressing variables are refused. Variable presence alone does not select it. hc measurement and remote machines are out of scope.
 - Pi 1.5.0 or newer, for a Pi parent or child. The repository SDK is pinned to 1.5.0; installed-runtime adapter tests verify provider request encoding separately.
 - =quota-axi@0.1.69= with Node >=22.19 for subscription reporting. The repository =package.json= declares it, so a Pi package install or =npm ci= in the checkout provides it. Without Pi, run =scripts/quota-axi-setup install= explicitly, or confirm Pi =/oh setup=. Setup installs in a user-local prefix with lifecycle scripts disabled; collection and routing never install. Discovery prefers the package dependency, then the managed install, then =PATH=. See [[file:scripts/docs/contract.md]] section 'Usage'.
 - Optional: the =org-plan= and =org-tasks= skills in this repository.
 
-Herdr is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md][upstream Herdr skill]] is vendored at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience. =oh= does not need it, so a standalone install works.
+The selected runtime is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md][upstream Herdr skill]] is vendored at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience. =oh= does not need it, so a standalone install works.
 
 ** Installation
 
@@ -118,7 +118,7 @@ The frontmatter parser reads one =key: value= per line and does not strip YAML c
 - =traits= :: Trait fragments to append, as =[name, ...]= ([[*Shared directives: traits]]).
 - =extends= :: A base persona (below).
 
-Usually omit =kind=: the child then runs the harness that Herdr measured for the parent. =kind= is the only way to choose a harness, with no flag or environment variable, because the harness is a deployment property, not a per-assignment setting like =model=. To compare harnesses, write a definition that declares the other harness.
+Usually omit =kind=: the child then runs the parent's observed harness from the selected runtime. =kind= is the only way to choose a harness, with no flag or environment variable, because the harness is a deployment property, not a per-assignment setting like =model=. To compare harnesses, write a definition that declares the other harness.
 
 =extends: <base-name>= puts one base persona's body before the persona's own body. The base resolves through the same three layers. Only one level is allowed: a base that declares =extends:= is refused. The packaged =base-analyst= (read-only, a leaf) is the base for analysis personas, so they do not repeat its assignment, evidence, and uncertainty scaffold. [[file:scripts/docs/contract.md]] section 'Persona composition (`extends`)' gives the rules.
 
@@ -241,24 +241,24 @@ The kind set is open: a new =:harnesses= entry needs no code change, and a kind 
 
 *** Upstream support is the real constraint
 
-Herdr decides which kinds exist. =herdr agent start --help= prints the current =--kind= values. This README and the contract do not copy the list, because Herdr adds kinds on its own release schedule. Herdr also updates a remote agent-detection manifest in the background (=manifest_check= in =herdr --default-config=), so the set can grow without a Herdr upgrade.
+The selected runtime decides which kinds it can launch and recognise. This README does not copy its detection catalogue. For TUI, =herdr agent start --help= lists the current =--kind= values, and the remote detection manifest (=manifest_check= in =herdr --default-config=) can extend recognition without an upgrade.
 
-A kind needs Herdr support at both ends of a delegation:
+A kind needs runtime support at both ends of a delegation:
 
-- As a child, the kind must be startable. =oh= spawns with =herdr agent start --kind=, which launches the executable and checks that Herdr detects it in the pane. A kind outside the list cannot spawn, whatever its configuration. An executable on =PATH= with a supported kind's name does not work either: detection fails.
-- As the orchestrator, the kind must be recognised. Every command that resolves the caller (=task run=/=start=, =collect --any=, =prune=) runs =agent get= on =$HERDR_PANE_ID=. In a pane with an unrecognised process this fails with =agent_not_found=, so an unsupported harness can be driven but cannot delegate.
+- As a child, it must be startable and positively recognised in the addressed pane. An executable name alone is not proof of the expected kind.
+- As the orchestrator, it must be recognised at the caller address selected by the ancestry gate. An unrecognised process cannot delegate. Parent kind and session identity follow the runtime table in [[file:scripts/docs/contract.md]] section 'Preconditions'; do not assume =HERDR_PANE_ID= in an hc terminal.
 
-Publication and capture work without recognition. =task publish= degrades open, because an unresolved caller owns nothing. =task collect <full-task-uuid>= reports ="ownership": "foreign-parent-session"= instead of failing. So an unsupported harness that you start by hand in a =pane split --env ...= pane can still publish a valid result. This is a manual fallback, not a supported path: =agent list= does not show the child, so =collect --any= skips it, and =prune= can treat it as stale while it still works. [[file:scripts/docs/contract.md]] section 'Preconditions' lists which commands resolve the caller and how each degrades.
+Publication and capture can work without agent recognition, but never bypass a runtime mismatch. =task publish= degrades open when caller identity cannot be resolved, so a finished result is not stranded. =task collect <full-task-uuid>= reports ="ownership": "foreign-parent-session"= instead of failing. A manually started, unrecognised child is not a supported delegation path: live listings can omit it, so fan-in and stale-round recovery cannot safely treat it as a recognised child. [[file:scripts/docs/contract.md]] section 'Preconditions' lists each identity-failure consequence.
 
 ** Child placement
 
 =:defaults :placement= chooses where a child's pane comes from:
 
-| Value        | At root                           | Below root (spawner has =HERDR_ORCH_PERSONA=) |
-|--------------+-----------------------------------+-----------------------------------------------|
-| =:split=     | split the caller's pane           | split the caller's pane                       |
-| =:tab=       | new tab in the caller's workspace | new tab in the caller's workspace             |
-| =:tab-split= | new tab                           | split the caller's pane                       |
+| Value        | At root                                    | Below root (spawner has =HERDR_ORCH_PERSONA=) |
+|--------------+--------------------------------------------+-----------------------------------------------|
+| =:split=     | split the caller's pane                    | split the caller's pane                       |
+| =:tab=       | new tab in the caller's workspace or space | new tab in the caller's workspace or space    |
+| =:tab-split= | new tab                                    | split the caller's pane                       |
 
 Resolution, highest first:
 
@@ -268,9 +268,9 @@ Resolution, highest first:
 
 =:tab-split= is the shipped default. Spawning is cheap and frequent, so first-level children accumulate fast. One tab each stays readable and recoverable, but a split for each one makes an ever-narrower column. A grandchild splits its parent's pane, so a nested unit stays together where its parent can watch it. =oh= detects depth from its own injected =HERDR_ORCH_PERSONA=, never from a label or a counter.
 
-The code fallback is deliberately not kept in step with the shipped value. It applies only when no config declares =:placement=, and the packaged config always does, because a missing packaged =config.edn= is fatal. In that degraded case a split is the safe choice, because it needs no =HERDR_WORKSPACE_ID=. To change the product default, edit [[file:subagents/config.edn][subagents/config.edn]]. No code change is necessary.
+The code fallback is deliberately not kept in step with the shipped value. It applies only when no config declares =:placement=, and the packaged config always does, because a missing packaged =config.edn= is fatal. In that degraded case a split stays beside the addressed parent pane. To change the product default, edit [[file:subagents/config.edn][subagents/config.edn]]. No code change is necessary.
 
-Placement is resolved for each spawn and never inherited: it is not stored per child, passed in the child's environment, or read by the child's own spawns. The ledger records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. [[file:scripts/docs/contract.md]] section 'Placement' gives the details.
+Placement is resolved for each spawn and never inherited: it is not stored per child, passed in the child's environment, or read by the child's own spawns. Both placements stay in the parent's workspace or herdr-app space and preserve focus. Children in both runtimes outlive their parent; =close= and =orphans --close= are the guarded cleanup paths. hc launch uses the environment wrapper, =--no-notify= and =--outlive-parent= specified in [[file:scripts/docs/contract.md]] section 'Start and prompt outcomes'. The ledger records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. [[file:scripts/docs/contract.md]] section 'Placement' gives the details.
 
 ** Verifying a configuration change
 
@@ -316,7 +316,7 @@ The operator keeps Pi and native CLI logins on one subscription per provider; =o
 - each ordinary skill that declares itself a workflow, with its name and description
 - the spawn defaults
 
-It only reads files, so it works outside Herdr.
+Outside either runtime, it only reads files. Inside a host, the ancestry and mismatch gate still applies.
 
 #+begin_src sh
 oh roster                                 # JSON, for tools and agents
@@ -393,10 +393,10 @@ The first column shows the two shortest string aliases for each canonical ID. A 
 | opus       | opus                             | anthropic/claude-opus-5-5        | anthropic/claude-opus-5-5        |
 | sonnet     | sonnet                           | anthropic/claude-sonnet-5-5      | anthropic/claude-sonnet-5-5      |
 | qwen-dense | lemonade/Qwen3.8-27B-GGUF-Q4_K_M | lemonade/Qwen3.8-27B-GGUF-Q4_K_M | lemonade/Qwen3.8-27B-GGUF-Q4_K_M |
-| gpt-terra  | openai-codex/gpt-5.6-terra       | gpt-5.6-terra                    | openai-codex/gpt-5.6-terra       |
 | gpt-astra  | openai-codex/gpt-6-astra         | gpt-6-astra                      | openai-codex/gpt-6-astra         |
 | gpt-luna   | openai-codex/gpt-6-luna          | gpt-6-luna                       | openai-codex/gpt-6-luna          |
 | gpt-sol    | openai-codex/gpt-6.1-sol         | gpt-6.1-sol                      | openai-codex/gpt-6.1-sol         |
+| gpt-terra  | openai-codex/gpt-6.1-terra       | gpt-6.1-terra                    | openai-codex/gpt-6.1-terra       |
 
 Ranked aliases (lowest rank is preferred):
 

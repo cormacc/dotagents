@@ -1,6 +1,6 @@
 # herdr-orch pi adapter
 
-Exposes the `herdr-orch` skill's `oh` CLI to pi. The extension invokes `$HERDR_ORCH_BIN` when set, else the co-installed launcher at `~/.agents/skills/herdr-orch/scripts/oh`, else the launcher of the skill packaged with the extension (`../../../skills/herdr-orch/scripts/oh`). It has no alternate implementation: each call runs `oh` and reads its `herdr-orch/v1` JSON envelope.
+Exposes the `herdr-orch` skill's `oh` CLI to pi. The extension invokes `$HERDR_ORCH_BIN` when set, else the co-installed launcher at `~/.agents/skills/herdr-orch/scripts/oh`, else the launcher of the skill packaged with the extension (`../../../skills/herdr-orch/scripts/oh`). It has no alternate implementation: each call runs `oh` and reads its `herdr-orch/v1` JSON envelope. The CLI owns backend selection and refusal. With `HC_TERMINAL_ID` present, `/oh` checks that gate before collector setup, including `/oh setup`.
 
 ## Tools
 
@@ -30,7 +30,7 @@ Always-loaded prompt guidelines retain the explicit Herdr-request boundary and p
 
 ## Dependencies
 
-Pi 1.5.0 or newer, Babashka, the `herdr-orch` skill (co-installed or packaged), and the `quota-axi` package dependency for usage reporting. Confirmed setup uses the supported Pi `exec` timeout/cancellation API. The shared setup script and guardian bound subprocess output and cleanup, discard raw diagnostics, and return only fixed status fields; the adapter rejects status output larger than 4 KiB. `/oh` does not need Herdr: `oh roster` and `oh usage` never call it.
+Pi 1.5.0 or newer, Babashka, the `herdr-orch` skill (co-installed or packaged), and the `quota-axi` package dependency for usage reporting. Confirmed setup uses the supported Pi `exec` timeout/cancellation API. The shared setup script and guardian bound subprocess output and cleanup, discard raw diagnostics, and return only fixed status fields; the adapter rejects status output larger than 4 KiB. `/oh` does not need a terminal host for offline listings. When `HC_TERMINAL_ID` is present, the CLI probes host ancestry and refuses an unsupported or mismatched runtime.
 
 ## Keybindings
 

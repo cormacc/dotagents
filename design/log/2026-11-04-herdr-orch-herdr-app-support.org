@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch: support herdr-app (herdr-core / hc)
 #+DATE: 2026-11-04 Wed
-#+PARENT: [[task:5968bca7-7fb8-4548-b627-f0adc1060a14][herdr-orch: support herdr-app (herdr-core / hc)]]
+#+PARENT: [[archive:5968bca7-7fb8-4548-b627-f0adc1060a14][herdr-orch: support herdr-app (herdr-core / hc)]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
@@ -15,13 +15,13 @@ Let a root agent that runs in a herdr-app terminal delegate through `oh`, and st
 * Summary
 *Level:* production · *Tests:* thorough · *Docs:* full
 
-`oh` calls only the `herdr` TUI CLI (`herdr-orch.herdr/invoke`). herdr-app (0.1.10) runs every terminal in herdr-core (`hc` 0.1.15) and identifies the caller by `HC_TERMINAL_ID`, not by `HERDR_PANE_ID`. In a herdr-app started from a Herdr TUI pane, the TUI variables leak: on 2026-11-04 `HERDR_PANE_ID=w3:pG` named the TUI pane that hosts herdr-app, `oh task start --print-prompt` failed closed with `agent_not_found`, and `oh pane current` returned `w3:pG`, which is the wrong target.
+`oh` selects a runtime by caller ancestry and delegates through a shared protocol to Herdr TUI or local herdr-core. herdr-app terminals use `HC_TERMINAL_ID`; raw TUI controls refuse an hc caller, including when TUI variables leak into it. The hc runtime preserves the ledger and validated completion path, with the approved safe skip for unverifiable Pi parent notifications. Native Pi-root delegation, fan-in, close, tab/split placement and synthetic fork passed in herdr-app; representative root TUI parity also passed.
 
 ** Scope
 *** In scope
 - Caller-backend detection by process ancestry: the nearest ancestor that is a Herdr pane shell (`pane process-info` `shell_pid`) or an hc terminal (`hc get` `pid`) selects the backend.
 - Refusal of every `oh` verb, and of the pi `herdr-orch` extension and its `herdr_*` tools, when the detected backend does not match the variables in use.
-- An hc capability spike that measures the facts in `** Risks` before the approach decision.
+- An isolated hc capability spike before the approach decision; retained evidence is in [[*Validation]].
 - The chosen approach (see `* Open questions`), with its contract, skill and README changes.
 *** Out of scope
 - Changes to herdr-app, herdr-core or Herdr TUI upstream. File upstream issues instead.
@@ -32,23 +32,25 @@ Let a root agent that runs in a herdr-app terminal delegate through `oh`, and st
 
 ** Acceptance
 *** Core functionality
-- [ ] In a herdr-app terminal with leaked TUI variables, `oh pane current` refuses with a backend-mismatch error.
-- [ ] In a Herdr TUI pane with no hc ancestor, existing `oh` behaviour is unchanged.
-- [ ] In a Herdr TUI pane inside a herdr-app terminal (reverse nesting), the TUI backend is selected.
-- [ ] The spike records whether `herdr-agent-state.ts` (Herdr-owned, not edited here) reports pi state to a leaked `HERDR_PANE_ID`. If it does, an upstream issue exists.
-- [ ] Under the chosen approach, `oh task run scout --task ...` from a pi root in herdr-app returns a validated `COMPLETE` envelope.
-- [ ] Under the chosen approach, `oh task collect --any --wait` returns the first of two published hc children.
-- [ ] Under the chosen approach, `oh task close <uuid>` ends the child terminal.
-- [ ] Under the chosen approach, the child appears in the parent's herdr-app space with the configured placement.
+- [X] In a herdr-app terminal with leaked TUI variables, `oh pane current` refuses with a backend-mismatch error.
+- [X] In a Herdr TUI pane with no hc ancestor, existing `oh` behaviour is unchanged.
+- [X] In a Herdr TUI pane inside a herdr-app terminal (reverse nesting), the TUI backend is selected.
+- [X] The spike records whether `herdr-agent-state.ts` (Herdr-owned, not edited here) reports pi state to a leaked `HERDR_PANE_ID`. If it does, an upstream issue exists.
+- [X] Under the chosen approach, `oh task run scout --task ...` from a pi root in herdr-app returns a validated `COMPLETE` envelope.
+- [X] Under the chosen approach, `oh task collect --any --wait` returns the first of two published hc children.
+- [X] Under the chosen approach, `oh task close <uuid>` ends the child terminal.
+- [X] Under the chosen approach, the child appears in the parent's herdr-app space with the configured placement.
 *** Edge cases
-- [ ] In both runtimes, a child whose parent terminal ends stays live until `close` or `orphans --close`.
-- [ ] A blocked hc child is never sent prompt text (hc exit 9 is surfaced, not forced).
-- [ ] `--context fork` from a pi root in herdr-app resolves the source session without `agent_session`.
+- [X] In both runtimes, a child whose parent terminal ends stays live until `close` or `orphans --close`.
+- [X] A blocked hc child is never sent prompt text (hc exit 9 is surfaced, not forced).
+- [X] `--context fork` from a pi root in herdr-app resolves the source session without `agent_session`.
 *** Anti-criteria
-- [ ] Must not: call `herdr` when the detected backend is hc.
-- [ ] Must not: call `hc send --force`.
-- [ ] Must not: run `hc server stop`, `hc server restart` or `hc update`.
-- [ ] Must not: give a verb, flag or envelope field a behaviour that differs between the two runtimes, except where `contract.md` names the runtime fact that forces it.
+- [X] Must not: call `herdr` when the detected backend is hc.
+- [X] Must not: call `hc send --force`.
+- [X] Must not: run `hc server stop`, `hc server restart` or `hc update`.
+- [X] Must not: give a verb, flag or envelope field a behaviour that differs between the two runtimes, except where `contract.md` names the runtime fact that forces it.
+
+Verification strength and native limits are recorded in [[*Validation]]; checked criteria do not imply every runtime combination was exercised natively.
 
 ** Decisions
 - Backend detection by process ancestry :: Both variable sets can leak in either nesting direction, so variable presence cannot choose a backend. The nearest ancestor is the innermost host.
@@ -59,7 +61,7 @@ Let a root agent that runs in a herdr-app terminal delegate through `oh`, and st
   Rejected:
   - Option B, thin layer over hc templates, `hc send` and `hc wait --children`: no validated completion, and the TUI runtime would need a second, different design.
 - Runtime parity over runtime fidelity :: One contract, one behaviour. Where hc and Herdr TUI differ, `oh` picks one behaviour and implements it in both, preferring the simpler one. The contract can be rewritten for this, provided its functionality stays equivalent.
-- One `oh`-owned parent push in both runtimes :: hc children launch with `--no-notify`. The push fires only on a validated terminal result, with the same text in both runtimes. Blocked and exited children show through `collect --wait` `child-status`.
+- One `oh`-owned parent push, subject to verified session identity :: hc children launch with `--no-notify`. The push fires only on a validated terminal result when the parent's current session can be verified, with the same text in both runtimes. User-approved exception, 2026-11-05: skip advisory pushes to hc Pi parents whose current session cannot be observed; keep the existing safety guard and use `collect --wait` or `collect --any --wait` for results. No session reporter is in scope; inter-subagent communication will be revisited separately. Blocked and exited children show through `collect --wait` `child-status`.
   Rejected:
   - hc-style notes in Herdr TUI: needs a watcher process for each child, because Herdr does not push child events to a parent.
   - hc notes plus the `oh` push in herdr-app: duplicate messages in two formats.
@@ -67,28 +69,28 @@ Let a root agent that runs in a herdr-app terminal delegate through `oh`, and st
   Rejected:
   - End children with their parent: needs a new Herdr TUI mechanism that a crash skips, and loses in-flight work that a resumed parent could collect.
 
-** Risks
-Spike results are in `* Validation`.
-- Environment :: a child gets the core's environment, not the caller's, so `HERDR_ORCH_*` must be injected as `env K=V ... <cmd>`.
-- Lifetime :: a child dies (SIGHUP) when its parent terminal's program ends, not when the launching subprocess ends. `oh` children need `--outlive-parent` to keep the TUI semantics, where closing the parent leaves children for `orphans`.
-- Notes :: hc types `<hc>` notes into an agent parent when a child exits. `--no-notify` suppresses them; `oh` keeps its own parent push.
-- Status :: pi 1.5.0, codex 0.166.0 and claude-code 2.1.317 all report OSC 7501. A pre-report dialog (claude's folder-trust prompt) leaves `status` null, which `hc wait --children all` counts as working, so a launch needs a timeout and a screen read.
-- Session :: hc has no session field. For a pi parent, `PI_SESSION_FILE` has the same path form as Herdr's `agent_session.value`. Claude and codex have no measured equivalent.
-- First message :: only template runs report `first_message`; hc sends the template body plus the task once the agent is ready. A plain run must pass the task as the agent's own argv prompt.
+** Shipped
+- MODIFIED :: [[proj:skills/herdr-orch/SKILL.md]], [[proj:skills/herdr-orch/scripts/docs/contract.md]], [[proj:skills/herdr-orch/scripts/README.md]] and [[proj:skills/herdr-orch/README.org]] define both runtimes, shared delegation semantics and explicit runtime limits.
+- MODIFIED :: [[proj:pi/extensions/herdr-agent-state.md]] records the state-reporter leak observation and its uncertainty; the Herdr-owned reporter remains unchanged.
+- Backend gates, a shared runtime protocol and the local hc adapter preserve ledger-backed completion, ownership, continuation and fork semantics. Pi extension entry points refuse the wrong runtime.
+
+** Gotchas
+- An hc Pi parent has no freshly observable cross-terminal session. Skip advisory pushes rather than trust the ledger's original session; collect remains the completion path.
+- Raw TUI controls and measurement remain TUI-only. hc has no native operator toast; the contract names that exception.
 
 * Plan
-** TODO [#B] Backend detection and mismatch refusal
+** DONE [#B] Backend detection and mismatch refusal
+CLOSED: [2026-11-05 Thu 11:13]
 :PROPERTIES:
 :CUSTOM_ID: 47b47249-9161-4f5a-b5ac-4777ab1eeac6
 :CREATED: [2026-11-04 Wed 22:02]
+:STARTED: [2026-11-05 Thu 10:03]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 22:02]
+- State "STARTED" from "TODO" [2026-11-05 Thu 10:03]
+- State "DONE" from "STARTED" [2026-11-05 Thu 11:13]
 :END:
-Acceptance criteria:
-- The three nesting criteria and the TUI-unchanged criterion in `** Acceptance` pass, with fake-herdr and fake-hc fixtures for each case.
-- Must not: change any TUI-backend envelope.
-See `herdr-orch.herdr/preflight!` and `herdr-orch.cli/parent-identity`.
 
 ** DONE [#B] hc capability spike
 CLOSED: [2026-11-04 Wed 22:21]
@@ -102,10 +104,6 @@ CLOSED: [2026-11-04 Wed 22:21]
 - State "STARTED" from "TODO" [2026-11-04 Wed 22:15]
 - State "DONE" from "STARTED" [2026-11-04 Wed 22:21]
 :END:
-Acceptance criteria:
-- Each item in `** Risks` has a measured result and a reproducing command in `* Validation`.
-- The `herdr-agent-state.ts` leak criterion in `** Acceptance` has a measured result.
-- Must not: affect user terminals. Every probe runs under its own `HC_SESSION` and scratch XDG paths.
 
 ** DONE [#B] Approach decision
 CLOSED: [2026-11-04 Wed 22:29]
@@ -118,71 +116,78 @@ CLOSED: [2026-11-04 Wed 22:29]
 - Created [2026-11-04 Wed 22:02]
 - State "DONE" from "TODO" [2026-11-04 Wed 22:29]
 :END:
-Acceptance criteria:
-- `** Decisions` records the chosen approach and the rejected one, with spike evidence.
-- The open question is `DECIDED`.
-- The remaining plan tasks exist for the chosen approach.
 
-** TODO [#B] Runtime protocol extraction
+** DONE [#B] Runtime protocol extraction
+CLOSED: [2026-11-05 Thu 11:13]
 :PROPERTIES:
 :CUSTOM_ID: 7f838268-80b6-4a92-8a00-032eda1fb94c
 :CREATED: [2026-11-04 Wed 22:29]
+:STARTED: [2026-11-05 Thu 10:03]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 22:29]
+- State "STARTED" from "TODO" [2026-11-05 Thu 10:03]
+- State "DONE" from "STARTED" [2026-11-05 Thu 11:13]
 :END:
-Acceptance criteria:
-- `cli.clj` calls no `herdr-orch.herdr` function directly; every call goes through one runtime protocol selected by backend detection.
-- The existing `bb test` suite passes with the TUI runtime unchanged in behaviour.
-- The protocol has one operation for each distinct need (identity, place, launch, prompt, wait, read, status, close, notify), not one for each `herdr` subcommand.
 
-** TODO [#B] hc runtime implementation
+** DONE [#B] hc runtime implementation
+CLOSED: [2026-11-05 Thu 13:29]
 :PROPERTIES:
 :CUSTOM_ID: 25520427-eed1-4e04-bba6-a0afd01b9287
 :CREATED: [2026-11-04 Wed 22:29]
 :BLOCKED-BY: 7f838268-80b6-4a92-8a00-032eda1fb94c
+:STARTED: [2026-11-05 Thu 11:14]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 22:29]
+- State "STARTED" from "TODO" [2026-11-05 Thu 11:14]
+- State "WAITING" from "STARTED" [2026-11-05 Thu 11:23]
+- State "STARTED" from "WAITING" [2026-11-05 Thu 11:35]
+- State "DONE" from "STARTED" [2026-11-05 Thu 13:29]
 :END:
-Acceptance criteria:
-- Identity comes from `HC_TERMINAL_ID` and its `herdr.space` / `herdr.tab` labels.
-- The parent session is `PI_SESSION_FILE` for pi, else the hc terminal address plus `created_ms`.
-- Children launch with the `env K=V` wrapper and `--no-notify`. They launch with `--outlive-parent`.
-- The task reaches a child exactly once, through the agent's argv prompt or a generated template; a fake-hc test asserts the count.
-- Placement `tab` and `split` both put the child in the parent's herdr-app space.
-- A fake-hc fixture, modelled on `test/fixtures/fake-herdr`, covers each protocol operation.
-- Must not: call `hc send --force`.
 
-** TODO [#B] Runtime-neutral contract and docs
+** DONE [#B] Runtime-neutral contract and docs
+CLOSED: [2026-11-05 Thu 13:29]
 :PROPERTIES:
 :CUSTOM_ID: 16f4e61b-d3fe-4183-85d7-a6435aca29b2
 :CREATED: [2026-11-04 Wed 22:29]
+:STARTED: [2026-11-05 Thu 10:10]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 22:29]
+- State "STARTED" from "TODO" [2026-11-05 Thu 10:10]
+- State "DONE" from "STARTED" [2026-11-05 Thu 13:29]
 :END:
-Acceptance criteria:
-- `contract.md` describes each verb once, in runtime-neutral terms, with a runtime table for preflight, identity and placement only.
-- `SKILL.md` names both runtimes and states `HERDR_ENV=1` or `HC_TERMINAL_ID` as the precondition.
-- `scripts/check-section-links.bb` passes.
 
-** TODO [#B] Live herdr-app smoke
+** DONE [#B] Live herdr-app smoke
+CLOSED: [2026-11-05 Thu 14:08]
 :PROPERTIES:
 :CUSTOM_ID: c1754410-0a33-476b-80d1-87a598617cd6
 :CREATED: [2026-11-04 Wed 22:29]
 :BLOCKED-BY: 25520427-eed1-4e04-bba6-a0afd01b9287
+:STARTED: [2026-11-05 Thu 13:29]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 22:29]
+- State "STARTED" from "TODO" [2026-11-05 Thu 13:29]
+- State "DONE" from "STARTED" [2026-11-05 Thu 14:08]
 :END:
-Acceptance criteria:
-- The four "Under the chosen approach" criteria in `** Acceptance` pass from a pi root in herdr-app, with evidence in `* Validation`.
-- The same commands pass from a pi root in a Herdr TUI pane.
 
 * Implementation
+- Backend selection refuses unresolved competing hosts and uses the nearest proven shell/terminal ancestor. CLI and Pi extension entry paths share the gate; raw TUI controls refuse an hc caller.
+- Delegation uses the runtime protocol for identity, placement, launch, prompt, wait, read, status, close and notification. Deferred allocation and launch-time prompt delivery preserve the ledger interface and prevent duplicate initial prompts.
+- The local hc runtime injects the child environment, disables native parent notes, keeps children alive after parent termination and selects app placement through space/tab labels. Process witnesses detect replaced programs without claiming a fresh Pi session. Waiting prompts match requested state with start, identity and deadline guards; they do not wait for native turn completion first.
 
 * Validation
+- Final integrated code at `9f24015ee330b9934bf8ed7a50648da6a83b48bf` plus this uncommitted change: root `bb test` exited 0, including 881 Clojure tests and 8532 assertions with zero failures/errors, followed by repository script suites. Log: `.tmp/herdr-app-execution/root-final-aggregate-1.log`. The runner executes both hc namespaces. Only documentation and task-memory edits followed this run.
+- Fresh independent code and conformance validators approved the result; reports: `.tmp/herdr-app-execution/final-code-validation-report.md` and `final-conformance-report.md`. They independently exercised prompt-state/deadline/replacement guards and the Pi session guard with known-bad scratch controls. The README wait-description finding is corrected; section links passed after this record refresh with 461 references and zero problems.
+- Native app smoke used hc 0.1.15, herdr-app 0.1.10, a private Xvfb and a synthetic interactive Pi root. Validated run, two-child fan-in, exact close, same-space tab/split placement and a second-turn synthetic fork passed. Root inspected result envelopes and the placement screenshot. Report: `.tmp/herdr-app-execution/live-smoke-retry-report.md`; evidence: `.tmp/a5f4b3a7/`.
+- Native disposable-program probes observed blocked send exit 9 with no input, an idle positive control receiving input, an outliving child after parent-terminal exit, and hc refusal with live leaked TUI variables plus a working read-only TUI identity control. Root inspected input/refusal evidence. Report: `.tmp/herdr-app-execution/live-boundary-report.md`; evidence: `.tmp/abd1a7069/`.
+- Root TUI parity: a scout run returned validated COMPLETE and closed exactly (`tui-root-run.json`, `tui-root-run-close.json`); two further children launched, `collect --any --wait` captured the scout, both publications were captured and both children closed (`tui-root-fanin-any.json`, `tui-root-fanin-close.json`, `tui-root-validator-close.json` under `.tmp/herdr-app-execution/`). Configured TUI placement used separate tabs in the root workspace.
+- Limits :: Reverse nesting has fixture coverage using real process ancestry, not a native nested TUI launch. TUI parent-death behaviour relies on its unchanged independent-pane mechanism, not a new native death probe. Native Pi publication did not expose a skipped-push reason; two fresh validators independently exercised the absence/session-mismatch guard instead. An ancestry probe can read TUI process identity before hc selection; no TUI action is dispatched after hc selection.
+- The separate `pi/extensions/herdr-orch/test.sh` usage-notification assertion was independently reproduced failing at the immutable baseline and foundation tree by the earlier reviewer. It is not covered by aggregate green claims; fresh final validators passed `index.test.ts`, not that full runner.
+- External state :: Five empty owned isolated cores remain because server stop/signals were not authorised: sessions `c294e5`, `b41d84`, `f12e33`, `53f817`, `5f4b3a`. Paths/PIDs are retained in `isolated-app-readiness-v2-report.md`, `live-smoke-report.md` and `live-smoke-retry-report.md` under `.tmp/herdr-app-execution/`. Root rechecked all five core PIDs and empty terminal inventories with `.tmp/herdr-app-execution/root-core-audit.clj`; saved outputs are `final-core-*-{status,list}.json` in that directory. Test app/display/terminal resources were cleaned; scratch state for live cores remains. The synthetic fork session in real Pi state is retained at the path in the retry report; only synthetic context was forked.
+
 hc capability spike, 2026-11-04, hc 0.1.15, in an isolated core: wrapper `hcx` = `env -u HC_TERMINAL_SOCKET -u HC_TERMINAL_ID -u HC_SCOPE HOME=<scratch> XDG_{CONFIG,STATE,CACHE,RUNTIME}_*=<scratch> HC_SESSION=spike hc`. Control: `hcx server status` gave a new core id and pid; the user core (`ffeb71f0...`, pid 98243, 2 live) was unchanged before and after. The spike core was stopped at the end.
 - Environment :: `SPIKE_MARK=caller hcx run 'echo MARK=$SPIKE_MARK'` printed `MARK=` both from outside and from inside a parent terminal that exported it. Control in the same run: `HOME` and `HC_SESSION` printed the core's values. `hcx run env SPIKE_MARK=wrapped sh -c 'echo $SPIKE_MARK'` printed `wrapped`.
 - Lifetime :: a parent that started `kida` (default) and `kidb` (`--outlive-parent`), then exited: `kida` finished with reason `killed`, signal 1; `kidb` stayed `live`. A child started by a subshell that exited stayed live until the parent terminal's own program ended, then was killed.
@@ -195,29 +200,26 @@ hc capability spike, 2026-11-04, hc 0.1.15, in an isolated core: wrapper `hcx` =
 - Side effects :: claude, codex and pi each started once with the real `HOME` and no prompt. They can have updated their own state files.
 
 * Open questions
+** DECIDED Pi parent notifications without an observable session
+:PROPERTIES:
+:DECIDED: [2026-11-05 Thu 11:34]
+:END:
+Decision: skip advisory notifications when the hc Pi parent's current session cannot be verified. Preserve the existing session guard; results remain available through `collect --wait` and `collect --any --wait`. The user accepted this exception for simplicity and intends to revisit inter-subagent communication separately.
+- Evidence :: The inspected hc 0.1.15 Terminal schema has `address`, `created_ms` and `status` but no session field; installed Pi sets `PI_SESSION_FILE` from the executing agent. The ledger's original identity is not a fresh observation of the parent. Root verified both consumers. Worker evidence: [[proj:.tmp/herdr-app-execution/hc-runtime-report.md]].
 ** DECIDED Child lifetime: should a child end with its parent?
 :PROPERTIES:
 :DECIDED: [2026-11-04 Wed 22:35]
 :END:
 Decision: no. See `** Decisions`.
-Recommendation: no. Pass `--outlive-parent` on hc and keep `orphans` in both runtimes.
-- hc's rule is not "ends with the parent agent". It is "ends when the parent terminal's program ends" (measured: a child outlived the subshell that launched it). In herdr-app that program is the login shell (`hc get t3` argv `/bin/zsh -l`), so the kill comes on pane close, not when pi exits.
-- Herdr TUI has no equivalent. Parity would need a new `oh` mechanism there, such as a pi shutdown hook, which a crash skips.
-- A child that survives keeps in-flight work, and a resumed parent session can still collect it, because the ledger is keyed by session.
+
 ** DECIDED Notes: should `oh` send hc-style notes in Herdr TUI?
 :PROPERTIES:
 :DECIDED: [2026-11-04 Wed 22:36]
 :END:
 Decision: no. See `** Decisions`.
-Recommendation: no. Pass `--no-notify` on hc and keep one `oh`-owned parent push, with the same text in both runtimes.
-- hc notes fire on child exit, turn end, block and error. To send them in Herdr TUI, `oh` would need a watcher process for each child, because Herdr does not push child events to a parent.
-- The `oh` push fires on a validated terminal result, which is the only completion signal. Blocked or exited children already show in `collect --wait` as `child-status`.
-- Two push mechanisms in herdr-app (hc notes and the `oh` push) would deliver duplicate, differently formatted messages.
+
 ** DECIDED Full hc backend for `oh`, or a thin layer over hc-native delegation?
 :PROPERTIES:
 :DECIDED: [2026-11-04 Wed 22:29]
 :END:
 Decision: Option A. See `** Decisions`.
-- Option A, second `oh` backend :: Extract a backend protocol from `herdr.clj` and add an hc implementation. Keeps the ledger, v1 envelope, worktrees, `continue`, `poke`, retro and trait composition. Cost: re-implement identity, placement (`hc run --label herdr.space/herdr.tab`, `herdr-app do terminal.keep --place`), session recording, close and the parent push; a fake-hc fixture.
-- Option B, thin layer over hc :: Generate hc templates (`~/.config/herdr-core/templates/<name>.md`) from personas and traits; children report with `hc send $HC_TERMINAL_ID`; the parent fans in with `hc wait --children any`. `oh` keeps only envelope validation. Cost: loses ledger-backed `continue`, `poke`, ownership guards, worktree isolation and validated completion, which `SKILL.md` names as the only completion signal.
-- Recommendation: A. The spike shows that `--outlive-parent` and `--no-notify` disable the conflicting hc semantics, and `env K=V` covers injection. Open costs for A: session identity for claude and codex, and first-message delivery (argv prompt per kind, or a generated template).
