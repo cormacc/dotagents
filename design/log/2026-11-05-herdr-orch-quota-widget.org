@@ -132,7 +132,8 @@ Acceptance criteria:
 - `herdr-plugin/README.md` documents the pane, the action and the footer option `tab_bar_position = "bottom"`.
 - The wrapper record's `** Scope`, `** Acceptance` and scaffold task 29d623ad say that the manifest already exists, with the quota pane and action.
 
-** STARTED [#B] Track the Herdr config in `agents/herdr/` and link it :herdr_orch:
+** DONE [#B] Track the Herdr config in `agents/herdr/` and link it :herdr_orch:
+CLOSED: [2026-11-05 Thu 08:08]
 :PROPERTIES:
 :CUSTOM_ID: a113bfe8-ea59-446a-ab1f-7c359ab93e9f
 :CREATED: [2026-11-05 Thu 00:59]
@@ -141,6 +142,7 @@ Acceptance criteria:
 :END:
 :LOGBOOK:
 - State "STARTED" from "TODO" [2026-11-05 Thu 01:51]
+- State "DONE" from "STARTED" [2026-11-05 Thu 08:08]
 :END:
 Acceptance criteria:
 - `agents/herdr/config.toml` contains the current keys of `~/.config/herdr/config.toml` and a `tab_bar_right` command entry for `~/.agents/skills/herdr-orch/scripts/oh usage --format status`.
@@ -149,12 +151,16 @@ Acceptance criteria:
 - Before the switch, the old file is saved under `.tmp/` and then removed.
 - Must not: link the whole `~/.config/herdr/` directory, which holds sockets, logs and session state.
 
-** TODO [#B] Live verification on this machine :herdr_orch:
+** DONE [#B] Live verification on this machine :herdr_orch:
+CLOSED: [2026-11-05 Thu 08:08]
 :PROPERTIES:
 :CUSTOM_ID: 958fc14e-7841-4ff3-a5dc-d96a87f9d6b0
 :CREATED: [2026-11-05 Thu 00:59]
 :BLOCKED-BY: task:6d68367f-aa46-4862-96a3-ca1844e8225c
 :BLOCKED-BY+: task:a113bfe8-ea59-446a-ab1f-7c359ab93e9f
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-11-05 Thu 08:08]
 :END:
 Acceptance criteria:
 - `herdr config check` passes, and after `herdr server reload-config` the tab row shows the status line.
@@ -165,3 +171,11 @@ Acceptance criteria:
 
 * Implementation
 - Baseline 2026-11-05 on macOS, after operator-approved `quota-axi-setup install` (0.1.69): `oh usage` reported `openai-codex` fresh with one `weekly` window (89% remaining), `anthropic`, `kimi` and `zai` `auth_required`, and `lemonade` local. After Keychain access was granted, `anthropic` was fresh with `five_hour` (`session`, 68%), `seven_day` (`weekly`, 39%) and `model:fable` (`model`, 85%) windows. The edited config has no `kimi` or `zai` rows. Fixture for status-format tests: a fresh row with session, weekly and model windows, an `auth_required` row, and a local row.
+- Routing: an unscoped vector-alias candidate uses the `all_models` scope also when quota-axi reports model scopes; Fable selects `model:fable`. Before, multi-scope evidence left Opus, Sonnet and Haiku unknown.
+- `oh usage --format text` is a per-provider list for the quota pane; markdown stays one line per provider.
+- macOS test runs skip `^:linux-only` measurement tests and name them; the contract refuses measurement outside Linux.
+
+* Validation
+- 2026-11-05, macOS, Herdr 0.9.5: the operator saw the status line in the tab row and the quota pane open and refresh. The entry command, run as `/bin/sh -lc` with the Herdr server's `PATH` and `USER`, found `bb` and `node` and exited 0.
+- `~/.config/herdr/config.toml` resolves through the Home Manager store link to `~/dotfiles/agents/herdr/config.toml` after `drs`.
+- `herdr config check` passed for the tracked config and failed for an `interval_seconds = 0` control.
