@@ -3717,22 +3717,31 @@
 ;; Render only the collector's allowlisted evidence, never subprocess text.
 (def usage-formats #{"json" "markdown" "text" "status"})
 (def ^:private status-window-labels {"session" "s" "weekly" "w" "monthly" "m"})
+(defn- status-window-label
+  "Kind suffix, or for an `unknown` kind its length (`30d`, `5h`), so a plan whose
+  only window has no recognised kind still shows its use."
+  [{:keys [kind windowSeconds]}]
+  (or (status-window-labels kind)
+      (when (and (= "unknown" kind) (pos-int? windowSeconds))
+        (if (zero? (mod windowSeconds 86400))
+          (str (quot windowSeconds 86400) "d")
+          (str (Math/round (/ windowSeconds 3600.0)) "h")))))
 (def ^:private setup-reasons #{"missing-executable" "wrong-version"})
 (defn usage-status
   "One plain line for a terminal status bar such as Herdr's `tab_bar_right`.
-  Local providers are omitted. A provider with session, weekly or monthly windows
-  shows each window's used percentage, as the vendors report it, labelled by kind,
-  with `~` when stale;
+  Local providers are omitted. A provider with session, weekly, monthly, or
+  unknown-kind windows of known length shows each window's used percentage, as the
+  vendors report it, labelled by kind or length, with `~` when stale;
   otherwise it shows `auth?`, `rl?` or `err?` from its state, or `?` when fresh
   evidence has no such window. When the quota-axi
   executable is missing or the wrong version, the whole line is `quota: setup?`."
   [result]
   (let [rows (remove :local (:providers result))
-        window-text (fn [{:keys [kind percentUsed]} stale?]
-                      (str (Math/round (double percentUsed)) "%" (status-window-labels kind) (when stale? "~")))
+        window-text (fn [{:keys [percentUsed] :as window} stale?]
+                      (str (Math/round (double percentUsed)) "%" (status-window-label window) (when stale? "~")))
         row-text (fn [{:keys [localProvider state windows]}]
                    (let [stale? (or (:stale state) (= "stale" (:status state)))
-                         shown (filter #(and (status-window-labels (:kind %)) (some? (:percentUsed %))) windows)]
+                         shown (filter #(and (status-window-label %) (some? (:percentUsed %))) windows)]
                      (str localProvider " "
                           (cond
                             (and (seq shown) (#{"fresh" "stale"} (:status state)))

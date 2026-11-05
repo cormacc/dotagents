@@ -8812,6 +8812,11 @@
 
 (deftest usage-status-markers-cover-every-state
   (let [row (fn [local status stale windows] {:localProvider local :provider local :state {:status status :stale stale} :windows windows})]
+    (is (= "e 19%30d 4%5h"
+           (cli/usage-status {:providers [(row "e" "fresh" false [{:kind "unknown" :windowSeconds 2592000 :percentUsed 19}
+                                                                {:kind "unknown" :windowSeconds 18000 :percentUsed 4.2}
+                                                                {:kind "unknown" :percentUsed 50}])]}))
+        "unknown-kind windows show their length; without a length they are omitted")
     (is (= "a rl? | b 50%m~ 7%w~ | c err? | d ?"
            (cli/usage-status {:providers [(row "a" "rate_limited" false [])
                                           (row "b" "stale" true [{:kind "monthly" :percentUsed 50} {:kind "weekly" :percentUsed 7.4}])

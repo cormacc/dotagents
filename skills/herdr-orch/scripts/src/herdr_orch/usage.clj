@@ -103,7 +103,8 @@
     (cond-> (select-keys w [:id :kind])
       (percent? (:percentUsed w)) (assoc :percentUsed (:percentUsed w))
       (percent? (:percentRemaining w)) (assoc :percentRemaining (:percentRemaining w))
-      (instant? (:resetsAt w)) (assoc :resetsAt (:resetsAt w)))))
+      (instant? (:resetsAt w)) (assoc :resetsAt (:resetsAt w))
+      (pos-int? (:windowSeconds w)) (assoc :windowSeconds (:windowSeconds w)))))
 
 (defn- subscription-bound? [w]
   (and w (#{"session" "weekly" "monthly" "model"} (:kind w))

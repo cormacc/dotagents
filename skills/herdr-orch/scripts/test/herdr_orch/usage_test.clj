@@ -48,6 +48,17 @@
           (is (= 1.0 (core/candidate-remaining result {:provider "local"})))
           (is (not (str/includes? (pr-str result) "private-account"))))))))
 
+(deftest window-length-is-allowlisted
+  (with-fixture
+    (fn [_ env]
+      (let [w (fn [secs] (assoc (window) :kind "unknown" :windowSeconds secs :label "private label"))
+            result (collect env (report [(assoc (row) :windows [(w 2592000) (assoc (w 1.5) :id "other")])]))
+            [kept dropped] (:windows (first (:providers result)))]
+        (is (= 2592000 (:windowSeconds kept)))
+        (is (some? (:percentUsed dropped)) "positive control: the second window is present")
+        (is (not (contains? dropped :windowSeconds)) "a non-integer length is dropped")
+        (is (not (str/includes? (pr-str result) "private label")))))))
+
 (deftest invalid-boundaries-return-fixed-reasons
   (with-fixture
     (fn [_ env]
