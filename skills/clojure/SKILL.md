@@ -48,6 +48,10 @@ Confirm the selected build and attached JS runtime before evaluating CLJS. Openi
 
 Correct small delimiter errors directly. If an available repair tool helps, inspect its changes and rerun normal verification. Repair is not syntax validation; the native `clojure_paren_repair` check can miss mismatched delimiter types and misread character literals. It repairs strings only: apply the repair to the file with an edit.
 
+## Babashka distribution
+
+For a standalone executable that does not need an installed runtime, read [self-contained executables](references/self-contained-executables.md). It covers uberjar entry points, revision stamping, runtime checksums, cross-building and Mac validation.
+
 ## Babashka caveats
 
 - Run tasks from the project's documented task directory. `-cp` replaces configured `:paths`; include all roots needed by a focused run.

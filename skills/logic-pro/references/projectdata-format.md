@@ -16,6 +16,8 @@ A `.logicx` project is a macOS package: a directory that Finder shows as one fil
 
 The plists are binary. Read them with `plutil -p <file>` on macOS, or with `python3 -c "import plistlib,sys; print(plistlib.load(open(sys.argv[1],'rb')))" <file>`.
 
+The extractor reads the root `BeatsPerMinute` integer or real directly from binary (`bplist00`) or XML metadata. Its binary reader decodes only dictionary keys and that numeric value, following [Apple's binary plist layout](https://github.com/apple-oss-distributions/CF/blob/main/CFBinaryPList.c); it is not a general plist decoder. XML external entities and DTD processing are disabled. The tests include independent binary fixtures generated with Python `plistlib`, XML metadata, invalid values, and automatic-versus-explicit tempo output comparisons.
+
 ## File and chunk structure
 
 All integers are little-endian. The file starts with the magic bytes `23 47 c0 ab`. The first chunk starts at offset `0x18`. The chunks follow each other, with no gaps, to the end of the file: in the analysed project, the chunk walk ended exactly at the file length.
@@ -53,7 +55,7 @@ A note is a group of four records (64 bytes). All 1866 notes in the analysed pro
 | --- | --- | --- |
 | Note on | `0x00` | Byte 0: `0x90` + channel. Bytes 4..7: position in ticks (u32). Byte 11: velocity. Byte 12: pitch. |
 | Note off | `0x89` | Byte 0: `0x80`. Bytes 12..15: length in ticks (u32). All other bytes were zero. |
-| Time | `0xa4` | Bytes 0..3: position in microseconds from bar 1 (u32), at the project tempo. |
+| Time | `0xa4` | Bytes 0..3: position in microseconds from bar 1 (s32), at the project tempo. Negative for a note before bar 1. |
 | Duration | `0xa3` | Bytes 0..3: length in microseconds (u32). |
 
 Not decoded:
@@ -72,6 +74,10 @@ fe d5 01 00 00 00 00 a3 00 00 00 00 00 00 00 00   duration: 0x01d5fe = 120318 us
 ```
 
 At 120 bpm one tick is 520.83 us. (39824 - 38400) x 520.83 = 741667 us, which agrees with the time record to 0.02 ms.
+
+The time field is signed (Logic Pro 11.2, confirmed 2026-11-04). In a second project, one note started at tick 38288, 112 ticks before bar 1, and its time record was -58345 us. Read as unsigned, it gave a tempo-map drift of exactly 2^32 us; read as signed, the largest drift over all 1258 notes was 0.02 ms. The tick position stays positive, because bar 1 is at tick 38400.
+
+A MIDI file cannot place an event before tick 0. `logic_extract_midi.bb` therefore starts a note that begins before bar 1 at tick 0 and keeps its end, so the note is shorter. It drops a note that ends at or before bar 1, moves earlier pressure events to tick 0, and prints a warning with both counts.
 
 ### Status 0xD0
 

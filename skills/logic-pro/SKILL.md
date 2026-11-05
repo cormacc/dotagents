@@ -28,7 +28,9 @@ The format knowledge comes from one project, saved by Logic Pro 11.2. Thus each 
    bb <skill-dir>/scripts/logic_extract_midi.bb --bpm <BeatsPerMinute> [--alternative N] <project.logicx> <out.mid>
    ```
 
-   The output is a type 1 Standard MIDI File at 960 ticks per quarter note. Track 1 holds the tempo and the time signature (4/4: the script does not read the project signature). Each later track holds one sequence that has notes, with the sequence name as the track name. Song bar 1 is MIDI tick 0.
+   The output is a type 1 Standard MIDI File at 960 ticks per quarter note. Track 1 holds the tempo and the time signature (4/4: the script does not read the project signature). Each later track holds one sequence that has notes, with the sequence name as the track name. Song bar 1 is MIDI tick 0. A note that starts before bar 1 starts at tick 0 and is shorter, and a note that ends before bar 1 is dropped; the script prints a warning with both counts.
+
+   Without `--bpm`, the CLI reads `BeatsPerMinute` directly from the selected alternative's binary or XML `MetaData.plist` on Linux and macOS. `--bpm` overrides metadata; missing or invalid metadata produces an error instead of an assumed tempo. Output defaults to a `.mid` file beside the project and cannot replace an existing file. Multiple alternatives require `--alternative N`. Run `--help` for examples or `--version` for the implementation revision.
 
 4. **Check.**
    - The exit status is 0. A non-zero status with `tempo-map drift` means that the project has a tempo change, or `--bpm` is wrong. Do not raise `--max-drift-ms` to pass the check: the script cannot write a tempo map, so the timing would be wrong.
@@ -36,7 +38,7 @@ The format knowledge comes from one project, saved by Logic Pro 11.2. Thus each 
    - The pitch and velocity ranges suit the instrument. Compare the part's length with the audio files in `Media/Audio Files/`, if there are any.
    - Optional: load the file with a MIDI library, for example `nix-shell -p python3Packages.mido`, and count the `note_on` messages.
 
-5. **Report the limits** that apply to the result: no note-off velocity (the script writes 64), `0xD0` events written as channel pressure without confirmation, and region playback parameters (transpose, quantise, loop, trim) not applied. See [references/projectdata-format.md#Not verified](references/projectdata-format.md#not-verified).
+5. **Report the limits** that apply to the result: no note-off velocity (the script writes 64), `0xD0` events written as channel pressure without confirmation, notes before bar 1 clamped or dropped (from the warning), and region playback parameters (transpose, quantise, loop, trim) not applied. See [references/projectdata-format.md#Not verified](references/projectdata-format.md#not-verified).
 
 ## When the format does not match
 
@@ -48,9 +50,15 @@ If the script fails on a note record, or the tempo check fails at the correct te
 
 When you confirm a new fact, add it to the reference with the Logic version and the date, add a case to `scripts/test-logic_extract_midi.bb`, and run the test.
 
+## Distribute to a Mac user
+
+Use [references/packaging.md](references/packaging.md) to rebuild self-contained Apple Silicon and Intel packages with a double-clickable launcher, user instructions and an embedded implementation revision. The packages need Mac execution and security-prompt validation before distribution; cross-building on Linux is not that validation.
+
 ## Scripts
 
 | Script | Use |
 | --- | --- |
 | `scripts/logic_extract_midi.bb` | Survey a project (`--list`) or extract its MIDI notes, with the tempo check. |
 | `scripts/test-logic_extract_midi.bb` | Tests the extractor against a synthetic `ProjectData` file. Run it after you change the extractor. |
+| `scripts/package.bb` | Builds self-contained packages from the current implementation; run `--help`. |
+| `scripts/test-package.bb` | Checks packaging arguments, output-directory protection and checksum verification. |
