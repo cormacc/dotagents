@@ -53,7 +53,7 @@
           "anthropic/claude-haiku-5-5"  {:claude "haiku"}
           "openai-codex/gpt-6-astra"    {:codex "gpt-6-astra"}
           "openai-codex/gpt-6.1-sol"    {:codex "gpt-6.1-sol"}
-          "openai-codex/gpt-5.6-terra"  {:codex "gpt-5.6-terra"}
+          "openai-codex/gpt-6.1-terra"  {:codex "gpt-6.1-terra"}
           "openai-codex/gpt-6-luna"     {:codex "gpt-6-luna"}}
  :aliases {"heavy"             [{:model "fable"  :rank 1 :quota-scope "model:fable"} {:model "gpt-astra"   :rank 1}]
            "middle"            [{:model "opus"   :rank 1} {:model "gpt-sol"   :rank 1}]
@@ -66,5 +66,5 @@
            "haiku"             "anthropic/claude-haiku-5-5"
            "gpt-astra"         "openai-codex/gpt-6-astra"
            "gpt-sol"           "openai-codex/gpt-6.1-sol"
-           "gpt-terra"         "openai-codex/gpt-5.6-terra"
+           "gpt-terra"         "openai-codex/gpt-6.1-terra"
            "gpt-luna"          "openai-codex/gpt-6-luna"}}
