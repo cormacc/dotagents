@@ -26,7 +26,6 @@
   - [[#review-pi-development-pin-advisories-before-upgrade][Review Pi development pin advisories before upgrade]]
   - [[#herdr-orch-support-herdr-app-herdr-core--hc][herdr-orch: support herdr-app (herdr-core / hc)]]
 - [[#fixes][Fixes]]
-  - [[#adapt-herdr-mods-quota-for-the-herdr-cli][Adapt herdr-mods quota for the Herdr CLI]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
   - [[#validate-axi-cli-changes-on-linux-without-measurement-exclusions][Validate AXI CLI changes on Linux without measurement exclusions]]
@@ -281,16 +280,6 @@ Acceptance criteria:
 Let oh delegate from a herdr-app terminal, and refuse when leaked Herdr TUI variables name the wrong session. Plan in the linked change-record.
 
 * Fixes
-
-** TODO Adapt herdr-mods quota for the Herdr CLI
-:PROPERTIES:
-:CUSTOM_ID: 9e209f54-73f2-4f3e-b08d-81559a268fc8
-:CREATED: [2026-11-04 Wed 17:47]
-:END:
-:LOGBOOK:
-- Created [2026-11-04 Wed 17:47]
-:END:
-Adapt the quota module at [[https://github.com/Lakris2407/herdr-mods/tree/main/quota]] for use with the Herdr CLI rather than the Herdr desktop app. Follow on from task:d0852ffd-78fd-4bf0-9cce-37e9776498df once the quota-axi backend is available. Inspect the upstream module and CLI integration surface before proposing a scoped implementation plan; prefer reusing the quota-axi collection boundary over another collector. This task does not authorise implementation of the adaptation or live provider checks.
 
 * Upstream issues
 
