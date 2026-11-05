@@ -8742,7 +8742,7 @@
     (is (= [] (leaked-secrets dir (:out proc) (:err proc))))
     (let [help (call! env "usage" "--help")]
       (is (zero? (:exit help)))
-      (is (str/includes? (:out help) "usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]")))
+      (is (str/includes? (:out help) "usage [--provider NAME]* [--fresh] [--format json|markdown|text|status] [--detail]")))
     (is (str/includes? (:out (call! env "--help")) "oh usage [--provider NAME]* [--fresh]"))))
 
 (deftest usage-rendering-reports-allowlisted-provider-evidence
@@ -8777,6 +8777,36 @@
     (is (str/includes? detail "bounded by session"))
     (is (str/includes? detail "resets 2030-01-01T00:00:00Z"))
     (is (str/includes? text "resets 2030-01-01T00:00:00Z"))))
+
+(deftest usage-status-renders-one-line-for-a-status-bar
+  (let [window (fn [id kind remaining] {:id id :kind kind :percentUsed (- 100 remaining) :percentRemaining remaining})
+        row (fn [provider status stale windows]
+              {:provider provider :state {:status status :stale stale} :windows windows
+               :quotaSemantics {:status "known" :effectiveAvailability []}})
+        rows [(row "claude" "fresh" false [(window "five_hour" "session" 68.4) (window "seven_day" "weekly" 39)
+                                           (window "model:fable" "model" 85)])
+              (row "codex" "auth_required" false [])
+              (row "kimi" "rate_limited" false [])
+              (row "zai" "stale" true [(window "monthly" "monthly" 50)])]
+        {:keys [env dir]} (routed-fixture {:schemaVersion 6 :providers rows} {"HERDR_ENV" "0"} nil)
+        status (fn [& argv] (apply call! env "usage" "--format" "status" argv))
+        proc (status)]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "anthropic 68%s 39%w | kimi rl? | openai-codex auth? | zai 50%m~\n" (:out proc))
+        "one line; local and model windows omitted")
+    (is (= "anthropic 68%s 39%w\n" (:out (status "--provider" "anthropic"))))
+    (is (= "quota: none\n" (:out (status "--provider" "lemonade"))))
+    (is (= 1 (:exit (status "--detail"))) "--detail stays markdown-only")
+    (testing "unusable evidence keeps one line and exit 0"
+      (spit (get env "FAKE_QUOTA_REPORT") "{")
+      (fs/delete-if-exists (usage-cache-dir dir))
+      (let [p (status)]
+        (is (zero? (:exit p)))
+        (is (= "anthropic err? | kimi err? | openai-codex err? | zai err?\n" (:out p)))))
+    (testing "a missing or wrong-version quota-axi is one setup marker"
+      (let [p (apply call! (assoc env "FAKE_QUOTA_VERSION" "0.0.1") ["usage" "--format" "status"])]
+        (is (zero? (:exit p)))
+        (is (= "quota: setup?\n" (:out p)))))))
 
 (deftest usage-unknown-provider-fails-before-any-credential-read-or-request
   (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10 :codex-used 10}))

@@ -20,7 +20,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports allowlisted subscription evidence from the operator-installed quota-axi executable; it never contacts Herdr or installs software. --provider is repeatable and an unconfigured name is a usage error; --fresh requests zero upstream reuse age; --detail (markdown only) adds reviewed scope bounds and reset times.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--fresh] [--format json|markdown|text|status] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports allowlisted subscription evidence from the operator-installed quota-axi executable; it never contacts Herdr or installs software. --provider is repeatable and an unconfigured name is a usage error; --fresh requests zero upstream reuse age; --detail (markdown only) adds reviewed scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn usage-error [message data]
   (throw (ex-info message (assoc data :error-kind :usage))))
@@ -3318,7 +3318,7 @@
                "remove <full-task-uuid>"]
    "spawn" ["spawn \"<shell command>\""]
    "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]"]
-   "usage" ["usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]"]})
+   "usage" ["usage [--provider NAME]* [--fresh] [--format json|markdown|text|status] [--detail]"]})
 ;; Derived from the signatures above rather than restated, so help and validation cannot
 ;; disagree. Flat on purpose: it exists to catch typos, and per-group scoping would
 ;; reintroduce a second list to keep in step. Boolean-ness is *not* derivable here
@@ -3715,7 +3715,33 @@
       (if (= format "json") listing (roster-text listing format (or section "all") detail?)))))
 ;; --- usage --------------------------------------------------------------------------------
 ;; Render only the collector's allowlisted evidence, never subprocess text.
-(def usage-formats #{"json" "markdown" "text"})
+(def usage-formats #{"json" "markdown" "text" "status"})
+(def ^:private status-window-labels {"session" "s" "weekly" "w" "monthly" "m"})
+(def ^:private setup-reasons #{"missing-executable" "wrong-version"})
+(defn usage-status
+  "One plain line for a terminal status bar such as Herdr's `tab_bar_right`.
+  Local providers are omitted. A provider with session, weekly or monthly windows
+  shows each window's remaining percentage, labelled by kind, with `~` when stale;
+  otherwise it shows `auth?`, `rl?` or `err?` from its state. When the quota-axi
+  executable is missing or the wrong version, the whole line is `quota: setup?`."
+  [result]
+  (let [rows (remove :local (:providers result))
+        window-text (fn [{:keys [kind percentRemaining]} stale?]
+                      (str (Math/round (double percentRemaining)) "%" (status-window-labels kind) (when stale? "~")))
+        row-text (fn [{:keys [localProvider state windows]}]
+                   (let [stale? (or (:stale state) (= "stale" (:status state)))
+                         shown (filter #(and (status-window-labels (:kind %)) (some? (:percentRemaining %))) windows)]
+                     (str localProvider " "
+                          (cond
+                            (and (seq shown) (#{"fresh" "stale"} (:status state)))
+                            (str/join " " (map #(window-text % stale?) shown))
+                            (= "auth_required" (:status state)) "auth?"
+                            (= "rate_limited" (:status state)) "rl?"
+                            :else "err?"))))]
+    (cond
+      (empty? rows) "quota: none"
+      (every? #(setup-reasons (:reason %)) rows) "quota: setup?"
+      :else (str/join " | " (map row-text rows)))))
 (defn usage-text [result format detail?]
   (let [bold (if (= format "markdown") #(str "**" % "**") identity)
         detail? (or detail? (= format "text"))
@@ -3749,13 +3775,16 @@
         names (vec (distinct (all opts :provider)))
         config (config)
         configured (set (keys (:providers config)))]
-    (when-not (usage-formats format) (usage-error "--format must be json, markdown, or text" {:format format}))
+    (when-not (usage-formats format) (usage-error "--format must be json, markdown, text, or status" {:format format}))
     (when (and detail? (not= format "markdown")) (usage-error "--detail applies only to markdown output" {}))
     ;; Validated before any credential read or fetch.
     (when-let [unknown (seq (remove configured names))]
       (usage-error (str "unknown provider: " (str/join ", " unknown)) {:unknown (vec unknown) :available (vec (sort configured))}))
     (let [result (usage-mod/usage-for config {:providers (seq names) :fresh (boolean (one opts :fresh))})]
-      (if (= format "json") result (usage-text result format detail?)))))
+      (case format
+        "json" result
+        "status" (usage-status result)
+        (usage-text result format detail?)))))
 (defn spawn-command! [opts positional]
   (let [[command] (require-positionals positional 1 "spawn")]
     (when (some #{command} (available-personas))

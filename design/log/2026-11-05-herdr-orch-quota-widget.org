@@ -94,10 +94,16 @@ Herdr plugin v1 cannot add tab-bar or footer items. The display is therefore a `
 
 * Plan
 
-** TODO [#B] Add `oh usage --format status` :herdr_orch:
+** DONE [#B] Add `oh usage --format status` :herdr_orch:
+CLOSED: [2026-11-05 Thu 01:47]
 :PROPERTIES:
 :CUSTOM_ID: ef96d545-3f0a-4b99-b9ee-da92bdade902
 :CREATED: [2026-11-05 Thu 00:59]
+:STARTED: [2026-11-05 Thu 01:44]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-05 Thu 01:44]
+- State "DONE" from "STARTED" [2026-11-05 Thu 01:47]
 :END:
 Acceptance criteria:
 - All `oh usage --format status` criteria in `** Acceptance`, asserted in herdr-orch tests with the `quota-axi` fixture and `FAKE_QUOTA_REPORT`.

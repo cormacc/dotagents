@@ -300,6 +300,7 @@ A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child la
 #+begin_src sh
 oh usage                                    # JSON envelope with schema-5/6 providers array
 oh usage --format markdown --detail         # scope bounds and reset times
+oh usage --format status                    # one line for a status bar, e.g. anthropic 68%s 39%w
 oh usage --provider anthropic --fresh       # request fresh upstream evidence
 #+end_src
 
