@@ -5,6 +5,12 @@ Historic evidence for the rules in [[file:home/AGENTS.md][home/AGENTS.md]] and [
 
 The [[file:skills/retro/SKILL.md][retro]] skill appends to this file. Group each entry under the rule heading that the evidence supports, and use the rule's own instruction-file heading text so a reader can find the rule.
 
+* 2026-11-05 Thu -- AXI CLI consumer migration
+
+** Workflows
+
+The owner approved the command-result consumer inventory rule in =skills/org-tasks/scripts/AGENTS.md=. The compact =ot list= migration updated the pi tasks and Hermes CLI wrappers but initially missed the standalone TUI's in-process =list-show/list-cmd= call. Broader tests exposed broken TUI move and plan-opening behaviour; =load-tasks= in =skills/org-tasks/scripts/src/org_tasks/tui/tasks.clj= requires the full graph. LSP references to the handler identify that direct caller as well as its registry entry. Evidence: =.tmp/axi-implementation-7/portable.out=, =tui-fixed.out= and =ot-all.out= in the same directory.
+
 * 2026-11-04 Wed -- quota-axi validation
 
 ** Tests
