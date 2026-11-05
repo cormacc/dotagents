@@ -14,7 +14,6 @@
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
   - [[#started-b-herdr-orch-llm-usage-limit-fallback][STARTED [#B] herdr-orch: LLM usage limit fallback]]
-  - [[#started-d-evaluate-rpiv-pi-workflow-setup][STARTED [#D] Evaluate rpiv-pi workflow setup]]
   - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
   - [[#re-evaluate-pi-context-with-a-week-of-session-data-after-2026-11-10][Re-evaluate pi-context with a week of session data (after 2026-11-10)]]
   - [[#reconcile-pi-managed-npm-dependencies-after-advisory-research][Reconcile Pi managed npm dependencies after advisory research]]
@@ -24,7 +23,6 @@
   - [[#started-b-traits-probe-backlog][STARTED [#B] traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
   - [[#review-pi-development-pin-advisories-before-upgrade][Review Pi development pin advisories before upgrade]]
-  - [[#herdr-orch-support-herdr-app-herdr-core--hc][herdr-orch: support herdr-app (herdr-core / hc)]]
 - [[#fixes][Fixes]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
@@ -51,34 +49,6 @@ It would be useful for sessions to fallback  after hitting session limits (anthr
 Take a look at https://github.com/luongnv89/ccl, which implements a solution for pi, claude and codex. Evaluate whether we can piggyback on this without breaking our model aliasing etc.
 There's also `agent-router`, which is session limit aware: https://github.com/nidhi-singh02/agent-router
 Also evaluate the subscription-failover handling in sova (https://github.com/Naomarik/sova), folded in from the cancelled task 8e199d7c. Verified [2026-10-20 Tue] at e67e868: herdr-orch has no failover mechanism today (no match in contract.md, subagents/config.edn, or core.clj).
-
-** STARTED [#D] Evaluate rpiv-pi workflow setup :pi:
-:PROPERTIES:
-:CUSTOM_ID: 95649700-252c-46d1-92fd-584f8b3b6237
-:CREATED: [2026-06-16 Tue 21:03]
-:STARTED: [2026-11-04 Wed 00:56]
-:END:
-:LOGBOOK:
-- Created [2026-06-16 Tue 21:03]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:56]
-:END:
-#+IMPORT: [[plan:2026-11-04-rpiv-evaluation.org]]
-An interesting-looking / opinionated workflow setup for pi.
-Likely to be some clashes with my own setup, but worth evaluating for (partial?) adoption.
-- https://github.com/juicesharp/rpiv-mono
-- https://rpiv-pi.com/
-*** TODO Decide whether to trial standalone rpiv-btw
-:PROPERTIES:
-:CUSTOM_ID: 86be0a2b-0097-4b18-9070-506bf85b2bfe
-:CREATED: [2026-11-04 Wed 00:56]
-:END:
-:LOGBOOK:
-- Created [2026-11-04 Wed 00:56]
-:END:
-Acceptance criteria:
-- Keep the full rpiv-pi workflow uninstalled unless separately approved.
-- Decide whether cross-session question hints within one Pi process are acceptable.
-- Approve a disposable interactive trial on the installed Pi before any persistent package/settings change.
 
 ** STARTED [#C] Explore agent memory options :org:
 :PROPERTIES:
@@ -121,6 +91,34 @@ pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) afte
 - Created [2026-11-04 Wed 00:43]
 :END:
 Research task:3d7ea3e7-fc22-49a1-824d-3c400671ee70 found a fresh pi-web-access@0.46.0 resolution with its existing MCP SDK 1.32.1 pin audits clean; the live managed lock still has eight vulnerable packages. Before touching ~/.pi/agent/npm, choose and document the reconciliation mechanism, snapshot the previous package and lock state, retain lifecycle-script suppression, verify other managed packages remain present, and run the runtime audit plus isolated loading checks. Pi 1.4.0 skips unchanged top-level versions during update; its same-source install path does not pass --ignore-scripts. Do not replace the extension or enable automatic provider routing as part of this maintenance. Live provider calls need a separate approved scope.
+
+** TODO Evaluate hierarchical AGENTS.md discovery for Pi :pi:
+:PROPERTIES:
+:CUSTOM_ID: 2ed2d031-aa15-4701-9608-2cf565ddc75e
+:CREATED: [2026-11-05 Thu 14:49]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:49]
+:END:
+Pi loads context files from the agent directory, the working directory and its ancestors only (Pi docs/configuration.md, "Context files"). A nested AGENTS.md below the working directory is not loaded: this repository works around that by hand for skills/herdr-orch/scripts/AGENTS.md and skills/org-tasks/scripts/AGENTS.md.
+rpiv-pi injects the nearest AGENTS.md, CLAUDE.md or .rpiv/guidance/<sub>/architecture.md at each depth when a read, edit or write tool call touches a file, once per session, as a hidden custom message; compaction defers re-injection to the next user turn. Source: rpiv-mono@46dbdfd packages/rpiv-pi/extensions/rpiv-core/guidance.ts and docs/architecture.md section "Guidance injection". Origin: [[task:95649700-252c-46d1-92fd-584f8b3b6237][rpiv absorption review]].
+Acceptance criteria:
+- Decide whether to add on-touch nested context discovery as a Pi extension, rely on manual pointers, or reject it.
+- Assess interaction with herdr-orch children (a child in a managed worktree has a different working directory) and with project trust, since context files load without trust.
+- Must not: install rpiv-pi.
+
+** TODO Decide whether to trial standalone rpiv-btw
+:PROPERTIES:
+:CUSTOM_ID: 86be0a2b-0097-4b18-9070-506bf85b2bfe
+:CREATED: [2026-11-04 Wed 00:56]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:56]
+:END:
+Acceptance criteria:
+- Keep the full rpiv-pi workflow uninstalled unless separately approved.
+- Decide whether cross-session question hints within one Pi process are acceptable.
+- Approve a disposable interactive trial on the installed Pi before any persistent package/settings change.
 
 * Improvements
 

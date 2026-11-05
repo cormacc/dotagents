@@ -503,6 +503,25 @@
     (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
                          :spec-citation-untested)))))
 
+(deftest spec-citation-untested-does-not-fire-when-cmd-cited
+  (let [content (str "* Summary\n"
+                     "** Acceptance\n"
+                     "*** Core functionality\n"
+                     "- [ ] Widget renders → spec:[[proj:design/specs/theming.org]] cmd:`bb test-clojure widget-test`\n"
+                     "- [ ] Widget themes → spec:[[proj:design/specs/theming.org]] command:`not-a-cmd-token`\n"
+                     "* Plan\n"
+                     "** TODO Work\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})]
+    ;; Positive control: the second criterion has no `cmd:` or `test:` token, so it still fires.
+    (is (= 1 (count-of findings :spec-citation-untested)))
+    (is (str/includes? (:message (first (filter #(= :spec-citation-untested (:code %)) findings)))
+                       "Widget themes"))))
+
 (deftest spec-citation-untested-does-not-fire-for-anti-criteria
   (let [content (str "* Summary\n"
                      "** Acceptance\n"

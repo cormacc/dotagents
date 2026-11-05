@@ -322,7 +322,8 @@
 (def ^:private acceptance-subheading-re #"(?i)^\*\*\*\s+(.+?)\s*$")
 (def ^:private acceptance-bullet-re #"^-\s*\[.\]\s*(.*)$")
 (def ^:private spec-citation-re #"(?i)(?:^|\s)spec:")
-(def ^:private test-citation-re #"(?i)(?:^|\s)test:")
+;; A runnable `cmd:` evidence command is evidence in the same way as a `test:` reference.
+(def ^:private test-citation-re #"(?i)(?:^|\s)(?:test|cmd):")
 (def ^:private anti-criteria-heading-re #"(?i)anti-criteria")
 
 (defn- acceptance-section-lines
@@ -339,8 +340,8 @@
         (subvec (vec rest-lines) 0 end)))))
 
 (defn- uncited-test-criteria
-  "Return acceptance-criterion bullet texts that cite `spec:` but not
-  `test:` and are not under an `*** Anti-criteria` sub-heading (an
+  "Return acceptance-criterion bullet texts that cite `spec:` but neither
+  `test:` nor `cmd:` and are not under an `*** Anti-criteria` sub-heading (an
   anti-criterion is its own evidence)."
   [^String content]
   (when-let [lines (acceptance-section-lines content)]
@@ -405,7 +406,7 @@
       (for [text (uncited-test-criteria content)]
         {:code :spec-citation-untested
          :severity :warn
-         :message (str "Acceptance criterion cites spec: but no test: evidence — " text)
+         :message (str "Acceptance criterion cites spec: but no test: or cmd: evidence — " text)
          :location {:file src}}))
     (record-content-index tasks record-exclude-paths))))
 

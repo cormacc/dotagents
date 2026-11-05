@@ -51,7 +51,7 @@ Report: changed files, acceptance evidence, commands/results, risks and artefact
 
 Reference authoritative requirements instead of rephrasing their exact values. Include the relevant cross-task constraints and interfaces, not accumulated session history. Locate the implementation first; use the existing `scout` when necessary rather than sending a worker an unlocated change.
 
-Mark the assigned tasks started through `org-tasks`, then dispatch the existing `worker` through `oh`. Choose context and isolation under `herdr-orch`; use fresh context by default. The worker reads the canonical record but edits only its assigned checkout and files. Do not request an authored commit unless authorised; managed-checkout checkpoints remain the CLI's responsibility.
+Mark the assigned tasks started through `org-tasks`, then dispatch the existing `worker` through `oh`. Choose context and isolation under `herdr-orch`; use fresh context by default. The worker reads the canonical record but edits only its assigned checkout and files. For a worktree assignment, pass the brief's allowed files to `oh` as repeated `--scope` values, so that reconciliation reports writes outside them. Do not request an authored commit unless authorised; managed-checkout checkpoints remain the CLI's responsibility.
 
 Keep outstanding task-to-round mappings, checkout/baseline references and the next action in the canonical task's handoff while work is active. Record the full round UUID returned by `oh`; Org task IDs and delegation round IDs are different identities.
 
@@ -59,7 +59,7 @@ If your tools include pi-context's `context_compact`, use it to remove finished 
 
 ## 4. Capture, review and integrate
 
-1. Collect through `oh`. Apply `herdr-orch`'s terminal-result, timeout and recovery rules; a wait expiry or non-terminal item does not justify replacement work. Inspect captured artefacts and checkout reconciliation before acting on the report.
+1. Collect through `oh`. Apply `herdr-orch`'s terminal-result, timeout and recovery rules; a wait expiry or non-terminal item does not justify replacement work. Inspect captured artefacts and checkout reconciliation before acting on the report. A path in `:undeclared` is outside the agreed scope: accept it as necessary fallout, return it to the worker, or take the scope question to its owner.
 2. Check each assigned task against its acceptance and the applicable evidence class. `COMPLETE` is the worker's terminal result, not proof of plan acceptance or integration. A blocked report returns the exact missing decision or required scope to its owner; a failed report requires inspection before retry.
 3. At a selected review gate, dispatch a fresh `reviewer` from the root. Supply the canonical requirements, exact base and target, report/evidence paths and the code under review. Apply [code-review](../code-review/SKILL.md); spec conformance and correctness may be checked in one assignment. Use a separate `simplifier` only when requested or warranted by its own scope, not as an automatic extra seat.
 4. Reconcile findings under the [bounded decision-review recipe](../herdr-orch/references/workflow-recipes.md#bounded-decision-review). Verify each before accepting it; return approved, in-scope fixes to the worker. Continue it only when its retained context is useful and safe under `herdr-orch`. Re-review the fix range and any concrete regression risk when warranted. Unresolved substantive defects at the cycle bound stop acceptance; the bound is not permission to park a defect as done.
@@ -78,7 +78,7 @@ A material scope change, missing product decision, conflicting interface or acce
 
 Apply `herdr-orch`'s independent Class C validation to the integrated result. Any child used for that validation is spawned fresh for closeout, not continued from implementation or an earlier review. Final fixes invalidate affected evidence; verify the final tree before closure.
 
-The root checks the whole acceptance set, anti-criteria and relevant specs, then performs [org-plan's closure-time refresh and prune](../org-plan/SKILL.md#closure-time-refresh-and-prune) before closing the parent task. Workers do not close the parent or prune the record. Preserve required evidence and use only the existing ownership-checked child and checkout cleanup paths. Integration, push, merge and authored commits keep their separate approval requirements.
+The root checks the whole acceptance set, anti-criteria and relevant specs, and runs each `cmd:` evidence command on the integrated tree, then performs [org-plan's closure-time refresh and prune](../org-plan/SKILL.md#closure-time-refresh-and-prune) before closing the parent task. Workers do not close the parent or prune the record. Preserve required evidence and use only the existing ownership-checked child and checkout cleanup paths. Integration, push, merge and authored commits keep their separate approval requirements.
 
 Report accepted tasks, delivered behaviour, verification and its limits, pending integration or decisions, and any remaining owned children/checkouts requiring action.
 

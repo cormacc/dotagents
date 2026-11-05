@@ -32,7 +32,11 @@ Read each changed file plus the callers, types, tests, configuration, and error 
 - authentication/authorisation, injection, path traversal, secret exposure, unsafe deserialisation, and untrusted network/file input;
 - deployment/runtime assumptions, dependency changes, migrations, and rollback compatibility;
 - missing tests for changed failure paths or regressions that the existing suite would not catch;
-- names, structure, and conventions in changed code that would mislead a reader or the next editor (see [#False-positive bar](#false-positive-bar) for the scope).
+- names, structure, and conventions in changed code that would mislead a reader or the next editor (see [#False-positive bar](#false-positive-bar) for the scope);
+- a new file or entity that parallels an existing sibling (handler, service, reducer, repository or registry entry) but lacks or changes one of the sibling's invariants: public operations, emitted events, state guards, collaborators, persisted fields, or registrations elsewhere. Treat an absence as intentional only when code or documentation states that intent;
+- defects that appear only across components: a state that one path reaches but no path handles or leaves; a condition whose matching branch depends on a consumer that excludes this entity; a shared filter or dispatch that a new or terminal value falls through. Such a finding needs facts from at least two locations.
+
+When the history has an earlier change of the same kind, read its follow-up fixes for a failure that the reviewed change could repeat. Before you treat a finding as already fixed by a commit, confirm that the commit is in the reviewed range with `git merge-base --is-ancestor <commit> <tip>`.
 
 When a skill for the changed files' language supplies a review reference (for example, the `clojure` skill's `references/review.md`), read it and apply its items under this skill's false-positive bar.
 
@@ -84,11 +88,14 @@ Start with findings ordered by severity. Number the findings in one sequence acr
 ```markdown
 ### 1. [P1] Imperative, specific title
 - **Location:** `path/file.ts:42`
+- **Quote:** `the cited line, copied verbatim from the file`
 - **Problem:** Reachable behaviour, or the misreading or later edit that the code invites, and why it is wrong.
 - **Impact:** Concrete consequence.
 - **Fix:** Smallest compatible correction.
 - **Evidence:** Reproduction, call path, or failed/passing test that proves the claim. For a maintainability finding, cite the code or convention that shows the cost.
 ```
+
+Copy the quote from the file at the reviewed state, not from memory or a diff header, so that a reader can confirm the location with one search. For a finding about something absent, quote the nearest line that shows the absence, such as the branch or call that lacks a guard. For a design-artefact review, quote the artefact line.
 
 Write each P3 finding on one line, in the form `3. [P3] path:line: problem. fix.`, and add the evidence in a short clause when the problem does not show it.
 
@@ -115,3 +122,5 @@ If no finding meets the bar, say **"No issues found."** and still report the dif
 The explicit requirement-conformance checks adapt Matt Pocock's [code-review](https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/engineering/code-review/SKILL.md) at that revision (MIT; [matt-pocock-LICENSE](matt-pocock-LICENSE)). They retain this skill's range, severity, reconciliation and clean-result rules rather than importing a compulsory standards panel.
 
 The one-line form for P3 findings, the wording rules, and the Questions item adapt `caveman-review` from https://github.com/JuliusBrussee/caveman/blob/v4.0.1/skills/caveman-review/SKILL.md (Apache License 2.0). The pass, fail, unavailable, and blocked result classes adapt `verify-and-stop` from the same repository and release. The expected-load rule, the treatment of a marked limit as a decision, and the numbering of findings across severities adapt `ponytail-review` from https://github.com/DietrichGebert/ponytail/blob/v5.3.2/skills/ponytail-review/SKILL.md (MIT License), where the marker is `shortcut:`.
+
+The verbatim quote on each finding, the sibling-invariant and cross-component trace targets, and the ancestry check on a claimed fix adapt `claim-verifier`, `peer-comparator` and `code-review` from [rpiv-mono](https://github.com/juicesharp/rpiv-mono/tree/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-pi) at that revision (MIT License). They retain this skill's single-reviewer flow, severity and false-positive bar rather than importing rpiv's review waves or severity weighting.

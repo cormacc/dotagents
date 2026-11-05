@@ -51,6 +51,7 @@ Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, ref
 | `--retro` / `--no-retro` | override retro gating for one spawn | [docs/contract.md#Retro gating](docs/contract.md#retro-gating) |
 | `--spawns NAMES` / `none` | override the persona allow-list; `none` forces a leaf | [docs/contract.md#Spawn gating](docs/contract.md#spawn-gating) |
 | `--worktree <path>` / `new` | use an existing checkout or create one managed target | [docs/contract.md#Checkout target resolution](docs/contract.md#checkout-target-resolution) |
+| `--scope PATH` (repeatable) | declare a worktree round's allowed paths; reconciliation reports `:undeclared` writes without refusing them | [docs/contract.md#Worktree reconciliation and teardown](docs/contract.md#worktree-reconciliation-and-teardown) |
 | `--tab` / `--split` | force placement; the flags are mutually exclusive | [docs/contract.md#Placement](docs/contract.md#placement) |
 | `--context measurement --measurement-config PATH` | TUI-only: run one headless measurement sample; `--tab`/`--split` add a read-only monitor | [docs/contract.md#Measurement launch](docs/contract.md#measurement-launch) |
 | `task status [UUID]` / `task list [--include-failed] [--full]` | inspect one round or list compact rounds with counts; opt into detailed or retained failed entries | [docs/contract.md#JSON output](docs/contract.md#json-output) |

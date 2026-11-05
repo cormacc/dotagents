@@ -4925,3 +4925,23 @@ CLOSED: [2026-11-05 Thu 16:47]
 :END:
 #+IMPORT: [[plan:2026-11-05-owned-quota-collector.org]]
 Evaluate whether herdr-orch should return to querying subscription quota directly from Babashka, as `usage.clj` did before b8e5e99, and remove the quota-axi dependency. The quota-axi integration needs a Node >=22.19 runtime, an npm package dependency, a root `npm ci` in Home Manager activation, setup and discovery code (`quota_setup.clj`, `quota-axi-setup`, the `/oh setup` flow), a process supervisor (`quota_process.mjs`), output allowlisting, and delegated credential refresh through vendor CLIs. Compare that cost with a maintained Babashka collector for the providers in use (Anthropic, Codex): endpoint stability, credential reading and refresh ownership, window semantics (for example the Codex 720h `unknown` window), and test coverage. Inputs: [[proj:design/log/2026-11-04-quota-axi-backend.org]] and the pre-quota-axi `usage.clj` at b8e5e99^.
+
+** DONE [#D] Evaluate rpiv-pi workflow setup :pi:
+CLOSED: [2026-11-05 Thu 18:19]
+:PROPERTIES:
+:CUSTOM_ID: 95649700-252c-46d1-92fd-584f8b3b6237
+:CREATED: [2026-06-16 Tue 21:03]
+:STARTED: [2026-11-04 Wed 00:56]
+:ARCHIVED: [2026-11-05 Thu 18:19]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-06-16 Tue 21:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:56]
+- State "DONE" from "STARTED" [2026-11-05 Thu 18:19]
+:END:
+#+IMPORT: [[plan:2026-11-04-rpiv-evaluation.org]]
+An interesting-looking / opinionated workflow setup for pi.
+Likely to be some clashes with my own setup, but worth evaluating for (partial?) adoption.
+- https://github.com/juicesharp/rpiv-mono
+- https://rpiv-pi.com/

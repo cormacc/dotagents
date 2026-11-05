@@ -1,53 +1,76 @@
-#+TITLE: Evaluate rpiv-pi workflow setup
+#+TITLE: Absorb rpiv-pi review and verification mechanics into herdr-orch
 #+DATE: 2026-11-04 Wed
-#+PARENT: [[task:95649700-252c-46d1-92fd-584f8b3b6237][Evaluate rpiv-pi workflow setup]]
+#+PARENT: [[archive:95649700-252c-46d1-92fd-584f8b3b6237][Evaluate rpiv-pi workflow setup]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Draft
-#+NO_SPEC: true
+#+STATUS: Complete
+#+SPEC: [[proj:skills/code-review/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/workflow-recipes.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/org-execute/SKILL.md]]
+#+SPEC: [[proj:skills/org-plan/SKILL.md]]
 
 * Intent
-Evaluate partial adoption of rpiv-pi without replacing Org planning, Herdr orchestration or the existing skill owners. Assess standalone rpiv-btw as a separate optional capability.
+Absorb the rpiv-pi review, verification and scope-control mechanics that strengthen herdr-orch delegation, into their existing local owners. Do not adopt rpiv-pi, its workflow runner or its artefact store.
 
 * Summary
-*Level:* prototype · *Tests:* smoke · *Docs:* inline
+*Level:* MVP · *Tests:* smoke · *Docs:* inline
 
-Source review at upstream revision ~46dbdfd78ab631bbf3ce41c2618bb173a5ec2725~, package version ~2.15.0~. Recommend against installing the full workflow alongside this setup. Standalone ~rpiv-btw~ is a plausible trial candidate, subject to its cross-session hint policy and installed-Pi compatibility checks. Nothing is installed and no live model request was made.
+Source review of rpiv-mono at revision ~46dbdfd78ab631bbf3ce41c2618bb173a5ec2725~ (package ~2.15.0~). rpiv-pi does not replace org-plan, org-execute or herdr-orch. Its value for us is a set of evidence mechanisms: verbatim-quote finding verification, a declared-scope floor on implementation, goal-derived executable acceptance, prior-finding adjudication on re-review, extra review lenses and disagreement-aware validator panels. Each mechanism landed in one existing owner; no rpiv package is installed and no persona, engine or store was added.
 
 ** Scope
 *** In scope
-- Workflow ownership, dependencies, model configuration and artifact storage.
-- Standalone side-question context, tool access, persistence and cancellation boundaries.
+- Finding verification: verbatim-quote citations in ~code-review~ findings and a grounding check before the root accepts them.
+- A declared-scope floor that reports undeclared writes in ~oh~ worktree reconciliation.
+- Optional runnable evidence on org-plan acceptance criteria, executed at org-execute closeout.
+- Prior-finding adjudication on re-review.
+- Peer-comparison, cross-component and precedent checks in ~code-review~.
+- Distinct-lens Class C validators with disagreement escalation.
 *** Out of scope
-- Running setup, syncing bundled agents, installing packages, or changing user settings.
-- Adopting rpiv's parallel plan/task store or replacing existing skills.
+- Installing rpiv-pi, rpiv-workflow or their sibling packages; any interactive trial of the rpiv workflow.
+- A workflow runner, typed stage DSL, run trail, lane dock or ~.rpiv/artifacts/~ store.
+- New personas. Each candidate extends an existing persona, skill or CLI verb.
+- Hierarchical ~AGENTS.md~ discovery: tracked separately in [[task:2ed2d031-aa15-4701-9608-2cf565ddc75e][Evaluate hierarchical AGENTS.md discovery for Pi]].
+- Standalone ~rpiv-btw~: tracked separately in [[task:86be0a2b-0097-4b18-9070-506bf85b2bfe][Decide whether to trial standalone rpiv-btw]].
 
 ** Acceptance
-Proposed trial criteria; not yet approved.
 *** Core functionality
-- [X] The full workflow's overlaps with local owners are identified.
-- [X] The standalone side-question package is assessed independently.
-- [ ] An approved disposable interactive trial works with the installed Pi and an OpenAI model.
+- [X] Every candidate names its rpiv source and its local owner.
+- [X] Each accepted candidate lands in its named owner with a provenance note (rpiv-mono is MIT-licensed).
+- [X] A ~code-review~ finding at P0--P2 carries the cited line verbatim.
+- [X] Worktree reconciliation reports paths outside a declared scope, when a scope was declared at spawn. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `scope-reports-undeclared-committed-and-dirty-paths`
+- [X] An org-plan acceptance criterion can carry a runnable evidence command that closeout validation executes. → test:`skills/org-tasks/scripts/test/org_tasks/doctor_test.clj` `spec-citation-untested-does-not-fire-when-cmd-cited`
+- [X] A re-review assignment rules on each prior finding as fixed or still open.
 *** Edge cases
-- [ ] Compaction and branch changes invalidate the side-context snapshot in the installed runtime.
-- [ ] Dismissing a side request cancels it without cancelling the parent session.
-- [ ] Cross-session question hints follow the approved privacy policy.
+- [X] An entry without a declared scope reconciles exactly as before.
+- [ ] A citation check that cannot resolve a path reports it as advisory, not as a failed review. Not applicable (2026-11-05): no mechanical citation check shipped; per Decisions, the quote requirement comes first and the root checks quotes.
+- [X] A failure of the scope query alone keeps the core reconciliation and reports ~:scope-diagnostic~. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `scope-reports-undeclared-committed-and-dirty-paths`
 *** Anti-criteria
-- [X] Must not: install or configure the full workflow during research.
-- [ ] Must not: persist side answers into the main transcript during a trial.
+- [X] Must not: install or configure any rpiv package.
+- [X] Must not: add a workflow engine, scheduler, persona or second plan store.
+- [X] Must not: copy rpiv's multi-wave review orchestration into ~code-review~; absorb checks, not waves.
 
 ** Decisions
-- Retain existing workflow owners :: rpiv-pi documents Markdown artifacts under ~.rpiv/artifacts/~, a separate model override configuration, bundled skill/agent sync and detached workflow lanes. These overlap with org-plan, org-tasks, herdr-orch and current model aliases. Rejected:
-  - Install the full umbrella and reconcile later: introduces several owners and setup side effects before choosing an actual missing capability.
-  - Copy the workflow's skill set: duplicates existing planning and review contracts.
-- Evaluate ~rpiv-btw~ alone :: its declared peer dependencies are the three Pi packages and its package manifest exposes its own extension. No workflow umbrella is required by that manifest. Rejected:
-  - Treat it as a free context window: the side call resends a clone of the active branch plus side history to the active model and has its own request cost.
-- Do not equate ephemeral storage with session isolation :: the package's documented cross-session hint includes the last ten question strings from sessions in one Pi process. Answers and branch content are not part of that hint, but questions can still contain sensitive context.
+- Absorb mechanisms, not the workflow :: rpiv's ~/wf~ runner, detached lanes, per-skill model overrides, bundled agent sync and artefact buckets duplicate org-plan, org-tasks, the ~oh~ ledger, Herdr panes and model tiers. Rejected:
+  - Install the umbrella and reconcile later: several competing owners and setup side effects before a missing capability is chosen.
+  - Copy the 30-skill pipeline: duplicates planning and review contracts.
+- Verify findings by quoted line :: rpiv's ~claim-verifier~ tags each finding Verified, Weakened or Falsified against a verbatim quote, with exactly one row per input finding; ~code-review~ Step 6 drops Falsified findings and demotes Weakened ones one severity tier. Our root performs this check under Class B probe budgets with no quote to ground it. Adopt the quote requirement first; a mechanical check or a light-tier verifier assignment follows only if root probing proves costly. Such a check must stay advisory: path resolution misses bare basenames and package-relative paths, which is why rpiv's ~citations.ts~ never blocks on it.
+- Report scope excess mechanically :: rpiv's ~implement-scope-check~ compares ~git status~ with the plan's declared ~files:~. The org-execute brief already declares allowed files and reconciliation already reports ~:committed~ and ~:dirty~, so the comparison belongs in the CLI under herdr-orch's "mechanics belong in a CLI" rationale ([[file:../../skills/herdr-orch/design.org::*Why mechanics belong in a CLI]]).
+- Acceptance from the goal alone :: rpiv's ~acceptance~ skill freezes items before planning and keeps research from narrowing them. Each evidence command measures the outcome, not a record of it, and must be satisfiable without a human. Adapt as an optional token beside org-plan's existing ~test:~ citation, not as a new artefact.
+- The herdr-orch "no workflow engine" statement is a conditional scope limit, not an architectural principle :: it entered ~SKILL.md~ with commit ~3fc1823~ from the child-context-modes record, whose anti-criterion reads "Must not: add dependencies or a workflow engine without a separate demonstrated need" ([[file:2026-10-21-child-context-modes.org]]). The 2026-07-22 record deferred a scheduler "until operational friction justifies code" ([[file:2026-07-22-harness-agnostic-subagents.org]]). Two adjacent decisions are principled and stand independently: the parent owns dependency knowledge, so a CLI-side fan-out scheduler was rejected ([[file:2026-07-29-subagent-comms-housekeeping.org]]); and org-plan/org-tasks are the single plan and task store ([[file:../../skills/org-execute/SKILL.md]]). The "launch authority" half of the same sentence is a safety boundary, not a scope limit. None of this cycle's candidates needs an engine. ~SKILL.md~ and ~workflow-recipes.md~ state the condition; the recipes keep "no persona, scheduler, or runner".
+- Defer the child command watchdog :: rpiv's ~RPIV_BASH_TIMEOUT_MS~ turns a wedged command in a detached session into a halt reason. Herdr children remain interactive and ~poke~/recovery covers a stalled child; revisit only on observed stalls.
 
-** Risks
-- The side completion prefers a private ~modelRegistry.runtime~ bridge for OAuth-aware request preparation. Its fallback and open-ended peer versions are not proof of compatibility with the installed Pi.
-- The README promises no transcript or disk persistence; this review confirms the request/context construction in source, not an interactive runtime observation.
+** Shipped
+- MODIFIED ~skills/code-review/SKILL.md~ :: P0--P2 findings carry a verbatim ~Quote~; trace targets for sibling invariants and cross-component defects; ancestry check before treating a finding as fixed by a commit.
+- MODIFIED ~skills/herdr-orch/references/workflow-recipes.md~ :: bounded decision review checks quotes (P0--P2) and requires a fixed or still-open ruling on each prior finding at re-review; the no-engine statement states its condition.
+- MODIFIED ~skills/herdr-orch/SKILL.md~ :: Class C validators take distinct lenses and disagreement goes to the root or user; the no-engine statement states its condition.
+- MODIFIED ~skills/herdr-orch/scripts/docs/contract.md~, ~scripts/README.md~ and ~cli.clj~ :: repeatable ~--scope PATH~ on ~task run|start~ for worktree rounds, ledger ~:scope~ carried by ~continue~, reconciliation ~:undeclared~ and ~:scope-diagnostic~; advisory only.
+- MODIFIED ~skills/org-plan/SKILL.md~, ~references/change-record-format.md~ :: optional ~cmd:~ evidence on acceptance criteria, run at closure.
+- MODIFIED ~skills/org-execute/SKILL.md~ :: pass the brief's allowed files as ~--scope~, act on ~:undeclared~, run ~cmd:~ evidence at closeout.
+- MODIFIED ~skills/org-tasks~ ~ot doctor~ and ~references/ot-cli.md~ :: ~cmd:~ counts as evidence for ~spec-citation-untested~.
 
 ** Follow-ups
+- [[task:2ed2d031-aa15-4701-9608-2cf565ddc75e][Evaluate hierarchical AGENTS.md discovery for Pi]].
 - [[task:86be0a2b-0097-4b18-9070-506bf85b2bfe][Decide whether to trial standalone rpiv-btw]].
 
 * Plan
@@ -63,13 +86,117 @@ CLOSED: [2026-11-04 Wed 00:56]
 :END:
 https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without polluting context... sounds useful
 
-* Implementation
-- Pinned source: [[https://github.com/juicesharp/rpiv-mono/tree/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725][rpiv-mono]]. The package's [[https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-pi/README.md][workflow README]] describes four pipelines, additional sibling extensions, bundled skills/agents, guidance injection and detached lanes. The local comparison uses [[file:../../skills/org-plan/SKILL.md]], [[file:../../skills/org-tasks/SKILL.md]] and [[file:../../skills/herdr-orch/SKILL.md]].
-- [[https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-btw/btw.ts][Side executor source]] uses ~ctx.model~, resolves authentication through the registry, sends ~tools: []~ and owns a separate abort controller. It snapshots completed assistant turns and invalidates snapshots on compaction/tree events. This checks construction, not provider behaviour.
-- [[https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-btw/docs/context-model.md][Context contract]] documents current compacted branch context, session-specific side turns, process-memory storage and cross-session question hints. [[https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-btw/pi-compat.ts][Compatibility bridge]] prefers the host runtime and falls back to the compatibility completion API.
+** DONE Require verbatim-quoted citations in code-review findings :skill:
+CLOSED: [2026-11-05 Thu 18:11]
+:PROPERTIES:
+:CUSTOM_ID: c568c05e-c16a-4f47-92b7-0022e5bdde41
+:CREATED: [2026-11-05 Thu 14:52]
+:STARTED: [2026-11-05 Thu 17:02]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:52]
+- State "STARTED" from "TODO" [2026-11-05 Thu 17:02]
+- State "DONE" from "STARTED" [2026-11-05 Thu 18:11]
+:END:
+Acceptance criteria:
+- A P0--P2 finding carries the cited line verbatim beside its `Location`.
+- The root checks the quote at the cited line before accepting a finding; an absent quote rejects it, a narrower claim demotes it one tier.
+- Must not: require the quote on P3 one-line findings.
 
-* Open questions
-** OPEN Is the process-wide recent-question hint acceptable?
-Choose whether to accept the upstream behaviour or require session-only context before a trial. Do not silently patch a third-party package.
-** OPEN Should standalone rpiv-btw receive an interactive trial?
-If approved, use a disposable Pi agent directory and synthetic context first. Verify request model/provider, tool declarations, cancellation, branch/compaction changes and transcript persistence before any permanent installation.
+** DONE Report undeclared writes in worktree reconciliation :herdr_orch:
+CLOSED: [2026-11-05 Thu 18:11]
+:PROPERTIES:
+:CUSTOM_ID: 371328ed-a5de-489c-bda0-e71262bc3619
+:CREATED: [2026-11-05 Thu 14:52]
+:STARTED: [2026-11-05 Thu 17:01]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:52]
+- State "STARTED" from "TODO" [2026-11-05 Thu 17:01]
+- State "DONE" from "STARTED" [2026-11-05 Thu 18:11]
+:END:
+Acceptance criteria:
+- `oh task start` accepts an optional declared path scope and records it on the ledger entry.
+- `:reconciliation` lists committed and dirty paths outside the declared scope.
+- An entry without a declared scope reconciles unchanged.
+- Must not: refuse publication or capture on scope excess; the root decides.
+
+** DONE Allow runnable evidence on acceptance criteria :org:
+CLOSED: [2026-11-05 Thu 18:11]
+:PROPERTIES:
+:CUSTOM_ID: 88a1e8b2-acc6-422d-87df-48ad9e5d14dc
+:CREATED: [2026-11-05 Thu 14:52]
+:STARTED: [2026-11-05 Thu 17:06]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:52]
+- State "STARTED" from "TODO" [2026-11-05 Thu 17:06]
+- State "DONE" from "STARTED" [2026-11-05 Thu 18:11]
+:END:
+Acceptance criteria:
+- An `** Acceptance` criterion may cite a read-only, self-contained evidence command beside `spec:` and `test:`.
+- org-execute closeout validation runs each cited command and reports its result.
+- The rule states that the command measures the outcome, not a record of it, and needs no human to pass.
+
+** DONE Require prior-finding rulings on re-review :herdr_orch:
+CLOSED: [2026-11-05 Thu 18:11]
+:PROPERTIES:
+:CUSTOM_ID: f4217a90-7c0e-4e44-aa94-9e0f52a708ed
+:CREATED: [2026-11-05 Thu 14:52]
+:STARTED: [2026-11-05 Thu 17:03]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:52]
+- State "STARTED" from "TODO" [2026-11-05 Thu 17:03]
+- State "DONE" from "STARTED" [2026-11-05 Thu 18:11]
+:END:
+Acceptance criteria:
+- A re-review assignment includes the prior findings and requires a fixed or still-open ruling on each, in addition to a fresh review.
+
+** DONE Add peer, cross-component and precedent checks to code-review :skill:
+CLOSED: [2026-11-05 Thu 18:11]
+:PROPERTIES:
+:CUSTOM_ID: b305ae52-cad7-4f7a-a3ba-94ffa4c3592d
+:CREATED: [2026-11-05 Thu 14:52]
+:STARTED: [2026-11-05 Thu 17:03]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:52]
+- State "STARTED" from "TODO" [2026-11-05 Thu 17:03]
+- State "DONE" from "STARTED" [2026-11-05 Thu 18:11]
+:END:
+Acceptance criteria:
+- Peer comparison: when a new file parallels a sibling, missing or diverged sibling invariants are checked; intentional absence needs a citation.
+- Cross-component: stranded state, false-promise predicate and co-tenant filter gap are listed trace targets.
+- Precedent: a claimed resolving commit is confirmed with `git merge-base --is-ancestor` before a finding is treated as resolved.
+- Must not: add review waves, new personas or severity bumps outside the existing false-positive bar.
+
+** DONE Give Class C validators distinct lenses and escalate disagreement :herdr_orch:
+CLOSED: [2026-11-05 Thu 18:11]
+:PROPERTIES:
+:CUSTOM_ID: e8bc3bad-fc60-43a0-b5a5-b1f377f5be6d
+:CREATED: [2026-11-05 Thu 14:52]
+:STARTED: [2026-11-05 Thu 17:04]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:52]
+- State "STARTED" from "TODO" [2026-11-05 Thu 17:04]
+- State "DONE" from "STARTED" [2026-11-05 Thu 18:11]
+:END:
+Acceptance criteria:
+- Two-validator closeout guidance assigns each validator a distinct lens rather than one shared assignment.
+- Disagreement between validators on a finding goes to the root or user as a decision, not a merge.
+
+* Implementation
+Sources, pinned at ~46dbdfd~ (base URL ~https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/~):
+- Finding verification :: ~rpiv-pi/agents/claim-verifier.md~; ~rpiv-pi/skills/code-review/SKILL.md~ sections "Step 5: Reconcile Findings" and "Step 6: Verify Findings".
+- Review lenses :: ~rpiv-pi/agents/peer-comparator.md~ (Mirrored / Missing / Diverged / Intentionally-absent, the last requiring a citation that proves intent); ~rpiv-pi/agents/precedent-locator.md~ (similar commits and their follow-up fixes within 30 days); ~code-review~ "Step 4b: Interaction Sweep" (stranded state, false-promise predicate, co-tenant filter gap) and the cascade triples in Step 5. Step 5 also checks a claimed resolving commit with ~git merge-base --is-ancestor~.
+- Scope floor :: ~rpiv-pi/extensions/rpiv-core/built-ins/scope-checks.ts~ and ~citations.ts~ (~verifyPhaseFilesCoverage~ is the only blocking structure check; citation resolution is advisory).
+- Acceptance :: ~rpiv-pi/skills/acceptance/SKILL.md~.
+- Prior adjudication :: ~rpiv-pi/skills/grade/SKILL.md~ ~--prior~ mode.
+- Panels :: ~rpiv-workflow/docs/workflow-authoring.md~ section "Adversarial verification (panel)": distinct lenses over N copies; ~PANEL_VERDICT~ carries ~agreement~ and ~tie~ for escalation.
+- Local owners compared :: [[file:../../skills/code-review/SKILL.md]], [[file:../../skills/herdr-orch/SKILL.md]] section "Trusting a result", [[file:../../skills/herdr-orch/references/workflow-recipes.md]] section "Bounded decision review", [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section "Worktree reconciliation and teardown", [[file:../../skills/org-execute/SKILL.md]] and [[file:../../skills/org-plan/SKILL.md]] section "Spec/test citation on acceptance criteria".
+
+* Validation
+- Two fresh read-only reviewers with distinct lenses (conformance, correctness) reviewed the integrated tree against ~0d113d6~. They converged on one P2 (P3 findings carry no quote, so the recipe's rejection rule had to be limited to P0--P2); the correctness reviewer also reproduced, with a fault hook and a baseline control, that a scope-query failure discarded the whole reconciliation. Both P2 findings and one P3 provenance gap were fixed; a fresh re-reviewer ruled all three fixed and approved.
+- ~bb test~ (892 Clojure tests) and ~scripts/check.sh~ pass on the final tree. The ~cmd:~ doctor test and the scope-query degradation test were each observed failing before their fix.

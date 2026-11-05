@@ -195,6 +195,15 @@ An `** Acceptance` criterion may optionally cite the spec clause it satisfies an
 - [ ] Widget renders in dark mode → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj` `dark-mode-render`
 ```
 
+A criterion may instead, or also, cite a runnable evidence command as `cmd:` followed by an inline-code command, for example ``cmd:`bb test-clojure widget-test` ``. Write it from the request when you draft the criterion, before the plan exists, so that later research or planning cannot narrow what it measures. The command must:
+
+- exit 0 only when the outcome holds;
+- measure the outcome itself, not a record that says it is done, such as a checkbox or table cell;
+- be read-only and self-contained: no tree mutation, no network, no state outside the repository;
+- be able to pass without a person, a paired device or another manual step.
+
+Use no `cmd:` when only a person can observe the outcome. A command that fails before implementation is expected. Closure verification runs each `cmd:`; see [#Closure-time refresh and prune](#closure-time-refresh-and-prune). For `ot doctor`, a `cmd:` counts as evidence in the same way as a `test:`. These rules adapt the `acceptance` skill from [rpiv-mono](https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-pi/skills/acceptance/SKILL.md) at that revision (MIT License).
+
 See [references/change-record-format.md#Acceptance criteria citation](references/change-record-format.md#acceptance-criteria-citation) for a worked example, and [../org-tasks/references/ot-cli.md#Spec keyword and checks](../org-tasks/references/ot-cli.md#spec-keyword-and-checks) for the `ot doctor` finding this feeds.
 
 ### Splitting test
@@ -278,7 +287,7 @@ Record closure is not itself a retro trigger, but it is the checkpoint to check 
 Refresh:
 
 1. Refresh `* Summary` so the effort line, `** Scope`, `** Shipped`, and `** Gotchas` reflect what actually landed. Compare `#+SPEC:` with actual `ADDED` / `MODIFIED` / `REMOVED` shipped bullets; include any discovered contract impact that was missed during planning.
-2. Verify each item in `** Acceptance` (the consolidated ISC) and every anti-criterion. A criterion the work reversed rather than met is recorded as reversed, with its date and reason, not deleted -- a record that silently drops a bar reads as though it met one. Relaxing a criterion you authored after your own work failed it needs independent review before closure.
+2. Verify each item in `** Acceptance` (the consolidated ISC) and every anti-criterion. Run each `cmd:` evidence command against the final tree from the repository root; a non-zero exit fails its criterion. A criterion the work reversed rather than met is recorded as reversed, with its date and reason, not deleted -- a record that silently drops a bar reads as though it met one. Relaxing a criterion you authored after your own work failed it needs independent review before closure.
  If a `* Validation` section exists, refresh it to match what actually ran; drop it if it has decayed to just "the suites pass" (an implicit pre-merge requirement).
 3. Ensure every `#+SPEC:` path was reviewed and updated when needed, or explain why the spec was relevant but unchanged -- update the impacted spec files themselves (not just the declaration) to reflect the change scope before marking `DONE`.
 4. Ensure newly discovered follow-up work exists as TODO tasks rather than buried prose. Do not hand-delete a plan subtree to tidy closure: use `ot remove --dry-run <id>` then `--yes` only for an eligible non-top-level subtree after reviewing unchecked criteria and inbound blockers; protocol roots still close through lifecycle plus archive.

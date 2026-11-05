@@ -125,6 +125,7 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - [[file:../../design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org][2026-08-07]] -- append-only publish stream: many immutable result items per round through one =publish= verb, terminal statuses sealing mechanically.
 - [[file:../../design/log/2026-08-08-herdr-orch-subagent-composition-and-exte.org][2026-08-08]] -- trait fragments composed into personas at spawn and into interactively typed prompts.
 - [[file:../../design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org][2026-08-13]] -- worktree-backed fan-out: parent-resolved checkout targets, mechanical publication checkpoints, and reconciliation/teardown.
+- [[file:../../design/log/2026-11-04-rpiv-evaluation.org][2026-11-05]] -- mechanisms absorbed from rpiv-mono (MIT License): quoted-finding verification, prior-finding rulings, distinct-lens Class C validators and declared-scope reconciliation.
 
 ** API reviews
 

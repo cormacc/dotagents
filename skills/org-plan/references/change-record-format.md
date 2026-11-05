@@ -165,7 +165,7 @@ As a [role], I want [capability], so that [outcome].
 
 ### Acceptance criteria citation
 
-Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]` and/or `test:REF`). Cite tests by file path plus `deftest`/test name (optionally with a short quoted assertion anchor) rather than a bare line number, which drifts. See org-plan [../SKILL.md#Spec/test citation on acceptance criteria](../SKILL.md#spectest-citation-on-acceptance-criteria).
+Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]`, `test:REF` and/or a runnable ``cmd:`COMMAND` ``). Cite tests by file path plus `deftest`/test name (optionally with a short quoted assertion anchor) rather than a bare line number, which drifts. See org-plan [../SKILL.md#Spec/test citation on acceptance criteria](../SKILL.md#spectest-citation-on-acceptance-criteria).
 
 ```org
 *** Core functionality

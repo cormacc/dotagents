@@ -868,7 +868,7 @@
 ;; passthrough that would have kept the unlisted field too).
 (deftest continue-carries-worktree-identity-forward-and-drops-an-unlisted-field
   (let [{:keys [env dir]} (fake-env {})
-        spawn-proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "worktree round one")
+        spawn-proc (call! env "task" "start" "worker" "--worktree" "new" "--scope" "./dir/" "--task" "worktree round one")
         _ (is (zero? (:exit spawn-proc)) (:err spawn-proc))
         spawned (ledger-entry* dir (get-in (result spawn-proc) [:result :task]))
         ;; A field `continue!`'s `select-keys` never names, so it must be dropped exactly
@@ -879,6 +879,7 @@
         continued (ledger-entry* dir (get-in (result continue-proc) [:result :task]))]
     (is (some? (:worktree prior)))
     (is (= (:worktree prior) (:worktree continued)))
+    (is (= ["dir/"] (:scope prior) (:scope continued)))
     (is (fs/exists? (get-in continued [:worktree :path])))
     ;; No second checkout was cut: the field rode through unchanged, it was never re-created.
     (is (= 2 (count (str/split-lines (git-worktree-list dir)))))
@@ -2518,10 +2519,62 @@
       (is (zero? (:exit status-proc)) (:err status-proc))
       (let [reconciliation (get-in (result status-proc) [:result :reconciliation])]
         (is (= "present" (:checkout-state reconciliation)))
+        (is (= #{:base :branch :tip :checkout-state :committed :dirty :ignored} (set (keys reconciliation))))
         (is (some #(str/includes? % "committed-work") (:committed reconciliation)))
         (is (not-any? #(str/includes? % "dirty-work") (:committed reconciliation)))
         (is (some #(str/includes? % "dirty-work") (:dirty reconciliation)))
         (is (not-any? #(str/includes? % "committed-work") (:dirty reconciliation)))))))
+
+(deftest ^:serial scope-reports-undeclared-committed-and-dirty-paths
+  (let [{:keys [env dir]} (fake-env {})
+        proc (call! env "task" "start" "worker" "--worktree" "new" "--scope" "dir/" "--scope" "exact" "--task" "scope")
+        _ (is (zero? (:exit proc)) (:out proc))
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        checkout (get-in entry [:worktree :path])]
+    (fs/create-dirs (fs/path checkout "dir"))
+    (doseq [path ["dir/inside" "exact" "outside committed" "old name"]]
+      (spit (str (fs/path checkout path)) "content"))
+    (git-in! checkout "add" ".")
+    (git-in! checkout "commit" "-q" "-m" "scope fixture")
+    (spit (str (fs/path checkout "dirty untracked")) "dirty")
+    (git-in! checkout "mv" "old name" "new name")
+    (let [status (call! env "task" "status" (:task entry))
+          rec (get-in (result status) [:result :reconciliation])]
+      (is (zero? (:exit status)))
+      (is (= ["dir/" "exact"] (:scope rec)))
+      (is (= ["dirty untracked" "new name" "old name" "outside committed"] (:undeclared rec)))
+      ;; A failure confined to the advisory scope query must keep the core evidence.
+      (let [degraded (with-redefs [cli/undeclared-paths (fn [& _] (throw (ex-info "injected scope-query failure" {})))]
+                       (cli/reconciliation entry))]
+        (is (= (dissoc rec :undeclared) (dissoc degraded :undeclared :scope-diagnostic)))
+        (is (= "present" (:checkout-state degraded)))
+        (is (contains? degraded :undeclared))
+        (is (nil? (:undeclared degraded)))
+        (is (str/includes? (:scope-diagnostic degraded) "injected scope-query failure"))))
+    (fs/delete-tree checkout)
+    (let [missing (cli/reconciliation entry)]
+      (is (= "missing" (:checkout-state missing)))
+      (is (contains? missing :undeclared))
+      (is (nil? (:undeclared missing))))
+    (fs/create-dirs checkout)
+    (let [invalid (cli/reconciliation entry)]
+      (is (= "invalid" (:checkout-state invalid)))
+      (is (= (:scope entry) (:scope invalid)))
+      (is (contains? invalid :undeclared))
+      (is (nil? (:undeclared invalid))))))
+
+(deftest scope-refusals-have-no-mutations
+  (doseq [[shared? value] [[false ""] [false "/absolute"] [false "a/../b"] [true "allowed"]]]
+    (let [{:keys [env dir log]} (fake-env {})
+          before-worktrees (git-worktree-list dir)
+          before (count (calls log))
+          proc (call! env "task" "start" "worker" "--worktree" (if shared? dir "new") "--scope" value "--task" "refuse")
+          new-calls (drop before (calls log))]
+      (is (= 2 (:exit proc)) (:out proc))
+      (when shared? (is (str/includes? (:out proc) "a shared tree has no reconciliation")))
+      (is (not-any? mutating? new-calls))
+      (is (= before-worktrees (git-worktree-list dir)))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger")))))))
 
 ;; --- explicit teardown: `oh worktree list|remove` (task 4962846f) --------------------
 (defn- git-branch-exists? [dir branch]
