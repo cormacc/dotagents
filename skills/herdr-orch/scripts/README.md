@@ -4,6 +4,8 @@
 
 ## Run
 
+Bare `oh` shows a read-only dashboard of up to ten recent recorded assignments, scoped to the caller pane when present or to the assignment root otherwise. It reports counts and explicit empty states without contacting Herdr or creating a ledger. Detail: [docs/contract.md#Home view](docs/contract.md#home-view).
+
 Run the CLI from the repository root or this scripts directory:
 
 ```sh
@@ -32,7 +34,9 @@ A separate native-system case uses the installed immutable Luna capabilities, hi
 
 Commands that take a task ID require the complete UUID. This rule includes `collect`, `prune`, `poke`, `close`, `continue`, `compact`, and `worktree remove`. `publish --task` also requires the complete UUID. `task status` accepts a complete UUID or no UUID. No command resolves a UUID prefix.
 
-Routine `task status` and `task list` omit only lower-case launch status `failed`; use `--include-failed` to audit retained failed entries. `task status <full-task-uuid>` always shows its entry and refuses `--include-failed` because that lookup is already unfiltered. Published `FAILED` results, invalid captures, and closed successes remain visible by default.
+Routine `task status` and `task list` return compact JSON entries (`task`, `child`, `pane-id`, `status`, `captured-at`, `summary`) with a top-level `counts` map. Use `--full` for detailed entries with live evidence; `--raw` implies `--full` and includes the stored envelope text. Text output is unchanged. These listings omit only lower-case launch status `failed`; use `--include-failed` to audit retained failed entries. `task status <full-task-uuid>` always shows its entry and refuses `--include-failed` because that lookup is already unfiltered. Published `FAILED` results, invalid captures, and closed successes remain visible by default.
+
+JSON lists and unfinished delegation results include selective top-level `help` hints; final results and confirmations do not. Usage errors include concise command help. Hints are separate from `result`, and existing text listings stay unchanged.
 
 The persona is optional: `task run --task TEXT` launches a persona-less fresh child with no synthetic role (explicit `--trait` selections still apply). `--context fresh` is the default and `--context fork` forks the caller's own Pi session (see [docs/contract.md#Fork launch](docs/contract.md#fork-launch)); `--context measurement --measurement-config PATH` runs a Pi subject headless under a detached, supervisor-published run with no pane by default (see [docs/contract.md#Measurement launch](docs/contract.md#measurement-launch)); its request audit covers exactly four Pi APIs (see [docs/contract.md#Pi measurement adapter](docs/contract.md#pi-measurement-adapter)) ([docs/contract.md#Context modes](docs/contract.md#context-modes)). Root-owned staging, repeated measurements and the approval-gated context smoke are in [../references/workflow-recipes.md](../references/workflow-recipes.md).
 
@@ -49,7 +53,7 @@ Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, ref
 | `--worktree <path>` / `new` | use an existing checkout or create one managed target | [docs/contract.md#Checkout target resolution](docs/contract.md#checkout-target-resolution) |
 | `--tab` / `--split` | force placement; the flags are mutually exclusive | [docs/contract.md#Placement](docs/contract.md#placement) |
 | `--context measurement --measurement-config PATH` | run one headless measurement sample; `--tab`/`--split` add a read-only monitor | [docs/contract.md#Measurement launch](docs/contract.md#measurement-launch) |
-| `task status [UUID]` / `task list [--include-failed]` | inspect one round or list rounds; opt into retained failed entries | [docs/contract.md#JSON output](docs/contract.md#json-output) |
+| `task status [UUID]` / `task list [--include-failed] [--full]` | inspect one round or list compact rounds with counts; opt into detailed or retained failed entries | [docs/contract.md#JSON output](docs/contract.md#json-output) |
 | `task collect UUID` | capture the next published item | [docs/contract.md#Ledger and completion](docs/contract.md#ledger-and-completion) |
 | `task collect --any` | capture the first same-session child to publish | [docs/contract.md#Fan-in](docs/contract.md#fan-in) |
 | `task collect UUID --close` | capture a terminal item, then request a guarded close | [docs/contract.md#Close](docs/contract.md#close) |

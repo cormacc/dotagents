@@ -707,5 +707,10 @@
     (if (< max-process (count (:process parsed)))
       (assoc parsed :process (vec (take max-process (:process parsed))) :process-overflow true)
       parsed)))
-(defn json-envelope [ok payload]
-  (json/generate-string (if ok {:ok true :schema schema :result payload} {:ok false :schema schema :error payload})))
+(defn json-envelope
+  "Encode a result or error with optional top-level counts and contextual help."
+  [ok payload]
+  (json/generate-string
+    (if ok
+      (merge {:ok true :schema schema :result payload} (select-keys (meta payload) [:counts :help]))
+      (merge {:ok false :schema schema :error payload} (select-keys (meta payload) [:help])))))

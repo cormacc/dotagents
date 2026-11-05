@@ -22,6 +22,8 @@
 
 (def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports allowlisted subscription evidence from the operator-installed quota-axi executable; it never contacts Herdr or installs software. --provider is repeatable and an unconfigured name is a usage error; --fresh requests zero upstream reuse age; --detail (markdown only) adds reviewed scope bounds and reset times.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
+(defn usage-error [message data]
+  (throw (ex-info message (assoc data :error-kind :usage))))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
 ;; strictly positive parse overrides the default.
@@ -71,7 +73,7 @@
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create and
 ;; pane split `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both
 ;; argv consumers use the same resolved set so no value-less flag swallows the next element.
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune" "--detail" "--include-failed" "--fresh"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune" "--detail" "--include-failed" "--fresh" "--full"})
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (or (and (#{"tab" "ws"} group) (= "create" op))
@@ -83,23 +85,23 @@
             (str/starts-with? x "--")
             (let [key (keyword (subs x 2))]
               (when-not (known key)
-                (fail "unknown option" {:option x}))
+                (usage-error "unknown option" {:option x}))
               (if (flags x)
                 (recur (next xs) (assoc out key true))
                 (let [value (second xs)]
-                  (when-not value (fail "option requires a value" {:option x}))
+                  (when-not value (usage-error "option requires a value" {:option x}))
                   (recur (nnext xs) (update out key (fnil conj []) value)))))
             :else (recur (next xs) (update out :_ (fnil conj []) x)))
       out)))
 (defn one [opts k]
   (let [value (get opts k)]
     (when (and (sequential? value) (< 1 (count value)))
-      (fail "option may be specified only once" {:option (str "--" (name k)) :values (vec value)}))
+      (usage-error "option may be specified only once" {:option (str "--" (name k)) :values (vec value)}))
     (if (sequential? value) (first value) value)))
 (defn all [opts k] (get opts k []))
 (defn task-text [opts]
   (let [choices (remove nil? [(one opts :task) (one opts :task-file) (when (and (nil? (one opts :task)) (nil? (one opts :task-file)) (nil? (System/console))) "-")])]
-    (when-not (= 1 (count choices)) (fail "provide exactly one of --task, --task-file, or stdin" {}))
+    (when-not (= 1 (count choices)) (usage-error "provide exactly one of --task, --task-file, or stdin" {}))
     (let [v (first choices)] (cond (= v "-") (slurp *in*) (and (one opts :task-file) (= v (one opts :task-file))) (slurp v) :else v))))
 (defn persona-names [dir]
   (if (fs/directory? dir)
@@ -366,12 +368,12 @@
 ;; silently. Raw `oh agent start --kind` is untouched.
 (defn kind-policy [opts frontmatter parent-kind]
   (when (one opts :kind)
-    (fail "--kind is not a spawn-time flag: declare `kind:` in the persona definition"
+    (usage-error "--kind is not a spawn-time flag: declare `kind:` in the persona definition"
           {:requested (one opts :kind)}))
   (core/resolve-kind {:frontmatter frontmatter :parent-kind parent-kind}))
 (defn retro-flag [opts]
   (let [on (boolean (one opts :retro)) off (boolean (one opts :no-retro))]
-    (when (and on off) (fail "--retro and --no-retro are mutually exclusive" {}))
+    (when (and on off) (usage-error "--retro and --no-retro are mutually exclusive" {}))
     (cond on true off false :else nil)))
 (defn retro-skill-path []
   (core/skill-path #(fs/exists? %) (ledger/assignment-root) (home-directory) "retro"))
@@ -445,7 +447,7 @@
 (defn worktree-target-option [opts] (one opts :worktree))
 (defn placement-flag [opts]
   (let [tab? (boolean (one opts :tab)) split? (boolean (one opts :split))]
-    (when (and tab? split?) (fail "--tab and --split are mutually exclusive" {}))
+    (when (and tab? split?) (usage-error "--tab and --split are mutually exclusive" {}))
     (cond tab? "tab" split? "split" :else nil)))
 (defn placement-policy [opts config]
   (core/resolve-placement {:flag (placement-flag opts)
@@ -495,16 +497,16 @@
   [persona opts]
   (let [mode (or (one opts :context) "fresh")]
     (when-not (some #{mode} context-modes)
-      (fail "--context must be fresh, fork or measurement" {:context mode}))
+      (usage-error "--context must be fresh, fork or measurement" {:context mode}))
     (if (= "measurement" mode)
       (do (when persona
-            (fail "--context measurement does not take a persona" {:context mode :persona persona}))
+            (usage-error "--context measurement does not take a persona" {:context mode :persona persona}))
           (doseq [[k flag] measurement-refused-options :when (contains? opts k)]
-            (fail (str "--context measurement refuses " flag) {:context mode :option flag}))
+            (usage-error (str "--context measurement refuses " flag) {:context mode :option flag}))
           (when-not (one opts :measurement-config)
-            (fail "--context measurement requires --measurement-config PATH" {:context mode})))
+            (usage-error "--context measurement requires --measurement-config PATH" {:context mode})))
       (when (contains? opts :measurement-config)
-        (fail "--measurement-config is accepted only with --context measurement" {:context mode})))
+        (usage-error "--measurement-config is accepted only with --context measurement" {:context mode})))
     {:context mode}))
 ;; A fork without an overlay reapplies the caller's launch-time role snapshot. An unnamed root
 ;; or a persona-less caller has none to apply, and a named delegated caller without a recorded
@@ -1946,7 +1948,7 @@
           :else nil)))))
 
 (defn prune! [task]
-  (when-not task (fail "prune requires a full task uuid" {}))
+  (when-not task (usage-error "prune requires a full task uuid" {}))
   (let [entry (ledger/read! task)
         caller (caller-parent-session)
         recorded (:parent-session entry)]
@@ -2378,7 +2380,7 @@
       (cond-> {:status "closed" :task task :child child :closed-at (:closed-at updated)}
         monitor (assoc :monitor monitor)))))
 (defn close-task! [task opts]
-  (when-not task (fail "close requires a full task uuid" {}))
+  (when-not task (usage-error "close requires a full task uuid" {}))
   (let [entry (ledger/read! task) entries (ledger/entries)]
     (cond
       (and (headless? entry) (one opts :abandon))
@@ -2495,7 +2497,7 @@
   (let [close? (boolean (one opts :close))
         prune? (boolean (one opts :prune))
         _ (when (and close? prune?)
-            (fail "orphans takes --close or --prune, not both" {}))
+            (usage-error "orphans takes --close or --prune, not both" {}))
         ;; Closeout fix (P3): refused before the first ledger read for *either* form, not
         ;; only `--close`. The plain listing's candidate filter is `(not= caller
         ;; (:parent-session %))`; with `caller` nil (identity unresolvable even at root --
@@ -2658,7 +2660,7 @@
       1 false
       (fail "git merge-base --is-ancestor failed" {:dir dir :tip tip :exit exit :stderr (str/trim err)}))))
 (defn worktree-remove! [task]
-  (when-not task (fail "worktree remove requires a full task uuid" {}))
+  (when-not task (usage-error "worktree remove requires a full task uuid" {}))
   (let [entry (ledger/read! task)]
     (assert-worktree-owned! "worktree remove" (caller-parent-session) entry)
     (let [{:keys [path branch base]} (worktree-of "worktree remove" entry)]
@@ -2714,9 +2716,9 @@
   ;; this file (next to `help-text`), and this dispatcher sits beside `orphans!` above it
   ;; -- referencing it here would fail to compile as an unresolved forward reference.
   (case op
-    "list" (do (when (seq positional) (fail "worktree list takes no arguments" {:arguments positional})) (worktree-list!))
+    "list" (do (when (seq positional) (usage-error "worktree list takes no arguments" {:arguments positional})) (worktree-list!))
     "remove" (worktree-remove! (first positional))
-    (fail "unknown worktree command" {:command op})))
+    (usage-error "unknown worktree command" {:command op})))
 ;; --- retention ------------------------------------------------------------------------
 ;; Nothing retired a captured ledger entry: `prune` only retires an entry proved *stale*, so
 ;; a captured one lived forever (measured 2026-08-07 in this repository's own assignment root:
@@ -2790,9 +2792,9 @@
             {:task task :status (:status entry)}))))
 (defn compact! [task opts]
   (let [closed? (boolean (one opts :closed))]
-    (when (and closed? task) (fail "compact --closed takes no task argument" {:task task}))
+    (when (and closed? task) (usage-error "compact --closed takes no task argument" {:task task}))
     (if-not closed?
-      (do (when-not task (fail "compact requires a full task uuid, or --closed" {}))
+      (do (when-not task (usage-error "compact requires a full task uuid, or --closed" {}))
           (let [entry (ledger/read! task)]
             (assert-compactable! entry)
             (compact-entry! entry)))
@@ -2904,7 +2906,7 @@
             {:task task :child child :newest (:task (newest-round entries child))}))))
 
 (defn poke! [task]
-  (when-not task (fail "poke requires a full task uuid" {}))
+  (when-not task (usage-error "poke requires a full task uuid" {}))
   (let [entry (ledger/read! task)
         child (:child entry)]
     ;; A measurement has no conversation to prompt; its supervisor alone publishes.
@@ -2994,7 +2996,7 @@
           next-entry)))))))
 
 (defn continue! [prior-task opts]
-  (when-not prior-task (fail "continue requires a full task uuid" {}))
+  (when-not prior-task (usage-error "continue requires a full task uuid" {}))
   ;; Root-only, and refused before preflight, ledger allocation, and any pane mutation: a
   ;; delegated child deciding to keep its own children resident is exactly the hidden
   ;; lifecycle this design removes, so a denied continue creates nothing at all.
@@ -3199,7 +3201,7 @@
 (def output-formats #{"json" "text"})
 (defn output-format [opts]
   (let [value (or (one opts :format) "json")]
-    (when-not (output-formats value) (fail "--format must be json or text" {:format value}))
+    (when-not (output-formats value) (usage-error "--format must be json or text" {:format value}))
     value))
 ;; Drops the duplicate blob wherever a read verb can carry it: at the top level of a
 ;; capture (`core/parse-envelope`'s `:text`) and nested under a ledger entry's `:envelope`.
@@ -3237,8 +3239,8 @@
               (text-field "CLOSE" (some-> (:close result) :status))))
 ;; One tab-separated line per entry: the task id first because it is the only field a
 ;; caller can act on, then the five the assignment names. Deliberately not the whole entry
-;; -- the JSON form remains the complete view, and `list` emitting full envelopes for every
-;; historical round is the cost this replaces.
+;; -- `--full` retains the complete JSON view without making routine listings carry
+;; every historical envelope.
 (defn entry-text [entry]
   (str/join "\t" [(:task entry) (:child entry) (or (:pane-id entry) "-") (:status entry)
                   (if (:captured-at entry) "captured" "uncaptured")
@@ -3299,9 +3301,9 @@
            "start [<persona>] (--task TEXT | --task-file PATH | stdin) [same options as run]"
            "collect <full-task-uuid> [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
-           "status [--include-failed] [--format json|text] [--raw]"
+           "status [--include-failed] [--full] [--format json|text] [--raw]"
            "status <full-task-uuid> [--format json|text] [--raw]"
-           "list [--include-failed] [--format json|text] [--raw]"
+           "list [--include-failed] [--full] [--format json|text] [--raw]"
            "publish --status COMPLETE|BLOCKED|FAILED|WAITING --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
            "prune <full-task-uuid>"
            "poke <full-task-uuid>"
@@ -3337,7 +3339,7 @@
     usage))
 (defn require-positionals [items n description]
   (when-not (= n (count items))
-    (fail (str description " requires " n " argument" (when (not= n 1) "s"))
+    (usage-error (str description " requires " n " argument" (when (not= n 1) "s"))
           {:arguments items}))
   items)
 (defn parse-env [values]
@@ -3345,7 +3347,7 @@
         (map (fn [value]
                (let [[key val] (str/split value #"=" 2)]
                  (when (or (str/blank? key) (nil? val))
-                   (fail "--env must be KEY=VALUE" {:value value}))
+                   (usage-error "--env must be KEY=VALUE" {:value value}))
                  [key val])))
         values))
 (defn current-cwd [] (System/getProperty "user.dir"))
@@ -3361,11 +3363,11 @@
     "wait-output" (let [[pane] (require-positionals positional 1 "pane wait-output")
                          match (one opts :match) regex (one opts :regex)]
                      (when (= (boolean match) (boolean regex))
-                       (fail "pane wait-output requires exactly one of --match or --regex" {}))
+                       (usage-error "pane wait-output requires exactly one of --match or --regex" {}))
                      (herdr/pane-wait-output! pane (assoc {:source (one opts :source) :lines (one opts :lines) :timeout (one opts :timeout) :raw (one opts :raw)} (if regex :regex :match) (or regex match))))
     "send-text" (let [[pane text] (require-positionals positional 2 "pane send-text")] (herdr/pane-send-text! pane text))
     "send-keys" (let [[pane & keys] positional]
-                  (when (or (nil? pane) (empty? keys)) (fail "pane send-keys requires a pane and at least one key" {}))
+                  (when (or (nil? pane) (empty? keys)) (usage-error "pane send-keys requires a pane and at least one key" {}))
                   (herdr/pane-send-keys! pane keys))
     "close" (let [[pane] (require-positionals positional 1 "pane close")] (herdr/close! pane))
     "list" (do (require-positionals positional 0 "pane list")
@@ -3375,7 +3377,7 @@
     "get" (let [[pane] (require-positionals positional 1 "pane get")] (herdr/pane! pane))
     "layout" (let [[pane] (require-positionals positional 1 "pane layout")] (herdr/pane-layout! pane))
     "rename" (let [[pane label] (require-positionals positional 2 "pane rename")] (herdr/rename! pane label))
-    (fail "unknown pane command" {:command op})))
+    (usage-error "unknown pane command" {:command op})))
 (defn raw-tab! [op opts positional]
   (case op
     "create" (do (require-positionals positional 0 "tab create")
@@ -3383,7 +3385,7 @@
                                       :label (one opts :label) :env (parse-env (all opts :env)) :focus (boolean (one opts :focus))}))
     "list" (do (require-positionals positional 0 "tab list") (herdr/tab-list! (one opts :workspace)))
     "focus" (let [[tab] (require-positionals positional 1 "tab focus")] (herdr/tab-focus! tab))
-    (fail "unknown tab command" {:command op})))
+    (usage-error "unknown tab command" {:command op})))
 (defn raw-workspace! [op opts positional]
   (case op
     "create" (do (require-positionals positional 0 "ws create")
@@ -3391,52 +3393,104 @@
                                             :env (parse-env (all opts :env)) :focus (boolean (one opts :focus))}))
     "list" (do (require-positionals positional 0 "ws list") (herdr/workspace-list!))
     "focus" (let [[workspace] (require-positionals positional 1 "ws focus")] (herdr/workspace-focus! workspace))
-    (fail "unknown ws command" {:command op})))
+    (usage-error "unknown ws command" {:command op})))
 (defn raw-agent! [op opts positional]
   (case op
     ;; The kind is validated as nonblank only: installed Herdr owns the kind set, and a
     ;; local allow-list would refuse a kind the runtime accepts (`qwen`, `letta`, `muse`).
-    "start" (let [[name] (require-positionals positional 1 "agent start") kind (one opts :kind) pane (or (one opts :pane) (fail "agent start requires --pane" {}))]
-              (when (str/blank? kind) (fail "agent start requires a nonblank --kind" {:kind kind}))
+    "start" (let [[name] (require-positionals positional 1 "agent start") kind (one opts :kind) pane (or (one opts :pane) (usage-error "agent start requires --pane" {}))]
+              (when (str/blank? kind) (usage-error "agent start requires a nonblank --kind" {:kind kind}))
               (herdr/start! name kind pane (:native opts)))
     ;; `--until`/`--timeout` are wait-only: without `--wait` they are refused rather than
     ;; silently dropped or silently promoted into a wait the caller did not ask for.
     "prompt" (let [[target text] (require-positionals positional 2 "agent prompt")
                    wait? (boolean (one opts :wait)) until (all opts :until) timeout (one opts :timeout)]
                (when (and (not wait?) (or (seq until) timeout))
-                 (fail "agent prompt --until and --timeout require --wait" {:until until :timeout timeout}))
+                 (usage-error "agent prompt --until and --timeout require --wait" {:until until :timeout timeout}))
                (herdr/prompt! target text {:wait wait? :until until :timeout (some->> timeout (core/timeout-value! "--timeout" nil))}))
     "wait" (let [[target] (require-positionals positional 1 "agent wait")] (herdr/agent-wait! target (Long/parseLong (or (one opts :timeout) "600000")) (all opts :until)))
     "read" (let [[target] (require-positionals positional 1 "agent read")] (herdr/agent-read! target {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
     "send-keys" (let [[target & keys] positional]
-                  (when (or (nil? target) (empty? keys)) (fail "agent send-keys requires a target and at least one key" {}))
+                  (when (or (nil? target) (empty? keys)) (usage-error "agent send-keys requires a target and at least one key" {}))
                   (herdr/agent-send-keys! target keys))
     "focus" (let [[target] (require-positionals positional 1 "agent focus")] (herdr/agent-focus! target))
     "rename" (let [[target name] positional clear? (boolean (one opts :clear))]
                (when (or (nil? target) (and (not clear?) (nil? name)) (and clear? name))
-                 (fail "agent rename requires <target> <name> or <target> --clear" {}))
+                 (usage-error "agent rename requires <target> <name> or <target> --clear" {}))
                (herdr/agent-rename! target name clear?))
     "list" (do (require-positionals positional 0 "agent list") (herdr/render-agents (herdr/agents)))
     "get" (let [[target] (require-positionals positional 1 "agent get")] (herdr/agent! target))
-    (fail "unknown agent command" {:command op})))
+    (usage-error "unknown agent command" {:command op})))
 (defn- listing-entries [opts]
   (let [entries (ledger/entries)]
     (if (one opts :include-failed)
       entries
       (filterv #(not= "failed" (:status %)) entries))))
 
+(defn- compact-list-entry [entry]
+  {:task (:task entry) :child (:child entry) :pane-id (:pane-id entry)
+   :status (:status entry) :captured-at (:captured-at entry)
+   :summary (get-in entry [:envelope :summary])})
+
+(defn- task-listing [opts]
+  (let [format (output-format opts)
+        entries (listing-entries opts)
+        full? (or (one opts :full) (one opts :raw) (= "text" format))
+        value (if full? (mapv live entries) (mapv compact-list-entry entries))
+        output (present opts value entries-text)]
+    (if (string? output)
+      output
+      (with-meta output (cond-> {:counts (frequencies (map :status entries))}
+                          (seq entries) (assoc :help ["oh task status <full-task-uuid>"]))))))
+
+(defn- home-view []
+  (let [root (ledger/assignment-root)
+        directory (fs/path root ".tmp" "herdr-orch" "ledger")
+        pane (some-> (System/getenv "HERDR_PANE_ID") str/trim not-empty)
+        entries (if (fs/directory? directory)
+                  (->> (fs/glob directory "*.json")
+                       (map #(json/parse-string (slurp (str %)) true))
+                       (filter #(and (not= "failed" (:status %))
+                                     (or (nil? pane) (= pane (:parent-pane %)) (= pane (:pane-id %)))))
+                       (sort-by (juxt :created-at :task))
+                       reverse vec)
+                  [])
+        limit 10
+        shown (mapv #(update (compact-list-entry %) :summary
+                             (fn [s] (when s (if (< 240 (count s)) (str (subs s 0 237) "...") s))))
+                    (take limit entries))]
+    (with-meta
+      {:bin (launcher-bin) :description "Inspect and delegate coding-agent assignments"
+       :root root :scope (if pane "caller-pane" "assignment-root") :pane-id pane
+       :state (cond (not (fs/directory? directory)) "no-ledger"
+                    (empty? entries) "no-assignments" :else "recorded")
+       :count (count entries) :shown (count shown) :limit limit
+       :truncated (< limit (count entries)) :tasks shown}
+      {:counts (frequencies (map :status entries))
+       :help (cond-> ["oh task status <full-task-uuid>" "oh --help"]
+               (< limit (count entries)) (conj "oh task list"))})))
+
+(defn- collection-hint [value]
+  (if (and (map? value) (:task value)
+           (#{"pending" "WAITING" "prompted"} (:status value)))
+    (vary-meta value assoc :help ["oh task collect <full-task-uuid> --wait"])
+    value))
+
 (defn task! [op opts positional]
   (case op
-    "run" (let [entry (spawn! (first positional) opts "blocking")] (if (:preview entry) entry (wait-and-capture! entry (round-timeout entry opts) true)))
-    "start" (spawn! (first positional) opts "non-blocking")
+    "run" (let [entry (spawn! (first positional) opts "blocking")]
+            (if (:preview entry) entry (collection-hint (wait-and-capture! entry (round-timeout entry opts) true))))
+    "start" (collection-hint (spawn! (first positional) opts "non-blocking"))
     "collect" (let [any? (boolean (one opts :any))]
-                (when (and any? (first positional)) (fail "collect --any takes no task argument" {:task (first positional)}))
-                (present opts (collect-with-closure! opts (if any? (collect-any! opts) (collect! (first positional) opts))) capture-text))
+                (when (and any? (first positional)) (usage-error "collect --any takes no task argument" {:task (first positional)}))
+                (collection-hint (present opts (collect-with-closure! opts (if any? (collect-any! opts) (collect! (first positional) opts))) capture-text)))
     "status" (let [task (first positional)]
                (when (and task (one opts :include-failed))
-                 (fail "--include-failed is only valid without a task ID" {:task task}))
-               (present opts (if task (live (ledger/read! task)) (mapv live (listing-entries opts))) ledger-text))
-    "list" (present opts (mapv live (listing-entries opts)) entries-text)
+                 (usage-error "--include-failed is only valid without a task ID" {:task task}))
+               (if task
+                 (present opts (live (ledger/read! task)) ledger-text)
+                 (task-listing opts)))
+    "list" (task-listing opts)
     "publish" (publish! opts)
     "prune" (prune! (first positional))
     "poke" (poke! (first positional))
@@ -3445,13 +3499,13 @@
     "compact" (compact! (first positional) opts)
     "harvest" (do (require-positionals positional 0 "task harvest") (present opts (harvest!) harvest-text))
     "close" (let [settled? (boolean (one opts :settled))]
-              (when (and settled? (first positional)) (fail "close --settled takes no task argument" {:task (first positional)}))
+              (when (and settled? (first positional)) (usage-error "close --settled takes no task argument" {:task (first positional)}))
               ;; Never silently ignored: a sweep that abandoned panes in bulk is authority
               ;; nobody asked for, and an accepted-but-dropped flag reads as though it acted.
               (when (and settled? (one opts :abandon))
-                (fail "close --settled does not take --abandon; abandon one round at a time" {}))
+                (usage-error "close --settled does not take --abandon; abandon one round at a time" {}))
               (if settled? (close-settled!) (close-task! (first positional) opts)))
-    (fail "unknown task command" {:command op})))
+    (usage-error "unknown task command" {:command op})))
 ;; --- roster -------------------------------------------------------------------------
 ;; Persona fields come from the spawn resolvers so discovery cannot disagree with a spawn.
 ;; Workflow entries are ordinary skill metadata, not spawn policy. A persona that fails
@@ -3652,11 +3706,11 @@
 (defn roster! [opts positional]
   (require-positionals positional 0 "roster")
   (let [format (or (one opts :format) "json") section (one opts :section) detail? (boolean (one opts :detail))]
-    (when-not (roster-formats format) (fail "--format must be json, markdown, or org" {:format format}))
+    (when-not (roster-formats format) (usage-error "--format must be json, markdown, or org" {:format format}))
     (when (and section (not (some #{section} roster-sections)))
-      (fail (str "--section must be one of " (str/join ", " roster-sections)) {:section section}))
+      (usage-error (str "--section must be one of " (str/join ", " roster-sections)) {:section section}))
     (when (and (= format "json") (or section detail?))
-      (fail "--section and --detail apply only to markdown or org output" {}))
+      (usage-error "--section and --detail apply only to markdown or org output" {}))
     (let [listing (roster-listing)]
       (if (= format "json") listing (roster-text listing format (or section "all") detail?)))))
 ;; --- usage --------------------------------------------------------------------------------
@@ -3695,17 +3749,17 @@
         names (vec (distinct (all opts :provider)))
         config (config)
         configured (set (keys (:providers config)))]
-    (when-not (usage-formats format) (fail "--format must be json, markdown, or text" {:format format}))
-    (when (and detail? (not= format "markdown")) (fail "--detail applies only to markdown output" {}))
+    (when-not (usage-formats format) (usage-error "--format must be json, markdown, or text" {:format format}))
+    (when (and detail? (not= format "markdown")) (usage-error "--detail applies only to markdown output" {}))
     ;; Validated before any credential read or fetch.
     (when-let [unknown (seq (remove configured names))]
-      (fail (str "unknown provider: " (str/join ", " unknown)) {:unknown (vec unknown) :available (vec (sort configured))}))
+      (usage-error (str "unknown provider: " (str/join ", " unknown)) {:unknown (vec unknown) :available (vec (sort configured))}))
     (let [result (usage-mod/usage-for config {:providers (seq names) :fresh (boolean (one opts :fresh))})]
       (if (= format "json") result (usage-text result format detail?)))))
 (defn spawn-command! [opts positional]
   (let [[command] (require-positionals positional 1 "spawn")]
     (when (some #{command} (available-personas))
-      (fail "spawn only runs shell commands; use `oh task run <persona>` for delegation" {:persona command}))
+      (usage-error "spawn only runs shell commands; use `oh task run <persona>` for delegation" {:persona command}))
     (let [pane (herdr/tab-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (or (one opts :label) "spawn") :env {} :focus false})]
       (herdr/pane-run! (:pane_id pane) command)
       {:pane-id (:pane_id pane) :tab-id (:tab-id pane)})))
@@ -3725,6 +3779,7 @@
             opts (option-map parse-args (boolean-flags-for group op) known-options)
             positional (:_ opts)]
         (case group
+          nil (if (empty? argv) (home-view) (usage-error "unknown oh command" {:command group}))
           "pane" (raw-pane! op opts positional)
           "tab" (raw-tab! op opts positional)
           "ws" (raw-workspace! op opts positional)
@@ -3734,7 +3789,13 @@
           "spawn" (spawn-command! opts positional)
           "roster" (roster! opts positional)
           "usage" (usage! opts positional)
-          (fail "unknown oh command" {:command group}))))))
+          (usage-error "unknown oh command" {:command group}))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))
-       (catch Exception e (println (core/json-envelope false {:message (.getMessage e) :data (ex-data e)})) (System/exit 1))))
+       (catch Exception e
+         (let [usage? (= :usage (:error-kind (ex-data e)))
+               [group op] argv
+               error (cond-> {:message (.getMessage e) :data (ex-data e)}
+                       usage? (with-meta {:help [(help-text group op)]}))]
+           (println (core/json-envelope false error))
+           (System/exit (if usage? 2 1))))))

@@ -632,14 +632,14 @@
         (git-in! dir "worktree" "remove" "--force" external)))))
 
 (deftest repeated-or-malformed-target-refuses-before-allocation-or-checkout-mutation
-  (doseq [[label argv pattern]
-          [["repeated" ["task" "start" "worker" "--worktree" "new" "--worktree" "." "--task" "two targets"] #"only once"]
-           ["missing value" ["task" "start" "worker" "--task" "missing target" "--worktree"] #"requires a value"]
-           ["missing path" ["task" "start" "worker" "--worktree" "/definitely/missing/checkout" "--task" "bad path"] #"existing directory"]]]
+  (doseq [[label argv pattern expected-exit]
+          [["repeated" ["task" "start" "worker" "--worktree" "new" "--worktree" "." "--task" "two targets"] #"only once" 2]
+           ["missing value" ["task" "start" "worker" "--task" "missing target" "--worktree"] #"requires a value" 2]
+           ["missing path" ["task" "start" "worker" "--worktree" "/definitely/missing/checkout" "--task" "bad path"] #"existing directory" 1]]]
     (let [{:keys [env dir]} (fake-env {})
           before (git-worktree-list dir)
           proc (apply call! env argv)]
-      (is (= 1 (:exit proc)) label)
+      (is (= expected-exit (:exit proc)) label)
       (is (re-find pattern (:out proc)) label)
       (is (= before (git-worktree-list dir)) label)
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) label))))
@@ -832,7 +832,7 @@
 (deftest spawn-kind-is-not-a-flag-and-is-recorded
   (let [{:keys [env log dir]} (fake-env {})
         refused (call! env "task" "start" "worker" "--kind" "claude" "--task" "forbidden flag")]
-    (is (= 1 (:exit refused)))
+    (is (= 2 (:exit refused)))
     (is (re-find #"--kind is not a spawn-time flag" (:out refused)))
     (is (not-any? mutating? (calls log)))
     ;; Inherited from the parent kind the fake herdr reports, with the resolved model.
@@ -1188,7 +1188,7 @@
   (testing "--tab and --split are mutually exclusive before ledger allocation or mutation"
     (let [{:keys [env log dir]} (fake-env {})
           proc (call! env "task" "start" "worker" "--tab" "--split" "--task" "conflicting placement")]
-      (is (= 1 (:exit proc)))
+      (is (= 2 (:exit proc)))
       (is (re-find #"--tab and --split are mutually exclusive" (:out proc)))
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log)))))
@@ -1312,13 +1312,36 @@
       (is (zero? (:exit proc)) (:err proc))
       (is (str/includes? (slurp from-file-target) "SUMMARY: published from file")))))
 
+(deftest usage-errors-are-distinct-from-runtime-failures
+  (let [{:keys [env log]} (fake-env {})
+        control (call! env "task" "list")
+        before (count (calls log))]
+    (is (zero? (:exit control)) (:out control))
+    (is (true? (:ok (result control))))
+    (doseq [argv [["unknown"] ["task" "unknown"] ["pane" "unknown"]
+                  ["task" "list" "--bogus"] ["task" "list" "--format"]
+                  ["task" "list" "--format" "yaml"]
+                  ["task" "list" "--format" "json" "--format" "text"]
+                  ["pane" "run"]]]
+      (let [proc (apply call! env argv)
+            response (result proc)]
+        (is (= 2 (:exit proc)) (str argv " -> " (:out proc)))
+        (is (false? (:ok response)))
+        (is (= "usage" (get-in response [:error :data :error-kind])))
+        (is (seq (:help response)))))
+    (let [proc (call! env "task" "collect" "not-a-recorded-task")]
+      (is (= 1 (:exit proc)) (:out proc))
+      (is (false? (:ok (result proc))))
+      (is (= "unknown assignment task" (get-in (result proc) [:error :message]))))
+    (is (= before (count (calls log))) "validation and a missing entry do not contact Herdr")))
+
 (deftest unknown-task-options-are-rejected-before-value-parsing
   (doseq [[label argv] [["mid-argv" ["worker" "--task" "x" "--bogus" "value" "--print-prompt"]]
                         ["final argv" ["worker" "--task" "x" "--print-prompt" "--bogus"]]
                         ["before assignment" ["worker" "--bogus" "--task" "x" "--print-prompt"]]]]
     (let [{:keys [env log dir]} (fake-env {})
           proc (apply call! env "task" "run" argv)]
-      (is (= 1 (:exit proc)) label)
+      (is (= 2 (:exit proc)) label)
       (is (re-find #"unknown option" (:out proc)) label)
       (is (re-find #"--bogus" (:out proc)) label)
       (is (empty? (calls log)) label)
@@ -1374,7 +1397,7 @@
         (is (str/starts-with? (:out proc) "oh task run [<persona>]"))))
     (testing "contradictory flags fail fast"
       (let [proc (call! env "task" "run" "worker" "--task" "x" "--retro" "--no-retro" "--print-prompt")]
-        (is (= 1 (:exit proc)))
+        (is (= 2 (:exit proc)))
         (is (re-find #"mutually exclusive" (:out proc)))))
     (testing "an uncoercible frontmatter value fails fast, naming persona and value"
       (let [solo (fs/canonicalize (fs/create-temp-dir {:prefix "fake-herdr-roster-"}))]
@@ -1804,7 +1827,7 @@
 (deftest an-unknown-task-command-is-refused
   (let [{:keys [env]} (fake-env {})
         command (call! env "task" "nonesuch" "--summary" "obsolete")]
-    (is (= 1 (:exit command)))
+    (is (= 2 (:exit command)))
     (is (re-find #"unknown task command" (:out command)))))
 
 ;; --- `collect --any` fan-in -------------------------------------------------------
@@ -1962,7 +1985,7 @@
 (deftest prune-requires-a-task-positional
   (let [{:keys [env]} (fake-env {})
         proc (call! env "task" "prune")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"full task uuid" (:out proc)))))
 
 ;; This command never scans the ledger or resolves a prefix: an exact-filename miss is
@@ -2186,7 +2209,7 @@
 (deftest collect-any-rejects-a-task-positional
   (let [{:keys [env]} (fake-env {})
         proc (call! env "task" "collect" "--any" "some-task")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"takes no task argument" (:out proc)))))
 
 ;; Elapsed budget with nothing published, plus the poll-interval discipline: one
@@ -2357,8 +2380,8 @@
       (let [specific (call! env "task" "collect" (:task gutted))
             any (call! env "task" "collect" "--any")
             single-status (call! env "task" "status" (:task wrong*))
-            status-all (call! env "task" "status")
-            list-all (call! env "task" "list")
+            status-all (call! env "task" "status" "--full")
+            list-all (call! env "task" "list" "--full")
             worktrees (call! env "worktree" "list")]
         (doseq [proc [specific any single-status status-all list-all worktrees]]
           (is (zero? (:exit proc)) (:err proc)))
@@ -2766,7 +2789,7 @@
 (deftest worktree-remove-requires-a-task-positional
   (let [{:keys [env]} (fake-env {})
         proc (call! env "worktree" "remove")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"full task uuid" (:out proc)))))
 
 (deftest worktree-remove-refuses-a-task-with-no-recorded-worktree
@@ -4270,7 +4293,7 @@
     (is (zero? (:exit closed)) (:err closed))
     (is (= 1 (:exit proc)))
     (is (re-find #"already closed" (:out proc)))
-    (is (= 1 (:exit missing)))
+    (is (= 2 (:exit missing)))
     (is (re-find #"requires a full task uuid" (:out missing)))))
 
 ;; A continuation entry is an ordinary entry everywhere else: fan-in candidacy and prune
@@ -4403,7 +4426,7 @@
     (testing "the sweep refuses it outright rather than accepting and ignoring it"
       (let [{:keys [env log]} (fake-env {})
             proc (call! env "task" "close" "--settled" "--abandon")]
-        (is (= 1 (:exit proc)))
+        (is (= 2 (:exit proc)))
         (is (re-find #"does not take --abandon" (:out proc)))
         (is (empty? (closed-panes log)))))))
 
@@ -4844,9 +4867,9 @@
         entry (capture-entry! dir (start-child! env dir "arity"))
         missing (call! env "task" "close")
         both (call! env "task" "close" "--settled" (:task entry))]
-    (is (= 1 (:exit missing)))
+    (is (= 2 (:exit missing)))
     (is (re-find #"requires a full task uuid" (:out missing)))
-    (is (= 1 (:exit both)))
+    (is (= 2 (:exit both)))
     (is (re-find #"takes no task argument" (:out both)))))
 
 ;; The sweep groups by child across continuation lineage and considers only each child's
@@ -5003,10 +5026,10 @@
     (let [before (count (calls log))]
       (doseq [kind ["" "   " "\t"]]
         (let [proc (call! env "agent" "start" "child" "--kind" kind "--pane" "w:x")]
-          (is (= 1 (:exit proc)) (pr-str kind))
+          (is (= 2 (:exit proc)) (pr-str kind))
           (is (str/includes? (:out proc) "nonblank --kind") (pr-str kind))))
       (let [proc (call! env "agent" "start" "child" "--pane" "w:x")]
-        (is (= 1 (:exit proc)))
+        (is (= 2 (:exit proc)))
         (is (str/includes? (:out proc) "nonblank --kind")))
       (is (= before (count (calls log))) "a blank kind never reaches Herdr"))))
 
@@ -5030,7 +5053,7 @@
       (let [before (count (calls log))]
         (doseq [argv [["--until" "idle"] ["--timeout" "5000"] ["--until" "idle" "--timeout" "5000"]]]
           (let [proc (apply call! env "agent" "prompt" "child" "hello" argv)]
-            (is (= 1 (:exit proc)) (pr-str argv))
+            (is (= 2 (:exit proc)) (pr-str argv))
             (is (str/includes? (:out proc) "require --wait") (pr-str argv))))
         (is (= before (count (calls log))))))
     (testing "an unparseable --timeout is a clean refusal"
@@ -5067,7 +5090,7 @@
     (is (some #(= ["pane" "run" "w:child" "echo ready"] (vec %)) (calls log))))
   (let [{:keys [env log]} (fake-env {})
         proc (call! env "spawn" "worker")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"task run" (:out proc)))
     (is (empty? (calls log)))))
 
@@ -5154,7 +5177,7 @@
     (is (empty? (calls log))))
   (let [{:keys [env log]} (fake-env {})
         proc (call! env "roster" "extra")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"roster requires 0 arguments" (:out proc)))
     (is (empty? (calls log))))
   (let [{:keys [env]} (fake-env {})]
@@ -5167,7 +5190,7 @@
                             ["--section" "traits"] #"apply only to markdown or org output"
                             ["--detail"] #"apply only to markdown or org output"}]
       (let [proc (apply call! env "roster" argv)]
-        (is (= 1 (:exit proc)) (str argv))
+        (is (= 2 (:exit proc)) (str argv))
         (is (false? (:ok (result proc))) (str argv))
         (is (re-find pattern (:out proc)) (str argv))))))
 
@@ -5684,7 +5707,7 @@
     (testing "there is no --work-root option to author one with"
       (let [proc (call! (child-publish-env env entry) "task" "publish" "--work-root" forged
                         "--status" "COMPLETE" "--summary" "done")]
-        (is (= 1 (:exit proc)))
+        (is (= 2 (:exit proc)))
         (is (re-find #"unknown option" (:out proc)))
         (is (not (fs/exists? (:result entry))))))
     (testing "a rewritten injected variable loses to the ledger entry"
@@ -5978,7 +6001,7 @@
     (call! env "task" "collect" (:task entry))
     (is (string? (get-in (ledger-entry* dir (:task entry)) [:envelope :text]))
         "the blob stays recorded on the entry, so --raw can still reproduce it")
-    (doseq [argv [["task" "status" (:task entry)] ["task" "status"] ["task" "list"]]]
+    (doseq [argv [["task" "status" (:task entry)] ["task" "status" "--full"] ["task" "list" "--full"]]]
       (let [res (:result (result (apply call! env argv)))
             entries (if (sequential? res) res [res])]
         (is (every? #(nil? (get-in % [:envelope :text])) entries) (str argv))
@@ -5986,6 +6009,115 @@
             (str argv " must still carry the parsed envelope"))))
     (is (= (slurp (:result entry))
            (get-in (result (call! env "task" "status" (:task entry) "--raw")) [:result :envelope :text])))))
+
+(deftest routine-listings-are-compact-with-counts-and-full-opt-in
+  (let [{:keys [env dir log]} (fake-env {})
+        completed (start-child! env dir "compact completed child")
+        _ (publish-child! completed)
+        _ (call! env "task" "collect" (:task completed))
+        completed (ledger-entry* dir (:task completed))
+        pending (start-child! env dir "compact pending child")
+        before (count (calls log))
+        compact-keys #{:task :child :pane-id :status :captured-at :summary}]
+    (doseq [op ["list" "status"]]
+      (let [proc (call! env "task" op)
+            response (result proc)
+            entries (:result response)]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (true? (:ok response)))
+        (is (= {:COMPLETE 1 :prompted 1} (:counts response)))
+        (is (= [(:task completed) (:task pending)] (mapv :task entries)))
+        (is (every? #(= compact-keys (set (keys %))) entries))
+        (is (= "fan-in child" (:summary (first entries))))
+        (is (= (:captured-at completed) (:captured-at (first entries))))
+        (is (nil? (:summary (second entries))))))
+    (is (= before (count (calls log))) "compact listings read only the ledger")
+    (doseq [op ["list" "status"]]
+      (let [proc (call! env "task" op "--full")
+            response (result proc)]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= {:COMPLETE 1 :prompted 1} (:counts response)))
+        (is (= "COMPLETE" (get-in response [:result 0 :envelope :status])))
+        (is (not (contains? (get-in response [:result 0 :envelope]) :text)))))
+    (let [raw (result (call! env "task" "list" "--raw"))
+          direct (result (call! env "task" "status" (:task completed)))]
+      (is (= (slurp (:result completed)) (get-in raw [:result 0 :envelope :text])))
+      (is (contains? (:result direct) :envelope))
+      (is (not (contains? direct :counts))))))
+
+(deftest home-view-is-bounded-scoped-and-read-only
+  (let [{:keys [env dir log]} (fake-env {})
+        directory (fs/path dir ".tmp" "herdr-orch" "ledger")
+        _ (fs/create-dirs directory)
+        entries (mapv (fn [n] {:task (ledger/fresh-task) :child (str "child-" n)
+                               :parent-pane (if (= n 12) "foreign:p" "w:p")
+                               :status "COMPLETE" :created-at (format "%03d" n)
+                               :envelope {:summary (apply str (repeat 300 "x"))}})
+                      (range 13))]
+    (doseq [entry entries]
+      (spit (str (fs/path directory (str (:task entry) ".json"))) (json/generate-string entry)))
+    (let [before (into {} (map (fn [p] [(str p) (slurp (str p))]) (fs/list-dir directory)))
+          before-calls (count (calls log))
+          proc (call! env)
+          response (result proc)
+          home (:result response)]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "caller-pane" (:scope home)))
+      (is (= 12 (:count home)))
+      (is (= 10 (:shown home)))
+      (is (true? (:truncated home)))
+      (is (= {:COMPLETE 12} (:counts response)))
+      (is (= (mapv :task (reverse (subvec entries 2 12))) (mapv :task (:tasks home))))
+      (is (every? #(= 240 (count (:summary %))) (:tasks home)))
+      (is (some #{"oh task list"} (:help response)))
+      (is (= before-calls (count (calls log))))
+      (is (= before (into {} (map (fn [p] [(str p) (slurp (str p))]) (fs/list-dir directory))))))
+    (let [proc (call! (dissoc env "HERDR_PANE_ID"))]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "assignment-root" (get-in (result proc) [:result :scope])))
+      (is (= 13 (get-in (result proc) [:result :count]))))))
+
+(deftest home-view-does-not-create-an-absent-ledger
+  (let [{:keys [env dir log]} (fake-env {})
+        directory (fs/path dir ".tmp" "herdr-orch")
+        before (count (calls log))]
+    (is (not (fs/exists? directory)))
+    (let [proc (call! env) response (result proc)]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (true? (:ok response)))
+      (is (= "no-ledger" (get-in response [:result :state])))
+      (is (= 0 (get-in response [:result :count])))
+      (is (= [] (get-in response [:result :tasks])))
+      (is (= {} (:counts response)))
+      (is (seq (:help response))))
+    (is (not (fs/exists? directory)))
+    (is (= before (count (calls log))))))
+
+(deftest ^:serial collection-hints-only-appear-for-unfinished-work
+  (let [outcome (atom nil)]
+    (with-redefs [cli/spawn! (fn [& _] {:task "test-task" :timeout 1 :status "prompted"})
+                  cli/wait-and-capture! (fn [& _] @outcome)
+                  cli/collect! (fn [& _] @outcome)]
+      (is (= ["oh task collect <full-task-uuid> --wait"]
+             (:help (json/parse-string (core/json-envelope true (cli/task! "start" {} [])) true))))
+      (doseq [status ["pending" "WAITING" "COMPLETE" "FAILED" "BLOCKED"]]
+        (reset! outcome {:task "test-task" :status status})
+        (doseq [op ["run" "collect"]]
+          (let [response (json/parse-string (core/json-envelope true (cli/task! op {} ["test-task"])) true)]
+            (is (= @outcome (:result response)))
+            (is (= (boolean (#{"pending" "WAITING"} status)) (contains? response :help))
+                (str op " " status)))))
+      (is (string? (cli/task! "collect" {:format ["text"]} ["test-task"]))))))
+
+(deftest empty-routine-listings-have-explicit-zero-counts
+  (let [{:keys [env]} (fake-env {})]
+    (doseq [op ["list" "status"] args [[] ["--full"] ["--raw"]]]
+      (let [proc (apply call! env "task" op args)
+            response (result proc)]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (true? (:ok response)))
+        (is (= [] (:result response)))
+        (is (= {} (:counts response)))))))
 
 (deftest list-format-text-is-one-line-per-child
   (let [{:keys [env dir]} (fake-env {})
@@ -6029,6 +6161,8 @@
           (is (zero? (:exit proc)) (str op " -> " (:out proc))))
         (is (= visible (json-tasks default)) (str op " default JSON"))
         (is (= all-tasks (json-tasks included)) (str op " audit JSON"))
+        (is (= {:FAILED 1 :invalid 1 :COMPLETE 1} (:counts (result default))))
+        (is (= {:failed 1 :FAILED 1 :invalid 1 :COMPLETE 1} (:counts (result included))))
         (is (= visible (text-tasks text-default)) (str op " default text"))
         (is (= all-tasks (text-tasks text-included)) (str op " audit text"))))
     (testing "a full UUID remains an audit lookup without the listing option"
@@ -6038,7 +6172,7 @@
         (is (= (:task failed) (get-in (result proc) [:result :task])))))
     (testing "a listing option with a full UUID refuses instead of silently doing nothing"
       (let [proc (call! env "task" "status" (:task failed) "--include-failed")]
-        (is (= 1 (:exit proc)))
+        (is (= 2 (:exit proc)))
         (is (re-find #"--include-failed is only valid without a task ID" (:out proc)))))
     (testing "help advertises the value-less listing option"
       (let [proc (call! env "task" "status" "--help")]
@@ -6082,7 +6216,7 @@
 (deftest an-unknown-output-format-fails-loudly-and-an-empty-listing-says-none
   (let [{:keys [env]} (fake-env {})
         proc (call! env "task" "list" "--format" "yaml")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"--format must be json or text" (:out proc)))
     ;; An empty text rendering is indistinguishable from a failed one, so it says "none".
     (is (= "none" (str/trim (:out (call! env "task" "list" "--format" "text")))))))
@@ -6643,7 +6777,7 @@
 (deftest orphans-refuses-close-and-prune-together
   (let [{:keys [env]} (fake-env {})
         proc (call! env "task" "orphans" "--prune" "--close")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"--close or --prune, not both" (:out proc)))))
 
 (deftest orphans-lists-only-captured-rounds-owned-by-another-session
@@ -6751,7 +6885,7 @@
 (deftest orphans-rejects-a-task-positional
   (let [{:keys [env]} (fake-env {})
         proc (call! env "task" "orphans" "some-task")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"task orphans requires 0 arguments" (:out proc)))))
 
 ;; --- phase 2: retention ---------------------------------------------------------------
@@ -6860,10 +6994,10 @@
 (deftest compact-argument-arity
   (let [{:keys [env]} (fake-env {})]
     (let [proc (call! env "task" "compact")]
-      (is (= 1 (:exit proc)))
+      (is (= 2 (:exit proc)))
       (is (re-find #"requires a full task uuid" (:out proc))))
     (let [proc (call! env "task" "compact" "--closed" "some-task")]
-      (is (= 1 (:exit proc)))
+      (is (= 2 (:exit proc)))
       (is (re-find #"takes no task argument" (:out proc))))))
 
 ;; --- phase 2: persona `timeout:` frontmatter -------------------------------------------
@@ -6997,7 +7131,7 @@
     (let [{env2 :env} (fake-env {})]
       (is (= "none" (str/trim (:out (call! env2 "task" "harvest" "--format" "text"))))))
     (let [proc (call! env "task" "harvest" "some-task")]
-      (is (= 1 (:exit proc)))
+      (is (= 2 (:exit proc)))
       (is (re-find #"task harvest requires 0 arguments" (:out proc))))))
 
 ;; Model inheritance is one level at every depth, and both hops share one mechanism: a
@@ -7656,8 +7790,9 @@
            ["a preview with a refused option" {} ["task" "run" "--context" "measurement" :config "--trait" "read-only" "--print-prompt" "--task" "x"] #"refuses --trait"]]]
     ;; `:config` stands for `--measurement-config PATH`.
     (let [{:keys [env dir log config] :as fixture} (measurement-fixture extra {})
-          proc (apply call! env (mapcat #(if (= :config %) ["--measurement-config" config] [%]) args))]
-      (is (= 1 (:exit proc)) label)
+          proc (apply call! env (mapcat #(if (= :config %) ["--measurement-config" config] [%]) args))
+          domain-refusal? (#{"a resolved kind that is not pi" "a below-root caller"} label)]
+      (is (= (if domain-refusal? 1 2) (:exit proc)) label)
       (is (re-find pattern (:out proc)) (str label ": " (:out proc)))
       (is (no-measurement-allocation? dir log fixture) label)))
   (testing "configuration errors fail before allocation"
@@ -7677,7 +7812,7 @@
                           [["task" "run" "--context" "measurement" "--print-prompt" "--task" "x"] #"requires --measurement-config"]]]
     (let [{:keys [env log dir]} (fake-env {})
           proc (apply call! env argv)]
-      (is (= 1 (:exit proc)) (str argv))
+      (is (= 2 (:exit proc)) (str argv))
       (is (re-find pattern (:out proc)) (str argv))
       (is (no-allocation? dir log) (str argv))))
   (testing "an explicit fresh context is the default"
@@ -8595,7 +8730,7 @@
       (is (= #{"anthropic" "lemonade"} (set (map :localProvider (:providers r))))))
     (doseq [argv [["--format" "html"] ["--detail"] ["--format" "text" "--detail"] ["extra"]]]
       (let [p (apply call! env "usage" argv)]
-        (is (= 1 (:exit p)) (str argv))
+        (is (= 2 (:exit p)) (str argv))
         (is (false? (:ok (result p))))))
     (is (= [] (leaked-secrets dir (:out proc) (:err proc))))
     (let [help (call! env "usage" "--help")]
@@ -8635,7 +8770,7 @@
 (deftest usage-unknown-provider-fails-before-any-credential-read-or-request
   (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10 :codex-used 10}))
         proc (call! env "usage" "--provider" "anthropic" "--provider" "nope")]
-    (is (= 1 (:exit proc)))
+    (is (= 2 (:exit proc)))
     (is (re-find #"unknown provider: nope" (:out proc)))
     (is (= ["anthropic" "kimi" "lemonade" "openai-codex" "zai"] (get-in (result proc) [:error :data :available])))
     (is (not (made-usage-call? dir)))
