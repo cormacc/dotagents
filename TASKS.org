@@ -295,6 +295,16 @@ Deferred by the owner from the owned quota collector delivery. Support native Cl
 #+IMPORT: [[plan:2026-11-05-herdr-app-orch-mod.org]]
 Scaffold a herdr-app mod for herdr-orch. Its first feature is the subscription quota status-bar item and popup, ported from the Lakris2407/herdr-mods `quota` mod (https://github.com/Lakris2407/herdr-mods/tree/main/quota). The data source must be `oh usage` (herdr-orch CLI) instead of the upstream mod's own collection, so that the TUI plugin (`herdr-plugin/`, `quota-stanza.sh`, `quota-pane.sh`) and the app mod show the same metrics. Mod authoring interface: `~/.config/herdr-app/AGENTS.md` (written by herdr-app). Related: task 9f667467 (herdr plugin wrapper), [[plan:2026-11-04-herdr-orch-herdr-app-support.org]].
 
+** TODO Add herdr-orch subagent fanout pane
+:PROPERTIES:
+:CUSTOM_ID: f51216ab-0bb7-41d9-a6d3-2d225b40a667
+:CREATED: [2026-11-05 Thu 19:46]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 19:46]
+:END:
+Add a pane that shows herdr-orch subagent fanout as a tree or hierarchy. Use [[https://github.com/mashhoodr/herdr-space-sidebar][herdr-space-sidebar]] as a tree/hierarchy design reference. Additional reference: [[https://github.com/yoshiori/herdr-configurable-picker][herdr-configurable-picker]].
+
 ** STARTED Rework the org-tasks UI as a Herdr plugin
 :PROPERTIES:
 :CUSTOM_ID: 82126d8e-eb54-45b8-abbe-9e76451b3963
