@@ -220,6 +220,15 @@
 ;; Provider of a routed candidate: the `provider/` prefix of its canonical ID, nil when the ID has none.
 (defn provider-prefix [canonical]
   (when-let [i (some-> canonical (str/index-of "/"))] (subs canonical 0 i)))
+;; Pi provider IDs may contain hyphens (`openai-codex`), so an account identity's base is
+;; the text before its final `-<N>` and must be a base the Pi account extension can build.
+(def account-bases #{"anthropic"})
+(defn account-base
+  "Base provider of a named Pi account identity `<provider>-<N>` (N a positive
+  integer without leading zeros), or nil for any other string."
+  [id]
+  (when (string? id)
+    (some-> (re-matches #"(.+)-[1-9][0-9]*" id) second account-bases)))
 (defn translate-model [config kind model]
   (let [canonical (canonical-model config model)]
     (or (get-in config [:models canonical (keyword kind)]) canonical)))

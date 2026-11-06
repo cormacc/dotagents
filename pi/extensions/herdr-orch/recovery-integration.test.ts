@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHarness, type Harness } from "../test/support/rpc.ts";
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, "../../..");
-const model = "claude-sonnet-4-5", work = "anthropic-account-work", personal = "anthropic-account-personal";
+const model = "claude-sonnet-4-5", work = "anthropic-2", personal = "anthropic-1";
 const isolated = Object.fromEntries(Object.keys(process.env).filter(k => k.startsWith("HERDR_ORCH_") || k === "HC_TERMINAL_ID" || k === "ORCH_ASSIGNMENT_ROOT").map(k => [k, undefined]));
 async function command(h: Harness, cmd: any) {
   const id = h.send(cmd); const e = await h.waitFor(e => e.type === "response" && e.id === id, cmd.type); assert.equal(e.success, true, e.error); return e;

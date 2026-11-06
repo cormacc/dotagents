@@ -5,7 +5,8 @@
   No read starts a process, performs HTTP, refreshes or writes credentials."
   (:require [babashka.fs :as fs]
             [cheshire.core :as json]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [herdr-orch.core :as core])
   (:import [java.net URI]
            [java.nio.charset StandardCharsets]
            [java.security MessageDigest]
@@ -71,10 +72,9 @@
             (text? account) (assoc :account-id account))))
 
 (defn pi-account?
-  "True only for the supported named Pi Anthropic account namespace."
+  "True only for a named Pi Anthropic account identity `anthropic-<N>`."
   [id]
-  (and (string? id)
-       (boolean (re-matches #"anthropic-account-[a-z][a-z0-9_-]{0,31}" id))))
+  (= "anthropic" (core/account-base id)))
 
 (defn pi-accounts
   "Return sorted supported account identities, without credentials."

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { accountProvider, registerStoredAccounts } from "./accounts.ts";
 import { registerRecovery, PENDING_WARNING } from "./recovery.ts";
-const work = "anthropic-account-work", personal = "anthropic-account-personal", model = "claude-sonnet-4-5";
+const work = "anthropic-2", personal = "anthropic-1", model = "claude-sonnet-4-5";
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; };
 
 /** Runs inside the installed Pi, not the repository's development SDK. */

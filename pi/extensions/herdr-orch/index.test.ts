@@ -31,7 +31,7 @@ const tools = new Map<string, Tool>();
 const execCalls: string[][] = [];
 let backendRefusal = false;
 let multiAccountUsage = false;
-const accountUsage = "- **anthropic-account-a** -- fresh; all_models 99% remaining\n- **anthropic-account-b** -- fresh; all_models 1% remaining\n";
+const accountUsage = "- **anthropic-1** -- fresh; all_models 99% remaining\n- **anthropic-2** -- fresh; all_models 1% remaining\n";
 const execOptions: Array<Record<string, unknown> | undefined> = [];
 type Command = { handler: (args: string, ctx: any) => Promise<void>; getArgumentCompletions?: (prefix: string) => unknown };
 const commands = new Map<string, Command>();

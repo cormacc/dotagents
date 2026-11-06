@@ -109,14 +109,14 @@ test("sibling accounts render separately and visibility changes do not hide thei
   const popup = a.make({ menu: true });
   for (const ops of [a.render(status), a.render(popup, { menu: true })]) {
     const text = words(ops);
-    for (const expected of ["anthropic-account-a", "anthropic-account-b", "1%", "99%"])
+    for (const expected of ["anthropic-1", "anthropic-2", "1%", "99%"])
       assert.ok(text.includes(expected), expected);
   }
   const ops = a.render(popup, { menu: true });
-  callback(ops, "on_click", "prov-anthropic-account-a")();
+  callback(ops, "on_click", "prov-anthropic-1")();
   const text = words(a.render(status));
-  assert.ok(!text.includes("anthropic-account-a"));
-  assert.ok(text.includes("anthropic-account-b"));
+  assert.ok(!text.includes("anthropic-1"));
+  assert.ok(text.includes("anthropic-2"));
   assert.ok(text.includes("99%"));
 });
 

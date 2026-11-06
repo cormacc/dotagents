@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { accountProvider, registerStoredAccounts } from "./accounts.ts";
 import { registerRecovery } from "./recovery.ts";
-const model = "claude-sonnet-4-5", work = "anthropic-account-work", personal = "anthropic-account-personal";
+const model = "claude-sonnet-4-5", work = "anthropic-2", personal = "anthropic-1";
 export default function fixture(outer: ExtensionAPI) {
   registerStoredAccounts(outer);
   outer.registerCommand("fixture-session", { handler: async (_args, ctx) => {

@@ -7,9 +7,9 @@ export const modelWindows = [
 ];
 export const row = (localProvider = "work", changes = {}) => ({ localProvider, provider: "claude", state: { status: "fresh", stale: false }, windows: [{ ...window }], ...changes });
 export const namedAccounts = [
-  row("anthropic-account-a", { baseProvider: "anthropic", accountId: "anthropic-account-a",
+  row("anthropic-1", { baseProvider: "anthropic", accountId: "anthropic-1",
     windows: [{ ...window, percentUsed: 1, percentRemaining: 99 }] }),
-  row("anthropic-account-b", { baseProvider: "anthropic", accountId: "anthropic-account-b",
+  row("anthropic-2", { baseProvider: "anthropic", accountId: "anthropic-2",
     windows: [{ ...window, percentUsed: 99, percentRemaining: 1 }] }),
 ];
 export const envelope = (providers = [row()]) => ({ schema: "herdr-orch/v1", ok: true, result: { providers } });

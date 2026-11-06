@@ -23,11 +23,12 @@ test("valid envelope preserves aliases and adapter identity without leaking arbi
 test("named accounts retain separate base and account identities and opposite quotas", () => {
   const providers = parse(envelope(namedAccounts));
   assert.deepEqual(providers.map(p => p.baseProvider), ["anthropic", "anthropic"]);
-  assert.deepEqual(providers.map(p => p.accountId), ["anthropic-account-a", "anthropic-account-b"]);
+  assert.deepEqual(providers.map(p => p.accountId), ["anthropic-1", "anthropic-2"]);
   assert.deepEqual(providers.map(p => p.windows[0].percentUsed), [1, 99]);
-  assert.deepEqual(providers.map(p => p.id), ["anthropic-account-a", "anthropic-account-b"]);
-  for (const changes of [{ baseProvider: {} }, { accountId: [] }, { accountId: "anthropic-account-other" },
-    { baseProvider: "openai-codex" }, { provider: "codex" }])
+  assert.deepEqual(providers.map(p => p.id), ["anthropic-1", "anthropic-2"]);
+  for (const changes of [{ baseProvider: {} }, { accountId: [] }, { accountId: "anthropic-3" },
+    { baseProvider: "openai-codex" }, { provider: "codex" },
+    { localProvider: "anthropic-01", accountId: "anthropic-01" }, { localProvider: "anthropic-", accountId: "anthropic-" }])
     assert.throws(() => parse(envelope([{ ...namedAccounts[0], ...changes }])));
 });
 

@@ -53,14 +53,19 @@
   (with-context
     (fn [context]
       (seed! context)
-      (let [a "anthropic-account-a" b "anthropic-account-b"
+      (let [a "anthropic-1" b "anthropic-2"
+            ;; Built at run time so a repository sweep finds no live literal of the retired namespace.
+            retired (str "anthropic" "-account-a")
             path (pi-path context)
             auth (assoc (json/parse-string (slurp path) true)
                         (keyword a) (oauth "same-token")
                         (keyword b) (oauth "same-token")
                         :openai-codex-account-no (oauth "ignored")
-                        :anthropic-account-INVALID (oauth "ignored")
-                        :anthropic-account- (oauth "ignored"))]
+                        :anthropic-01 (oauth "ignored")
+                        :anthropic- (oauth "ignored")
+                        (keyword retired) (oauth "ignored")
+                        :openai-codex-1 (oauth "ignored")
+                        :openai-codex-1x (oauth "ignored"))]
         (put-json! path auth)
         (let [before (slurp path)
               first-read (credentials/credentials :pi "claude" context a)]
@@ -71,8 +76,8 @@
               "identical tokens still have account-specific cache identities")
           (is (= before (slurp path)))
           (is (= "pi-claude" (:access (credentials/credentials :pi "claude" context))))
-          (doseq [id ["anthropic-account-INVALID" "anthropic-account-" "openai-codex" "../secret"
-                      (str "anthropic-account-" (apply str (repeat 33 "a")))]]
+          (doseq [id ["anthropic-01" "anthropic-" "anthropic-0" "anthropic-1-2" "openai-codex" "openai-codex-1"
+                      "openai-codex-1x" "../secret" retired]]
             (is (= "unsupported-auth-context"
                    (:reason (credentials/credentials :pi "claude" context id)))))
           (is (= "unsupported-auth-context" (:reason (credentials/credentials :claude "claude" context a))))

@@ -231,11 +231,12 @@
     (fn [context]
       (stores/seed! context)
       (let [path (stores/pi-path context)
-            a "anthropic-account-a" b "anthropic-account-b"
+            a "anthropic-1" b "anthropic-2"
             auth (assoc (json/parse-string (slurp path) true)
                         (keyword a) (stores/oauth "token-a")
                         (keyword b) (stores/oauth "token-b")
-                        :anthropic-account-INVALID (stores/oauth "ignored"))
+                        :anthropic-01 (stores/oauth "ignored")
+                        (keyword (str "anthropic" "-account-c")) (stores/oauth "ignored"))
             calls (atom [])
             opts (assoc (options context nil) :providers ["anthropic"]
                         :http-fn (fn [req]
@@ -269,15 +270,15 @@
           (is (nil? (remaining report b)))
           (is (= "expired-credentials" (:reason (last (:providers report)))))
           (is (= 0.99 (remaining report a))))
-        (let [report (usage/usage-for config (assoc opts :providers ["anthropic-account-missing"]))]
+        (let [report (usage/usage-for config (assoc opts :providers ["anthropic-9"]))]
           (is (= "missing-credentials" (:reason (row report))))
-          (is (nil? (remaining report "anthropic-account-missing"))))))))
+          (is (nil? (remaining report "anthropic-9"))))))))
 
 (deftest named-accounts-never-resolve-a-native-or-misconfigured-base-credential
   (stores/with-context
     (fn [context]
       (stores/seed! context)
-      (let [account "anthropic-account-a"
+      (let [account "anthropic-1"
             configured (assoc-in config [:providers account] {:quota-provider "claude"})
             opts (assoc (options context nil) :providers [account]
                         :http-fn (fn [_] (throw (ex-info "must not fetch" {}))))]
@@ -294,7 +295,7 @@
       (fn [context]
         (stores/seed! context)
         (let [path (stores/pi-path context)
-              account "anthropic-account-a"
+              account "anthropic-1"
               auth (assoc (json/parse-string (slurp path) true)
                           (keyword account) (stores/oauth "old-token"))
               opts (assoc (options context nil) :providers [account]

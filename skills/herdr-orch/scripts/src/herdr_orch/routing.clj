@@ -26,9 +26,7 @@
                            (and (map? entry) (= #{:canonical :account :reasoning} (set (keys entry)))
                                 (pair? (select-keys entry [:canonical :account]))
                                 (let [base (core/provider-prefix (:canonical entry)) account (:account entry)]
-                                  (or (= base account)
-                                      (and (= base "anthropic")
-                                           (re-matches #"anthropic-account-[a-z][a-z0-9_-]{0,31}" account))))
+                                  (or (= base account) (= base (core/account-base account))))
                                 (vector? (:reasoning entry))
                                 (every? levels (:reasoning entry)))) (:inventory request))
                  (= (count (:inventory request)) (count (distinct (map #(select-keys % [:canonical :account]) (:inventory request)))))
@@ -45,8 +43,8 @@
     (core/candidates config kind model)
     (let [resolved (core/canonical-model config model)
           prefix (core/provider-prefix resolved)
-          canonical (if (and prefix (re-matches #"anthropic-account-[a-z][a-z0-9_-]{0,31}" prefix))
-                      (str "anthropic" (subs resolved (count prefix))) resolved)
+          canonical (if-let [account-base (core/account-base prefix)]
+                      (str account-base (subs resolved (count prefix))) resolved)
           provider (core/provider-prefix canonical)
           allowed (get-in config [:harnesses (keyword kind) :providers])]
       (when-not (canonical? canonical) (reject!))

@@ -11,7 +11,7 @@ To remove the personal layout, select another layout in Herdr app first. Remove 
 
 The quota mod requires the home-installed `~/.agents/skills/herdr-orch/scripts/oh` and its runtime prerequisites. It runs `oh usage --format json` from your home directory and reports quota for this computer, not a selected remote machine. See the [usage contract](../skills/herdr-orch/scripts/docs/contract.md#usage) for provider setup and cache behaviour.
 
-Named Pi Anthropic subscriptions appear as separate `anthropic-account-<name>` rows alongside the default `anthropic` row. The footer, popup and visibility preferences use the full local account identity, so hiding one account does not hide its sibling. Quota values and unavailable states remain account-specific. The parser retains explicit `baseProvider` and `accountId` fields; older single-account rows remain supported. Account management stays in Pi; the quota command never refreshes or writes credentials.
+Named Pi Anthropic subscriptions appear as separate `anthropic-<N>` rows (`anthropic-1`, `anthropic-2`, ...) alongside the default `anthropic` row. The footer, popup and visibility preferences use the full local account identity, so hiding one account does not hide its sibling. Quota values and unavailable states remain account-specific. The parser retains explicit `baseProvider` and `accountId` fields; older single-account rows remain supported. Account management stays in Pi; the quota command never refreshes or writes credentials.
 
 ## Refresh and limits
 

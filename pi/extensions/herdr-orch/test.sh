@@ -15,6 +15,7 @@ mkdir -p "$HOME" "$PI_CODING_AGENT_DIR/tmp"
 export TMPDIR="$PI_CODING_AGENT_DIR/tmp"
 
 "$TSX" ./accounts.test.ts
+node --import tsx ./private-browser.test.ts
 "$TSX" ./accounts-integration.test.ts
 "$TSX" ./index.test.ts
 "$TSX" ./pi-integration.test.ts

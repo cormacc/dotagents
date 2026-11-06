@@ -18,8 +18,9 @@ export function parseQuota(stdout) {
       || !["fresh", "stale", "auth_required", "rate_limited", "unavailable"].includes(p.state?.status)
       || typeof p.state.stale !== "boolean") bad();
     if ((p.baseProvider != null && !text(p.baseProvider)) || (p.accountId != null && !text(p.accountId))) bad();
-    if (p.localProvider.startsWith("anthropic-account-")
-      && (!/^anthropic-account-[a-z][a-z0-9_-]{0,31}$/.test(p.localProvider)
+    // A named Pi account is `anthropic-<N>`; reject malformed numbers instead of showing a base row.
+    if (/^anthropic-[0-9]*$/.test(p.localProvider)
+      && (!/^anthropic-[1-9][0-9]*$/.test(p.localProvider)
         || p.baseProvider !== "anthropic" || p.accountId !== p.localProvider || p.provider !== "claude" || p.local === true)) bad();
     seen.add(p.localProvider);
     const windows = p.windows.map(w => {

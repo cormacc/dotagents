@@ -8,7 +8,7 @@ import { createHarness, type Harness } from "../test/support/rpc.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../..");
-const alias = "anthropic-account-work";
+const alias = "anthropic-2";
 const model = "claude-sonnet-4-5";
 const isolatedOrchEnv = Object.fromEntries(Object.keys(process.env)
   .filter((key) => key === "ORCH_ASSIGNMENT_ROOT" || key.startsWith("HERDR_ORCH_"))
@@ -105,7 +105,7 @@ async function main() {
   const origin = `http://127.0.0.1:${(server.address() as any).port}`;
   const agent = join(cwd, "agent");
   mkdirSync(agent);
-  writeFileSync(join(agent, "auth.json"), JSON.stringify({ ...preserved, [alias]: oauth(process.env.ACCOUNT_TEST_WRONG_ACCOUNT ? "default" : "work", process.env.ACCOUNT_TEST_WRONG_ACCOUNT ? 4102444800000 : 0), "anthropic-account-personal": oauth("personal", 4102444800000) }));
+  writeFileSync(join(agent, "auth.json"), JSON.stringify({ ...preserved, [alias]: oauth(process.env.ACCOUNT_TEST_WRONG_ACCOUNT ? "default" : "work", process.env.ACCOUNT_TEST_WRONG_ACCOUNT ? 4102444800000 : 0), "anthropic-1": oauth("personal", 4102444800000) }));
   writeFileSync(join(agent, "models.json"), JSON.stringify({ providers: { [alias]: { baseUrl: origin } } }));
   writeFileSync(join(cwd, "tool.txt"), "fixture tool content\n");
   const extension = join(cwd, "fixture.ts");
@@ -121,21 +121,21 @@ async function main() {
     await command(h, { type: "get_state" });
     if (!process.env.ACCOUNT_TEST_GATE_ONLY) {
       sibling = createHarness(extension, cwd, {
-        args: ["--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", "--provider", "anthropic-account-personal", "--model", model],
+        args: ["--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", "--provider", "anthropic-1", "--model", model],
         env: { ...isolatedOrchEnv, PI_CODING_AGENT_DIR: agent, HERDR_ENV: "0", HC_TERMINAL_ID: undefined, NODE_OPTIONS: `--require=${join(here, "account-fake-only.cjs")}`, HERDR_ORCH_FAKE_ORIGIN: origin },
       });
       await command(sibling, { type: "get_state" });
       await command(h, { type: "set_model", provider: "anthropic", modelId: model });
       await command(h, { type: "set_model", provider: alias, modelId: model });
-      assert.equal((await command(sibling, { type: "get_state" })).data.model.provider, "anthropic-account-personal");
+      assert.equal((await command(sibling, { type: "get_state" })).data.model.provider, "anthropic-1");
       assert.equal((await command(h, { type: "get_state" })).data.model.provider, alias);
       console.log("ok - two installed Pi primary sessions retain independent account selections outside Herdr");
       const since = h.events.length;
-      await command(h, { type: "prompt", message: "/oh-account add new-account" });
-      await h.waitFor((e) => e.type === "extension_ui_request" && e.message?.includes("Registered anthropic-account-new-account"), "account registration notice", { since });
+      await command(h, { type: "prompt", message: "/oh-account add" });
+      await h.waitFor((e) => e.type === "extension_ui_request" && e.message?.includes("Registered anthropic-3"), "account registration notice", { since });
       const models = await command(h, { type: "get_available_models" });
-      assert.ok(!models.data.models.some((m: any) => m.provider === "anthropic-account-new-account"));
-      assert.equal(JSON.parse(readFileSync(join(agent, "auth.json"), "utf8"))["anthropic-account-new-account"], undefined);
+      assert.ok(!models.data.models.some((m: any) => m.provider === "anthropic-3"));
+      assert.equal(JSON.parse(readFileSync(join(agent, "auth.json"), "utf8"))["anthropic-3"], undefined);
       console.log("ok - installed extension adds an OAuth-only named login target without authenticating or changing global credentials");
     }
     const since = h.events.length;

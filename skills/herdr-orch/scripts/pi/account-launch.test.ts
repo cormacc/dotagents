@@ -10,7 +10,7 @@ import type { TestCase } from "./runtime.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = realpathSync(join(here, "../../../.."));
-const account = "anthropic-account-work";
+const account = "anthropic-2";
 const model = "claude-sonnet-4-5";
 async function run(args: string[], env: NodeJS.ProcessEnv, cwd: string) {
   const child = spawn(process.execPath, [process.argv[1], ...args], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });

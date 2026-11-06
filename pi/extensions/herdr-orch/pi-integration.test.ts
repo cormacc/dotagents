@@ -37,8 +37,8 @@ function writeUsageFixture(cwd: string): NodeJS.ProcessEnv {
   mkdirSync(agentDir, { recursive: true });
   writeFileSync(join(agentDir, "auth.json"), JSON.stringify({
     anthropic: { type: "oauth", refresh: "fixture-refresh", access: "fixture-claude", expires: 4102444800000 },
-    "anthropic-account-a": { type: "oauth", refresh: "fixture-refresh", access: "fixture-account-a", expires: 4102444800000 },
-    "anthropic-account-b": { type: "oauth", refresh: "fixture-refresh", access: "fixture-account-b", expires: 4102444800000 },
+    "anthropic-1": { type: "oauth", refresh: "fixture-refresh", access: "fixture-account-a", expires: 4102444800000 },
+    "anthropic-2": { type: "oauth", refresh: "fixture-refresh", access: "fixture-account-b", expires: 4102444800000 },
     "openai-codex": { type: "oauth", refresh: "fixture-refresh", access: "fixture-codex", expires: 4102444800000, accountId: "fixture-account" },
   }));
   return {
@@ -111,8 +111,8 @@ async function main(): Promise<void> {
         throw new Error("The default help omitted workflow or fixture-backed usage output");
       }
       if (message !== "/oh workflows") {
-        for (const expected of ["**anthropic-account-a** -- fresh; all_models 99% remaining",
-          "**anthropic-account-b** -- fresh; all_models 1% remaining"]) {
+        for (const expected of ["**anthropic-1** -- fresh; all_models 99% remaining",
+          "**anthropic-2** -- fresh; all_models 1% remaining"]) {
           if (!notice.message.includes(expected)) throw new Error("Help merged or omitted named account quota");
         }
         if (/fixture-account-[ab]|fixture-refresh/.test(notice.message)) throw new Error("Help leaked fixture credentials");

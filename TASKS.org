@@ -376,7 +376,7 @@ Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. De
 :CUSTOM_ID: 56d4713a-bb0c-4ba8-87e8-7b49023b36fa
 :CREATED: [2026-11-06 Fri 12:22]
 :STARTED: [2026-11-06 Fri 13:21]
-:HANDOFF: Tasks1-4 DONE, task5 WAITING manual final gates. No active children: fresh final conformance e5e277c7-6d78-483d-885f-a2a1dd03d007 and correctness ff30c486-f507-4ee3-9700-88599f27736c captured APPROVED offline/no issues and closed. Reports task5-{conformance,correctness}-report.md; full acceptance matrices. Root combined repeat task5-root-check.clj all4exit0, complete logs task5-root-repeat-*:471tests4826assertions, Pi17/2/67/accountlaunch1, extension23unit12RPC29delayed3session5boundary, Herdr34pass2skip. Initial root final routing timeout retained task5-root-final-routing.log, cause UNKNOWN; validators similar first failures/retries no causal conclusion. Record Validation updated. Next owner authorisation for real two-account login/selection and rendered native Pi/Herdr checks; no real credentials/provider traffic authorised yet, no closure/pruning until gates pass. HEAD44f3fd37b444eec7e1bc7fd2ec8c49727e5a8a3c unchanged all feature uncommitted; preserve settings/Org. Accepted native setter timing/report limits and actual-external-selection invalidation unchanged. Runtime private OS temp, nonGit supported. Companion29fef88e open pending integrated acceptance. Feedbackf2365984 created for completion delivery; remaining retro inputs in prior handoff not persisted rules. No commits/pushes; root owns Org. Await one manual-gate decision.
+:HANDOFF: No active children. Base committed0be579d; numeric rename61ab7581 DONE and private login afc8a48f WAITING local visual acceptance, both implemented/reviewed. Root live credential key migrated to anthropic-1 under native lock, private backup retained (never stage/read). Private worker e11d21bc and fresh reviewer1401485b captured COMPLETE/closed APPROVED no issues; reports private-browser-report.md/private-browser-review.md. Root combined followup-root-check.clj all4exit0 complete summaries read:472tests4854assertions, Pi17/2/67/1, full extension incl native browser controls, Herdr34pass2skip. User remote: explicitly requested commit here after offline review and will pull/test new local session; DO NOT open remote browser. Next approve/proceed follow-up commit message per git-commit, then user local /reload, /oh-account add, /login anthropic-N check incognito Chrome/Chromium and primary SSO untouched. Task5 and parent stay open pending local follow-up; base real login/two-session/quota display already verified/user-confirmed. All feature changes currently uncommitted vs0be579d; preserve pi/settings.json, no push yet authorised. Feedbackf2365984 and earlier retro candidates remain. No provider-cause conclusion from earlier paused turn.
 :END:
 :LOGBOOK:
 - Created [2026-11-06 Fri 12:22]
@@ -388,6 +388,51 @@ Allow multiple subscriptions to a single provider, and extend usage-aware subage
 User-supplied prior art for planning:
 - https://pi.dev/packages/pi-multi-account?name=multi+claude
 - https://pi.dev/packages/@ravshansbox/pi-multi-claude?name=multi+claude
+
+*** DONE Rename account namespace to <provider>-<N>
+CLOSED: [2026-11-06 Fri 20:29]
+:PROPERTIES:
+:CUSTOM_ID: 61ab7581-3fee-4ca7-af53-69c6d037ea3f
+:CREATED: [2026-11-06 Fri 20:08]
+:STARTED: [2026-11-06 Fri 20:09]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 20:08]
+- State "STARTED" from "TODO" [2026-11-06 Fri 20:09]
+- State "DONE" from "STARTED" [2026-11-06 Fri 20:29]
+:END:
+Acceptance criteria:
+- Named account keys are `<provider>-<N>` with N a positive integer without leading zeros (for example `anthropic-1`, `anthropic-2`); the old `anthropic-account-<name>` namespace is no longer discovered, registered or routed.
+- `/oh-account add` accepts the next free number or an explicit number and refuses any other name shape.
+- Discovery, routing validation, quota credential lookup, launch inventory and the Herdr quota consumers agree on the new namespace with no remaining old-prefix literal in source, fixtures or tests.
+- The display name is the full key.
+- Operator documentation describes the new convention and states that an existing old-namespace credential needs a one-off key rename in `auth.json` or a fresh login.
+- Existing negative controls (wrong account, absent registration, ambient key fallback) remain and pass.
+
+Pointers: `pi/extensions/herdr-orch/accounts.ts` (`ACCOUNT_PREFIX`, `accountId`, `isAccountId`), `skills/herdr-orch/scripts/src/herdr_orch/routing.clj` (`validate!`, `candidates`), `skills/herdr-orch/scripts/src/herdr_orch/quota_credentials.clj` account discovery. The namespace must stay provider-generalisable: the base provider is the text before the last `-<N>`.
+
+*** WAITING Open alternate-account OAuth login in a private browser window
+:PROPERTIES:
+:CUSTOM_ID: afc8a48f-775a-4f88-80af-d7ccde249d0e
+:CREATED: [2026-11-06 Fri 20:09]
+:BLOCKED-BY: task:61ab7581-3fee-4ca7-af53-69c6d037ea3f
+:STARTED: [2026-11-06 Fri 20:29]
+:HANDOFF: Implemented and fresh-review APPROVED offline. PrivateBrowserOAuth wraps native auth_url notifications, opens ChromiumLinux/ChromeOther incognito, keeps manual info-link fallback and default login untouched. Root all4combined suites exit0; logs followup-root-*.log. Worker e11d21bc and reviewer1401485b COMPLETE captured/closed; report private-browser-review.md. User moved remote and deferred real browser/SSO rendered check until commit/pull into a new local session. DO NOT open any browser on remote host. Await local manual validation, no reauthentication needed for already migrated anthropic-1 credential.
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 20:09]
+- State "STARTED" from "TODO" [2026-11-06 Fri 20:29]
+- State "WAITING" from "STARTED" [2026-11-06 Fri 21:04]
+:END:
+Acceptance criteria:
+- The account provider wraps native OAuth `login(interaction)` so named-account `interaction.notify` events of type `auth_url` open their URL in a private browser window while preserving the native login flow.
+- Linux uses `chromium --incognito <url>`; other platforms use Chrome in incognito mode; the command is verified against the installed browser documentation, not guessed.
+- When the browser command is absent or fails, the URL is still shown through the native callback and login continues without the private window.
+- The default `anthropic` credential login is unchanged.
+- Installed-Pi tests prove the private-window command receives the exact URL and that the fallback path still completes a synthetic login; no real provider login in tests.
+- Operator documentation explains why a private window avoids logging out the primary SSO session and names the browser commands.
+
+Pointer: `pi/extensions/herdr-orch/accounts.ts` `accountProvider` retains native `auth.oauth`; wrap `login(interaction)` and decorate `interaction.notify` for `auth_url`. The installed native implementation is `@earendil-works/pi-ai/dist/auth/oauth/anthropic.js`; distinguish this native interface from the legacy extension `onAuth` adapter. Preserve prompt, cancellation, refresh and native callback semantics, and avoid also opening the default browser.
 
 ** TODO Plan accepted Pi recovery selection limits
 :PROPERTIES:

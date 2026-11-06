@@ -8901,13 +8901,13 @@
         auth (json/parse-string (slurp (str path)) true)
         entry {:type "oauth" :refresh "fixture-refresh" :expires far-future-ms}]
     (spit (str path) (json/generate-string
-                     (assoc auth :anthropic-account-a (assoc entry :access "fixture-a")
-                                 :anthropic-account-b (assoc entry :access "fixture-b"))))
+                     (assoc auth :anthropic-1 (assoc entry :access "fixture-a")
+                                 :anthropic-2 (assoc entry :access "fixture-b"))))
     (let [proc (call! env "usage" "--provider" "anthropic")
           response (result proc)]
       (is (zero? (:exit proc)) (:out proc))
       (is (true? (:ok response)))
-      (is (= ["anthropic" "anthropic-account-a" "anthropic-account-b"]
+      (is (= ["anthropic" "anthropic-1" "anthropic-2"]
              (mapv :localProvider (get-in response [:result :providers]))))
       (is (= ["anthropic" "anthropic" "anthropic"]
              (mapv :baseProvider (get-in response [:result :providers])))))
@@ -8915,20 +8915,22 @@
       (let [proc (call! env "usage" "--provider" "anthropic" "--format" format)
             text (:out proc)]
         (is (zero? (:exit proc)) text)
-        (is (str/includes? text "anthropic-account-a") text)
-        (is (str/includes? text "anthropic-account-b") text)
+        (is (str/includes? text "anthropic-1") text)
+        (is (str/includes? text "anthropic-2") text)
         (if (= format "status")
-          (is (str/includes? text "anthropic-account-a 1%s | anthropic-account-b 99%s") text)
+          (is (str/includes? text "anthropic-1 1%s | anthropic-2 99%s") text)
           (do (is (str/includes? text "99% remaining") text)
               (is (str/includes? text "1% remaining") text)))))
-    (let [proc (call! env "usage" "--provider" "anthropic-account-b")]
+    (let [proc (call! env "usage" "--provider" "anthropic-2")]
       (is (zero? (:exit proc)) (:out proc))
-      (is (= ["anthropic-account-b"] (mapv :localProvider (get-in (result proc) [:result :providers])))))
-    (let [proc (call! env "usage" "--provider" "anthropic-account-missing")]
+      (is (= ["anthropic-2"] (mapv :localProvider (get-in (result proc) [:result :providers])))))
+    (let [proc (call! env "usage" "--provider" "anthropic-9")]
       (is (zero? (:exit proc)) (:out proc))
       (is (= "missing-credentials" (get-in (result proc) [:result :providers 0 :reason]))))
-    (doseq [argv [["--provider" "anthropic-account-INVALID"]
-                  ["--provider" "anthropic-account-b" "--harness" "claude"]]]
+    (doseq [argv [["--provider" "anthropic-01"]
+                  ["--provider" (str "anthropic" "-account-b")]
+                  ["--provider" "openai-codex-1"]
+                  ["--provider" "anthropic-2" "--harness" "claude"]]]
       (let [proc (apply call! env "usage" argv)]
         (is (= 2 (:exit proc)))))
     (let [proc (call! env "usage" "--provider" "anthropic" "--harness" "claude")]
@@ -9245,7 +9247,7 @@
   (let [path (fs/path (:dir fixture) "home/.pi/agent/auth.json")
         auth (json/parse-string (slurp (str path)) true)]
     (spit (str path) (json/generate-string
-                     (assoc auth :anthropic-account-work
+                     (assoc auth :anthropic-2
                             {:type "oauth" :refresh "fixture-refresh" :access "fixture-work" :expires far-future-ms})))
     (spit (get-in fixture [:env "FAKE_QUOTA_REPORT"])
           (json/generate-string
@@ -9260,10 +9262,10 @@
         previewed (:result (result (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")))
         proc (call! env "task" "start" "pi-heavy" "--task" "named account")
         out (:result (result proc))
-        concrete "anthropic-account-work/claude-fable-5-1"]
+        concrete "anthropic-2/claude-fable-5-1"]
     (is (zero? (:exit proc)) (:out proc))
     (is (= concrete (:model-canonical previewed) (:model-canonical out)))
-    (is (= "anthropic-account-work" (get-in previewed [:model-route :account])))
+    (is (= "anthropic-2" (get-in previewed [:model-route :account])))
     (is (= (:model-route previewed) (:model-route (ledger-entry* dir (:task out)))))
     (is (= concrete (injected-env env-file "HERDR_ORCH_MODEL")))
     (is (some #(some #{concrete} %) (calls log)))
@@ -9280,7 +9282,7 @@
   (let [fixture (named-routing! (seed-subscription-stores! (measurement-fixture)))
         proc (measure! fixture "run" "--model" "heavy" "--print-prompt" "--task" "x")]
     (is (zero? (:exit proc)) (:out proc))
-    (is (= ["--model" "anthropic-account-work/claude-fable-5-1"]
+    (is (= ["--model" "anthropic-2/claude-fable-5-1"]
            (get-in (result proc) [:result :model-args])))))
 
 (deftest named-account-fork-routing-and-expired-account-exclusion
@@ -9288,13 +9290,13 @@
         proc (call! env "task" "start" "pi-heavy" "--context" "fork" "--task" "fork account")
         out (:result (result proc))]
     (is (zero? (:exit proc)) (:out proc))
-    (is (= "anthropic-account-work/claude-fable-5-1" (:model-canonical out)))
-    (is (= "anthropic-account-work" (get-in (ledger-entry* dir (:task out)) [:model-route :account]))))
+    (is (= "anthropic-2/claude-fable-5-1" (:model-canonical out)))
+    (is (= "anthropic-2" (get-in (ledger-entry* dir (:task out)) [:model-route :account]))))
   (let [{:keys [env dir]} (named-routing! (routed-fixture {} {} heavy-persona))
         path (str (fs/path dir "home/.pi/agent/auth.json"))
         auth (json/parse-string (slurp path) true)]
-    (doseq [next-auth [(assoc-in auth [:anthropic-account-work :expires] 1)
-                      (dissoc auth :anthropic-account-work)]]
+    (doseq [next-auth [(assoc-in auth [:anthropic-2 :expires] 1)
+                      (dissoc auth :anthropic-2)]]
       (spit path (json/generate-string next-auth))
       (clear-usage! dir)
       (let [proc (call! (assoc env "ANTHROPIC_API_KEY" "fixture-paid-must-not-rescue-account")
@@ -9302,7 +9304,7 @@
             route (route-of proc)]
         (is (zero? (:exit proc)) (:out proc))
         (is (= "openai-codex" (:account route)))
-        (is (not-any? #(= "anthropic-account-work" (:account %)) (:candidates route)))))))
+        (is (not-any? #(= "anthropic-2" (:account %)) (:candidates route)))))))
 
 (deftest malformed-alias-reasoning-refuses-before-collection
   (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10}) {} heavy-persona)

@@ -4,7 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isAccountId, storedAccountIds } from "./accounts.ts";
+import { accountBase, isAccountId, storedAccountIds } from "./accounts.ts";
 
 const TIER_ENTRY = "herdr-orch-tier";
 const WARNING_KEY = "herdr-orch-recovery";
@@ -13,7 +13,7 @@ type Pair = { canonical: string; account: string };
 type Level = ReturnType<ExtensionAPI["getThinkingLevel"]>;
 type Route = { chosen?: string; account?: string; concrete?: string; refused?: boolean };
 type Execute = (args: string[], signal?: AbortSignal, options?: { cwd?: string; timeout?: number }) => Promise<{ details: unknown }>;
-const pair = (model: Model<Api>): Pair => ({ canonical: `${isAccountId(model.provider) ? "anthropic" : model.provider}/${model.id}`, account: model.provider });
+const pair = (model: Model<Api>): Pair => ({ canonical: `${accountBase(model.provider) ?? model.provider}/${model.id}`, account: model.provider });
 const key = (p: Pair) => `${p.account}/${p.canonical}`;
 const selectable = (model?: Model<Api>) => model ? `${model.provider}/${model.id}` : "none";
 
