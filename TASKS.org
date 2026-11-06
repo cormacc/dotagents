@@ -342,7 +342,7 @@ Add a pane that shows herdr-orch subagent fanout as a tree or hierarchy. Use [[h
 :CUSTOM_ID: 82126d8e-eb54-45b8-abbe-9e76451b3963
 :CREATED: [2026-11-05 Thu 19:54]
 :STARTED: [2026-11-05 Thu 20:16]
-:HANDOFF: Moving to Linux with checkpoint commits. Shared/Pi/compact DONE; terminal WAITING unresolved reviewed P2 request/snapshot race and mandatory native Linux gate, desktop TODO blocked. Durable review, runnable reproduction and output linked from design/log/2026-11-05-org-tasks-herdr-ui.org Validation; these supersede scratch-only handoff evidence and must be deleted at eventual closure. Root reran reproduction: positive control B, race retains ready A; exit0 means defect reproduced. All owned workers/reviewers captured/closed, no active children. Next fresh worker fixes reconciliation, adds exact regression and receives bounded re-review; then native Linux gate before terminal acceptance or desktop dispatch. Workspace pinning deferred16358bea-c42f-4342-883b-6409d14c7281. No plugin installation or settings cutover; preserve unrelated generated/settings/fanout changes.
+:HANDOFF: Shared/Pi/compact DONE. Terminal WAITING: P2 race fixed and independently approved (see record Validation 'Request/snapshot race correction'); remaining gates are native Linux (needs isolated host) and native macOS validation, then installation via agents.nix. Desktop TODO blocked on terminal. Workspace pinning deferred 16358bea. Preserve unrelated herdr-app/settings.json change.
 :END:
 :LOGBOOK:
 - Created [2026-11-05 Thu 19:54]

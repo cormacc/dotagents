@@ -287,20 +287,29 @@
          (loop [previous nil last-context nil last-request nil]
           (when (nil? (deref child 0 nil))
             (let [started (now)
+                  ;; Bracket the snapshot with two request reads. A request seen
+                  ;; before it is reconciled against a snapshot at least as new; an
+                  ;; unchanged request across both reads means no action wrote one
+                  ;; (and so none had focused or resized yet) during the snapshot.
+                  request (read-json (fs/path dir "request.json"))
                   snapshot (snapshot!)
+                  settled? (= request (read-json (fs/path dir "request.json")))
                   current (pane snapshot id)]
               (when-not (and (= (:terminal owner) (:terminal_id current)) (= tab (:tab_id current))
                              (= instance (:instance (read-json index))))
                 (throw (ex-info "Task pane moved or disappeared" {})))
-              (let [request (read-json (fs/path dir "request.json"))
-                    {:keys [candidate context]} (sample! snapshot owner previous last-context request last-request)
+              (let [{:keys [candidate context]} (if settled?
+                                                  (sample! snapshot owner previous last-context request last-request)
+                                                  {:candidate previous :context last-context})
                     record (assoc owner :updatedAt (now))]
-                (atomic! file context)
+                ;; An unsettled poll publishes no context, so the next poll
+                ;; resamples with the old retained state; the heartbeat still runs.
+                (when settled? (atomic! file context))
                 (atomic! owner-file record)
                 ;; The immutable tab pointer is action-owned. Heartbeats must
                 ;; not wait on an action's lock or slow host requests.
                 (Thread/sleep (max 1 (- 500 (- (now) started))))
-                (recur candidate context request))))))
+                (recur candidate context (if settled? request last-request)))))))
         (finally
           ;; known-limit: retain private instance metadata for ownership diagnosis;
           ;; add bounded pruning if repeated reopening causes material state growth.

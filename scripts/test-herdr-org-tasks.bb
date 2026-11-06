@@ -401,5 +401,94 @@
           (host/action! "collapse" dir)
           (is (some #{["agent" "focus" "agent-b"]} @calls) "positive control: fresh pending B restores B without a poll")))))))
 
+(def race-script (str (fs/absolutize *file*)))
+
+(defn race-probe
+  "Child process: the user focuses B and expands after a supervisor poll has taken its
+  snapshot (A focused) but before that poll could be reconciled with request.json."
+  [root]
+  (let [instance (System/getenv "OT_HOST_INSTANCE")
+        a (assoc a :foreground_cwd (str root "/a")) b (assoc b :foreground_cwd (str root "/b"))
+        state (atom (assoc (snapshot [a b task-pane])
+                           :layouts [{:tab_id tab :focused_pane_id "agent-a"}]))
+        action-at (parse-long (or (System/getenv "RACE_ACTION_AT") "2"))
+        snapshots (atom 0) acted (atom false) contexts (atom []) post (atom []) real-atomic host/atomic!]
+    (with-redefs [host/call! (fn [& args]
+                               (case (vec (take 2 args))
+                                 ["api" "snapshot"]
+                                 (let [old @state n (swap! snapshots inc)]
+                                   (when (= n action-at)
+                                     (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-b"}])
+                                     (host/action! "expand" root)
+                                     (reset! acted true))
+                                   {:snapshot (if (= n action-at) old @state)})
+                                 ["pane" "process-info"] {:process_info (if (= "tasks" (last args))
+                                                                           {:shell_pid (.pid (java.lang.ProcessHandle/current))}
+                                                                           local-info)}
+                                 ["pane" "layout"] {:layout {:panes [] :splits []}}
+                                 ["plugin" "pane"] (do (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "tasks"}]) {})
+                                 ["agent" "focus"] {}))
+                  host/state-root! (constantly root) host/identity! (constantly "fixture")
+                  host/atomic! (fn [file value]
+                                 (when (= "context.json" (str (fs/file-name file)))
+                                   (when (:requestId value) (swap! contexts conj value))
+                                   (when @acted (swap! post conj (:sourcePane value))))
+                                 (real-atomic file value))]
+      (host/supervise! (str root "/sleeper")))
+    (let [c (last @contexts) file (str root "/observed.json")
+          _ (host/atomic! file c)
+          result (embed/read-context {:context-file file :instance instance} (host/now))]
+      (println (pr-str {:post @post :polls (count @contexts) :sources (mapv :sourcePane @contexts)
+                        :status (:status result) :directory (get-in result [:context :directory])})))))
+
+(when-let [root (System/getenv "RACE_PROBE_ROOT")]
+  (race-probe root)
+  (System/exit 0))
+
+(deftest supervisor-reconciles-a-request-with-a-snapshot-no-older-than-it
+  (temporary
+   (fn [dir]
+     (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
+       (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
+       (spit (str dir "/sleeper") "#!/bin/sh\nexec /bin/sleep 2\n")
+       (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
+       (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
+       (let [proc (p/process ["bb" race-script]
+                             {:extra-env {"RACE_PROBE_ROOT" dir "OT_HOST_DIR" private
+                                          "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
+                                          "HERDR_PANE_ID" "tasks"}
+                              :out :string :err :string})
+             result (deref proc 15000 nil)]
+         (when-not result (p/destroy-tree proc))
+         (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
+         (let [out (read-string (last (str/split-lines (:out result))))]
+           (is (= :ready (:status out)))
+           (is (= "agent-b" (last (:sources out))) "the expanded-from agent B is retained, not stale A")
+           (is (= (str dir "/b") (:directory out)))))))))
+
+;; The supervisor has already published a poll that sampled A when the user focuses B
+;; and expands inside the next poll's snapshot call.
+(deftest supervisor-never-publishes-a-sample-incoherent-with-its-request
+  (temporary
+   (fn [dir]
+     (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
+       (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
+       (spit (str dir "/sleeper") "#!/bin/sh\nexec /bin/sleep 3\n")
+       (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
+       (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
+       (let [proc (p/process ["bb" race-script]
+                             {:extra-env {"RACE_PROBE_ROOT" dir "OT_HOST_DIR" private "RACE_ACTION_AT" "3"
+                                          "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
+                                          "HERDR_PANE_ID" "tasks"}
+                              :out :string :err :string})
+             result (deref proc 15000 nil)]
+         (when-not result (p/destroy-tree proc))
+         (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
+         (let [out (read-string (last (str/split-lines (:out result))))]
+           (is (seq (:post out)) "positive control: contexts were published after the expansion")
+           (is (not-any? #{"agent-a"} (:post out)) (str "no post-expansion context names A: " (:post out)))
+           (is (= :ready (:status out)))
+           (is (= "agent-b" (last (:sources out))))))))))
+
 (let [{:keys [fail error]} (run-tests)]
   (System/exit (if (zero? (+ fail error)) 0 1)))
