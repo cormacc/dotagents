@@ -109,6 +109,8 @@ Bare `ot` on an interactive terminal opens a standalone task-browser TUI: task t
 
 The TUI needs no harness integration -- it is the interactive surface for humans and for agents/harnesses without a dedicated extension. Both task UIs bind `D` to removal through `ot remove`: the standalone TUI previews impact and arms a second `D` on the same cursor task, while the pi overlay uses its modal confirmation. The `D` flow prunes reported inbound blockers on confirmed removal; neither UI has a separate blocker-prune key.
 
+`ot tui --mode compact` provides a passive, height-bounded selected-task view with parent, plan and subtask context. Host adapters can embed the same renderer through a private per-instance context file; they do not own task parsing or writes. Both modes refresh external changes and defer root switches during forms, pickers and removal confirmation. Embedding usage and safety states: [references/ot-cli.md#Compact and embedded use](references/ot-cli.md#compact-and-embedded-use). The producer/consumer contract lives in [scripts/docs/contract.md#Embedded TUI context contract](scripts/docs/contract.md#embedded-tui-context-contract).
+
 ## Status discipline
 
 - Mark `STARTED` when beginning substantial work. The first transition writes `:STARTED:`.

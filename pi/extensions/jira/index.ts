@@ -94,7 +94,7 @@ function getAtlassianAvailability(pi: ExtensionAPI): {
 
 const DISCONNECTED = "Atlassian MCP: disconnected. Run /mcp login atlassian first.";
 const NO_SELECTION =
-  "No selected task. Press `s` on a task in /tasks first, or set #+SELECTED: in TASKS.local.org.";
+  "No selected task. Use `ot select <id>`, press `s` in the optional /tasks UI, or set #+SELECTED: in TASKS.local.org.";
 
 /** The selected task, or null after notifying why there is none. */
 async function selectedTaskOrNotify(

@@ -21,6 +21,8 @@ history is audit evidence and is not replayed as a queue of Jira
 transitions. The shared-event listener is released on `session_shutdown`, so
 reloads and session replacement cannot multiply a single status transition.
 
+Task selection, cloning and task reads use `ot` and remain available without Pi's visual task UI. Select a task with `ot select <id>`. Auto-transition consumes only the optional legacy overlay's status cycles; CLI, external-file and Herdr changes do not emit that event. Loading the non-visual `tasks/agent.ts` integration does not add another listener or status-event source. See [../tasks/README.md#Loading and coexistence](../tasks/README.md#loading-and-coexistence).
+
 ## Commands
 
 | Command                                | Status      | Description                                            |

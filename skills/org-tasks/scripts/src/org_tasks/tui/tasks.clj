@@ -1,5 +1,5 @@
 (ns org-tasks.tui.tasks
-  "Task model and command bridge for the standalone TUI.
+  "Task model and command bridge for the shared terminal TUI.
 
   Owns two concerns the view/dispatch layers build on:
 
@@ -159,6 +159,8 @@
         selected-id (:selectedId list-result)
         state (with-visible-tasks
                 {:tasks tasks
+                 :task-tree (:tree list-result)
+                 :task-memory-path (get-in list-result [:files :tasks])
                  :depths (task-depths tasks)
                  :selected-id selected-id
                  :expanded (ancestor-ids tasks selected-id)
@@ -214,24 +216,32 @@
   (:id (cursor-task state)))
 
 (defn reload-state
-  "Reload tasks from disk after a mutation, preserving the operator's view.
-  Collapse state, scroll, message, and dimensions carry over untouched;
+  "Reload tasks from disk, preserving the operator's view.
+  Collapse state, details scroll, message, and dimensions carry over;
   `:visible-tasks` is recomputed; and the cursor is re-anchored to the task it
   was on, falling back to the previous cursor index when that task no longer
   exists (e.g. after archive). The cursor is an index into *visible* tasks, so
   it must never snap to the freshly loaded selection's index in the full list.
-  Clamping and scroll follow-up belong to the `:tree/reload` action, which
-  chains `:tree/clamp-cursor` and `:tree/scroll-to-cursor` after this reload."
+  Cursor and tree scroll are clamped here so external refreshes are safe
+  without a following navigation action."
   [opts state]
   (let [prev-id (:id (cursor-task state))
         result (load-tasks opts)
         tasks (:rows result)
         state (-> state
                   (assoc :tasks tasks
+                         :task-tree (:tree result)
+                         :task-memory-path (get-in result [:files :tasks])
                          :depths (task-depths tasks)
                          :selected-id (:selectedId result)
-                         :details-scroll 0
                          :remove-confirmation nil)
                   with-visible-tasks)
-        idx (task-index-by-id (:visible-tasks state) prev-id)]
-    (assoc state :cursor (or idx (:cursor state 0)))))
+        idx (task-index-by-id (:visible-tasks state) prev-id)
+        cursor (max 0 (min (dec (count (:visible-tasks state)))
+                           (or idx (:cursor state 0))))
+        body-h (max 1 (- (tree-pane-height state) 2))
+        scroll (min cursor (:tree-scroll state 0))]
+    (assoc state :cursor cursor :tree-scroll
+           (if (>= cursor (+ scroll body-h))
+             (max 0 (- cursor body-h -1))
+             scroll))))

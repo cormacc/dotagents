@@ -2,6 +2,8 @@
 
 Herdr plugin `cormacc.herdr-orch`. It is an adapter over the `herdr-orch` skill in the same checkout: every entrypoint runs `../skills/herdr-orch/scripts/oh`, resolved from `HERDR_PLUGIN_ROOT`. The plugin contains no orchestration logic.
 
+The separate [org-tasks plugin](org-tasks/README.md) embeds the shared task TUI in a tab-local bottom split. Link its nested directory separately; the quota plugin and its configuration stay independent.
+
 ## Prerequisites
 
 - Herdr 0.9.1 or later, on Linux or macOS.

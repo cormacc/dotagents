@@ -125,10 +125,13 @@ In-place =status=, =priority=, and property commands (=handoff= / =blocker= / =i
 
 * TUI design
 
-- charm.clj owns the terminal program loop (raw mode, key decode, resize, cleanup); stdout is reserved for one final selected-task envelope on exit.
+- charm.clj owns the terminal program loop (raw mode, key decode, resize, cleanup). Standalone stdout carries one final selected-task envelope on exit; embedded stdout is empty.
 - State is a plain map; charm messages become nexus actions (=tui/dispatch.clj=), which expand to effects against the state and, for mutations, in-process command calls through the bridge.
 - Layout: side-by-side tree/details on landscape terminals; stacked (details below tree, viewport split by =tasks/tree-pane-height=) when narrow (width < 80) or portrait (width < height × 2, correcting for the ~1:2 terminal cell aspect). =tasks/stacked-layout?= owns the rule so rendering and cursor-scroll math agree.
 - Row rendering colours status and priority tokens from the shared palettes, matching =ot list= exactly.
+- =tui/embedding.clj= owns the private context-file consumer, lease validation and root-switch state. It calls the existing root resolver and task bridge; no host APIs enter rendering or mutations. [[file:contract.md]] section 'Embedded TUI context contract' owns the producer fields, entrypoint and fixtures.
+- A serial poll command refreshes task memory, local selection, imports and setupfiles. No graph load replaces an open form, move picker or removal confirmation. The latest pending context applies after the interaction ends; command effects use frozen action options and revalidate the producer lease before writing. A post-load context check rejects superseded graph results.
+- Compact rendering keeps selection identity, top-level parent, linked-plan path and height-bounded descendants, with pending work before completed history. Expanded mode uses the existing actions and a minimal cursor/prompt layout at very small geometry. Hosts own terminal sizing, placement and focus; snapshots carry data, not key sequences.
 
 * Project layout
 

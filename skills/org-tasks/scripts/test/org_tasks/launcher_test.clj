@@ -11,7 +11,8 @@
 (def repo-bin (str (fs/path scripts-dir "ot")))
 
 (defn- with-temp-dir [f]
-  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "ot-launcher-"})))]
+  (fs/create-dirs (fs/path root ".tmp"))
+  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:dir (fs/path root ".tmp") :prefix "ot-launcher-"})))]
     (try
       (f dir)
       (finally (fs/delete-tree dir)))))
@@ -42,4 +43,15 @@
         (is (= caller (resolved-path full)))
         (is (= caller (resolved-path symlinked)))
         (is (= caller (resolved-path fallback)))
-        (is (= dir (resolved-path absolute)))))))
+        (is (= dir (resolved-path absolute)))
+        (doseq [bin [repo-bin (str (fs/path deploy "org-tasks" "scripts" "ot"))
+                     (str (fs/path bare "ot"))]]
+          (let [help @(process/process [bin "tui" "--help"]
+                                       {:out :string :err :string :dir caller})
+                invalid @(process/process [bin "tui" "--context-file" "/missing/context.json"
+                                           "--format" "json"]
+                                          {:out :string :err :string :dir caller})]
+            (is (zero? (:exit help)) (:err help))
+            (is (str/includes? (:out help) "--context-file"))
+            (is (= 2 (:exit invalid)))
+            (is (str/includes? (:err invalid) "argument-error"))))))))

@@ -43,6 +43,89 @@
 (defn- removal-tui-state [opts]
   (tasks/initial-state (tasks/load-tasks opts)))
 
+(deftest compact-view-keeps-selection-and-pending-work-before-history
+  (let [state (assoc (tasks/initial-state
+                      {:selectedId "b"
+                       :rows [{:id "a" :summary "Parent" :status "TODO"}
+                              {:id "b" :parentId "a" :summary "Selected" :status "STARTED"
+                               :importPath "plan:work.org"}
+                              {:id "c" :parentId "b" :summary "Finished" :status "DONE"}
+                              {:id "d" :parentId "b" :summary "Pending" :status "TODO"}]})
+                     :mode "compact" :width 60 :height 4 :color? false)
+        rendered (tui/view state)]
+    (is (str/includes? rendered "Selected"))
+    (is (str/includes? rendered "Parent"))
+    (is (str/includes? rendered "plan:work.org"))
+    (is (str/includes? rendered "Pending"))
+    (is (not (str/includes? rendered "Finished")))
+    (is (<= (count (str/split-lines rendered)) 4))
+    (is (= [] (tui/msg->actions state (msg/key-press "n"))))))
+
+(deftest compact-progress-path-and-geometry
+  (let [home (System/getProperty "user.home")
+        result {:selectedId "b" :files {:tasks (str home "/project/TASKS.org")}
+                :tree [{:id "a" :importChildren [{:id "b" :status "STARTED"
+                                                   :children [{:id "c" :status "DONE"}
+                                                              {:id "d" :status "TODO"}]}
+                                                  {:id "e" :status "TODO"}]}]
+                :rows [{:id "a" :summary "Parent" :status "TODO" :sourcePath "/tasks"
+                        :importPath "plan:work.org"}
+                       {:id "b" :parentId "a" :summary "Selected" :status "STARTED" :sourcePath "/plan"}
+                       {:id "c" :parentId "b" :summary "Done" :status "DONE" :sourcePath "/plan"}
+                       {:id "d" :parentId "b" :summary "Pending" :status "TODO" :sourcePath "/plan"}
+                       {:id "e" :parentId "a" :summary "Other" :status "TODO" :sourcePath "/plan"}
+                       {:id "f" :parentId "a" :summary "Local child" :status "CANCELLED" :sourcePath "/tasks"}]}
+        state (assoc (tasks/initial-state result) :mode "compact" :width 80 :height 4 :color? false)
+        lines (str/split-lines (tui/view state))]
+    (is (str/starts-with? (first lines) "> Selected [--------] STARTED (1/2)"))
+    (is (str/ends-with? (first lines) "~/project/TASKS.org"))
+    (is (= 80 (count (first lines))))
+    (is (some #(= "Plan: plan:work.org (1/4)" %) lines))
+    (is (some #(str/includes? % "Pending") lines))
+    (is (not-any? #(str/includes? % "Done") lines))
+    (let [narrow (str/split-lines (tui/view (assoc state :width 18)))]
+      (is (str/includes? (first narrow) "Selected"))
+      (is (every? #(<= (count %) 18) narrow)))
+    (let [outside (assoc-in result [:files :tasks] (str home "-other/TASKS.org"))
+          wide (tui/view (assoc (tasks/initial-state outside) :mode "compact" :width 120 :height 4))]
+      (is (str/includes? wide (str home "-other/TASKS.org"))))
+    (let [empty-state (assoc (tasks/initial-state (assoc result :rows [(second (:rows result))]))
+                             :mode "compact" :width 80 :height 4)]
+      (is (str/includes? (tui/view empty-state) "(0/0)")))
+    (with-redefs [tasks/load-tasks (fn [_] (assoc-in result [:files :tasks] "/new/TASKS.org"))]
+      (is (str/ends-with? (first (str/split-lines (tui/view (tasks/reload-state {} state))))
+                          "/new/TASKS.org")))))
+
+(deftest compact-counts-imported-tasks-from-the-same-source
+  (let [owner {:id "a" :summary "Owner" :status "TODO" :sourcePath "/tasks" :importPath "file:TASKS.org"}
+        child {:id "b" :summary "Imported" :status "DONE" :sourcePath "/tasks" :parentId "a"}
+        result {:selectedId "a" :rows [owner child]
+                :tree [(assoc owner :importChildren [child] :children [])]}
+        state (assoc (tasks/initial-state result) :mode "compact" :width 80 :height 3)]
+    (is (str/includes? (tui/view state) "Plan: file:TASKS.org (1/1)"))))
+
+(deftest compact-renders-loaded-import-and-refresh
+  (test-util/with-temp-dir
+    (fn [root]
+      (spit (str root "/TASKS.org")
+            (str "* TODO Parent\n:PROPERTIES:\n:CUSTOM_ID: " removal-parent-id
+                 "\n:END:\n#+IMPORT: [[file:plan.org]]\n"))
+      (spit (str root "/TASKS.local.org") (str "#+SELECTED: " removal-parent-id "\n"))
+      (spit (str root "/plan.org")
+            (str "* Plan\n** DONE Done\n:PROPERTIES:\n:CUSTOM_ID: " removal-child-id
+                 "\n:END:\n** TODO Pending\n:PROPERTIES:\n:CUSTOM_ID: " removal-other-child-id "\n:END:\n"))
+      (let [opts {:root root}
+            state (assoc (tasks/initial-state (tasks/load-tasks opts)) :mode "compact" :width 180 :height 4)
+            lines (str/split-lines (tui/view state))]
+        (is (str/includes? (first lines) "(1/2)"))
+        (is (str/ends-with? (first lines) (str root "/TASKS.org")))
+        (is (some #(str/ends-with? % "(1/2)") (rest lines)))
+        (is (some #(str/includes? % "Pending") lines))
+        (spit (str root "/plan.org") (str/replace (slurp (str root "/plan.org")) "TODO Pending" "DONE Pending"))
+        (let [refreshed (str/split-lines (tui/view (tasks/reload-state opts state)))]
+          (is (str/includes? (first refreshed) "(2/2)"))
+          (is (some #(and (str/starts-with? % "Plan:") (str/ends-with? % "(2/2)")) refreshed)))))))
+
 (deftest move-picker-filters-owner-and-subtree
   (let [rows [{:id "a" :sourcePath "/tasks"}
               {:id "b" :parentId "a" :sourcePath "/tasks"}

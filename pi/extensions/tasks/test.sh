@@ -50,7 +50,7 @@ fi
 # refresh. That is not hypothetical: a transient `ot list` timeout under load
 # did exactly that, via the watcher-debounce refresh in `scheduleRefresh`.
 # Attach `.catch` instead -- the failure belongs to the refresh, not the session.
-if FLOATING="$(grep -nE 'void [a-zA-Z_$][a-zA-Z0-9_$]*\(' index.ts overlay.ts ot.ts)"; then
+if FLOATING="$(grep -nE 'void [a-zA-Z_$][a-zA-Z0-9_$]*\(' index.ts legacy.ts prompts.ts agent.ts overlay.ts ot.ts)"; then
   echo "not ok - floating promise(s) found; attach .catch so a rejection cannot kill the pi process:" >&2
   echo "$FLOATING" | sed 's/^/  /' >&2
   exit 1
@@ -62,7 +62,7 @@ CODE=0
 
 # Every *.test.ts beside this runner, plus the shared lib test. Globbed rather
 # than listed so a new test file cannot be added without being run.
-for t in ./*.test.ts ../lib/agent-paths.test.ts ../test/locked-tools.test.ts; do
+for t in ./*.test.ts ../lib/agent-paths.test.ts ../test/locked-tools.test.ts ../test/event-subscriptions.test.ts; do
   echo "# Running $t..."
   "$TSX" "$t" || CODE=1
 done

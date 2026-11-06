@@ -137,6 +137,54 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren": [T
 - The final envelope reflects the persisted `#+SELECTED:` value. Moving the cursor is not selection; press `s` to persist a new selected task, or `s` again on the selected row to clear it.
 - In the standalone TUI, `D` first calls `ot remove --dry-run --prune-blockers`, displays the impact, and arms only that cursor task. A second `D` on the same task calls `ot remove --yes --prune-blockers`. Cursor movement, mutations, mode changes, or a different task disarm it. The pi overlay exposes the same removal through its modal confirmation. Neither UI has a separate blocker-prune key.
 
+## Embedded TUI context contract
+
+The shared consumer is `ot tui --context-file /absolute/private/context.json --instance <instance-id>`. This is an interactive terminal entrypoint, not a host API. It emits no final stdout envelope in embedded mode because the project can change during its lifetime. `ot tui [--mode compact|expanded]` without embedding options is standalone and retains the final selected-task envelope. The default standalone mode is expanded. `--root`, `--tasks` and `--archive` cannot accompany `--context-file`; incomplete embedding options fail with `argument-error` and exit 2.
+
+### Producer snapshot
+
+Create a private directory for each interface instance (directory mode `0700`, snapshot mode `0600`). The producer owns this directory and must not accept another instance's file. Write a complete UTF-8 JSON object to a unique sibling temporary file, then rename it over the context path. Never truncate the live snapshot in place. Start a new instance with a new, non-blank `instanceId` and pass that value through `--instance`; do not reuse an earlier process's file or identity.
+
+```json
+{
+  "schema": "org-tasks-embed/v1",
+  "instanceId": "interface-instance-1",
+  "contextId": "source-project-a-1",
+  "availability": "local",
+  "directory": "/absolute/project/a/subdirectory",
+  "mode": "compact",
+  "updatedAt": 1793908800000
+}
+```
+
+| Field | Contract |
+| --- | --- |
+| `schema` | Exactly `org-tasks-embed/v1`; independent of command-output schema `org-tasks/v1`. |
+| `instanceId` | Non-blank string equal to `--instance`; fixed for one consumer process. |
+| `contextId` | Non-blank source-context identity, independent of task UUIDs. Issue a new value on each source change, including A → B → A. Heartbeats retain it. |
+| `availability` | `local`, `unavailable` or `remote`. No fallback project is permitted. |
+| `directory` | For `local`, an absolute existing local directory. For `remote` or `unavailable`, ignored and may be null. Never mark a remote working-directory string as `local`. |
+| `mode` | `compact` or `expanded`; the snapshot controls mode, not simulated key input. |
+| `updatedAt` | Integer Unix epoch milliseconds. Renew at least once per second, including when context is unavailable. |
+
+All fields except `directory` are required. Unknown additive fields are ignored. Instance mismatch, missing fields, unknown enum values, malformed JSON, relative/nonexistent local directories and unreadable files are invalid. Remote context is rejected before any local directory resolution. The producer must publish `unavailable` when no eligible source exists, rather than retaining a different tab's project. Source-pane eligibility, active-pane/workspace-root policy, placement, sizing, focus restoration and resource ownership belong to the host adapter; this contract defines no host methods.
+
+### Consumer state and liveness
+
+The consumer polls every 500 ms and revalidates input on every input event and immediately before command effects or editor launches. A snapshot is stale when its age exceeds 5000 ms or it is more than 1000 ms in the future. A stopped producer therefore loses authority within 5500 ms while the event loop is available. Graph loading and synchronous editor launches can delay repainting; no mutation input runs concurrently with those operations, and the lease is checked again before a command. This lease is not a PID check and does not authenticate a producer: private file ownership is a producer requirement.
+
+Missing, invalid, stale, remote, unavailable and graph-load-error states are explicit and disable mutations. Without an open interaction, the unavailable view hides the earlier project's graph. A valid local directory goes through `org-tasks.root/resolve-root` with the directory as its starting cwd, including the existing nearest-ancestor rule. If the resolved root has no `TASKS.org`, the consumer shows `No task memory in project` and does not initialise it. Recovery from a failed snapshot reloads the current valid context; task UUID equality never makes two contexts interchangeable.
+
+A create input, every move-picker stage (including section input), and armed removal confirmation freeze their original graph and action root. Valid source or mode changes show `Project switch pending`; the latest snapshot takes effect after submission or cancellation. A context failure blocks submission even while a modal is open; cancellation remains available. `Esc` cancels an embedded armed removal rather than exiting. Deferred valid switches may complete the original-root action, but a context change not observed by the event loop is refused at the command effect. Original-root task memory must still exist. Command handlers retain their sandbox, validation, confirmation and optimistic-concurrency rules.
+
+Graph refresh runs serially through the existing full-list bridge on each poll, including imported files and setupfile changes. Refresh waits while a modal is open. The consumer rereads context after loading and discards the graph if instance, context identity, directory, availability or mode changed; heartbeat-only updates do not supersede a result. There are no parallel graph-refresh jobs that can install an older result later. Poll commands are per-program one-shot commands; exit stops scheduling them and leaves no recurring watcher.
+
+Compact mode is passive except for exit keys. It shows selected-task identity first, then its top-level parent, nearest linked-plan path and descendants within the actual height. Pending descendants take space before `DONE`/`CANCELLED` history. An absent selection says `No selected task`; an unresolved non-null pointer says `Stale selection`. Expanded mode retains the standalone action set. Very small expanded terminals use a single-column cursor/prompt view; navigation remains active and output stays within the reported geometry.
+
+### Producer and consumer fixtures
+
+[`../test/fixtures/embedding/local.json`](../test/fixtures/embedding/local.json) is the producer template. Replace its directory and timestamp when writing a live snapshot. [`../test/org_tasks/embedding_test.clj`](../test/org_tasks/embedding_test.clj) supplies `produce!` (atomic replacement), disposable A/B roots, lease-boundary and invalid-input cases, modal switches, producer loss, external imports, superseded refresh and standalone-output assertions. Run `bb test-clojure org-tasks.embedding-test org-tasks.tui-test org-tasks.cli-test org-tasks.launcher-test` from the repository root. These fixtures do not validate native host placement or focus.
+
 ## Per-command results
 
 ### `ot list`

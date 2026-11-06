@@ -12,7 +12,8 @@
             [clojure.test :refer [deftest is testing]]
             [org-tasks.cli :as cli]
             [org-tasks.commands.registry :as registry]
-            [org-tasks.output :as out]))
+            [org-tasks.output :as out]
+            [org-tasks.tui :as tui]))
 
 (defn- with-user-dir [dir f]
   (let [prev (System/getProperty "user.dir")]
@@ -48,6 +49,29 @@
     {:out  (str out)
      :err  (str err)
      :exit (or @exit 0)}))
+
+(deftest shared-tui-entrypoint-options-and-embedding-validation
+  (let [calls (atom [])]
+    (with-redefs [tui/run! #(swap! calls conj %)]
+      (doseq [args [["tui" "--mode" "compact"]
+                    ["tui" "--context-file" "/private/context.json" "--instance" "instance-1"]]]
+        (is (zero? (:exit (capture #(apply cli/-main args))))))
+      (is (= "compact" (:mode (first @calls))))
+      (is (= "/private/context.json" (:context-file (second @calls))))
+      (is (= "instance-1" (:instance (second @calls))))
+      (doseq [args [["tui" "--context-file" "/private/context.json"]
+                    ["tui" "--instance" "instance-1"]
+                    ["tui" "--context-file" "relative.json" "--instance" "instance-1"]
+                    ["tui" "--context-file" "/private/context.json" "--instance" "instance-1" "--root" "/other"]
+                    ["tui" "--mode" "unknown"]]]
+        (let [{:keys [exit err]} (capture #(apply cli/-main (into ["--format" "json"] args)))]
+          (is (= 2 exit))
+          (is (str/includes? err "argument-error"))))
+      (is (= 2 (count @calls)))))
+  (let [{:keys [out exit]} (capture #(cli/-main "tui" "--help"))]
+    (is (zero? exit))
+    (doseq [option ["--context-file" "--instance" "--mode"]]
+      (is (str/includes? out option)))))
 
 (deftest usage-errors-include-command-reference-outside-error
   (let [{:keys [err exit]} (capture #(cli/-main "list" "--format" "json" "--bogus"))

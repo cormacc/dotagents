@@ -75,7 +75,7 @@
           (is (str/includes? err "HERDR_PLUGIN_ROOT") err))))))
 
 (deftest plugin-files-hold-no-checkout-path
-  (let [files (map str (fs/list-dir plugin))]
+  (let [files (map str (filter fs/regular-file? (fs/list-dir plugin)))]
     (is (seq files) "positive control: the plugin directory has files")
     (doseq [f files]
       (is (not (re-find #"/Users/|/home/|dotfiles" (slurp f))) f))))

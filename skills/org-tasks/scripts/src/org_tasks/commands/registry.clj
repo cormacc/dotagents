@@ -192,7 +192,13 @@
 (def commands
   "Ordered command registry. Order drives both dispatch precedence and
   the `ot --help` command index."
-  [{:cmds ["init"]               :fn maintenance/init-cmd
+  [{:cmds ["tui"] :fn (fn [result] ((requiring-resolve 'org-tasks.tui/command!) result))
+    :spec {:mode (merge {:desc "Display mode"} (enum-opt "mode" [:compact :expanded]))
+           :context-file {:desc "Private per-instance embedding JSON file" :ref "<path>"}
+           :instance {:desc "Expected embedding instance identity" :ref "<id>"}}
+    :summary ["[--mode compact|expanded] [--context-file <path> --instance <id>]"
+              "Run the shared terminal task UI"]}
+   {:cmds ["init"]               :fn maintenance/init-cmd
     :spec {}
     :summary ["" "Bootstrap TASKS.{setup,local}.org + TASKS.org"]}
    {:cmds ["root"]               :fn maintenance/root-cmd

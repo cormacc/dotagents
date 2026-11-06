@@ -1,5 +1,5 @@
 (ns org-tasks.tui.dispatch
-  "Nexus actions and effects for the standalone TUI.
+  "Nexus actions and effects for the shared terminal TUI.
 
   Actions are pure: they receive an immutable state snapshot and return a
   collection of actions/effects. Effects perform the side-effects against the
@@ -19,7 +19,8 @@
             [org-tasks.commands.list-show :as list-show]
             [org-tasks.commands.registry :as registry]
             [org-tasks.editor :as editor]
-            [org-tasks.tui.tasks :as tasks]))
+            [org-tasks.tui.tasks :as tasks]
+            [org-tasks.tui.embedding :as embedding]))
 
 (def quit-marker
   "State key set by the `:tui/quit` effect and consumed (and removed) by the
@@ -76,35 +77,46 @@
     :tui/quit        (fn [_ {:keys [!store]}] (swap! !store assoc quit-marker true))
 
     :command/run
-    (fn [{:keys [dispatch] {:keys [opts]} :dispatch-data} _system cmd-key cmd-opts ok-message]
-      (let [{:keys [exit envelope]} (tasks/call-command (command-fns cmd-key) (merge opts cmd-opts))]
-        (dispatch
-         (if (zero? exit)
-           (cond-> [[:state/assoc :message ok-message]
-                    [:tree/reload]]
-             (= cmd-key :move) (conj [:tree/reveal-task (:id cmd-opts)]))
-           [[:state/assoc :message (tasks/error-message envelope)]]))))
+    (fn [{:keys [dispatch] {:keys [opts]} :dispatch-data} {:keys [!store]} cmd-key cmd-opts ok-message]
+      (if-not (embedding/command-allowed? opts @!store)
+        (swap! !store assoc :message "Task mutations disabled: context unavailable")
+        (let [{:keys [exit envelope]}
+              (tasks/call-command (command-fns cmd-key)
+                                  (merge (embedding/action-opts opts @!store) cmd-opts))]
+          (dispatch
+           (if (zero? exit)
+             (cond-> [[:state/assoc :message ok-message]
+                      [:tree/reload]]
+               (= cmd-key :move) (conj [:tree/reveal-task (:id cmd-opts)]))
+             [[:state/assoc :message (tasks/error-message envelope)]])))))
 
     :remove/preview
     (fn [{{:keys [opts]} :dispatch-data} {:keys [!store]} id]
       (let [{:keys [ok? result message]}
-            (tasks/call-result (command-fns :remove)
-                               (merge opts {:id id :dry-run true :prune-blockers true}))]
+            (if (embedding/command-allowed? opts @!store)
+              (tasks/call-result (command-fns :remove)
+                                 (merge (embedding/action-opts opts @!store)
+                                        {:id id :dry-run true :prune-blockers true}))
+              {:message "Task mutations disabled: context unavailable"})]
         (swap! !store assoc
                :remove-confirmation (when ok? {:task-id id})
                :message (if ok? (tasks/removal-impact-message result) message))))
 
     :state/reload
     (fn [{{:keys [opts]} :dispatch-data} {:keys [!store]}]
-      (reset! !store (tasks/reload-state opts @!store)))
+      (reset! !store (tasks/reload-state (embedding/action-opts opts @!store) @!store)))
 
     :editor/open
     (fn [{{:keys [opts]} :dispatch-data} {:keys [!store]} path line message]
-      (swap! !store assoc :message (or (editor/open! opts path line) message)))
+      (swap! !store assoc :message
+             (if (embedding/command-allowed? opts @!store)
+               (or (editor/open! (embedding/action-opts opts @!store) path line) message)
+               "Editor disabled: context unavailable")))
 
     :issues/open-linked
     (fn [{{:keys [opts]} :dispatch-data} {:keys [!store]} id]
-      (let [{:keys [ok? result message]} (tasks/call-result (command-fns :issue-urls) (merge opts {:id id}))]
+      (let [{:keys [ok? result message]} (tasks/call-result (command-fns :issue-urls)
+                                                                  (merge (embedding/action-opts opts @!store) {:id id}))]
         (if ok?
           (let [urls (:urls result)]
             (doseq [u urls] (open-url! u))
@@ -117,10 +129,13 @@
     ;; show` does, rather than handing the raw link token to the
     ;; editor as a literal path.
     (fn [{{:keys [opts]} :dispatch-data} {:keys [!store]} id]
-      (let [{:keys [ok? result message]} (tasks/call-result list-show/show-cmd (merge opts {:id id}))]
+      (let [{:keys [ok? result message]} (tasks/call-result list-show/show-cmd (merge (embedding/action-opts opts @!store) {:id id}))]
         (if ok?
           (if-let [abs (get-in result [:record :path])]
-            (swap! !store assoc :message (or (editor/open! opts abs 1) "Plan editor launched."))
+            (swap! !store assoc :message
+                   (if (embedding/command-allowed? opts @!store)
+                     (or (editor/open! (embedding/action-opts opts @!store) abs 1) "Plan editor launched.")
+                     "Editor disabled: context unavailable"))
             (swap! !store assoc :message "No change-record found for this task."))
           (swap! !store assoc :message message))))}
 
@@ -133,6 +148,7 @@
     :tree/reload
     (fn [_state]
       [[:state/reload]
+       [:state/assoc :details-scroll 0]
        [:tree/clamp-cursor]
        [:tree/scroll-to-cursor]])
 

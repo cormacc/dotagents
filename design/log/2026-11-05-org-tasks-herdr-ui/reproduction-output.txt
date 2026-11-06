@@ -1,0 +1,5 @@
+ACTION captured agent-b
+CASE control polls 6 SOURCES [agent-b agent-b agent-b agent-b agent-b agent-b] CONSUMER :ready DIR /Users/cormacc/dotfiles/agents/.tmp/focus-rereview-race-15470716575329937589/b
+
+ACTION captured agent-b
+CASE race polls 5 SOURCES [agent-a agent-a agent-a agent-a agent-a] CONSUMER :ready DIR /Users/cormacc/dotfiles/agents/.tmp/focus-rereview-race-16663963989767773839/a

@@ -34,6 +34,8 @@ The local shim resolves the dotagents repo root from its own path and invokes `b
 
 Run `ot --help` for the command index and `ot <command> --help` for per-command options -- both are derived from the same command registry as dispatch itself, so they cannot drift. Full usage reference, including the interactive TUI, key map, root resolution, and id-prefix rules: [`../references/ot-cli.md`](../references/ot-cli.md).
 
+Embedding uses the same installed launcher: `ot tui --context-file /absolute/private/context.json --instance <instance-id>`. No additional dependency or host installation is part of the shared TUI. Adapter authors should start with [docs/contract.md#Embedded TUI context contract](docs/contract.md#embedded-tui-context-contract) and its producer/consumer fixtures; host setup belongs in the adapter's own documentation.
+
 ## Testing
 
 ```sh
@@ -53,7 +55,7 @@ The local `bb.edn` delegates `bb test` to the repository-root task. The reposito
 | [`../SKILL.md`](../SKILL.md) | org-tasks protocol: file format, lifecycle, agent workflows |
 | [`../references/ot-cli.md`](../references/ot-cli.md) | CLI + TUI usage: commands, key map, root resolution, machine-output overview |
 | [`../references/protocol.md`](../references/protocol.md) | field-level org format reference |
-| [`docs/contract.md`](docs/contract.md) | canonical `org-tasks/v1` JSON/EDN envelope schemas per command |
+| [`docs/contract.md`](docs/contract.md) | canonical `org-tasks/v1` JSON/EDN envelopes and `org-tasks-embed/v1` producer/consumer contract |
 | [`docs/DESIGN.org`](docs/DESIGN.org) | architecture: namespaces, data flow, TUI design, project layout |
 | [`docs/boundary.md`](docs/boundary.md) | what `ot` owns vs the pi tasks extension |
 | [`docs/test-map.md`](docs/test-map.md) | test suite map (behaviour → namespace) |

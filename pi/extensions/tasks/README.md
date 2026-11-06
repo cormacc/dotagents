@@ -1,16 +1,30 @@
 # Tasks Extension
 
-Displays project tasks from a `TASKS.org` file in the project root using org-mode TODO syntax.
-The extension is a UI over the plain-org task-memory protocol documented in
-`skills/org-tasks/SKILL.md`; that skill defines the durable file-format contract. The `ot` CLI owns protocol reads and writes; this extension owns commands, rendering, dialogs, and event glue. Protocol logic is being migrated incrementally to the
-portable Babashka `ot` CLI under `skills/org-tasks/scripts/`: leaf LLM tools now
-call `ot section` / `ot scan`, `/tasks doctor` calls `ot doctor`,
-selection/status/archive/publish/unpublish use
-`ot select|status|archive|publish|unpublish`, `insertTaskIntoFile` and the
-interactive overlay create flow shell through `ot create`, and the overlay task
-graph loads from `ot list --full --format json`. The extension always passes canonical
-full UUIDs to `ot`; CLI prefix resolution is a shell-user convenience and does
-not affect overlay or tool-call behaviour.
+The legacy visual extension displays project tasks from `TASKS.org` using an overlay and a compact selected-task widget. The plain-org protocol belongs to [org-tasks](../../../skills/org-tasks/SKILL.md); `ot` owns protocol reads and writes. `/tasks doctor` calls `ot doctor`, visual mutations call the corresponding `ot` commands, and the task graph loads from `ot list --full --format json`. The extension passes canonical full UUIDs to `ot`; CLI prefix resolution is a shell-user convenience. No LLM-facing task tools are registered. Agents use `ot` through their existing shell access, independently of this UI.
+
+## Loading and coexistence
+
+| Load path | Contract |
+| --- | --- |
+| `tasks/index.ts` (or auto-discovered `tasks/`) | Compatibility entrypoint: retains the visual UI, commands, Alt+T and watchers. |
+| `tasks/legacy.ts` | Explicit legacy visual entrypoint with the same behaviour. Load one visual path, not both. |
+| [`tasks/agent.ts`](agent.ts) | Non-visual integration: exports prompt helpers, with no commands, tools, UI keybindings, widgets, watchers or event subscriptions. |
+
+The non-visual entrypoint can load alone or with either visual path. Loading both integrations adds no duplicate registrations. The current settings and visual default remain unchanged. Keep the sibling `tasks/`, `emacsclient/` and `lib/` directories together so their relative helper imports resolve; the installed whole-tree symlink already does this.
+
+After terminal-Herdr delivery is validated and the user explicitly requests cutover:
+
+1. Exclude the auto-discovered visual entrypoint in `<configured agent directory>/settings.json` with `"extensions": ["-./extensions/tasks/index.ts"]`. Preserve other entries. If the visual path is configured explicitly, remove that entry too.
+2. Add `"./extensions/tasks/agent.ts"` to the same `extensions` array, and keep `ot` and the `org-tasks` skill installed. Agent shell access to `ot` needs neither visual entrypoint nor a task tool registration.
+3. For temporary coexistence, add `"./extensions/tasks/legacy.ts"` to the same `extensions` array while the compatibility entrypoint stays excluded. Remove that explicit entry to disable Pi's visual surface again.
+
+These are instructions for an explicit user cutover, not an automatic migration. External `ot` or Herdr status changes do not emit Pi's legacy `tasks:status-changed` event.
+
+## Prompt helper API
+
+Import `buildChangeRecordPrompt`, `buildSummaryRefreshPrompt` and `handlePlanEdit` from `tasks/agent.ts` or `tasks/prompts.ts` without importing the visual factory. Prompt text retains the task, path, mode and skill-owned policy contract. Non-visual `handlePlanEdit` uses Pi's prefilled `ctx.ui.editor` for path approval and sends a follow-up after `ot record create`; it does not refresh or start the legacy UI. Opening an existing record retains the sandboxed Emacs-open flow. It needs a UI context when called, but loading it needs none.
+
+Existing imports from `tasks/index.ts` remain supported. Its `handlePlanEdit` wrapper retains the prefilled custom path dialog and legacy refresh after record creation. The visual entrypoint consumes the same prompt builders; only its wrapper owns visual refresh.
 
 `ot` discovery order is:
 
@@ -304,7 +318,7 @@ The extension no longer registers LLM-facing task/org tools. Agents should use t
 - Read change-record sections: `ot section design/log/foo.org Summary --format json`.
 - Scan prior work: `ot scan --scope all --max-body-chars 500 --format json`.
 
-Cross-extension JS callers that need deterministic org insertion should import `insertTaskIntoFile` from `./insert.ts` directly. The helper still owns UUID/`:CREATED:` rendering, duplicate `:LINKED_ISSUES:` checks, and project-root sandboxing; the `jira_clone` tool of the `jira` extension uses that direct import path.
+Cross-extension JS callers that need deterministic org insertion should import `insertTaskIntoFile` from `./insert.ts` directly. The helper delegates UUID/`:CREATED:` rendering, duplicate `:LINKED_ISSUES:` checks and project-root sandboxing to `ot`; the `jira_clone` tool of the `jira` extension uses that direct import path without loading either task entrypoint.
 
 ## Cross-extension events
 
@@ -365,7 +379,9 @@ Extension-specific notes:
 
 ## Tests
 
-Run `./test.sh`. It discovers every co-located `*.test.ts` and runs the shared path and locked-launcher tests. The suites cover parsing, insertion, graph reconstruction, CLI adapters, sandboxing, move destinations, picker cancellation, removal, and summary-refresh detection.
+Run `./test.sh`. It discovers every co-located `*.test.ts` and runs the shared path, locked-launcher and event-subscription tests. The suites cover parsing, insertion, graph reconstruction, CLI adapters, sandboxing, move destinations, picker cancellation, removal, and summary-refresh detection.
+
+`separation.test.ts` covers non-visual-only, legacy-only and both combined load orders, repeated shutdown/replacement, real watcher cleanup and shutdown during an in-flight refresh. `discovery.test.ts` starts installed Pi in offline RPC mode with disposable settings and task roots, checks actual auto-discovery and explicit legacy loading across reloads, verifies shell/CLI access, and makes no provider requests. `prompts.test.ts` checks non-visual record creation, cancellation, validation and prompt text. The shared event suite cycles a task through the real legacy overlay callback and checks durable status-event payloads and Jira follow-up semantics.
 
 `record.test.ts` exercises the real `ot` record adapter: custom paths, migrated IDs, existing-file preservation, local source owners, sandbox refusal, and skill-owned prompt policy. `pi-integration.test.ts` uses the [shared RPC harness](../test/README.md) and retains framing, environment-isolation, response-correlation, early-load-failure, spawn-error, and stdin-error checks.
 

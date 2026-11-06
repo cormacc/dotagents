@@ -1,21 +1,24 @@
 (ns org-tasks.tui
-  "Standalone terminal UI for `ot`.
+  "Shared standalone and embedded terminal UI for `ot`.
 
   The interactive program is run through charm.clj so JLine owns raw-mode
   input, key decoding, window-size messages, rendering, and terminal cleanup.
-  stdout remains reserved for the final org-tasks/v1 selected-task envelope;
-  while Charm creates its system terminal, System/out is temporarily pointed at
-  System/err so renderer control sequences go to the user's terminal stream but
-  not to captured stdout."
+  Standalone stdout holds one final org-tasks/v1 selected-task envelope;
+  embedded mode emits no stdout payload. While Charm owns its system terminal,
+  System/out is temporarily pointed at System/err so renderer control sequences
+  go to the user's terminal stream rather than captured stdout."
   (:refer-clojure :exclude [run!])
-  (:require [charm.message :as msg]
+  (:require [babashka.fs :as fs]
+            [charm.message :as msg]
             [charm.program :as program]
             [charm.style.core :as style]
             [clojure.string :as str]
             [org-tasks.styling :as styling]
             [org-tasks.task :as task]
+            [org-tasks.output :as out]
             [org-tasks.tui.dispatch :as dispatch]
             [org-tasks.tui.tasks :as tasks]
+            [org-tasks.tui.embedding :as embedding]
             ;; Charm owns the terminal program loop; nexus owns event
             ;; dispatch. Each charm event is turned into nexus actions
             ;; (see `org-tasks.tui.dispatch`) that expand to effects against
@@ -35,7 +38,7 @@
 
 (defn- crop [n s]
   (if (pos? n)
-    (style/truncate (str s) n)
+    (style/truncate (str s) n :tail (if (< n 4) "" "..."))
     ""))
 
 (defn- pad-right [n s]
@@ -186,7 +189,7 @@
   "↑↓/jk cursor  ←→/hl status  ⇧←→ priority  Enter/Space/Tab collapse  s select  m move  D remove  e edit  p plan  n/N new  A archive  P publish  U unpublish  J issues  Esc/Alt-t quit")
 
 (defn- view-dimensions [state]
-  (let [width (max 20 (:width state 100))
+  (let [width (max 1 (:width state 100))
         ;; Leave spare columns in the normal buffer/Display output so long
         ;; right-pane lines never hit the terminal's auto-wrap margin, even in
         ;; terminals whose reported width is slightly optimistic.
@@ -241,9 +244,14 @@
                      (map #(crop detail-w %) detail-lines))
              pane-h))
 
+(defn- context-notice [state]
+  (or (:context-message state)
+      (when (:pending-context state) "Project switch pending")))
+
 (defn- status-line [state content-w]
   (let [msg-line (when-let [m (:message state)] (styled state m :fg message-color))]
-    (crop content-w (or (prompt-line state) msg-line ""))))
+    (crop content-w (str (when-let [notice (context-notice state)] (str notice " | "))
+                         (or (prompt-line state) msg-line "")))))
 
 (defn- move-picker-view [state]
   (let [{:keys [stage mode options cursor input]} (:move-task state)
@@ -261,15 +269,72 @@
                   ["No same-file destinations. Esc cancels."]))]
     (str/join "\n"
               (map #(crop content-w %)
-                   (concat [(styled state (if (= stage :relation) "Move: choose relation"
-                                             (str "Move: choose " (name mode) " destination"))
+                   (concat [(styled state (str (when-let [notice (context-notice state)]
+                                                   (str notice " | "))
+                                             (if (= stage :relation) "Move: choose relation"
+                                             (str "Move: choose " (name mode) " destination")))
                                     :fg accent-color :bold true)]
                            (fit-lines lines body-h)
                            ["" (if section?
                                  "Type section name  Enter confirm  Esc cancel"
                                  "↑↓/jk choose  Enter confirm  Esc cancel")])))))
 
-(defn view [state]
+(defn- home-shortened [path]
+  (when path
+    (let [home (System/getProperty "user.home")
+          prefix (str (str/replace home #"/+$" "") "/")]
+      (cond
+        (= path home) "~"
+        (str/starts-with? path prefix) (str "~/" (subs path (count prefix)))
+        :else path))))
+
+(defn- compact-progress [rows completed?]
+  (str "(" (count (filter completed? rows)) "/" (count rows) ")"))
+
+(defn- compact-selected-line [width label path]
+  (if (and path (<= (+ (text-width label) 1 (text-width path)) width))
+    (str (pad-right (- width (text-width path)) label) path)
+    (crop width label)))
+
+(defn compact-lines
+  "Height-bounded selected-task context. Keep identity before ancestry, plan and
+  descendants; pending descendants take space before completed history."
+  [state]
+  (let [rows (:tasks state)
+        selected (first (filter #(= (:selected-id state) (:id %)) rows))
+        ancestors (tasks/ancestor-ids rows (:selected-id state))
+        parent (first (filter #(and (contains? ancestors (:id %))
+                                   (not (contains? ancestors (:parentId %)))) rows))
+        by-id (into {} (map (juxt :id identity)) rows)
+        plan-owner (first (filter :importPath (take-while some?
+                                                          (iterate #(get by-id (:parentId %)) selected))))
+        plan (:importPath plan-owner)
+        descendants (filter #(contains? (tasks/ancestor-ids rows (:id %))
+                                         (:selected-id state)) rows)
+        tree-nodes (tree-seq #(seq (concat (:children %) (:importChildren %)))
+                             #(concat (:children %) (:importChildren %))
+                             {:children (:task-tree state)})
+        plan-node (first (filter #(= (:id plan-owner) (:id %)) tree-nodes))
+        plan-tasks (task/flatten-tree (:importChildren plan-node))
+        completed? #(#{"DONE" "CANCELLED"} (:status %))
+        label (fn [t] (str (:summary t) " [" (task/id-prefix (:id t)) "] " (:status t)))
+        lines (if selected
+                (concat [(compact-selected-line (max 1 (:width state 100))
+                                                (str "> " (label selected) " " (compact-progress descendants completed?))
+                                                (home-shortened (:task-memory-path state)))]
+                        (when parent [(str "Parent: " (:summary parent))])
+                        (when plan [(str "Plan: " plan " " (compact-progress plan-tasks completed?))])
+                        (map #(str "  " (label %))
+                             (concat (remove completed? descendants)
+                                     (filter completed? descendants))))
+                [(if (:selected-id state)
+                   (str "Stale selection: " (:selected-id state))
+                   "No selected task")])
+        lines (if-let [notice (context-notice state)]
+                (cons notice lines) lines)]
+    (take (max 1 (:height state 30)) lines)))
+
+(defn- expanded-view [state]
   (let [{:keys [visible-tasks]} state
         {:keys [content-w pane-h tree-h stacked? tree-w detail-w]} (view-dimensions state)
         detail-lines (detail-view-lines state detail-w)
@@ -285,6 +350,38 @@
            (status-line state content-w)
            "\n"
            (styled state (crop content-w footer) :fg dim-color)))))
+
+(defn- small-view [state]
+  (let [cursor (tasks/cursor-task state)
+        picker (:move-task state)
+        option (when picker (nth (:options picker) (:cursor picker) nil))]
+    (str/join "\n"
+              (remove nil?
+                      [(context-notice state)
+                       (or (prompt-line state)
+                           (when picker
+                             (if (= :section (:mode picker))
+                               (str "Section: " (:input picker) "█")
+                               (str "Move: " (:label option))))
+                           (when cursor (str (:summary cursor) " [" (task/id-prefix (:id cursor)) "]"))
+                           "No tasks")
+                       (:message state)
+                       "j/k move  Enter choose  Esc cancel/quit"]))))
+
+(defn view [state]
+  (let [width (max 1 (:width state 100))
+        height (max 1 (:height state 30))
+        rendered (cond
+                   (and (:context-status state) (not= :ready (:context-status state))
+                        (not (embedding/modal? state)))
+                   (str (context-notice state) "\nTask mutations disabled")
+                   (= "compact" (:mode state)) (str/join "\n" (compact-lines state))
+                   (or (< height 7) (< width 40)) (small-view state)
+                   :else (expanded-view state))]
+    (->> (str/split-lines rendered)
+         (take height)
+         (map #(crop width %))
+         (str/join "\n"))))
 
 (defn- key-text [m]
   (let [k (:key m)]
@@ -348,25 +445,46 @@
   [state m]
   (cond
     (msg/window-size? m) [[:tui/resize (:width m) (:height m)]]
+    (= "compact" (:mode state))
+    (if (and (msg/key-press? m)
+             (or (msg/key-match? m :escape) (msg/key-match? m "alt+t")
+                 (msg/key-match? m "ctrl+c")))
+      [[:tui/quit]] [])
     (and (:move-task state) (msg/key-press? m)) (move-msg->actions state m)
     (:new-task state)    (prompt-msg->actions m)
     (msg/key-press? m)   (key-msg->actions m)
     :else                []))
+
+(defn- poll-cmd []
+  (program/cmd (fn []
+                 (Thread/sleep embedding/poll-ms)
+                 {:type ::poll})))
 
 (defn update-fn
   "charm `update` bridge: turn the message into nexus actions, dispatch them
   against a per-event store atom, and hand the resulting state (plus an
   optional quit command) back to charm."
   [opts state m]
-  (let [actions* (msg->actions state m)]
+  (let [poll? (= ::poll (:type m))
+        state (embedding/sync-context opts state poll?)
+        actions* (if (and (:context-file opts)
+                          (not= :ready (:context-status state))
+                          (msg/key-press? m)
+                          (not (or (msg/key-match? m :escape)
+                                   (msg/key-match? m "ctrl+c"))))
+                   []
+                   (if (and (:context-file opts) (:remove-confirmation state)
+                            (msg/key-match? m :escape))
+                     [[:state/assoc :remove-confirmation nil]]
+                     (msg->actions state m)))]
     (if (seq actions*)
       (let [store (atom state)]
         (nexus/dispatch dispatch/nexus {:!store store} {:opts opts} actions*)
         (let [next-state @store]
           (if (get next-state dispatch/quit-marker)
             [(dissoc next-state dispatch/quit-marker) program/quit-cmd]
-            [next-state nil])))
-      [state nil])))
+            [(embedding/sync-context opts next-state false) nil])))
+      [state (when poll? (poll-cmd))])))
 
 (defn- run-program! [opts state0]
   (let [original-out System/out]
@@ -375,7 +493,7 @@
       ;; writer to stderr while the TUI owns the screen so stdout remains clean
       ;; for the final selected-task JSON emitted after program/run returns.
       (System/setOut System/err)
-      (program/run {:init state0
+      (program/run {:init (fn [] [state0 (poll-cmd)])
                     :update (partial update-fn opts)
                     :view view
                     :alt-screen true
@@ -385,7 +503,21 @@
         (System/setOut original-out)))))
 
 (defn run! [opts]
-  (let [state0 (-> (tasks/initial-state (tasks/load-tasks opts))
-                   (assoc :color? (not (:no-color opts))))]
+  (let [state0 (-> (tasks/initial-state (if (:context-file opts) {:rows []}
+                                         (tasks/load-tasks opts)))
+                   (assoc :color? (not (:no-color opts)) :mode (:mode opts "expanded")))
+        state0 (embedding/sync-context opts state0 true)]
     (run-program! opts state0)
-    (tasks/selected-json! opts)))
+    (when-not (:context-file opts)
+      (tasks/selected-json! opts))))
+
+(defn command! [{:keys [opts]}]
+  (if (or (and (:context-file opts) (not (:instance opts)))
+          (and (:instance opts) (not (:context-file opts)))
+          (and (:context-file opts)
+               (or (not (fs/absolute? (:context-file opts)))
+                   (some #(contains? opts %) [:root :tasks :archive]))))
+    (out/emit-error
+     opts {:code "argument-error"
+           :message "Embedding requires absolute --context-file and --instance, without root/file selectors"} 2)
+    (run! (cond-> opts (:mode opts) (update :mode name)))))

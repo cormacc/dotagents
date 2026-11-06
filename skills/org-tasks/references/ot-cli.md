@@ -174,6 +174,14 @@ Editor launches (`e`, and `p` on an existing plan) go through a configurable res
 
 Exit contract: the TUI reserves stdout for a final org-tasks/v1 selected-task envelope, so scripts can run it interactively and still consume machine output afterwards. Exiting without pressing `s` returns the persisted selection, not the cursor row.
 
+### Compact and embedded use
+
+`ot tui --mode compact` opens the shared passive selected-task view. The selected row shows descendant completion as `(completed/total)` and, when space permits, the right-aligned task-memory path with the home directory shortened to `~`. The linked-plan row shows its own task completion count. The view keeps the selection identifiable, shows its top-level parent, and uses the remaining height for descendants. Pending work takes space before completed history; there are no separate count summary rows. `Esc`, `Alt-t` or `Ctrl-c` exits; expand through the embedding snapshot to browse or mutate. Standalone `ot tui` defaults to expanded mode and accepts `--root` like other commands.
+
+A host can run `ot tui --context-file /absolute/private/context.json --instance <instance-id>` in its owned terminal. The JSON snapshot supplies source directory, compact/expanded mode, availability, context identity and a renewable lease. The shared TUI owns root resolution, graph refresh and safe switching; the host owns source selection, placement and focus. There are no host-specific task-rendering calls. Exact producer requirements and fixtures: [../scripts/docs/contract.md#Embedded TUI context contract](../scripts/docs/contract.md#embedded-tui-context-contract).
+
+External task, local selection and imported-plan edits refresh without reopening either TUI mode. Create inputs, move pickers and armed removal confirmations retain their original root and show a pending project switch until completion or cancellation. Invalid, lost, stale or remote context blocks mutations; cancelling an interaction remains possible. Missing task memory is displayed, never initialised by a context update. Embedded exit has no final stdout payload; standalone exit retains the selected-task JSON contract.
+
 ## Root resolution
 
 `ot` resolves the project root from explicit `--root` first. Without `--root`, it starts at the process current working directory and walks parent directories to the nearest `TASKS.org`, falling back to the current directory when none exists. The walk continues to the filesystem root. The nearest ancestor may be outside `$HOME`.

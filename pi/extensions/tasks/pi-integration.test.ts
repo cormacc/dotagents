@@ -303,24 +303,29 @@ function writeFixtureTasksOrg(cwd: string): void {
     },
   );
 
-  await runScenario("/tasks doctor succeeds under the RPC harness", async (harness) => {
-    const since = harness.events.length;
-    const requestId = harness.send({ type: "prompt", message: "/tasks doctor" });
+  for (const entrypoint of ["index.ts", "legacy.ts"]) {
+    const name = entrypoint === "index.ts"
+      ? "/tasks doctor succeeds under the RPC harness"
+      : "/tasks doctor succeeds through the explicit legacy entrypoint";
+    await runScenario(name, async (harness) => {
+      const since = harness.events.length;
+      const requestId = harness.send({ type: "prompt", message: "/tasks doctor" });
 
-    const response = await harness.waitFor(
-      (e) => e.type === "response" && e.command === "prompt" && e.id === requestId,
-      "prompt response",
-      { since },
-    );
-    if (!response.success) return `prompt command rejected: ${response.error}`;
+      const response = await harness.waitFor(
+        (e) => e.type === "response" && e.command === "prompt" && e.id === requestId,
+        "prompt response",
+        { since },
+      );
+      if (!response.success) return `prompt command rejected: ${response.error}`;
 
-    const notify = await harness.waitFor((e) => e.type === "extension_ui_request" && e.method === "notify", "notify", { since });
-    if (notify.notifyType === "error" && !String(notify.message).length) {
-      return `Expected a doctor report, got ${JSON.stringify(notify)}`;
-    }
+      const notify = await harness.waitFor((e) => e.type === "extension_ui_request" && e.method === "notify", "notify", { since });
+      if (notify.notifyType === "error" && !String(notify.message).length) {
+        return `Expected a doctor report, got ${JSON.stringify(notify)}`;
+      }
 
-    return true;
-  });
+      return true;
+    }, { ext: join(__dirname, entrypoint) });
+  }
 
   await runScenario("bare /tasks reports unsupported mode outside TUI", async (harness) => {
     const since = harness.events.length;

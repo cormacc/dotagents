@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import registerTasks, { buildChangeRecordPrompt, handlePlanEdit } from "./index.ts";
+import registerTasks, { buildChangeRecordPrompt as legacyPrompt, handlePlanEdit } from "./index.ts";
+import { buildChangeRecordPrompt } from "./agent.ts";
 import { parseTasks } from "./parser.ts";
 import { otCreateTask, otRecordCreate, otRecordPath, runOtResult } from "./ot.ts";
 
@@ -75,6 +76,7 @@ async function main() {
     await handlePlanEdit(pi, ctx, flowTask);
     assert.equal(messages.length, 1, "cancelling path approval sends no follow-up prompt");
 
+    assert.equal(legacyPrompt, buildChangeRecordPrompt, "legacy prompt export retains the non-visual builder contract");
     const promptTask = parseTasks("* TODO Prompt parent\n").tasks[0]!;
     for (const mode of ["proactive", "retrospective", "summary"] as const) {
       const prompt = buildChangeRecordPrompt(mode, promptTask, record.importRaw, record.recordPath);

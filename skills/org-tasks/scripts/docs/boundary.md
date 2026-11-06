@@ -1,6 +1,8 @@
 # Tasks extension boundary
 
-The protocol engine (`ot`, in Babashka) owns durable org-tasks behaviour and the standalone terminal task browser launched by bare `ot`. The pi `tasks` extension owns pi-specific overlay/compact UI and event glue. This table is the contract for the refactor in `design/log/2026-05-18-tasks-extension-ot-cli.org` and the standalone TUI added in `design/log/2026-06-27-add-org-tasks-tui.org`.
+The protocol engine (`ot`, in Babashka) owns durable org-tasks behaviour and the standalone terminal task browser launched by bare `ot`. Pi's optional legacy `tasks` visual entrypoint owns overlay/compact UI and event glue. The non-visual `tasks/agent.ts` entrypoint exports prompt helpers without registering UI or session resources; agents access `ot` through their existing shell tools. This table is the contract for the refactor in `design/log/2026-05-18-tasks-extension-ot-cli.org` and the standalone TUI added in `design/log/2026-06-27-add-org-tasks-tui.org`.
+
+The shared compact/expanded terminal renderer also supports embedding. Host adapters own context production, pane/terminal identity, placement, focus and sizing; `ot` owns context validation, liveness, root resolution, safe modal switching and graph refresh. The owning producer/consumer contract is [contract.md#Embedded TUI context contract](contract.md#embedded-tui-context-contract). The existing Pi visual surface remains independent; this boundary adds no host APIs or cross-harness event bus.
 
 ## Ownership table
 
@@ -23,27 +25,25 @@ The protocol engine (`ot`, in Babashka) owns durable org-tasks behaviour and the
 | Insert task into named section                   | ✅   |              | Replaces TypeScript `insertTaskIntoFile`. `insert.ts` survives only as a shim into `ot create --linked-issue`. |
 | Idempotency check across `:LINKED_ISSUES:`       | ✅   |              | Walks `alsoScan` recursively through imports.                                                                  |
 | Doctor checks                                    | ✅   |              | All current finding codes plus the protocol-file link-template checks.                                         |
-| `org_read_section` (=> `ot section`)             | ✅   |              | Source-block shielding, case-insensitive, trailing-tag tolerant.                                               |
-| `tasks_scan_summaries` (=> `ot scan`)            | ✅   |              | Active/archived/all scope, tags OR-filter, body caps, `hasContext`.                                            |
+| Read Org sections (`ot section`)             | ✅   |              | Source-block shielding, case-insensitive, trailing-tag tolerant.                                               |
+| Scan task summaries (`ot scan`)            | ✅   |              | Active/archived/all scope, tags OR-filter, body caps, `hasContext`.                                            |
 | Change-record scaffolding (`ot record create`)   | ✅   |              | Required sections, `#+IMPORT:` attachment, subtask migration into `* Plan`.                                    |
 | Change-record path suggestion                    | ✅   |              | From `#+LINK: plan file:.../%s`, falls back to `./design/log`.                                                 |
 | Retrospective `git log` scoping                  | ✅   |              | `--mode retrospective` shells `git log --since/--until` from `:STARTED:` and `CLOSED:`.                        |
 | `:LINKED_ISSUES:` get/set/list/remove           | ✅   |              | Tracker-agnostic. Resolves URLs via `#+LINK:` for `urls`.                                                      |
 | `:BLOCKED-BY:` / `:BLOCKED-BY+:` get/set/list   | ✅   |              | Plus ready-task computation against the loaded graph.                                                          |
 | `:HANDOFF:` get/set/clear                        | ✅   |              |                                                                                                                |
-| Standalone terminal task browser (`ot`)          | ✅   |              | Renders to stderr/terminal streams; stdout emits final selected-task JSON.                                      |
+| Standalone and embedded terminal task browser (`ot`, `ot tui`) | ✅ | | Shared compact/expanded rendering, input, confirmations, external graph refresh and context safety. Standalone stdout emits final selected-task JSON; embedded stdout is empty. |
 | Overlay rendering (split pane, highlighting)    |      | ✅           | Pi-owned expanded overlay; behaviour mirrors the standalone TUI where practical.                               |
 | Compact selected-task widget                     |      | ✅           | Layout, truncation rules, side-bar markers.                                                                    |
 | Pi overlay keybindings (`s`, `m`, `D`, `e`, `p`, `n`, `N`, `A`, `P`, `U`, `J`, scroll, status cycle) |      | ✅           | Standalone TUI has its own Clojure key loop; pi event wiring stays in TypeScript. Status-cycle and create-placement *policy* now live in `ot` (both UIs only send direction / anchor+relation). |
-| File watchers (`TASKS.org`, `TASKS.local.org`, plan files) |      | ✅           | Debounced 150 ms; calls `ot list --format json` on fire.                                                       |
-| Confirmation / input prompts                     |      | ✅           |                                                                                                                |
-| Emacs open at task / plan                        |      | ✅           |                                                                                                                |
-| Browser `open` / `xdg-open` for linked issues   |      | ✅           |                                                                                                                |
+| Pi file watchers (`TASKS.org`, `TASKS.local.org`, plan files) | | ✅ | Pi-specific watchers remain separate from the shared TUI's per-instance polling. |
+| Confirmation / input prompts | ✅ | ✅ | Each UI owns interaction state; `ot` commands own validation and writes. Embedded terminal interactions freeze the original root. |
+| Emacs open at task / plan | ✅ | ✅ | Terminal editor launches are context-guarded; Pi retains its own editor glue. |
+| Browser `open` / `xdg-open` for linked issues | ✅ | ✅ | Both consume command-resolved issue URLs. |
 | Agent prompts (proactive plan, retrospective scaffold, summary refresh) |      | ✅           | Supplies task identity, paths, mode, and scope to `pi.sendUserMessage`; section and drafting policy stay in the skills.                                                             |
-| `tasks:status-changed` event emission           |      | ✅           | Driven directly by `ot status`'s JSON envelope (`prevStatus`, `status`, `closed`).                             |
-| `tasks_insert_task` LLM tool registration       |      | ✅           | Handler now shells `ot create`.                                                                                |
-| `org_read_section` LLM tool registration        |      | ✅           | Handler now shells `ot section`.                                                                               |
-| `tasks_scan_summaries` LLM tool registration    |      | ✅           | Handler now shells `ot scan`.                                                                                  |
+| `tasks:status-changed` event emission | | ✅ | Legacy overlay status cycles only; emitted after the `ot status` write using `prevStatus`, `status`, task summary and closed-state classification. CLI, external-file and Herdr changes do not emit it. |
+| Agent CLI access | ✅ | | Agents call `ot create`, `ot section`, `ot scan` and other commands through shell access; neither Pi task entrypoint registers task tools. |
 
 ## Consolidated into `ot` (2026-06-27, TUI v3)
 
@@ -60,4 +60,10 @@ Three policies that were previously encoded in both the pi overlay (TypeScript) 
 
 ## Behaviours under review
 
-- Change-record prompts remain Pi glue. `ot record create` returns paths, subtask-migration state, and retrospective scope; the extension dispatches those facts with a reference to the skills, without copying their section or drafting rules.
+- Change-record prompts remain Pi glue in `pi/extensions/tasks/prompts.ts`. `ot record create` returns paths, subtask-migration state and retrospective scope; the helpers dispatch those facts with a reference to the skills, without copying their section or drafting rules. The non-visual workflow uses Pi's editor for path approval; only the legacy wrapper adds its custom dialog and UI refresh.
+
+## Pi loading boundary
+
+The compatibility `tasks/index.ts` path retains the visual UI until explicit user cutover. `tasks/legacy.ts` is the explicit visual entrypoint; load one visual path, not both. `tasks/agent.ts` can load alone or with the visual entrypoint and registers no commands, tools, overlays, widgets, watchers, shortcuts or event listeners. It exports the prompt helpers independently of visual registration. The historical `tasks_insert_task`, `org_read_section` and `tasks_scan_summaries` tools are not registered; their operations are CLI commands, not replacement Pi tools.
+
+Jira's `insertTaskIntoFile` import continues to delegate to `ot` without loading the visual factory. Jira's optional status listener retains the legacy in-overlay event semantics; no cross-harness event bus is added. See [../../../../pi/extensions/tasks/README.md#Loading and coexistence](../../../../pi/extensions/tasks/README.md#loading-and-coexistence) for loading paths and explicit cutover instructions.

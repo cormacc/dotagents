@@ -39,7 +39,7 @@ import {
   type FSWatcher,
 } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { ensureEmacsServer } from "../emacsclient/emacsclient.ts";
 import { TasksOverlay } from "./overlay.ts";
 import { cursorAfterRemoval, runOverlayRemoval } from "./removal.ts";
@@ -52,8 +52,6 @@ import {
   otList,
   otMoveTask,
   otPublishTask,
-  otRecordPath,
-  otRecordCreate,
   otRemoveTask,
   otSelectTask,
   otCyclePriority,
@@ -70,13 +68,19 @@ import {
   type Task,
 } from "./parser.ts";
 import { formatFindingsReport, type Finding } from "./doctor.ts";
-import { isWithinRoot, resolveProjectPath } from "./paths.ts";
+import { isWithinRoot } from "./paths.ts";
 import {
   evaluateSummaryRefresh,
   type SummaryRefreshReason,
 } from "./summary.ts";
 import { colorIssues, colorPriority, colorStatus, colorTags } from "./status-colors.ts";
 import { getAgentPath } from "../lib/agent-paths.ts";
+import {
+  buildSummaryRefreshPrompt,
+  getEmacsOptions,
+  handlePlanEdit as handlePlanEditPrompt,
+} from "./prompts.ts";
+export { buildChangeRecordPrompt, buildSummaryRefreshPrompt } from "./prompts.ts";
 
 const TASKS_FILE = "TASKS.org";
 /** Gitignored local file that stores per-contributor selection state. */
@@ -139,6 +143,7 @@ let activeOverlayInstance: TasksOverlay | null = null;
 const fileWatchers = new Map<string, FSWatcher>();
 let watchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let activeCtx: ExtensionContext | null = null;
+let uiGeneration = 0;
 
 /** Collect every path whose changes should trigger a compact-widget refresh. */
 function collectWatchPaths(tasks: Task[], files: Record<string, string>): Set<string> {
@@ -603,10 +608,13 @@ async function refreshTaskUi(
   ctx: ExtensionContext,
   cwd: string,
 ): Promise<Task[]> {
+  const generation = uiGeneration;
   activeCtx = ctx;
   const loaded = await loadTasks(cwd);
   const { tasks, files } = loaded;
   const selectedId = await readSelectedId(files.local);
+  // A refresh started before shutdown must not restore session resources.
+  if (generation !== uiGeneration || activeCtx !== ctx) return tasks;
   if (isOverlayActive) {
     // Push fresh task data into the running overlay so external changes
     // (e.g. Emacs selection toggle) are reflected immediately.
@@ -652,7 +660,10 @@ export default function (pi: ExtensionAPI) {
   const eventUnsubs: Array<() => void> = [];
 
   pi.on("session_shutdown", async () => {
+    uiGeneration++;
     closeAllFileWatchers();
+    isOverlayActive = false;
+    activeOverlayInstance = null;
     clearCompactWidget(activeCtx ?? undefined);
     activeCtx = null;
     while (eventUnsubs.length > 0) {
@@ -1198,21 +1209,6 @@ async function openTaskInEmacs(
   pi.events.emit("emacs:open", { file: filePath, line: task.lineNumber });
 }
 
-function getEmacsOptions(pi: ExtensionAPI) {
-  const env = (globalThis as { [key: string]: unknown })["process"] as
-    | { env?: Record<string, string | undefined> }
-    | undefined;
-  return {
-    binary: env?.env?.EMACSCLIENT_BINARY || "emacsclient",
-    daemonBinary: env?.env?.EMACS_BINARY || "emacs",
-    exec: (cmd: string, args: string[], opts?: { signal?: AbortSignal; timeout?: number }) =>
-      pi.exec(cmd, args, {
-        signal: opts?.signal,
-        timeout: opts?.timeout,
-      }),
-  };
-}
-
 class PrefilledInputPrompt implements Component, Focusable {
   private readonly input = new Input();
   private _focused = false;
@@ -1294,84 +1290,17 @@ async function promptForPlanPath(
   );
 }
 
-/** Build task-specific context without copying the skills' planning policy. */
-export function buildChangeRecordPrompt(
-  mode: "proactive" | "retrospective" | "summary",
-  task: Task,
-  link: string,
-  recordPath: string,
-  detail?: string,
-): string {
-  const action = mode === "proactive" ? "Develop a plan" :
-    mode === "retrospective" ? "Reconstruct the delivered work from git history" :
-    "Refresh the condensed memory layer";
-  return [
-    `${action} for this task using the \`org-plan\` and \`org-tasks\` skills. Read their current instructions first.`,
-    `Task: ${task.status} ${task.summary}`,
-    `Change-record link: ${link}`,
-    `Change-record file: ${recordPath}`,
-    detail,
-    "Show the draft for approval before writing. Offer to open the file in Emacs after writing.",
-  ].filter(Boolean).join("\n");
-}
-
-function buildSummaryRefreshPrompt(task: Task, link: string, recordPath: string, reason: SummaryRefreshReason): string {
-  return buildChangeRecordPrompt("summary", task, link, recordPath,
-    reason === "missing" ? "The record has no Summary heading." : "The summary may be stale because the record predates the task start.");
-}
-
-/** Open an imported record in Emacs, or approve a path and delegate creation to ot. */
+/** Open an imported record, or create one and refresh the legacy task UI. */
 export async function handlePlanEdit(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   task: Task,
   mode: "proactive" | "retrospective" = "proactive",
 ): Promise<void> {
-  const sourcePath = task.sourcePath ?? join(ctx.cwd, TASKS_FILE);
-  const sourceDir = dirname(sourcePath);
-
-  // ── Open existing plan ──
-  if (task.importPath) {
-    const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
-    const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
-    const importBaseDir = expandedImportPath.fromProjectRoot ? ctx.cwd : sourceDir;
-    const absPlan = await resolveProjectPath(ctx.cwd, importBaseDir, expandedImportPath.target);
-    if (!absPlan) {
-      ctx.ui.notify("Plan path resolves outside project root", "error");
-      return;
-    }
-    if (!(await ensureEmacsServer(getEmacsOptions(pi)))) {
-      ctx.ui.notify("Could not reach or start Emacs server", "error");
-      return;
-    }
-    pi.events.emit("emacs:open", { file: absPlan, line: 1 });
-    return;
-  }
-
-  const id = getTaskId(task);
-  if (!id) {
-    ctx.ui.notify("Cannot create a record without a :CUSTOM_ID:.", "error");
-    return;
-  }
-  const options = { cwd: ctx.cwd };
-  try {
-    const { suggested } = await otRecordPath(id, options);
-    const approved = await promptForPlanPath(ctx, task, suggested);
-    const path = approved?.split(/\r?\n/, 1)[0]?.trim();
-    if (!path) return;
-    const record = await otRecordCreate(id, path, mode, options);
-    await refreshTaskUi(ctx, ctx.cwd);
-    ctx.ui.notify(`Change-record ready: ${relative(sourceDir, record.recordPath)}`, "info");
-    pi.sendUserMessage(buildChangeRecordPrompt(
-      mode, task, record.importRaw, record.recordPath,
-      JSON.stringify({
-        absorbedSubtasks: record.absorbedSubtasks,
-        scope: record.scope ? { since: record.scope.since, until: record.scope.until } : null,
-      }),
-    ), { deliverAs: "followUp" });
-  } catch (error) {
-    ctx.ui.notify(`Failed to create plan: ${(error as Error).message}`, "error");
-  }
+  await handlePlanEditPrompt(pi, ctx, task, mode, {
+    approvePath: promptForPlanPath,
+    afterCreate: (context) => refreshTaskUi(context, context.cwd),
+  });
 }
 
 // ── Create task flow ─────────────────────────────────────────────────────

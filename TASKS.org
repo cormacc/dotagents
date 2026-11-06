@@ -295,6 +295,20 @@ Deferred by the owner from the owned quota collector delivery. Support native Cl
 #+IMPORT: [[plan:2026-11-05-herdr-app-orch-mod.org]]
 Scaffold a herdr-app mod for herdr-orch. Its first feature is the subscription quota status-bar item and popup, ported from the Lakris2407/herdr-mods `quota` mod (https://github.com/Lakris2407/herdr-mods/tree/main/quota). The data source must be `oh usage` (herdr-orch CLI) instead of the upstream mod's own collection, so that the TUI plugin (`herdr-plugin/`, `quota-stanza.sh`, `quota-pane.sh`) and the app mod show the same metrics. Mod authoring interface: `~/.config/herdr-app/AGENTS.md` (written by herdr-app). Related: task 9f667467 (herdr plugin wrapper), [[plan:2026-11-04-herdr-orch-herdr-app-support.org]].
 
+** STARTED Rework the org-tasks UI as a Herdr plugin
+:PROPERTIES:
+:CUSTOM_ID: 82126d8e-eb54-45b8-abbe-9e76451b3963
+:CREATED: [2026-11-05 Thu 19:54]
+:STARTED: [2026-11-05 Thu 20:16]
+:HANDOFF: Moving to Linux with checkpoint commits. Shared/Pi/compact DONE; terminal WAITING unresolved reviewed P2 request/snapshot race and mandatory native Linux gate, desktop TODO blocked. Durable review, runnable reproduction and output linked from design/log/2026-11-05-org-tasks-herdr-ui.org Validation; these supersede scratch-only handoff evidence and must be deleted at eventual closure. Root reran reproduction: positive control B, race retains ready A; exit0 means defect reproduced. All owned workers/reviewers captured/closed, no active children. Next fresh worker fixes reconciliation, adds exact regression and receives bounded re-review; then native Linux gate before terminal acceptance or desktop dispatch. Workspace pinning deferred16358bea-c42f-4342-883b-6409d14c7281. No plugin installation or settings cutover; preserve unrelated generated/settings/fanout changes.
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 19:54]
+- State "STARTED" from "TODO" [2026-11-05 Thu 20:16]
+:END:
+#+IMPORT: [[plan:2026-11-05-org-tasks-herdr-ui.org]]
+Explore moving the org-tasks UI into a Herdr plugin. Options are a Herdr widget or an embedded terminal pane at the foot of the Herdr window running the org-tasks TUI. The embedded terminal pane is the preferred candidate as the likely cleanest strategy, not a settled design. Consider adding a collapsed mode to the TUI that replicates the selected-task overlay in Pi.
+
 ** TODO Validate herdr-app herdr-orch mod on Linux :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: a5cbd996-628f-4883-929a-e5d54338f9b8
@@ -304,6 +318,16 @@ Scaffold a herdr-app mod for herdr-orch. Its first feature is the subscription q
 - Created [2026-11-05 Thu 20:23]
 :END:
 Follow-up to task f7457cc5-64a5-4139-ba94-7da9eca8f6ed. The owner deferred native Linux validation to another machine. Use [[plan:2026-11-05-herdr-app-orch-mod.org]] as the requirements source, especially Summary/Acceptance and the native validation plan task a8cb3a32-0c02-4755-9634-02044fdfa9dc. Run native checks for both mods; demonstrate real Linux CPU/RAM and optional NVIDIA metrics, quota popup and keyboard access, narrow/light/dark readability, shared in-flight refresh, native timeout/process cleanup, real five-minute stale expiry/recovery, individual symlink discovery/source watching and app restart persistence. Preserve installed files, selected layout and user terminals; obtain consent for disruptive actions. Use fake quota commands for failure/lifecycle probes, never live credentials or endpoints in automated tests. Record exact app/core versions, commands, statuses and native screenshots in the linked record. macOS fixture or initial-check evidence is not Linux delivery evidence. Prerequisite: transfer the committed implementation and parent Nix wiring to the target machine before validation.
+
+** TODO Add workspace pinning to the Herdr org-tasks adapters
+:PROPERTIES:
+:CUSTOM_ID: 16358bea-c42f-4342-883b-6409d14c7281
+:CREATED: [2026-11-06 Fri 08:34]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 08:34]
+:END:
+Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. Design focus-independent workspace-root pinning for terminal Herdr and the desktop adapter. Establish an authoritative configured directory source before implementation; Herdr 0.9.5 PluginInvocationContext.workspace_cwd prefers focused pane cwd and is not sufficient. Consider an explicitly configured plugin-owned directory map only after agreement. Preserve active-agent following as the default, reject missing or remote roots, and test that task-pane and agent-pane focus changes cannot change a pinned root. Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
 
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
