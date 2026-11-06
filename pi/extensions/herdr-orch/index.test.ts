@@ -30,6 +30,8 @@ function same(actual: unknown, expected: unknown, message: string): void {
 const tools = new Map<string, Tool>();
 const execCalls: string[][] = [];
 let backendRefusal = false;
+let multiAccountUsage = false;
+const accountUsage = "- **anthropic-account-a** -- fresh; all_models 99% remaining\n- **anthropic-account-b** -- fresh; all_models 1% remaining\n";
 const execOptions: Array<Record<string, unknown> | undefined> = [];
 type Command = { handler: (args: string, ctx: any) => Promise<void>; getArgumentCompletions?: (prefix: string) => unknown };
 const commands = new Map<string, Command>();
@@ -37,6 +39,7 @@ const entryRenderers = new Map<string, unknown>();
 const entries: Array<{ type: string; data: any }> = [];
 
 register({
+  on() {},
   registerTool(tool: Tool) {
     tools.set(tool.name, tool);
   },
@@ -59,7 +62,7 @@ register({
     if (args[0] === "usage") {
       const detail = args.includes("--detail");
       return {
-        stdout: detail
+        stdout: multiAccountUsage ? accountUsage : detail
           ? "- **anthropic** -- unknown; remaining unknown; reason: missing; source: pi; windows: five_hour 20% used, resets 2030-01-01T00:00:00Z\n"
           : "- **anthropic** -- unknown; remaining unknown; reason: missing; windows: five_hour 20% used\n",
         stderr: "",
@@ -235,6 +238,27 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
     ["roster", "--format", "markdown", "--section", "workflows", "--detail"],
   ], "TUI: workflow listing uses the shared CLI renderer in both forms");
   same(entries.at(-1)?.data.section, "workflows", "workflow listing remains a display-only session entry");
+}
+
+// The CLI owns quota policy; the Pi entry must not merge sibling rows.
+{
+  multiAccountUsage = true;
+  const oh = commands.get("oh")!;
+  const notices: string[] = [];
+  const ctx = { mode: "tui", hasUI: true, cwd: "/proj", ui: { notify: (text: string) => notices.push(text) } };
+  try {
+    await oh.handler("usage", ctx);
+    same(entries.at(-1)?.data.compact, accountUsage, "usage retains opposite account quotas in compact TUI output");
+    same(entries.at(-1)?.data.detail, accountUsage, "usage retains opposite account quotas in expanded TUI output");
+    await oh.handler("", ctx);
+    same(entries.at(-1)?.data.usage.compact, accountUsage, "bare help retains both account rows");
+    const framed = composeHelp("help", entries.at(-1)!.data.compact, false, entries.at(-1)!.data.usage.compact);
+    ok(framed.includes(accountUsage.trimEnd()), "help outside Herdr preserves both accounts");
+    await oh.handler("usage", { ...ctx, mode: "rpc" });
+    same(notices.at(-1), accountUsage.trimEnd(), "RPC usage preserves distinct account rows");
+  } finally {
+    multiAccountUsage = false;
+  }
 }
 
 // --- /oh framing ----------------------------------------------------------------------

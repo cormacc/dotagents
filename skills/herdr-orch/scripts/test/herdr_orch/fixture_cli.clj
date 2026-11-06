@@ -3,6 +3,10 @@
   (:require [babashka.http-client :as http]
             [cheshire.core :as json]
             [herdr-orch.cli :as cli]
+            [herdr-orch.core :as core]
+            [herdr-orch.pi-adapter :as pi-adapter]
+            [herdr-orch.quota-credentials :as credentials]
+            [herdr-orch.routing :as routing]
             [herdr-orch.usage :as usage]))
 
 (defn fixture-http
@@ -14,7 +18,9 @@
     (spit (System/getenv "FAKE_QUOTA_LOG") (str provider "\n") :append true)
     (try
       (let [responses (json/parse-string (slurp (System/getenv "FAKE_QUOTA_REPORT")))
-            response (get responses provider)]
+            response (if-let [accounts (get-in responses [provider "accounts"])]
+                       (get accounts (get headers "Authorization"))
+                       (get responses provider))]
         (if (map? response)
           {:status (if (and (contains? response "expectedAuthorization")
                             (not= (get response "expectedAuthorization") (get headers "Authorization")))
@@ -24,6 +30,18 @@
       (catch Exception _ {:status 200 :body "null" :headers {}}))))
 
 (defn -main [& argv]
-  (with-redefs [usage/default-http-fn fixture-http
+  (let [run-op pi-adapter/run-op!]
+  (with-redefs [pi-adapter/run-op!
+                (fn [file op request]
+                  (if (= op "model-inventory")
+                    {:ok true :inventory
+                     (vec (for [canonical (distinct (concat (keys (:models (cli/config)))
+                                                           (filter string? (vals (:aliases (cli/config))))))
+                                account (cond-> [(core/provider-prefix canonical)]
+                                          (= "anthropic" (core/provider-prefix canonical))
+                                          (into (credentials/pi-accounts (credentials/environment))))]
+                            {:canonical canonical :account account :reasoning (vec (sort routing/levels))}))}
+                    (run-op file op request)))
+                usage/default-http-fn fixture-http
                 http/get (fn [& _] (throw (ex-info "network escaped fixture transport" {})))]
-    (apply cli/-main argv)))
+    (apply cli/-main argv))))

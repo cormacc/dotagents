@@ -49,6 +49,45 @@
                (credentials/credentials h p context))))
       (is (= "unsupported-provider" (:reason (credentials/credentials :pi "kimi" context)))))))
 
+(deftest named-pi-account-selection-is-validated-and-read-only
+  (with-context
+    (fn [context]
+      (seed! context)
+      (let [a "anthropic-account-a" b "anthropic-account-b"
+            path (pi-path context)
+            auth (assoc (json/parse-string (slurp path) true)
+                        (keyword a) (oauth "same-token")
+                        (keyword b) (oauth "same-token")
+                        :openai-codex-account-no (oauth "ignored")
+                        :anthropic-account-INVALID (oauth "ignored")
+                        :anthropic-account- (oauth "ignored"))]
+        (put-json! path auth)
+        (let [before (slurp path)
+              first-read (credentials/credentials :pi "claude" context a)]
+          (is (= [a b] (credentials/pi-accounts context)))
+          (is (= "same-token" (:access first-read)))
+          (is (not= (:context-key first-read)
+                    (:context-key (credentials/credentials :pi "claude" context b)))
+              "identical tokens still have account-specific cache identities")
+          (is (= before (slurp path)))
+          (is (= "pi-claude" (:access (credentials/credentials :pi "claude" context))))
+          (doseq [id ["anthropic-account-INVALID" "anthropic-account-" "openai-codex" "../secret"
+                      (str "anthropic-account-" (apply str (repeat 33 "a")))]]
+            (is (= "unsupported-auth-context"
+                   (:reason (credentials/credentials :pi "claude" context id)))))
+          (is (= "unsupported-auth-context" (:reason (credentials/credentials :claude "claude" context a))))
+          (is (= "unsupported-auth-context" (:reason (credentials/credentials :pi "codex" context a))))
+          (doseq [[entry reason] [[nil "missing-credentials"]
+                                 [(assoc (oauth "same-token") :expires now-ms) "expired-credentials"]
+                                 [{:type "api_key" :key "paid-canary"} "not-subscription-auth"]]]
+            (put-json! path (if entry (assoc auth (keyword a) entry) (dissoc auth (keyword a))))
+            (let [selected (assoc-in context [:env "ANTHROPIC_API_KEY"] "paid-canary")]
+              (is (= "ready" (:status (credentials/credentials :pi "claude" selected b))) "sibling control")
+              (is (= reason (:reason (credentials/credentials :pi "claude" selected a))))))
+          (put-json! path (assoc-in auth [(keyword a) :refresh] "new-refresh"))
+          (is (not= (:context-key first-read)
+                    (:context-key (credentials/credentials :pi "claude" context a)))))))))
+
 (deftest pi-supported-location-overrides
   (with-context
     (fn [context]

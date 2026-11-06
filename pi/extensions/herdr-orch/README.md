@@ -27,6 +27,39 @@ Always-loaded prompt guidelines retain the explicit Herdr-request boundary and p
 - The output contract is in [../../../skills/herdr-orch/scripts/docs/contract.md#Roster](../../../skills/herdr-orch/scripts/docs/contract.md#roster).
 - Root-owned staging, repeated measurements and the approval-gated context smoke are in [../../../skills/herdr-orch/references/workflow-recipes.md](../../../skills/herdr-orch/references/workflow-recipes.md).
 
+## Named Anthropic subscription accounts
+
+Account registration lives in [accounts.ts](accounts.ts). A name is 1-32 lowercase letters, digits, `_` or `-`, starts with a letter, and is case-sensitive. The selectable provider and auth-store key are both `anthropic-account-<name>`; the suffix is the display name. The existing `anthropic` credential remains the default account. Names are stable identities, not cosmetic labels; there is no rename operation or separate account database.
+
+1. Run `/oh-account add work`. This registers `anthropic-account-work` in this Pi process without changing credentials. It also works outside Herdr.
+2. Run `/login anthropic-account-work` in the Pi TUI. Complete Pi's native Anthropic subscription login. A cancelled login does not create an account credential. Successful login stores OAuth credentials under that key in the existing Pi `auth.json`.
+3. Use `/model` to choose `anthropic-account-work/<model-id>`. This changes only the current session, and Pi restores the model/account when that session resumes. Another running session keeps its own selection. Use an `anthropic/<model-id>` entry to return this session to the default account. Do not save startup defaults in the model selector unless you intend to change them.
+4. To remove an account credential, run Pi's native `/logout` and select its display name, for example `work`, not `Anthropic`. Pi serialises logout with in-progress refresh transactions and deletes only that credential. Registration can remain visible until reload, but requests cannot authenticate after removal. `/reload` discovers the remaining stored account keys. Other processes discover newly added accounts at startup or reload; they never swap the shared default credential.
+
+The extension registers stored keys only from the validated `anthropic-account-` namespace before startup model resolution. Registration without a successful login lasts only until reload. Login, refresh and logout belong to Pi's native provider/credential APIs, not extension-owned file writes. These commands use Pi's normal file store, including `PI_CODING_AGENT_DIR`; an SDK host with a custom credential store must register its account providers itself.
+
+Aliases expose native Anthropic OAuth only: no API-key login method, ambient API-key fallback, or default-account fallback. Missing, removed, expired-with-failed-refresh and wrong-type credentials fail rather than use another account or a paid key. Explicit operator endpoint/auth overrides in `models.json` are Pi configuration, not account switching. Primary tier selection and quota recovery use the shared account-aware routing policy described below.
+
+## Primary tiers and quota recovery
+
+1. Use `/oh models` to list the merged configured weight aliases.
+2. While idle, run `/oh-tier light` (or another configured vector alias). The shared `oh route --request PATH` policy selects an authenticated registered account/model with the current reasoning level. Tier selection also works outside Herdr and does not change startup defaults.
+3. Use `/model` for a direct concrete selection, or `/oh-tier clear` to retain the concrete selection and clear the tier. A direct model/account change reported by Pi clears tier intent. Pi persists tier intent in session metadata and restores it on resume; recovery-generated changes retain it.
+
+On an explicit quota/rate-limit refusal, the controller attributes the error to the failed request's captured account/model. It first tries eligible same-model sibling accounts, then only candidates in the retained tier, including other providers. Without a tier it cannot change models. The shared policy preserves exact reasoning capability, rank, reserve and quota-scope rules; unavailable credentials supply no eligibility. Authentication failures, permission denials and generic server failures do not trigger recovery.
+
+Each chain uses a fixed initial inventory, tries each pair at most once and stops with a visible exhaustion or failure reason. It is capped at 4096 attempted pairs; an inventory above 4096 pairs is refused. Availability is checked again before switching. Successful recovery uses Pi's native continuation with completed tool results intact; the controller does not replay tools. Delegated children remain pinned to their launch selection, even when fork history contains tier metadata. Account registration still works in children.
+
+### Pending native selection limit
+
+Before an automatic switch, the extension shows a status, widget and notification warning: avoid manual selection while authentication is pending. Abort stops automatic continuation, but an already-pending native setter can still change the selected account/model after abort or overwrite a newer manual selection. The warning remains until that setter settles in the active session, not merely until cancellation or a timeout. A cancelled switch reports the actual selected account/model and makes no automatic retry. A failed setter clears its warning and reports failure. Session replacement prevents old callbacks from updating the replacement UI.
+
+Explicit abort, new input and an external model/account change reported by Pi invalidate recovery. Pending native selection requests and silent same-target/equal selections are not reliably observable and may not cancel recovery. Use Pi's explicit abort control when cancellation is required. The extension does not intercept selection requests, poll transcripts, lock native controls or roll back selection. While a controller setter is unresolved, another `/oh-tier` command is refused rather than queued.
+
+Warnings and switch reports are user-only output, never model context. Hosts without UI receive them on stderr. TUI uses native status/widget/notification methods; RPC emits the supported extension UI requests, which its client must display. Automated TUI API checks are not rendered visual evidence. Native visual and authorised real-account checks remain separate acceptance gates.
+
+Routing requires Babashka, the shared CLI and writable system temporary storage. Private request files contain routing identities and capabilities, not credentials; they are removed after the routing call. No assignment ledger or terminal operation is used for selection. The controller is [recovery.ts](recovery.ts); the policy and request schema are in [../../../skills/herdr-orch/scripts/docs/contract.md#Shared selection operation](../../../skills/herdr-orch/scripts/docs/contract.md#shared-selection-operation).
+
 ## Dependencies
 
 Pi 1.5.0 or newer, Babashka and the `herdr-orch` skill (co-installed or packaged). Subscription usage requires valid credentials in the selected Pi file store. Native and SDK-only stores are not silently substituted. There is no npm collector dependency. `/oh` does not need a terminal host for offline listings. When `HC_TERMINAL_ID` is present, the CLI probes host ancestry and refuses an unsupported or mismatched runtime.
@@ -37,7 +70,9 @@ None.
 
 ## Tests
 
-`./test.sh` runs `index.test.ts` (pi-to-`oh` argv, `/oh` behaviour, and rendering), `pi-integration.test.ts` (installed Pi RPC commands through the real CLI, including fixture-backed usage and workflow discovery without a model turn), and `../test/herdr-agent-state.test.ts` with the repository's locked `tsx`.
+`./test.sh` runs `accounts.test.ts` (onboarding, native OAuth login and credential transactions, refresh cancellation/removal, and no API-key fallback), `accounts-integration.test.ts` (installed Pi RPC alias refresh and streamed tool round-trip, two session-local selections outside Herdr, and command registration), `index.test.ts` (pi-to-`oh` argv, `/oh` behaviour, and rendering), `pi-integration.test.ts` (installed Pi RPC commands through the real CLI, including fixture-backed usage and workflow discovery without a model turn), `recovery.test.ts` (classification, captured pairs, continuation staging, cancellation, warning lifecycle, credential revalidation, pinned children and the 4096-attempt bound), `recovery-integration.test.ts` (installed Pi startup discovery and RPC recovery, native tool-result retention, shared tier/direct/reasoning constraints, delayed native/public-store selection, pending requests, credential removal, resume/fork and idle command/replacement/inventory boundaries), and `../test/herdr-agent-state.test.ts` with the repository's locked `tsx`. Account tests use disposable auth stores, synthetic credentials and bounded fake endpoints, never live provider calls. `account-fake-only.cjs` is test-only: it redirects native OAuth token requests to the loopback fixture and loads the socket egress guard. `ACCOUNT_TEST_GATE_ONLY=1` selects the provider-only runtime gate; `ACCOUNT_TEST_WRONG_ACCOUNT=1` supplies a deliberate wrong-account negative control that must fail.
+
+The runner clears inherited `HERDR_ORCH_*` and `HC_TERMINAL_ID` and creates isolated HOME, auth and assignment roots under repository `.tmp/`. Runtime fixtures use synthetic credentials, loopback endpoints and an external-traffic guard. `RECOVERY_TEST_DELAYED_ONLY=1`, `RECOVERY_TEST_SESSION_ONLY=1` and `RECOVERY_TEST_BOUNDARIES_ONLY=1` select focused installed suites. `RECOVERY_TEST_WRONG_ACCOUNT=1` and `RECOVERY_TEST_DUPLICATE_CONTROL=1` are deliberate negative inputs: the integration suite must fail its account-sequence assertion. The fixture files are not extension entry points.
 
 Test tooling: [../test/README.md](../test/README.md).
 

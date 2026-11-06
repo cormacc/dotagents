@@ -286,7 +286,7 @@ The preview reports:
 
 - =kind=
 - =model= (before the alias hop) and =model-canonical= (after it, or the routed choice for a vector alias)
-- =model-route= (only for a vector alias): the alias, each candidate's rank, provider, allowance and status, the chosen canonical ID and the reason. A preview of a vector alias collects the same current subscription evidence as a start, so name an explicit canonical ID to preview without collection
+- =model-route= (only for a vector alias): the alias, each candidate's rank, provider, allowance and status, the chosen canonical ID and the reason. Pi also reports each candidate's =account= and the selected =account= and =concrete= account/model ID; =model-canonical= and =model-args= carry that concrete selection. A preview of a vector alias collects the same current subscription evidence as a start, so name an explicit canonical ID to preview without collection
 - =model-args=, the translated args that the harness receives
 - =effort=, =effort-source=, and =effort-args=
 - =placement=, =retro= and =retro-source=, and =spawns= and =spawns-source=
@@ -295,7 +295,7 @@ To find a model miss, compare the model fields. If =model-canonical= still shows
 
 ** Subscription allowance and model routing
 
-A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and =all_models= is the default. Give a model that has its own quota scope (for example =model:fable=) that selector, or it is routed on account-wide credit. The packaged provider map contains Anthropic, Codex and local Lemonade. Kimi, Qwen and Z.AI adapters are deferred. Fable selects =model:fable= explicitly; Opus, Sonnet and Haiku use =all_models=. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
+A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible after Pi authentication and registered-model availability have been established. Pi expands candidates to account/model pairs, preserves the requested reasoning level and uses each account's own quota evidence. Equal pairs use the default account first, then sorted named identities. Native non-Pi harnesses retain one account context. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and =all_models= is the default. Give a model that has its own quota scope (for example =model:fable=) that selector, or it is routed on account-wide credit. The packaged provider map contains Anthropic, Codex and local Lemonade. Kimi, Qwen and Z.AI adapters are deferred. Fable selects =model:fable= explicitly; Opus, Sonnet and Haiku use =all_models=. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
 
 #+begin_src sh
 oh usage                                    # owned providers array, using Pi credentials
@@ -306,6 +306,20 @@ oh usage --harness codex --provider openai-codex  # explicit native credential c
 #+end_src
 
 Reporting reads the selected harness's credentials; routing uses the destination harness's store. Missing or expired selected credentials grant no numeric credit and never cause a fallback to another harness. The collector never refreshes or writes credentials, starts a vendor CLI or prompts for authentication; normal harness operation owns refresh. A credential-context cache provides TTL reuse, negative caching, provider backoff and concurrent request coalescing. Stale windows are diagnostic only. Native OS-store access is unavailable without prompting; see [[file:scripts/docs/contract.md]] section 'Owned credential boundary'. A string alias or canonical ID (=--model opus=, =--model anthropic/claude-opus-5-5=) is never routed and makes no usage call.
+
+The selected account reaches fresh, forked and measurement Pi launches. Same-kind concrete inheritance retains it without rerouting. Named accounts reuse the Herdr Pi extension's native OAuth registration, including in offline loaders; a bare skill without that extension's account module has no named account providers. No credential swapping or second token store is used.
+
+=oh route --request PATH= exposes the same Babashka selection policy outside Herdr for primary-session callers. It accepts an alias or direct model, current pair, authenticated registered inventory, attempted pairs and requested reasoning. It prefers eligible same-model siblings during recovery, never escapes a direct model or configured alias, and reports exhaustion without launching or changing a session. [[file:scripts/docs/contract.md]] section 'Shared selection operation' owns the strict JSON request/response contract. The Pi extension supplies primary-session recovery through this policy; see [[file:scripts/docs/contract.md]] section 'Primary Pi recovery'.
+
+*** Primary Pi selection and recovery
+
+With the Herdr Pi extension loaded, use =/oh models= to list merged aliases, then =/oh-tier light= (or another configured vector alias) while idle. It selects an authenticated registered account/model through the shared policy without changing startup defaults, including outside Herdr. Session resume restores the retained tier. A direct model/account change reported by Pi clears tier intent; =/oh-tier clear= clears it without changing the concrete selection. Recovery-owned changes retain it.
+
+Quota recovery tries eligible same-model sibling accounts first, then only candidates in the retained tier, including other providers. A direct selection cannot escape its model. Requested reasoning is preserved exactly; unsupported candidates are skipped. Authentication, permission and generic server failures do not trigger recovery. Each pair is attempted at most once in a finite initial inventory, up to 4096 pairs; exhaustion is reported. Completed tool results stay in native continuation context and the controller does not replay tools. Delegated children remain pinned, including forks with copied tier history.
+
+The extension warns before an automatic native selection and keeps the warning until its setter settles. Abort stops automatic continuation, but a pending native setter can still change selection after abort or overwrite a newer manual selection. Avoid manual selection while the warning is visible. A cancelled switch reports the actual selected account/model; there is no automatic retry or rollback. Abort, new input and external model/account changes reported by Pi invalidate recovery. Pending requests and silent same-target/equal native selections may not cancel it; use explicit abort when cancellation is required. Native controls stay usable, but another =/oh-tier= command is refused while a controller setter is unresolved.
+
+Routing needs the shared CLI and writable system temporary storage. Warning and result text are user-only output, not model context; hosts without UI receive them on stderr. RPC clients must display the supported extension UI requests. Native rendered visual checks and authorised real-account login/selection smoke remain separate acceptance gates. [[file:../../pi/extensions/herdr-orch/README.md]] gives the operator steps and test entry points; [[file:scripts/docs/contract.md]] section 'Primary Pi recovery' owns the lifecycle and accepted public-API limits.
 
 ** Listing personas, traits, models, and workflows
 

@@ -62,6 +62,7 @@
      (fs/create-sym-link (fs/path dir "herdr") fake)
      (fs/create-sym-link (fs/path dir "hc") fake-hc)
      (fs/create-dirs home)
+     (support/routing-auth! dir)
      (fs/create-dirs (fs/parent roster))
      ;; `dir` doubles as `ORCH_ASSIGNMENT_ROOT` and, via `call!`'s pinned `:dir`, the
      ;; subprocess's own source cwd -- the coincide case task f49a63f5 relies on for every
@@ -8892,6 +8893,48 @@
       (is (str/includes? (:out help) "usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]")))
     (is (str/includes? (:out (call! env "--help")) "oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh]"))))
 
+(deftest usage-distinguishes-named-accounts-in-every-format
+  (let [{:keys [env dir]} (routed-fixture
+                          {:claude {:accounts {"Bearer fixture-a" {:body {:five_hour {:utilization 1}}}
+                                               "Bearer fixture-b" {:body {:five_hour {:utilization 99}}}}}})
+        path (fs/path dir "home/.pi/agent/auth.json")
+        auth (json/parse-string (slurp (str path)) true)
+        entry {:type "oauth" :refresh "fixture-refresh" :expires far-future-ms}]
+    (spit (str path) (json/generate-string
+                     (assoc auth :anthropic-account-a (assoc entry :access "fixture-a")
+                                 :anthropic-account-b (assoc entry :access "fixture-b"))))
+    (let [proc (call! env "usage" "--provider" "anthropic")
+          response (result proc)]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (true? (:ok response)))
+      (is (= ["anthropic" "anthropic-account-a" "anthropic-account-b"]
+             (mapv :localProvider (get-in response [:result :providers]))))
+      (is (= ["anthropic" "anthropic" "anthropic"]
+             (mapv :baseProvider (get-in response [:result :providers])))))
+    (doseq [format ["markdown" "text" "status"]]
+      (let [proc (call! env "usage" "--provider" "anthropic" "--format" format)
+            text (:out proc)]
+        (is (zero? (:exit proc)) text)
+        (is (str/includes? text "anthropic-account-a") text)
+        (is (str/includes? text "anthropic-account-b") text)
+        (if (= format "status")
+          (is (str/includes? text "anthropic-account-a 1%s | anthropic-account-b 99%s") text)
+          (do (is (str/includes? text "99% remaining") text)
+              (is (str/includes? text "1% remaining") text)))))
+    (let [proc (call! env "usage" "--provider" "anthropic-account-b")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= ["anthropic-account-b"] (mapv :localProvider (get-in (result proc) [:result :providers])))))
+    (let [proc (call! env "usage" "--provider" "anthropic-account-missing")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "missing-credentials" (get-in (result proc) [:result :providers 0 :reason]))))
+    (doseq [argv [["--provider" "anthropic-account-INVALID"]
+                  ["--provider" "anthropic-account-b" "--harness" "claude"]]]
+      (let [proc (apply call! env "usage" argv)]
+        (is (= 2 (:exit proc)))))
+    (let [proc (call! env "usage" "--provider" "anthropic" "--harness" "claude")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= ["anthropic"] (mapv :localProvider (get-in (result proc) [:result :providers])))))))
+
 (deftest usage-rendering-reports-owned-provider-evidence
   (let [{:keys [env dir]} (routed-fixture (usage-body {:anthropic-used 28 :codex-used 40}) {"HERDR_ENV" "0"} nil)
         project-config (fs/path dir ".agents" "subagents" "config.edn")
@@ -9093,14 +9136,14 @@
         (is (not (contains? e :model-route)))
         (is (not (contains? (:result (result p)) :model-route)))))))
 
-(deftest routed-launch-without-credentials-uses-the-unknown-allowance-path
-  (let [{:keys [env dir]} (fake-env {} heavy-persona)
-        proc (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")
-        route (route-of proc)]
-    (is (zero? (:exit proc)) (:out proc))
-    (is (= fable (:chosen route)) "rank 1, first in config order")
-    (is (= [["unknown" "missing-credentials"] ["unknown" "missing-credentials"]] (map (juxt :status :reason) (:candidates route))))
-    (is (re-find #"unknown" (:reason route)))
+(deftest routed-launch-without-credentials-refuses-before-mutation
+  (let [{:keys [env dir log]} (fake-env {} heavy-persona)
+        _ (fs/delete (fs/path dir "home/.pi/agent/auth.json"))
+        proc (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")]
+    (is (= 1 (:exit proc)) (:out proc))
+    (is (false? (:ok (result proc))))
+    (is (empty? (filter mutating? (calls log))))
+    (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger"))))
     (is (not (made-usage-call? dir)) "missing credentials prevent HTTP")))
 
 (deftest a-missing-fixture-response-never-falls-through-to-the-network
@@ -9197,6 +9240,101 @@
         (use! (usage-body {:anthropic-used 28.0}))
         (is (zero? (:exit (measure! fixture "run" "--model" fable "--print-prompt" "--task" "x"))))
         (is (not (made-usage-call? dir)))))))
+
+(defn- named-routing! [fixture]
+  (let [path (fs/path (:dir fixture) "home/.pi/agent/auth.json")
+        auth (json/parse-string (slurp (str path)) true)]
+    (spit (str path) (json/generate-string
+                     (assoc auth :anthropic-account-work
+                            {:type "oauth" :refresh "fixture-refresh" :access "fixture-work" :expires far-future-ms})))
+    (spit (get-in fixture [:env "FAKE_QUOTA_REPORT"])
+          (json/generate-string
+           {:claude {:accounts {(str "Bearer " anthropic-secret) {:body {:five_hour {:utilization 100}}}
+                                "Bearer fixture-work" {:body {:five_hour {:utilization 10}
+                                                               :seven_day_fable {:utilization 10}}}}}
+            :codex {:body {:rate_limit {:primary_window {:used_percent 90 :limit_window_seconds 18000}}}}})))
+  fixture)
+
+(deftest named-account-preview-ledger-launch-and-inheritance
+  (let [{:keys [env dir log env-file]} (named-routing! (routed-fixture {} {} heavy-persona))
+        previewed (:result (result (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")))
+        proc (call! env "task" "start" "pi-heavy" "--task" "named account")
+        out (:result (result proc))
+        concrete "anthropic-account-work/claude-fable-5-1"]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= concrete (:model-canonical previewed) (:model-canonical out)))
+    (is (= "anthropic-account-work" (get-in previewed [:model-route :account])))
+    (is (= (:model-route previewed) (:model-route (ledger-entry* dir (:task out)))))
+    (is (= concrete (injected-env env-file "HERDR_ORCH_MODEL")))
+    (is (some #(some #{concrete} %) (calls log)))
+    (is (some #(some (fn [s] (str/ends-with? s "/account-loader.ts")) %) (calls log)))
+    (let [child (routed-fixture {} {"HERDR_ORCH_MODEL" concrete "HERDR_ORCH_PERSONA" "worker"
+                                    "HERDR_ORCH_SPAWNS" "modelless" "FAKE_PARENT_LABEL" "worker-1"}
+                               {"modelless" "---\nname: modelless\ndescription: fixture\nretro: false\n---\nFixture."})
+          inherited (call! (:env child) "task" "start" "modelless" "--task" "inherit")
+          entry (:result (result inherited))]
+      (is (zero? (:exit inherited)) (:out inherited))
+      (is (= concrete (:model-canonical entry)))
+      (is (not (contains? entry :model-route)))
+      (is (not (made-usage-call? (:dir child))))))
+  (let [fixture (named-routing! (seed-subscription-stores! (measurement-fixture)))
+        proc (measure! fixture "run" "--model" "heavy" "--print-prompt" "--task" "x")]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= ["--model" "anthropic-account-work/claude-fable-5-1"]
+           (get-in (result proc) [:result :model-args])))))
+
+(deftest named-account-fork-routing-and-expired-account-exclusion
+  (let [{:keys [env dir]} (named-routing! (seed-subscription-stores! (fork-env {} heavy-persona)))
+        proc (call! env "task" "start" "pi-heavy" "--context" "fork" "--task" "fork account")
+        out (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "anthropic-account-work/claude-fable-5-1" (:model-canonical out)))
+    (is (= "anthropic-account-work" (get-in (ledger-entry* dir (:task out)) [:model-route :account]))))
+  (let [{:keys [env dir]} (named-routing! (routed-fixture {} {} heavy-persona))
+        path (str (fs/path dir "home/.pi/agent/auth.json"))
+        auth (json/parse-string (slurp path) true)]
+    (doseq [next-auth [(assoc-in auth [:anthropic-account-work :expires] 1)
+                      (dissoc auth :anthropic-account-work)]]
+      (spit path (json/generate-string next-auth))
+      (clear-usage! dir)
+      (let [proc (call! (assoc env "ANTHROPIC_API_KEY" "fixture-paid-must-not-rescue-account")
+                        "task" "run" "pi-heavy" "--task" "x" "--print-prompt")
+            route (route-of proc)]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "openai-codex" (:account route)))
+        (is (not-any? #(= "anthropic-account-work" (:account %)) (:candidates route)))))))
+
+(deftest malformed-alias-reasoning-refuses-before-collection
+  (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10}) {} heavy-persona)
+        proc (call! env "task" "start" "pi-heavy" "--task" "invalid reasoning" "--effort" "bogus")]
+    (is (= 2 (:exit proc)) (:out proc))
+    (is (not (made-usage-call? dir)))
+    (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger"))))
+    (is (empty? (filter mutating? (calls log))))))
+
+(deftest shared-route-works-outside-herdr-and-malformed-requests-have-no-effects
+  (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10}) {"HERDR_ENV" "0"} nil)
+        path (str (fs/path dir "route.json"))
+        pair {:canonical fable :account "anthropic"}
+        request {:schema "herdr-orch-route/v1" :model "heavy" :inventory [(assoc pair :reasoning ["high"])]
+                 :attempted [] :reasoning "high"}
+        invoke (fn [request] (spit path (json/generate-string request)) (call! env "route" "--request" path))
+        good (invoke request)]
+    (is (zero? (:exit good)) (:out good))
+    (is (= "anthropic" (get-in (result good) [:result :account])))
+    (is (= fable (get-in (result good) [:result :chosen])))
+    (clear-usage! dir)
+    (doseq [bad [(dissoc request :inventory) (assoc request :unknown "field")
+                 (assoc request :attempted [{}]) (assoc request :reasoning "invalid")
+                 (assoc request :inventory [(assoc pair :reasoning "high")])]]
+      (let [proc (invoke bad)]
+        (is (= 2 (:exit proc)) (:out proc))
+        (is (not (made-usage-call? dir)))
+        (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger"))))
+        (is (empty? (filter mutating? (calls log))))))
+    (let [exhausted (invoke (assoc request :attempted [pair]))]
+      (is (zero? (:exit exhausted)))
+      (is (true? (get-in (result exhausted) [:result :refused]))))))
 
 (deftest secret-probe-detects-a-planted-token
   (let [{:keys [dir]} (routed-fixture {})]

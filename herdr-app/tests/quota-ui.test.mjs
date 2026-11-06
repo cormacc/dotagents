@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { response, row, window, modelWindows } from "./quota-fixtures.mjs";
+import { response, row, window, modelWindows, namedAccounts } from "./quota-fixtures.mjs";
 
 async function app() {
   let currentProps = {}, now = Date.parse("2030-01-01T02:30:00Z"), calls = 0, finish;
@@ -101,6 +101,23 @@ test("status owns initial/60s polling; popup shares data and refresh, with no se
   assert.ok(!statusText.some(s => s.startsWith("model:extra")));
   assert.equal(a.timers.filter(t => t.every).length, 1);
   assert.ok(a.timers.some(t => !t.every && t.ms === 300000));
+});
+
+test("sibling accounts render separately and visibility changes do not hide their sibling", async () => {
+  const a = await app(), status = a.make();
+  await a.finish(namedAccounts);
+  const popup = a.make({ menu: true });
+  for (const ops of [a.render(status), a.render(popup, { menu: true })]) {
+    const text = words(ops);
+    for (const expected of ["anthropic-account-a", "anthropic-account-b", "1%", "99%"])
+      assert.ok(text.includes(expected), expected);
+  }
+  const ops = a.render(popup, { menu: true });
+  callback(ops, "on_click", "prov-anthropic-account-a")();
+  const text = words(a.render(status));
+  assert.ok(!text.includes("anthropic-account-a"));
+  assert.ok(text.includes("anthropic-account-b"));
+  assert.ok(text.includes("99%"));
 });
 
 test("scoped model windows retain identity in status, popup, tooltips and accessible text", async () => {

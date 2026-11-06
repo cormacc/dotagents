@@ -5,6 +5,8 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
+import { registerAccounts } from "./accounts.ts";
+import { registerRecovery } from "./recovery.ts";
 import { composeHelp, parseSection, rosterArgs, usageArgs, SECTION_DESCRIPTIONS, SECTIONS, type Section } from "./help.ts";
 
 // `/oh` output is a session entry, not a message: it is shown to the user and never enters
@@ -162,6 +164,8 @@ function outputText(result: unknown): string {
 }
 
 export default function (pi: ExtensionAPI) {
+  registerAccounts(pi);
+
   async function execute(args: string[], signal?: AbortSignal, options: { cwd?: string; timeout?: number } = {}) {
     const result = await pi.exec(launcherPath(), args, { signal, ...options });
     if (signal?.aborted || result.killed) throw new Error("Aborted");
@@ -183,6 +187,8 @@ export default function (pi: ExtensionAPI) {
       details: { output: result.stdout },
     };
   }
+
+  registerRecovery(pi, execute);
 
   pi.registerEntryRenderer<HelpEntry>(HELP_ENTRY, (entry, { expanded }, theme) => {
     const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));

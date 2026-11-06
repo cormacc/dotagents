@@ -226,6 +226,92 @@
       (is (= 1.0 (remaining (run-usage context "openai-codex" (codex-body 0 18000)) "openai-codex")))
       (is (= 0.0 (remaining (run-usage context "openai-codex" (codex-body 100 18000) {:fresh true}) "openai-codex"))))))
 
+(deftest named-accounts-isolate-evidence-and-credential-generations
+  (stores/with-context
+    (fn [context]
+      (stores/seed! context)
+      (let [path (stores/pi-path context)
+            a "anthropic-account-a" b "anthropic-account-b"
+            auth (assoc (json/parse-string (slurp path) true)
+                        (keyword a) (stores/oauth "token-a")
+                        (keyword b) (stores/oauth "token-b")
+                        :anthropic-account-INVALID (stores/oauth "ignored"))
+            calls (atom [])
+            opts (assoc (options context nil) :providers ["anthropic"]
+                        :http-fn (fn [req]
+                                   (let [token (get-in req [:headers "Authorization"])]
+                                     (swap! calls conj token)
+                                     {:status 200 :body {:five_hour {:utilization (if (= token "Bearer token-b") 99 1)}}})))
+            run #(usage/usage-for config opts)]
+        (stores/put-json! path auth)
+        (let [before (slurp path) report (run)]
+          (is (= ["anthropic" a b] (mapv :localProvider (:providers report))))
+          (is (= ["anthropic" "anthropic" "anthropic"] (mapv :baseProvider (:providers report))))
+          (is (= ["anthropic" a b] (mapv :accountId (:providers report))))
+          (is (= 0.99 (remaining report a)))
+          (is (= 0.01 (remaining report b)))
+          (is (= before (slurp path)) "read-only collection")
+          (let [files (fs/glob (fs/path (:home context) "cache") "*.json")
+                cache (apply str (map #(slurp (str %)) files))]
+            (is (= 3 (count files)) "one cache per account")
+            (is (str/includes? cache "five_hour") "cache positive control")
+            (doseq [secret ["token-a" "token-b" "fixture-refresh" "fixture-account"]]
+              (is (not (str/includes? (pr-str report) secret)))
+              (is (not (str/includes? cache secret))))))
+        (is (= 3 (count @calls)))
+        (is (= 0.01 (remaining (run) b)))
+        (is (= 3 (count @calls)) "account-specific cache hits")
+        (stores/put-json! path (assoc-in auth [(keyword a) :refresh] "replacement-refresh"))
+        (is (= 0.99 (remaining (run) a)))
+        (is (= 4 (count @calls)) "refresh generation invalidates only its account")
+        (stores/put-json! path (assoc-in auth [(keyword b) :expires] stores/now-ms))
+        (let [report (run)]
+          (is (nil? (remaining report b)))
+          (is (= "expired-credentials" (:reason (last (:providers report)))))
+          (is (= 0.99 (remaining report a))))
+        (let [report (usage/usage-for config (assoc opts :providers ["anthropic-account-missing"]))]
+          (is (= "missing-credentials" (:reason (row report))))
+          (is (nil? (remaining report "anthropic-account-missing"))))))))
+
+(deftest named-accounts-never-resolve-a-native-or-misconfigured-base-credential
+  (stores/with-context
+    (fn [context]
+      (stores/seed! context)
+      (let [account "anthropic-account-a"
+            configured (assoc-in config [:providers account] {:quota-provider "claude"})
+            opts (assoc (options context nil) :providers [account]
+                        :http-fn (fn [_] (throw (ex-info "must not fetch" {}))))]
+        (doseq [[config harness] [[configured :claude] [configured :codex]
+                                  [(update configured :providers dissoc "anthropic") :pi]
+                                  [(assoc-in configured [:providers "anthropic" :quota-provider] "codex") :pi]]]
+          (let [report (usage/usage-for config (assoc opts :harness harness))]
+            (is (= "unsupported-auth-context" (:reason (row report))))
+            (is (nil? (remaining report account)))))))))
+
+(deftest named-account-removal-or-replacement-during-fetch-discards-credit
+  (doseq [replacement [nil (stores/oauth "new-token")]]
+    (stores/with-context
+      (fn [context]
+        (stores/seed! context)
+        (let [path (stores/pi-path context)
+              account "anthropic-account-a"
+              auth (assoc (json/parse-string (slurp path) true)
+                          (keyword account) (stores/oauth "old-token"))
+              opts (assoc (options context nil) :providers [account]
+                          :http-fn (fn [_]
+                                     (stores/put-json! path
+                                       (if replacement (assoc auth (keyword account) replacement)
+                                           (dissoc auth (keyword account))))
+                                     {:status 200 :body {:five_hour {:utilization 1}}}))]
+          (stores/put-json! path auth)
+          (let [report (usage/usage-for config opts)]
+            (is (= (if replacement "credentials-changed" "missing-credentials") (:reason (row report))))
+            (is (nil? (remaining report account)))
+            (is (empty? (:windows (row report)))))
+          (is (= "pi-claude" (:access (credentials/credentials :pi "claude" context))))
+          (when-not replacement
+            (is (= "missing-credentials" (:reason (credentials/credentials :pi "claude" context account))))))))))
+
 (deftest locals-and-unconfigured-providers-do-not-read-credentials
   (let [r (usage/usage-for config {:providers ["local" "missing"]})]
     (is (= 1.0 (remaining r "local")))

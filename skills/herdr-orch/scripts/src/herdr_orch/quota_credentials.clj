@@ -70,16 +70,35 @@
                    :context-key (digest (pr-str [harness provider path access expires account]))}
             (text? account) (assoc :account-id account))))
 
-(defn- pi-credentials [provider context]
+(defn pi-account?
+  "True only for the supported named Pi Anthropic account namespace."
+  [id]
+  (and (string? id)
+       (boolean (re-matches #"anthropic-account-[a-z][a-z0-9_-]{0,31}" id))))
+
+(defn pi-accounts
+  "Return sorted supported account identities, without credentials."
+  [context]
+  (->> (read-json (str (fs/path (pi-directory context) "auth.json")))
+       :data keys (map name) (filter pi-account?) sort vec))
+
+(defn- pi-credentials [provider context account]
   (let [path (str (fs/path (pi-directory context) "auth.json"))
         result (read-json path)
-        entry (get (:data result) (case provider "claude" :anthropic "codex" :openai-codex))]
+        identity (or account (case provider "claude" "anthropic" "codex" "openai-codex"))
+        entry (get (:data result) (keyword identity))]
     (cond
       (:reason result) result
       (nil? entry) (unknown "missing-credentials")
       (not= "oauth" (:type entry)) (unknown "not-subscription-auth")
       (not (string? (:refresh entry))) (unknown "invalid-credentials")
-      :else (ready :pi provider path (:access entry) (:expires entry) (:accountId entry) (:now-ms context)))))
+      :else (let [result (ready :pi provider path (:access entry) (:expires entry)
+                               (:accountId entry) (:now-ms context))]
+              (if (= "ready" (:status result))
+                (assoc result :context-key
+                       (digest (pr-str [(:context-key result) identity
+                                        (select-keys entry [:access :refresh :expires :accountId])])))
+                result)))))
 
 (defn- claude-credentials [{:keys [env os home cwd now-ms]}]
   (cond
@@ -140,13 +159,17 @@
   "Read PROVIDER (claude or codex) from HARNESS (:pi, :claude or :codex).
   Default context comes from `environment`; an explicit context must supply all
   its fields. Return private ready inputs with a credential-generation digest,
-  or a fixed unknown reason. Never fall back to another harness or prompt."
+  or a fixed unknown reason. Optional ACCOUNT is a validated named Pi Anthropic
+  identity; nil selects the base credential. Never fall back or prompt."
   ([harness provider] (credentials harness provider (environment)))
-  ([harness provider context]
+  ([harness provider context] (credentials harness provider context nil))
+  ([harness provider context account]
    (try
      (cond
        (not (#{"claude" "codex"} provider)) (unknown "unsupported-provider")
-       (= harness :pi) (pi-credentials provider context)
+       (and account (not (and (= harness :pi) (= provider "claude")
+                              (pi-account? account)))) (unknown "unsupported-auth-context")
+       (= harness :pi) (pi-credentials provider context account)
        (and (= harness :claude) (= provider "claude")) (claude-credentials context)
        (and (= harness :codex) (= provider "codex")) (codex-credentials context)
        :else (unknown "unsupported-auth-context"))

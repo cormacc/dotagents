@@ -63,7 +63,7 @@
 (defn- launch!
   "Invoke `bin` (possibly relative) with `cwd` as the process working directory."
   [h bin cwd]
-  (let [proc @(process/process (into ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin] ["task" "start" "worker" "--task" "launcher matrix"])
+  (let [proc @(process/process (into ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin] ["task" "start" "worker" "--model" "anthropic/fixture" "--task" "launcher matrix"])
                                {:out :string :err :string :env (:env h) :dir cwd})]
     (is (not (fs/exists? (fs/path (:dir h) "quota-calls"))) "missing fixture credentials require no HTTP")
     (is (not (fs/exists? (fs/path (:dir h) "vendor-escapes"))) "no native CLI escaped")
@@ -85,7 +85,7 @@
         deploy (str (fs/path (:dir h) "deploy-root"))
         _ (fs/create-sym-link deploy (fs/path root "skills"))
         bin (str deploy "/herdr-orch/scripts/oh")
-        proc @(process/process ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin "task" "start" "worker" "--task" "foreign project"]
+        proc @(process/process ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin "task" "start" "worker" "--model" "anthropic/fixture" "--task" "foreign project"]
                                {:out :string :err :string :env env :dir project})
         env-map (injected (:env-file h))]
     (is (zero? (:exit proc)) (:err proc))

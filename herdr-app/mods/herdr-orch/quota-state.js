@@ -17,6 +17,10 @@ export function parseQuota(stdout) {
       || (p.provider != null && !text(p.provider)) || (p.local != null && typeof p.local !== "boolean")
       || !["fresh", "stale", "auth_required", "rate_limited", "unavailable"].includes(p.state?.status)
       || typeof p.state.stale !== "boolean") bad();
+    if ((p.baseProvider != null && !text(p.baseProvider)) || (p.accountId != null && !text(p.accountId))) bad();
+    if (p.localProvider.startsWith("anthropic-account-")
+      && (!/^anthropic-account-[a-z][a-z0-9_-]{0,31}$/.test(p.localProvider)
+        || p.baseProvider !== "anthropic" || p.accountId !== p.localProvider || p.provider !== "claude" || p.local === true)) bad();
     seen.add(p.localProvider);
     const windows = p.windows.map(w => {
       if (!text(w.id) || !text(w.kind) || !text(w.scope) || !number(w.percentUsed) || !number(w.percentRemaining)
@@ -29,6 +33,7 @@ export function parseQuota(stdout) {
         windowSeconds: duration, resetsAt: date(w.resetsAt) ? w.resetsAt : null };
     });
     return { id: p.localProvider, adapter: p.provider ?? null, label: p.localProvider,
+      baseProvider: p.baseProvider ?? p.localProvider, accountId: p.accountId ?? p.localProvider,
       status: p.state.status, stale: p.state.stale, local: p.local === true,
       windows: p.state.status === "auth_required" ? [] : windows };
   });

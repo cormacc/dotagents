@@ -1,0 +1,326 @@
+#+TITLE: herdr-orch multiple subscription support
+#+DATE: 2026-11-06 Fri
+#+PARENT: [[task:56d4713a-bb0c-4ba8-87e8-7b49023b36fa][herdr-orch multiple subscription support]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+#+SPEC: [[proj:herdr-app/README.md]]
+
+* Intent
+Use multiple subscriptions per provider in primary Pi sessions and usage-aware subagent launches. Start with Anthropic, retain explicit account selection, and recover primary sessions from quota exhaustion without leaving the selected weight alias tier.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+Named Anthropic OAuth-only account providers are implemented in the Pi Herdr extension. Installed-Pi tests verify independent primary selections, native refresh and a streamed tool round-trip; native credential tests cover refresh/removal isolation and ambient-key exclusion. BOM-prefixed native auth stores remain supported. Read-only quota collection and CLI/Pi/Herdr consumers distinguish named accounts with isolated credential-generation caches; offline tests cover opposite quotas, late removal and native single-account compatibility. Shared Babashka model/account routing and concrete account propagation through fresh, forked and measurement launches are implemented. Installed-Pi tests cover repository and separate skill/package layouts; independent review's package-discovery defect is fixed. Primary tier intent, session restore and bounded quota recovery are implemented; installed-runtime tests cover cancellation, reported external selections, child pinning, retained tool results and operation from non-Git directories outside Herdr. The owner accepts the native pending-selection limitation with a visible warning and post-cancellation selection report, as defined in [[file:2026-pi-recovery-selection-limits.org]]. No native fix, fork, UI lock or startup auth gate is required. Task 4 passed fresh lifecycle and cwd-correction reviews plus the root's complete extension suite. Integrated final acceptance remains pending. Root native-lock evidence remains in ~.tmp/multi-subscription-execution/task4-root-native-auth-gate.log~; the planner independently confirmed public-store manual-selection overwrite in ~.tmp/multi-subscription-execution/planner-public-store-verification.log~. Native visual and real-account acceptance remain open. Baseline: ~44f3fd37b444eec7e1bc7fd2ec8c49727e5a8a3c~. Existing ~TASKS.org~ and ~pi/settings.json~ modifications belong to the user. The parent task remains open.
+
+** Scope
+*** In scope
+- Named Anthropic subscription accounts in Pi; independent primary-session account selection; account-specific quota reporting and launch routing.
+- Explicit primary-session weight selection using the existing merged alias configuration; bounded quota-triggered failover and continuation.
+- Account identity propagation through fresh, forked and measurement launches, previews, ledger entries and inherited concrete selections.
+- Existing CLI, Pi help and Herdr quota consumers; their fixtures and tests; the four declared operator contracts.
+- Provider-neutral account identity and routing, with Anthropic-specific authentication and quota adaptation. Existing OpenAI and local alias candidates remain usable.
+*** Out of scope
+- Native Claude account switching or credential synchronisation. Shared tokens are optional only if later evidence establishes a low-cost, safe path; they are not a delivery gate.
+- Additional multi-account provider adapters, a proxy service, overnight quota polling, account reservations or a new model taxonomy.
+- Automatic in-flight child failover. Children retain their launch selection; primary-session recovery must be inactive in delegated children.
+- Paid API-key fallback without explicit consent, automatic model upgrades, or changes to global Pi startup defaults.
+
+** Acceptance
+*** Core functionality
+- [ ] A user can add a named Anthropic subscription account.
+- [ ] A user can remove a named account without removing another account's credential.
+- [ ] Two primary Pi sessions can select different accounts concurrently.
+- [ ] Primary Pi account selection works outside Herdr.
+- [ ] Usage output distinguishes each configured account's quota evidence.
+- [ ] A tier-based subagent launch selects a model/account pair using that account's evidence.
+- [ ] Fresh launches use the selected account.
+- [ ] Forked launches use the selected account.
+- [ ] Measurement launches use the selected account.
+- [ ] Launch previews and ledger audit identify the selected account without credentials.
+- [ ] A primary session can explicitly select a configured weight alias.
+- [ ] Quota-triggered primary failover prefers another eligible account serving the current model.
+- [ ] Cross-model primary failover selects only candidates from the explicitly selected alias.
+- [ ] Cross-provider fallback is permitted within that alias.
+- [ ] Direct model selection permits only same-model account fallback.
+- [ ] A resumed primary session retains its explicitly selected tier.
+- [ ] Direct model selection clears retained tier intent.
+- [ ] A successful failover automatically continues the interrupted turn.
+- [ ] The recovery controller retains completed tool results.
+- [ ] Existing single-account operation remains usable.
+*** Edge cases
+- [ ] A recovery chain attempts each eligible model/account pair at most once.
+- [ ] Exhaustion stops recovery with a visible reason.
+- [ ] User cancellation suppresses pending continuation.
+- [ ] New user input cancels the pending recovery chain.
+- [ ] An external model/account change reported by Pi invalidates automatic continuation from pending recovery.
+- [ ] Documentation states that pending or same-target native selections may not cancel recovery; explicit abort remains available.
+- [ ] A warning precedes automatic selection and remains until the native setter settles in the active session.
+- [ ] Cancelled recovery reports the actual selected account/model after its setter settles.
+- [ ] Documentation states that a pending setter can change selection after abort or overwrite an intervening manual selection.
+- [ ] A fallback that cannot preserve the requested reasoning level is skipped.
+- [ ] Authentication failure is not classified as quota exhaustion.
+- [ ] Permission denial is not classified as quota exhaustion.
+- [ ] Generic server failure is not classified as quota exhaustion.
+- [ ] Missing, expired or removed account credentials cannot silently resolve through another account or an ambient paid API key.
+- [ ] Unknown or stale quota supplies no numeric credit; existing rank/reserve/unknown ordering remains intact for eligible authenticated accounts.
+- [ ] Concurrent refresh preserves another account's credential.
+- [ ] Account removal during recovery cannot resurrect the removed credential through a late callback.
+- [ ] Herdr quota UI accepts multiple accounts from one provider.
+*** Anti-criteria
+- [ ] Must not: overwrite the shared default credential to switch a session.
+- [ ] Must not: expose tokens in logs, route reports, ledger entries or records.
+- [ ] Must not: have the recovery controller replay completed tool calls.
+- [ ] Must not: infer tier membership from model-name heuristics.
+- [ ] Must not: activate primary-session automatic recovery in delegated children.
+- [ ] Must not: refresh credentials from the read-only quota collector.
+- [ ] Must not: modify unrelated user changes or close the parent task during planning.
+
+** Decisions
+- Chose a focused repository-owned integration in the existing Pi Herdr extension, reusing native Pi authentication/provider APIs and the Babashka routing policy.
+  - Rejected adapting ~pi-multi-account~ wholesale: its quality-band heuristics differ from configured weight aliases; its wider recovery/proxy surface is outside this change.
+  - Rejected extending ~pi-multi-claude~ as the account foundation: its shared ~anthropic~ credential replacement cannot provide independent concurrent selections.
+- Each account has a stable non-secret identity, separate from its base provider and quota adapter. Preserve the existing base-provider credential as the default account. Register additional accounts as distinct Pi providers so the selected model identifies the credential without global credential swapping.
+- Proposed minimal naming: ~anthropic-account-<name>~ is both a Pi auth-store key and the account's stable selectable identity. Validate names; use the suffix as its display name. No separate account database or cosmetic rename feature is required. Discover only supported account namespaces, never arbitrary auth-store keys.
+- Keep canonical models and weight aliases account-independent. Expand candidates to model/account pairs at routing time; retain exact quota scopes, reserve thresholds, harness filters and deterministic order. Preserve the base account first for otherwise equal ties.
+- Extend the existing collector with explicit account lookup and account-isolated cache keys. Its output retains ~providers~ rows with unique ~localProvider~ identities, plus explicit base-provider/account identity. Native non-Pi harnesses retain their existing single-account credential contexts.
+- One pure Babashka selection policy serves launch routing and primary recovery. Add a bounded machine-readable routing operation usable without Herdr; it accepts the selected tier or direct model, current route, eligible registered model/account inventory and attempted-route exclusions. Validate request shape; return only non-secret routing evidence. This operation grants no terminal control and does not weaken existing launch gates.
+- Pi owns account login, refresh and removal through supported credential transactions. Account providers retain native Anthropic OAuth/request shaping and model metadata; subscription aliases must not inherit ambient API-key authentication. The first implementation task proves this with the installed Pi runtime before downstream integration.
+- Launches persist and forward the concrete account/model. Fork and measurement loaders must register the same account providers before model resolution. Same-kind inherited concrete selections do not reroute. Native Claude token sharing is not assumed safe.
+- Primary tier intent is session metadata, restored on resume and cleared by direct selection. Recovery-generated model changes do not clear it. A child with copied session history must remain in pinned-child mode.
+- Recovery first tries same-model accounts, then the selected alias's ranked candidates, including other providers. Direct selections have no cross-model fallback. Filter candidates by registered availability and ability to preserve the requested reasoning level.
+- Attribute quota failures to the request's captured account/model. At the final actionable Pi lifecycle boundary, attempt each candidate pair once in a finite chain; use Pi continuation rather than reconstructing tool calls. Cancellation, new input and externally reported model/account changes invalidate automatic continuation. The owner accepts that pending native selection requests and silent same-target selections may not invalidate recovery; the public API reports neither reliably. Explicit abort remains the reliable cancellation action. An already-pending native setter may still commit: retain a visible warning until it settles and report the actual selection after cancellation, per [[file:2026-pi-recovery-selection-limits.org]]. Do not lock controls, roll back selection or add startup auth checks. Report switches and terminal exhaustion. No timer waits for quota reset.
+
+** Risks
+- Alias authentication or request shaping may differ from the base provider. Gate dependent work on an installed-runtime fake-upstream OAuth/tool round-trip; return for design review if native reuse cannot satisfy it without a proxy or SDK change.
+- Refresh/removal races can lose credentials. Exercise concurrent refresh, cancellation and removal with isolated auth stores; do not copy tokens into a second store.
+- Actual refusals can disagree with cached quota. Keep failed routes excluded for the recovery chain; quota collection remains evidence, not a promise that inference will succeed.
+- Simultaneous launches can choose the same account. Accepted: no reservation layer; revisit if measured contention justifies it.
+- The controller must not replay completed tools, but cannot guarantee a model never independently requests the same action. Preserve the transcript and test controller behaviour, not an impossible model guarantee.
+- Herdr quota parsing rejects duplicate ~localProvider~ values. Producer, parser, UI identity and fixtures must change coherently.
+
+* Plan
+** DONE Register isolated named Anthropic accounts in Pi
+CLOSED: [2026-11-06 Fri 13:45]
+:PROPERTIES:
+:CUSTOM_ID: 5472db3d-fa90-4df6-9030-7b361ea50c18
+:CREATED: [2026-11-06 Fri 13:10]
+:STARTED: [2026-11-06 Fri 13:21]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 13:10]
+- State "STARTED" from "TODO" [2026-11-06 Fri 13:21]
+- State "DONE" from "STARTED" [2026-11-06 Fri 13:45]
+:END:
+Acceptance criteria:
+- Named Anthropic accounts can be added through the existing Pi Herdr extension.
+- Existing anthropic credentials remain usable as the default account.
+- Account selection in one primary session leaves a second session's selection unchanged.
+- Account removal deletes only the selected account credential.
+- An installed-Pi fake-upstream test completes an OAuth-authenticated streamed tool round-trip through an account alias.
+- Concurrent refresh preserves unrelated credentials.
+- Removal prevents a late refresh callback from restoring the account.
+- Missing account credentials do not fall back to ambient API keys.
+- Operator documentation explains account naming, login, removal and session-local selection.
+- Must not: introduce a second token store, proxy service or global credential swapping.
+
+Implement inside `pi/extensions/herdr-orch/index.ts` with supporting modules/tests in that directory; follow `pi/extensions/herdr-orch/pi-integration.test.ts` for installed-runtime validation and update `pi/extensions/herdr-orch/README.md`. Use the record's named provider-key convention and native Pi provider/OAuth transactions. Gate downstream work on the alias runtime proof; return for design review if native reuse requires an SDK change or proxy.
+
+** DONE Collect and display account-specific subscription quota
+CLOSED: [2026-11-06 Fri 14:52]
+:PROPERTIES:
+:CUSTOM_ID: 4c96ff1d-dffe-42ed-99e7-83f9e98b88bf
+:CREATED: [2026-11-06 Fri 13:10]
+:BLOCKED-BY: task:5472db3d-fa90-4df6-9030-7b361ea50c18
+:STARTED: [2026-11-06 Fri 13:48]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 13:10]
+- State "STARTED" from "TODO" [2026-11-06 Fri 13:48]
+- State "DONE" from "STARTED" [2026-11-06 Fri 14:52]
+:END:
+Acceptance criteria:
+- Pi credential lookup selects the requested account identity.
+- Usage rows have unique account identities within one base provider.
+- Two Anthropic accounts with opposite quota states retain distinct evidence.
+- Cache reads cannot transfer quota evidence between accounts.
+- Credential changes invalidate evidence from the previous credential generation.
+- Expired or absent credentials remain explicitly unavailable.
+- The collector performs no credential refresh.
+- CLI JSON output distinguishes accounts.
+- CLI Markdown output distinguishes accounts.
+- CLI text output distinguishes accounts.
+- CLI status output distinguishes accounts.
+- Pi help distinguishes accounts.
+- Herdr quota UI renders two accounts for one provider.
+- Native Claude single-account reporting remains compatible.
+- Native Codex single-account reporting remains compatible.
+- Collector, rendering and UI regression fixtures cover the expanded rows.
+- The usage contract documents account identity and read-only behaviour.
+
+Extend `skills/herdr-orch/scripts/src/herdr_orch/quota_credentials.clj` (credentials), `skills/herdr-orch/scripts/src/herdr_orch/usage.clj` (collect-provider, usage-for) and CLI renderers; update `herdr-app/mods/herdr-orch/quota-state.js` (parseQuota), its UI/fixtures/tests, Pi help tests, and `skills/herdr-orch/scripts/docs/contract.md` plus `herdr-app/README.md`. Check `herdr-plugin/quota-pane.sh` and `herdr-plugin/quota-stanza.sh` against the retained status interface. Keep producer/consumer fallout in this task.
+
+** DONE Route model-account pairs through primary and subagent entry points
+CLOSED: [2026-11-06 Fri 16:21]
+:PROPERTIES:
+:CUSTOM_ID: 85ec22af-7010-4778-8b97-ea95217d5ec8
+:CREATED: [2026-11-06 Fri 13:10]
+:BLOCKED-BY: task:4c96ff1d-dffe-42ed-99e7-83f9e98b88bf
+:STARTED: [2026-11-06 Fri 14:58]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 13:10]
+- State "STARTED" from "TODO" [2026-11-06 Fri 14:58]
+- State "DONE" from "STARTED" [2026-11-06 Fri 16:21]
+:END:
+Acceptance criteria:
+- A candidate expands to its eligible registered model/account pairs.
+- Selection preserves configured rank ordering.
+- Selection excludes known allowance at or below the configured reserve.
+- Selection uses the exact configured quota scope.
+- Selection preserves unknown-evidence ordering.
+- Otherwise equal pairs use deterministic order with the default account first.
+- The shared routing operation works without a Herdr terminal.
+- Malformed routing requests fail before state mutation.
+- Primary recovery selection prefers eligible same-model sibling accounts.
+- A direct-model request cannot return another model.
+- A tier request cannot return a model outside that alias.
+- Attempted pairs are excluded from recovery selection.
+- Unsupported reasoning levels exclude fallback candidates.
+- Fresh launch uses the selected account.
+- Fork launch uses the selected account.
+- Measurement launch uses the selected account.
+- Preview output identifies the account without secrets.
+- Ledger audit identifies the account without secrets.
+- Same-kind concrete inheritance preserves the account without rerouting.
+- Native non-Pi launches retain their existing single-account context.
+- Launch, adapter and routing fixtures exercise these outcomes.
+- The routing contract documents the new machine-readable operation.
+
+Extend `skills/herdr-orch/scripts/src/herdr_orch/core.clj` (candidates, candidate-remaining, route) and `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` (route-model, route-record, model-resolution); propagate through measurement/Pi adapter paths under `skills/herdr-orch/scripts/src/herdr_orch/` and `skills/herdr-orch/scripts/pi/`, with their existing tests. Reuse one policy rather than a TypeScript ranking copy. Update `skills/herdr-orch/scripts/docs/contract.md`, configuration commentary and `skills/herdr-orch/README.org`; preserve launch gates and regenerate roster output only if changed.
+
+** DONE Add primary-session tier selection and bounded quota recovery
+CLOSED: [2026-11-06 Fri 19:26]
+:PROPERTIES:
+:CUSTOM_ID: b0170667-85ba-4062-9bef-6ce3d6ae94aa
+:CREATED: [2026-11-06 Fri 13:10]
+:STARTED: [2026-11-06 Fri 16:23]
+:BLOCKED-BY: task:85ec22af-7010-4778-8b97-ea95217d5ec8
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 13:10]
+- State "STARTED" from "TODO" [2026-11-06 Fri 16:23]
+- State "WAITING" from "STARTED" [2026-11-06 Fri 16:45]
+- State "STARTED" from "WAITING" [2026-11-06 Fri 17:55]
+- State "WAITING" from "STARTED" [2026-11-06 Fri 18:22]
+- State "STARTED" from "WAITING" [2026-11-06 Fri 18:29]
+- State "DONE" from "STARTED" [2026-11-06 Fri 19:26]
+:END:
+Acceptance criteria:
+- Primary Pi sessions can explicitly select a configured weight alias.
+- Tier selection uses the shared routing policy.
+- Session resume restores explicit tier intent.
+- Direct model selection clears tier intent.
+- Recovery-generated selection preserves tier intent.
+- Primary account and tier selection works outside Herdr.
+- A quota failure is attributed to its captured request account/model.
+- Automatic recovery continues after selecting an eligible replacement.
+- Each pair is attempted at most once in a recovery chain.
+- Route exhaustion produces a visible stop reason.
+- Requested reasoning level is preserved on a switch.
+- Cancellation suppresses delayed automatic continuation.
+- New input invalidates automatic continuation from pending recovery.
+- An external model/account change reported by Pi invalidates automatic continuation from pending recovery.
+- Pending or silent same-target native selections are documented as not guaranteed to cancel recovery; explicit abort and new-input invalidation remain required.
+- A warning precedes the recovery setter and remains until it settles in the active session.
+- Cancelled recovery reports the actual selected account/model after the setter settles.
+- A failed setter clears its warning and reports failure without claiming a successful switch.
+- Late callbacks cannot update a replacement session's UI.
+- Native abort and model-selection controls remain available.
+- No automatic rollback or overlapping recovery setter is introduced.
+- Authentication failures do not trigger quota failover.
+- Permission failures do not trigger quota failover.
+- Generic server failures do not trigger quota failover.
+- Account removal during recovery cannot select the removed account.
+- Recovery does not replay completed tool calls.
+- Delegated children remain pinned even when fork history contains tier metadata.
+- Switch reports contain no credentials.
+- Installed-runtime tests exercise recovery.
+- Installed-runtime tests exercise cancellation without requiring the native setter to preserve selection.
+- Delayed-auth tests cover manual-selection interference and retain passing normal-selection controls.
+- Installed-runtime tests exercise session restore.
+- Operator documentation explains explicit tiers, direct selections and recovery limits.
+
+Extend `pi/extensions/herdr-orch/index.ts` with focused supporting modules and tests in the same directory; use the installed Pi final actionable continuation boundary and the task-linked record's cancellation/attempt contract. Follow existing command/event and session cleanup patterns, keep registration available in children but recovery inactive, and update `pi/extensions/herdr-orch/README.md`. Apply [[file:2026-pi-recovery-selection-limits.org]] without private/native patches: show the pending warning before selection, retain it until settlement, invalidate continuation separately and report the actual selection after cancellation. Add a ~known-limit:~ comment at this boundary; wire focused tests into ~pi/extensions/herdr-orch/test.sh~ and update the shared CLI contract and skill operator guidance. Use the retained native-lock/public-store probes as regression references, promoting fixtures into the test directory rather than depending on scratch paths.
+
+** WAITING Verify integrated multi-subscription acceptance and operator handoff
+:PROPERTIES:
+:CUSTOM_ID: 5a4bb6b9-7ec8-488c-ab42-5a97ba5f2d82
+:CREATED: [2026-11-06 Fri 13:10]
+:BLOCKED-BY: task:b0170667-85ba-4062-9bef-6ce3d6ae94aa
+:STARTED: [2026-11-06 Fri 19:27]
+:HANDOFF: Owner authorised guided manual real two-account login/selection and rendered native Pi/Herdr checks, but no real inference request (separate approval required). Baseline credential-key-only check shows anthropic/lemonade/openai-codex, no named account yet. Next user reload extension, register secondary named account and complete native login themselves; do not expose tokens. Capture visual/manual evidence, then two-session selection/quota display. Offline validators approved and closed; root repeat suite logs retained. Task remains WAITING until manual gates complete.
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 13:10]
+- State "STARTED" from "TODO" [2026-11-06 Fri 19:27]
+- State "WAITING" from "STARTED" [2026-11-06 Fri 19:46]
+:END:
+Acceptance criteria:
+- Installed-Pi tests prove two concurrent primary sessions keep separate selected accounts.
+- Installed-Pi tests prove alias OAuth refresh retains the intended account.
+- Installed-Pi tests prove streamed tool results retain the intended account.
+- A quota refusal on one account recovers to a same-model sibling.
+- Exhausted same-model accounts permit cross-provider fallback only inside the selected alias.
+- A direct-model session stops rather than changing models.
+- Cancellation and delayed callbacks cannot restart a stopped recovery chain.
+- Delayed selection retains its warning until settlement and reports the actual selection after cancellation.
+- Manual-selection interference is documented as an accepted native limit, not hidden by a passing continuation assertion.
+- Native abort and model-selection controls remain available throughout recovery.
+- Fresh-launch evidence names the chosen account.
+- Fork-launch evidence names the chosen account.
+- Measurement evidence names the chosen account.
+- Single-account regression tests remain green.
+- A wrong-account negative control fails the selection test.
+- A duplicate-continuation negative control fails the recovery test.
+- Relevant automated suites have complete passing summaries with changed-file coverage identified.
+- An authorised manual two-account smoke verifies real login; unavailable credentials block completion rather than waive this check.
+- An authorised manual smoke verifies explicit account selection.
+- Account-aware Pi output receives visual verification.
+- Herdr quota UI receives visual verification.
+- The four declared operator contracts describe the delivered behaviour.
+- Must not: close the parent task or prune its final record as part of this delegated verification.
+
+Use the record's Validation strategy and acceptance checklist; relevant entry points are `pi/extensions/herdr-orch/test.sh`, `skills/herdr-orch/scripts/pi/test.sh`, `scripts/test-herdr-app.bb` and `bb.edn`. Keep credentials outside evidence, preserve user modifications, and record actual outcomes in the change-record. Implementation tasks own their tests; this task checks integrated acceptance and reports any required repair rather than weakening criteria.
+
+* Implementation
+** Source anchors and change surface
+- ~skills/herdr-orch/scripts/src/herdr_orch/quota_credentials.clj~: ~pi-credentials~ reads only the base provider key; ~credentials~ owns harness selection. Extend together with ~usage.clj~ functions ~collect-provider~ and ~usage-for~.
+- ~skills/herdr-orch/scripts/src/herdr_orch/core.clj~: ~candidates~, ~candidate-remaining~ and ~route~ own model ranking. ~cli.clj~ functions ~route-model~, ~route-record~ and ~model-resolution~ connect it to launch resolution, previews and audit.
+- ~skills/herdr-orch/scripts/src/herdr_orch/cli.clj~, ~measurement.clj~ and ~pi_adapter.clj~; ~skills/herdr-orch/scripts/pi/fork-adapter.ts~ and ~measurement-adapter.ts~: trace the selected account through interactive, fork and headless execution. Preserve existing context and launch safeguards.
+- ~pi/extensions/herdr-orch/index.ts~ and ~help.ts~: add account/tier commands, provider registration and primary recovery within this packaged extension. New supporting modules and tests stay inside its directory, not the extension discovery root. ~package.json~ already exports this directory; preserve package inclusion and normal startup discovery.
+- ~herdr-app/mods/herdr-orch/quota-state.js~: ~parseQuota~ currently uses ~localProvider~ as a unique UI identity. Update ~main.js~, ~herdr-app/tests/quota-fixtures.mjs~, ~quota-state.test.mjs~ and ~quota-ui.test.mjs~ with account-aware rows. Check ~herdr-plugin/quota-pane.sh~ and ~quota-stanza.sh~ against the CLI status rendering.
+- Regression surfaces: ~quota_credentials_test.clj~, ~owned_usage_test.clj~, ~owned_usage_http_test.clj~, ~core_test.clj~, ~cli_test.clj~, ~launcher_test.clj~, ~measurement_test.clj~ and fake runtime fixtures under ~skills/herdr-orch/scripts/test/~; Pi extension unit/integration tests and ~skills/herdr-orch/scripts/pi/~ adapter tests.
+- Configuration/docs: ~skills/herdr-orch/subagents/config.edn~, home/project override compatibility, CLI contract/help, ~skills/herdr-orch/README.org~, ~pi/extensions/herdr-orch/README.md~, ~herdr-app/README.md~. Regenerate roster listings only if their source changes. Do not add personal account names or tokens to tracked configuration.
+
+** Prior art and host evidence
+- [[https://pi.dev/packages/pi-multi-account?name=multi+claude][pi-multi-account]]; source reviewed at [[https://cdn.jsdelivr.net/npm/pi-multi-account@1.28.1/index.ts][1.28.1 index.ts]]: ~modelQualityBand~ uses name-derived quality bands; ~findFallbackModels~ implements same-identity preference and band filtering. Useful recovery cases, not the policy source for this design.
+- [[https://pi.dev/packages/@ravshansbox/pi-multi-claude?name=multi+claude][pi-multi-claude]]; source reviewed at [[https://cdn.jsdelivr.net/npm/@ravshansbox/pi-multi-claude@2.0.5/index.ts][2.0.5 index.ts]]: ~switchAccount~ writes the selected credential to ~anthropic~ and reloads; ~getAccessToken~ refreshes stored credentials. This is prior art, not a concurrent-isolation guarantee.
+- Installed Pi 1.5.0 documentation, ~docs/extensions.md~ sections 'pi.registerProvider(name, config)' and 'agent_start / agent_end / agent_before_settle / agent_settled': native provider composition and the final actionable continuation boundary exist. This establishes API availability, not proof that an Anthropic alias works; the runtime gate must establish that.
+
+** Validation strategy
+- Use disposable auth stores and fake provider endpoints; no real subscription tokens in automated fixtures. Prove tests detect wrong-account selection, stale evidence, forbidden tier changes, credential loss and duplicate controller continuation with negative controls.
+- Exercise native login/refresh integration, streamed tool round-trips, session restore, two concurrent sessions, child isolation, cancellation and late completion using the installed Pi runtime. Keep network probes bounded and block external provider traffic.
+- Run the relevant Clojure namespaces through ~bb test-clojure~, Pi adapters through ~bb test-pi-adapters~, Pi extension integration through its ~test.sh~, and Herdr UI tests through ~scripts/test-herdr-app.bb~. The repository ~bb test~ task aggregates Clojure, adapter and script suites; verify extension coverage explicitly rather than attributing unrelated suite totals to this feature.
+- Clear inherited ~HERDR_ORCH_*~ assignment state for test execution per the scripts guide. Use ~scripts/check-section-links.bb~ and ~ot doctor~ for record/contracts. Confirm actual command exit status and complete test summaries.
+- Before feature closure, perform an explicitly authorised manual two-account login/selection smoke; show account-aware Pi output and Herdr quota UI. Offline fake-provider tests do not establish current live-provider acceptance. Record any blocked manual validation honestly.
+
+* Validation
+- Fresh final conformance and correctness validators independently approved the offline implementation with no issues found. Acceptance matrices and changed-file execution coverage: ~.tmp/multi-subscription-execution/task5-conformance-report.md~ and ~.tmp/multi-subscription-execution/task5-correctness-report.md~.
+- Root combined repeat passed: eight named Clojure namespaces, 471 tests and 4826 assertions; installed Pi adapter groups 17/2/67/1; full extension runner including 23 recovery unit, 12 RPC, 29 delayed-selection, 3 session and 5 boundary scenarios; Herdr app 34 passes and 2 wiring skips. Complete logs: ~.tmp/multi-subscription-execution/task5-root-repeat-*.log~. These are the impacted suites, not the whole repository aggregate.
+- The first root final routing run failed with a start-contender materialisation timeout in ~continue-and-explicit-start-serialize-the-same-checkout-under-concurrency~ (471 tests, 4822 assertions, 0 failures, 1 error). The repeat passed without code changes; cause is unknown. Both validators retained similar first-run observations and passing retries rather than assigning an unverified baseline or environment cause.
+- Section-link check: 484 references in 478 files, no problems. Task doctor: no errors, 20 specification advisories on other records; final closure still requires its own record refresh.
+- Task 5 waits for authorised real two-account login/selection and rendered native Pi/Herdr verification. Synthetic OAuth, RPC and UI-builder checks do not satisfy those manual gates. The parent remains open.

@@ -248,13 +248,25 @@
                           quota-scope (assoc :quota-scope quota-scope))))))
             v))))
 
+(defn account-candidates
+  "Expand candidates against authenticated registered inventory, base account first.
+  Inventory rows contain canonical model, selectable account and reasoning levels."
+  [candidates inventory]
+  (vec (mapcat (fn [candidate]
+                 (for [entry (sort-by (juxt #(if (= (:account %) (:provider candidate)) 0 1) :account)
+                                      inventory)
+                       :when (= (:canonical candidate) (:canonical entry))]
+                   (assoc candidate :account (:account entry) :reasoning (:reasoning entry))))
+               candidates)))
+
 (defn candidate-remaining
-  "Validated evidence -> a candidate's fraction, or nil. The candidate's exact
-  `:quota-scope` selects the scope, defaulting to `all_models`. There is no fuzzy
+  "Validated evidence -> a candidate's fraction, or nil. Select the full :account
+  identity, or :provider for native harnesses. The candidate's exact :quota-scope
+  selects the scope, defaulting to `all_models`. There is no fuzzy
   model-name join, so a model with its own scope needs a selector in config, or it
   receives account-wide credit."
-  [evidence {:keys [provider quota-scope]}]
-  (when-let [row (first (filter #(= provider (:localProvider %)) (:providers evidence)))]
+  [evidence {:keys [provider account quota-scope]}]
+  (when-let [row (first (filter #(= (or account provider) (:localProvider %)) (:providers evidence)))]
     (if (:local row)
       1.0
       (when (and (= "fresh" (get-in row [:state :status])) (false? (get-in row [:state :stale])))
@@ -263,7 +275,7 @@
           (when (= "known" (:status scope)) (/ (:effectivePercentRemaining scope) 100.0)))))))
 
 (defn- annotate [evidence candidate]
-  (let [entry (first (filter #(= (:provider candidate) (:localProvider %)) (:providers evidence)))
+  (let [entry (first (filter #(= (or (:account candidate) (:provider candidate)) (:localProvider %)) (:providers evidence)))
         remaining (candidate-remaining evidence candidate)]
     (cond-> (assoc candidate :status (if (some? remaining) :ok :unknown) :remaining remaining)
       (nil? remaining) (assoc :reason (or (:reason entry) "unresolved-scope")))))
@@ -277,12 +289,14 @@
         eligible (filter #(or (nil? (:remaining %)) (> (:remaining %) (:reserve %))) annotated)
         picked (first (sort-by (fn [c] [(:rank c) (if (:remaining c) 0 1) (- (or (:remaining c) 0))]) eligible))]
     (if picked
-      {:chosen (:canonical picked)
+      (cond-> {:chosen (:canonical picked)
        :candidates annotated
        :reason (if (:remaining picked)
                  (str "rank " (:rank picked) " with " (:remaining picked) " remaining")
                  (str "rank " (:rank picked) " allowance unknown" (when (:reason picked) (str ": " (:reason picked)))
                       "; no known candidate with credit at that rank or better"))}
+        (:account picked) (assoc :account (:account picked)
+                                 :concrete (str (:account picked) "/" (subs (:canonical picked) (inc (count (:provider picked)))))))
       {:refused true
        :candidates annotated
        :reason (if (empty? annotated) "no candidates" "no candidate has credit and none has unknown allowance")})))

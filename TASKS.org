@@ -120,6 +120,38 @@ Acceptance criteria:
 - Decide whether cross-session question hints within one Pi process are acceptable.
 - Approve a disposable interactive trial on the installed Pi before any persistent package/settings change.
 
+** TODO Evaluate efficient herdr-orch inter-agent communication :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 1a58c66c-5b2b-453f-aaa3-836f9c3dbe0b
+:CREATED: [2026-11-06 Fri 18:51]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 18:51]
+:END:
+Outcome: decide whether the existing Herdr-based communication is sufficient or propose a robust, portable and efficient augmentation. This is an investigation backlog item, not approval to implement a messaging service.
+
+Initial assessment (architectural research, not a latency benchmark): result-file detection and delivery into a busy or idle model are separate problems. Preserve immutable result publications, identity validation, explicit collection and parent-owned lifecycle decisions. Re-check the current implementation in [[file:skills/herdr-orch/scripts/src/herdr_orch/cli.clj]] and the contract in [[file:skills/herdr-orch/scripts/docs/contract.md]] before using this assessment as a baseline.
+
+Compare these options:
+- Keep the existing mechanism, including a bounded polling-interval experiment; coarse-grained delegation may not justify a new subsystem.
+- Preferred hypothesis: add a small durable mailbox behind the oh CLI, using immutable files shared across worktrees, change notifications for prompt wake-up, and startup/reconnect scans plus a low-frequency polling fallback. Keep notifications advisory and stored messages authoritative.
+- Add a persistent local socket broker only if measurements justify its startup, ownership, reconnection and compatibility costs; retain durable replay rather than socket-only delivery.
+- Expose the same operations through MCP as an optional interface, not a second orchestration authority. Verify actual client wake-up support: resource-change notifications do not themselves establish portable delivery into an idle model. Separate stdio server processes still need shared storage or a broker.
+- Assess adoption or selective reuse of catalogue packages rather than assuming a custom implementation is necessary.
+
+Prior art from [[https://pi.dev/packages]] (package-documented behaviour, not independently tested guarantees):
+- [[https://pi.dev/packages/pi-mail][pi-mail]]: project-scoped durable mail, quiet delivery with explicit urgent notification, deliberately separate from orchestration.
+- [[https://pi.dev/packages/pi-session-mail][pi-session-mail]]: Maildir-style persistence, watcher plus polling fallback, offline delivery and request/reply correlation; inspect its local-filesystem and crash-durability limits.
+- [[https://pi.dev/packages/pi-agent-comm][pi-agent-comm]]: Unix-socket responses and session-persisted recovery; separates mechanical context queries from questions that require a peer model turn.
+- [[https://pi.dev/packages/pi-messenger][pi-messenger]]: file-based coordination and native Pi steering, with message budgets; avoid importing duplicate orchestration unintentionally.
+- [[https://pi.dev/packages/agent-comms][agent-comms]]: cross-harness TCP mesh and push/drain adapters; examine delivery states, persistence boundaries and whether mesh complexity is justified locally.
+
+Design constraints to evaluate: stable message and correlation IDs; replay cursors and acknowledgements; deduplication rather than an exactly-once execution claim; stored/presented/answered states distinct from task completion; current task/session/round identity checks; bounded queues, payloads, waits and automatic exchanges; quiet information versus explicit steering; peer messages must not grant user authority or additional delegation/lifecycle permissions. Owner-only storage is not isolation from other processes under the same account. Retain a portable CLI receive/wait path, with native harness adapters and existing Herdr prompting as fallbacks.
+
+Acceptance: record a keep/adopt/augment decision with evidence. Compare publication-to-capture and message-to-presentation delay, subprocess activity and restart recovery at representative concurrency; alternate baseline and candidate rounds and report each rounds median. Test idle/busy recipients, continued/replaced sessions, lost notifications, duplicate delivery, and crashes between persistence, notification, presentation and acknowledgement. A keep-existing decision is explicitly acceptable if gains do not justify complexity.
+
+Related investigation: [[task:f2365984-c97f-4e39-9b86-6c2cc94809a9][Diagnose desktop completion delivery and enforce explicit collection]]. Coordinate with that narrower delivery diagnosis; do not presume its cause or duplicate its workflow rules.
+
 * Improvements
 
 ** STARTED [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
@@ -339,6 +371,38 @@ Follow-up to task f7457cc5-64a5-4139-ba94-7da9eca8f6ed. The owner deferred nativ
 :END:
 Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. Design focus-independent workspace-root pinning for terminal Herdr and the desktop adapter. Establish an authoritative configured directory source before implementation; Herdr 0.9.5 PluginInvocationContext.workspace_cwd prefers focused pane cwd and is not sufficient. Consider an explicitly configured plugin-owned directory map only after agreement. Preserve active-agent following as the default, reject missing or remote roots, and test that task-pane and agent-pane focus changes cannot change a pinned root. Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
 
+** STARTED herdr-orch multiple subscription support
+:PROPERTIES:
+:CUSTOM_ID: 56d4713a-bb0c-4ba8-87e8-7b49023b36fa
+:CREATED: [2026-11-06 Fri 12:22]
+:STARTED: [2026-11-06 Fri 13:21]
+:HANDOFF: Tasks1-4 DONE, task5 WAITING manual final gates. No active children: fresh final conformance e5e277c7-6d78-483d-885f-a2a1dd03d007 and correctness ff30c486-f507-4ee3-9700-88599f27736c captured APPROVED offline/no issues and closed. Reports task5-{conformance,correctness}-report.md; full acceptance matrices. Root combined repeat task5-root-check.clj all4exit0, complete logs task5-root-repeat-*:471tests4826assertions, Pi17/2/67/accountlaunch1, extension23unit12RPC29delayed3session5boundary, Herdr34pass2skip. Initial root final routing timeout retained task5-root-final-routing.log, cause UNKNOWN; validators similar first failures/retries no causal conclusion. Record Validation updated. Next owner authorisation for real two-account login/selection and rendered native Pi/Herdr checks; no real credentials/provider traffic authorised yet, no closure/pruning until gates pass. HEAD44f3fd37b444eec7e1bc7fd2ec8c49727e5a8a3c unchanged all feature uncommitted; preserve settings/Org. Accepted native setter timing/report limits and actual-external-selection invalidation unchanged. Runtime private OS temp, nonGit supported. Companion29fef88e open pending integrated acceptance. Feedbackf2365984 created for completion delivery; remaining retro inputs in prior handoff not persisted rules. No commits/pushes; root owns Org. Await one manual-gate decision.
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 12:22]
+- State "STARTED" from "TODO" [2026-11-06 Fri 13:21]
+:END:
+#+IMPORT: [[plan:2026-multiple-subscriptions.org]]
+Allow multiple subscriptions to a single provider, and extend usage-aware subagent model routing to account for and select between those subscriptions. The accounts must also be usable and selectable from the primary/orchestrator session, not only from subagent sessions. Initial support targets Anthropic/Claude. Keep the design generalisable to other providers, with minor provider-dependent adaptation where needed.
+
+User-supplied prior art for planning:
+- https://pi.dev/packages/pi-multi-account?name=multi+claude
+- https://pi.dev/packages/@ravshansbox/pi-multi-claude?name=multi+claude
+
+** TODO Plan accepted Pi recovery selection limits
+:PROPERTIES:
+:CUSTOM_ID: 29fef88e-1331-4c1f-82c2-64905aca3ef2
+:CREATED: [2026-11-06 Fri 17:21]
+:HANDOFF: Accepted planning deliverable design/log/2026-pi-recovery-selection-limits.org published by planner0c063b4c-d8bc-4759-9f42-f6301b6ecd4f, captured COMPLETE and closed. User rejected native-fork prerequisite in planner interaction and approved extension-only warning/result contract; no native fix required. Root read records/report, discharged administrative blocker and resumed existing task4. Coordination record implementation checkboxes remain pending task4; do not close as feature delivery. Active implementation round85200f11-e2ab-48de-9a07-1c6bf9c8fab7 t17 owns revised task4, see feature parent handoff.
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 17:21]
+:END:
+#+IMPORT: [[plan:2026-pi-recovery-selection-limits.org]]
+Coordinate the accepted recovery contract for multi-subscription task b0170667-85ba-4062-9bef-6ce3d6ae94aa. The owner chose automatic concrete-account recovery with a pending-auth warning and post-cancellation selection report, accepting stale native selection after abort or an intervening manual selection. No native fix/fork, monkey-patch, virtual dispatch, UI lock or startup auth gate is required.
+
+The linked record owns the decision and evidence. Existing task 4 owns implementation and regression tests; task 5 owns integrated acceptance. Planning is approved; leave this coordination task and the feature parent open for root review, with task 4 WAITING until root-owned resumption. No production code, release, installation, commit or live inference was authorised by this planning session.
+
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:
@@ -432,3 +496,22 @@ Acceptance criteria:
 - Two consecutive regeneration runs leave the README byte-identical after the first run.
 - A configuration change replaces the old ranked aliases instead of appending another list.
 - Maintainer instructions use the supported regeneration path without manual result edits.
+
+** TODO Diagnose desktop completion delivery and enforce explicit collection :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: f2365984-c97f-4e39-9b86-6c2cc94809a9
+:CREATED: [2026-11-06 Fri 13:16]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 13:16]
+:END:
+Investigate completion awareness for a Pi orchestrator running inside Herdr desktop. Establish when advisory completion pushes are observable, reproduce any delivery gap, and ensure the execution workflow explicitly collects outstanding children when pushes are unavailable. Existing herdr-orch guidance already requires collection when a Pi parent session cannot be observed; determine whether the gap is delivery, session observation, or failure to follow that guidance rather than adding a duplicate rule.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-06 Fri 13:15]
+- sender: human
+
+Evidence:
+The user reported planner completion before this parent had collected it. Explicit collection found queued WAITING publications; final completion and notification causality need separate verification. Planner round: 5ee33dcf-3cf9-49a9-9054-d72617720e9d. Use active collect/wait for the remainder of this session; do not rely on advisory pushes.

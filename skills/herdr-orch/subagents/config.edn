@@ -21,8 +21,10 @@
 ;; candidates `{:model <short name or canonical ID> :rank n}` with an optional exact
 ;; `:quota-scope` selector, which defaults to `all_models`. Give a model with its own
 ;; quota scope (for example `model:fable`) that selector. Lower rank is preferred; the
-;; router chooses among them at spawn from each provider's remaining allowance. A candidate
-;; takes at most one string-alias hop and never names another vector alias.
+;; router chooses among them at spawn from each account's remaining allowance. Pi expands
+;; authenticated registered model/account pairs and requires the requested reasoning level;
+;; equal pairs use the default account first. Accounts do not belong in this model table.
+;; A candidate takes at most one string-alias hop and never names another vector alias.
 ;;
 ;; `:providers` maps a local provider prefix to its owned adapter `:quota-provider`
 ;; and optional `:reserve` fraction. Empty rows describe local providers.

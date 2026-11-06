@@ -16,6 +16,7 @@ import { existsSync, readFileSync, realpathSync, statSync, unlinkSync, writeFile
 import { CURRENT_SESSION_VERSION, SessionManager, VERSION } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runtimeIdentity } from "./runtime.ts";
+import { registerNativeAccounts } from "./account-registration.ts";
 
 export const FORK_MARKER = "herdr-orch-fork";
 export const BOUNDARY_RULE =
@@ -272,9 +273,10 @@ export function createFork(request: ForkRequest): ForkResult {
   }
 }
 
-// Inert unless HERDR_ORCH_ADAPTER selects an operation, so loading it into an ordinary
-// session by mistake does nothing. The request and result travel as files, not argv.
-export default function (pi: ExtensionAPI) {
+// Account registration must precede model resolution even without a fork operation.
+// File operations require HERDR_ORCH_ADAPTER; request and result travel as files, not argv.
+export default async function (pi: ExtensionAPI) {
+  await registerNativeAccounts(pi);
   pi.on("session_start", async () => {
     const op = process.env.HERDR_ORCH_ADAPTER;
     if (!op || !op.startsWith("fork-")) return;

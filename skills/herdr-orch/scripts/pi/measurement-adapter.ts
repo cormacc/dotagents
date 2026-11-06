@@ -1,7 +1,8 @@
 // herdr-orch isolated measurement adapter: an explicitly loaded Pi extension (`pi -e`), never
-// installed into Pi auto-discovery and inert unless HERDR_ORCH_MEASUREMENT_MANIFEST names a
-// manifest. Load it LAST among explicit extensions: handlers run in load order, so it then
-// audits the request after every other extension's changes.
+// installed into Pi auto-discovery. Measurement hooks require a manifest named by
+// HERDR_ORCH_MEASUREMENT_MANIFEST; native account registration precedes model selection.
+// Load it LAST among explicit extensions: handlers run in load order, so it audits the
+// request after every other extension's changes.
 //
 // It does four things for a measurement subject, all outside model context:
 //   1. replaces the CLI's neutral input sentinel with the literal assignment text, so leading
@@ -19,6 +20,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path";
 import { type ExtensionAPI, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { runtimeIdentity } from "./runtime.ts";
+import { registerNativeAccounts } from "./account-registration.ts";
 import { auditPayload, deriveActiveEffort, deriveExpectation, PLACEHOLDER_NAME, type Expectation, type HistoryMessage } from "./measurement-audit.ts";
 
 export const INPUT_SENTINEL = "herdr-orch-measurement-input";
@@ -32,7 +34,8 @@ export interface Manifest {
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
-export default function (pi: ExtensionAPI) {
+export default async function (pi: ExtensionAPI) {
+  await registerNativeAccounts(pi);
   const manifestPath = process.env.HERDR_ORCH_MEASUREMENT_MANIFEST;
   if (!manifestPath) return;
   const manifest: Manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

@@ -17,7 +17,7 @@ done
 installed_path="$(IFS=:; printf '%s' "${installed_entries[*]}")"
 pi_bin="$(PATH="$installed_path" command -v pi)" || { echo "pi is not on PATH; the adapter checks need the installed Pi runtime" >&2; exit 1; }
 version="$(PATH="$installed_path" "$pi_bin" --version 2>&1 | tail -n 1)"
-suites=(${HERDR_ORCH_ADAPTER_SUITES:-fork-adapter fork-provider-context measurement-adapter})
+suites=(${HERDR_ORCH_ADAPTER_SUITES:-fork-adapter fork-provider-context measurement-adapter account-launch})
 
 run_pi() {
   PATH="$installed_path" PI_OFFLINE=1 "$pi_bin" --offline --no-session -ne -e "$here/run-tests.ts" --no-skills --no-prompt-templates --no-context-files --no-mcp -p x </dev/null 2>&1

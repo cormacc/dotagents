@@ -7,10 +7,12 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [herdr-orch.core :as core]
+            [herdr-orch.routing :as routing]
             [herdr-orch.runtime :as herdr]
             [herdr-orch.ledger :as ledger]
             [herdr-orch.measurement :as measurement]
             [herdr-orch.pi-adapter :as pi-adapter]
+            [herdr-orch.quota-credentials :as quota-credentials]
             [herdr-orch.traits :as traits]
             [herdr-orch.usage :as usage-mod]
             [herdr-orch.workflows :as workflows])
@@ -20,7 +22,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable and an unconfigured name is a usage error; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-account-<name> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn usage-error [message data]
   (throw (ex-info message (assoc data :error-kind :usage))))
@@ -401,36 +403,55 @@
       core/default-timeout-ms))
 ;; --- model routing ----------------------------------------------------------------------
 ;; Resolve vector aliases before allocation; explicit models bypass collection.
+;; Pi uses authenticated registered pairs; native harnesses keep one account context.
 (defn- percent [fraction] (format "%.0f%%" (* 100.0 fraction)))
 (defn- candidate-summary [{:keys [canonical rank status remaining reserve reason]}]
   (str canonical " (rank " rank "): "
        (if remaining (str (percent remaining) " remaining") "allowance unknown")
        (when (and remaining (not (pos? (- remaining (or reserve 0))))) (str ", at or below reserve " (percent (or reserve 0))))
        (when (and status (not= :ok status)) (str " [" (name status) (when reason (str ": " reason)) "]"))))
-(defn- route-record [alias {:keys [chosen reason candidates]}]
-  {:alias alias :chosen chosen :reason reason
+(defn- route-record [alias {:keys [chosen account concrete reason candidates]}]
+  (cond-> {:alias alias :chosen chosen :reason reason
    :candidates (mapv (fn [c] (cond-> {:model (:model c) :canonical (:canonical c) :provider (:provider c) :rank (:rank c)
                                       :status (name (:status c)) :remaining (:remaining c) :reserve (:reserve c)}
-                               (:reason c) (assoc :reason (:reason c))))
-                     candidates)})
-;; Returns nil for a non-vector alias, else the `:model-route` record; refuses with each
+                               (:reason c) (assoc :reason (:reason c))
+                               (:account c) (assoc :account (:account c))))
+                     candidates)}
+    account (assoc :account account :concrete concrete)))
+(defn account-loader-file [] (str (fs/path (skill-directory) "scripts/pi/account-loader.ts")))
+(defn- authenticated-inventory [config inventory]
+  (let [context (quota-credentials/environment)]
+    (filterv (fn [{:keys [canonical account]}]
+               (let [base (core/provider-prefix canonical)
+                     adapter (get-in config [:providers base :quota-provider])]
+                 (or (nil? adapter)
+                     (= "ready" (:status (quota-credentials/credentials :pi adapter context
+                                         (when (quota-credentials/pi-account? account) account))))))) inventory)))
+;; Returns nil for a non-vector alias, else the :model-route record; refuses with each
 ;; candidate and its allowance when nothing is eligible.
-(defn- route-model [config kind model]
+(defn- route-model [config kind model reasoning]
   (when (core/vector-alias? config model)
+    (when (= kind "pi")
+      (routing/validate! {:schema routing/schema :model model :reasoning reasoning :inventory [] :attempted []}))
     (let [candidates (core/candidates config kind model)
           usage (if (seq candidates)
                   (usage-mod/usage-for config {:providers (vec (distinct (map :provider candidates))) :harness (keyword kind)})
                   {:providers []})
-          route (core/route candidates usage)]
+          route (if (= kind "pi")
+                  (routing/select-route config kind
+                    {:schema routing/schema :model model :attempted [] :reasoning reasoning
+                     :inventory (authenticated-inventory config
+                                  (:inventory (pi-adapter/run-op! (account-loader-file) "model-inventory" {})))} usage)
+                  (core/route candidates usage))]
       (when (:refused route)
         (fail (str "spawn refused: no candidate of model alias '" model "' has allowance for kind " kind ": "
                    (if (seq (:candidates route)) (str/join "; " (map candidate-summary (:candidates route))) "no candidate runs on this kind"))
               {:alias model :kind kind :candidates (:candidates (route-record model route))}))
       (route-record model route))))
-;; The model a launch actually runs: the routed canonical ID, else the requested model.
-(defn- model-resolution [config kind model]
-  (let [route (route-model config kind model)
-        effective (or (:chosen route) model)]
+;; The model a launch runs: the concrete routed account/model, else the requested model.
+(defn- model-resolution [config kind model reasoning]
+  (let [route (route-model config kind model reasoning)
+        effective (or (:concrete route) (:chosen route) model)]
     {:model-route route
      :model-effective effective
      :model-canonical (core/canonical-model config effective)
@@ -564,7 +585,7 @@
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
         effort (effort-policy effective opts frontmatter kind ident)
         config (config)
-        resolution (model-resolution config kind model)]
+        resolution (model-resolution config kind model (:effort effort))]
     {:context context :path path :composition composition :frontmatter frontmatter
      :inherited inherited :fork-source fork-source :overlay-persona persona
      :role-absent (nil? effective) :label-persona (or effective core/anonymous-persona)
@@ -590,7 +611,7 @@
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter {} :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
         effort (effort-policy nil opts {} kind ident)
         config (config)
-        resolution (model-resolution config kind model)]
+        resolution (model-resolution config kind model (:effort effort))]
     {:resolved resolved :treatment (measurement/compile-treatment resolved)
      :ident ident :kind kind :model model :effort effort :config config
      :model-route (:model-route resolution) :model-effective (:model-effective resolution)
@@ -1422,7 +1443,10 @@
             (when (and (:pane-id persisted) (not= label (:label renamed)))
               (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
             (ledger/update! task assoc :status "renamed")
-            (let [native (concat (:model-args entry)
+            (let [native (concat (when (and (= kind "pi")
+                                            (quota-credentials/pi-account? (core/provider-prefix model-effective)))
+                                   ["-e" (account-loader-file)])
+                                 (:model-args entry)
                                  (:effort-args entry)
                                  (core/harness-extra-args config kind)
                                  (when persona-path (core/persona-args kind persona-path))
@@ -3380,6 +3404,7 @@
                "remove <full-task-uuid>"]
    "spawn" ["spawn \"<shell command>\""]
    "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]"]
+   "route" ["route --request PATH"]
    "usage" ["usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]"]})
 ;; Derived from the signatures above rather than restated, so help and validation cannot
 ;; disagree. Flat on purpose: it exists to catch typos, and per-group scoping would
@@ -3391,7 +3416,7 @@
   "Global usage, one group's signatures, or a single command's signature."
   [group op]
   (if-let [lines (and group (signatures group))]
-    (let [prefix (if (#{"spawn" "roster" "usage"} group) "oh " (str "oh " group " "))
+    (let [prefix (if (#{"spawn" "roster" "usage" "route"} group) "oh " (str "oh " group " "))
           matching (when (and op (not (str/starts-with? op "-")))
                      (seq (filter #(or (= op (first (str/split % #" ")))
                                        ;; `spawn`'s only signature repeats the group name.
@@ -3881,7 +3906,11 @@
     (when-not (usage-formats format) (usage-error "--format must be json, markdown, text, or status" {:format format}))
     (when (and detail? (not= format "markdown")) (usage-error "--detail applies only to markdown output" {}))
     ;; Validated before any credential read or fetch.
-    (when-let [unknown (seq (remove configured names))]
+    (when-let [unknown (seq (remove #(if (quota-credentials/pi-account? %)
+                                        (and (= harness "pi")
+                                             (= "claude" (get-in config [:providers "anthropic" :quota-provider])))
+                                        (configured %))
+                                   names))]
       (usage-error (str "unknown provider: " (str/join ", " unknown)) {:unknown (vec unknown) :available (vec (sort configured))}))
     (let [result (usage-mod/usage-for config {:providers (seq names) :harness (keyword harness) :fresh (boolean (one opts :fresh))})]
       (case format
@@ -3896,6 +3925,23 @@
     (let [pane (herdr/raw :tab-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (or (one opts :label) "spawn") :env {} :focus false})]
       (herdr/raw :pane-run! (:pane_id pane) command)
       {:pane-id (:pane_id pane) :tab-id (:tab-id pane)})))
+(defn route! [opts positional]
+  (require-positionals positional 0 "route")
+  (when-not (= #{:request} (set (keys (dissoc opts :_))))
+    (usage-error "route requires only --request PATH" {}))
+  (let [path (one opts :request)
+        _ (when-not (and (fs/regular-file? path) (<= (fs/size path) 1048576))
+            (usage-error "route request must be a file of at most 1 MiB" {}))
+        request (try (json/parse-string (slurp path) true)
+                     (catch Exception _ (usage-error "invalid routing request JSON" {})))
+        _ (routing/validate! request)
+        config (config)
+        candidates (routing/candidates config "pi" (:model request))
+        evidence (if (seq candidates)
+                   (usage-mod/usage-for config {:providers (vec (distinct (map :provider candidates))) :harness :pi})
+                   {:providers []})]
+    (routing/select-route config "pi" request evidence)))
+
 ;; A measurement subject carries a task-bound marker and no routing authority. Every command
 ;; except help refuses it before any code falls back to the root or focused-pane identity.
 (def subject-env "HERDR_ORCH_SUBJECT")
@@ -3911,7 +3957,7 @@
       (help-text group op)
       (let [_ (refuse-subject! group op)
             _ (herdr/gate!)
-            parse-args (if (#{"spawn" "roster" "usage"} group) (cons op args) args)
+            parse-args (if (#{"spawn" "roster" "usage" "route"} group) (cons op args) args)
             opts (option-map parse-args (boolean-flags-for group op) known-options)
             positional (:_ opts)]
         (case group
@@ -3925,6 +3971,7 @@
           "spawn" (spawn-command! opts positional)
           "roster" (roster! opts positional)
           "usage" (usage! opts positional)
+          "route" (route! opts positional)
           (usage-error "unknown oh command" {:command group}))))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))

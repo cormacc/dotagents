@@ -1,0 +1,90 @@
+#+TITLE: Pi recovery selection limits
+#+DATE: 2026-11-06 Fri
+#+PARENT: [[task:29fef88e-1331-4c1f-82c2-64905aca3ef2][Plan accepted Pi recovery selection limits]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+
+* Intent
+Retain automatic quota recovery with concrete account selection on the installed Pi runtime. Warn during pending authentication and report the resulting selection after cancellation, accepting that native selection can still commit after cancellation or overwrite an intervening manual selection.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+Planning only. The owner accepts the native selection timing limitation instead of maintaining a Pi fork. This decision replaces the proposed native-fix prerequisite for task ~b0170667-85ba-4062-9bef-6ce3d6ae94aa~; it does not establish that recovery is implemented or verified. Existing multi-subscription scope remains in [[file:2026-multiple-subscriptions.org]]. Task 4 is resumed for implementation; task 5 and final manual acceptance remain pending. The parent remains open.
+
+** Scope
+*** In scope
+- Revise the existing multi-subscription recovery contract and task 4 acceptance to separate cancellation of automatic continuation from cancellation of an already-pending native selection.
+- Implement warning and result reporting within task 4's existing controller work in ~pi/extensions/herdr-orch/index.ts~ and focused supporting modules in that directory; do not create a second recovery controller.
+- Cover warning lifecycle, normal recovery, cancellation and manual-selection interference in unit and installed-runtime tests; wire new tests into ~pi/extensions/herdr-orch/test.sh~ and retain existing account fixtures and egress guards.
+- Update ~pi/extensions/herdr-orch/README.md~, ~skills/herdr-orch/scripts/docs/contract.md~ and the operator recovery guidance in ~skills/herdr-orch/README.org~ with the limitation and unchanged abort controls.
+- Preserve the existing routing, account registration, alias, child-isolation and tool-result requirements in the original record. Configuration and exports require no planned changes.
+*** Out of scope
+- Native Pi production changes, fork maintenance, upstream PRs, monkey-patching, release or installation.
+- Virtual dispatch, UI locking, launch-time auth verification or forced refresh, automatic selection rollback and a separate credential store.
+- Live inference, commits, unrelated user changes, parent closure or waiving final manual acceptance.
+
+** Acceptance
+*** Core functionality
+- [ ] A visible warning precedes each automatic recovery call to the native model setter.
+- [ ] The warning identifies that a pending switch can change selection after abort.
+- [ ] The warning advises against manual selection while the switch is pending.
+- [ ] The pending-selection warning remains until the setter settles in the active session.
+- [ ] A cancelled attempt reports the actual selected account/model after its setter settles.
+- [ ] Normal recovery retains the original finite, tier-constrained continuation contract.
+- [ ] Operator documentation states that a pending recovery switch can overwrite a newer manual selection.
+*** Edge cases
+- [ ] Abort suppresses automatic continuation from the invalidated recovery attempt.
+- [ ] An external model/account change reported by Pi invalidates the recovery chain even if the older native setter later commits.
+- [ ] Operator documentation states that pending or silent same-target native selections may not cancel recovery.
+- [ ] Installed-runtime tests cover silent same-target selection as an accepted continuation outcome, alongside explicit-abort controls.
+- [ ] New input invalidates the recovery chain without authorising a late automatic continuation.
+- [ ] A failed setter clears its pending warning and reports the failure without claiming a successful switch.
+- [ ] Session shutdown or replacement cannot let an old callback write UI state into the replacement session.
+- [ ] Installed-runtime tests distinguish the accepted stale-selection outcome from forbidden automatic continuation.
+- [ ] Delayed-selection tests have passing normal-selection controls.
+*** Anti-criteria
+- [ ] Must not: disable native abort or model-selection controls.
+- [ ] Must not: restore an old selection automatically after cancellation.
+- [ ] Must not: treat a timeout of an extension wait as cancellation of the native setter.
+- [ ] Must not: log credentials or send warning text into model context.
+- [ ] Must not: require a modified Pi runtime or relax unrelated multi-subscription acceptance.
+
+** Decisions
+- Use an extension-only warning and explicit result report around native concrete selection. The user accepts the timing limitation as a corner case; its normal frequency and duration are not measured.
+  Rejected:
+  - Native fix/fork: maintenance cost is not justified for this accepted limitation.
+  - Manual-only recovery: loses the requested automatic recovery benefit.
+  - Virtual dispatch: changes the accepted concrete-account selection contract.
+  - UI lock: removes useful escape controls and is not a native atomicity guarantee.
+  - Startup auth gate: each setter still checks credentials; a later file change can still cause a locked reload.
+- Manual invalidation begins at an externally reported model/account change, not an unobservable native selection request. The owner accepts that pending requests and silent same-target selections may not cancel recovery. Explicit abort and new input still invalidate automatic continuation. Do not replace this limit with transcript polling or a fixed waiting window.
+- Suggested warning: "Checking recovery account authentication. Avoid changing models until this finishes. Abort stops recovery, but the account selection may still change."
+- Suggested cancellation report: "Recovery cancelled. Selected account/model: <actual selection>. No automatic retry will run." This describes the invalidated recovery attempt, not a user-initiated request.
+- Reuse documented Pi UI status/widget and notification facilities. Cancellation invalidates continuation but does not end the pending-setter warning. Clear only this controller's UI when the setter settles; retain session ownership checks for late callbacks.
+- Do not queue another automatic selection while this controller's setter is unresolved. Do not attempt rollback. Add a ~known-limit:~ comment at the selection boundary naming stale native commits and revisit if Pi gains a cancellation-safe public setter or observed impact makes the limitation unacceptable.
+
+** Risks
+- Accepted: native auth-await completion can change selection after abort or overwrite a newer manual selection. Warnings reduce surprise but do not prevent this.
+- Accepted: a stalled setter can leave the warning visible for an extended period. Abort remains available; do not hide an unresolved switch behind a success message or an extension-only timeout.
+- Accepted: pending manual auth requests and equal/no-op commits can be invisible to extensions, so recovery may continue. Distinguish externally reported changes from recovery-generated events and test both observed-change invalidation and silent same-target continuation. Do not claim request-time cancellation.
+- A warning may not render in every host mode. Test TUI and supported RPC presentation separately; do not claim visual coverage from SDK tests.
+
+* Plan
+Reuse the existing executable tasks in [[file:2026-multiple-subscriptions.org::*Plan]]; do not duplicate their IDs or create a second controller task.
+- [[task:b0170667-85ba-4062-9bef-6ce3d6ae94aa][Task 4: primary tier selection and bounded recovery]] owns the warning, continuation invalidation, final-selection report, tests and operator docs together with the recovery implementation. Its body includes the accepted native limit and exact existing-code/test entry points.
+- [[task:5a4bb6b9-7ec8-488c-ab42-5a97ba5f2d82][Task 5: integrated acceptance and operator handoff]] depends on task 4 and verifies the warning/reporting behaviour alongside the retained integration and manual gates.
+
+* Implementation
+- The owner approved this record. The existing multi-subscription plan and coordination-task body are reconciled with the accepted extension-only design; task IDs and lifecycle history are preserved. Both parents remain open; root discharged the planning blocker and resumed task 4. The owner further accepted externally reported-change invalidation after a native same-target selection reproduced silent continuation in ~.tmp/multi-subscription-execution/task4-root-revised-delayed.log~. No native-runtime prerequisite is required.
+- Native source checkout baseline: ~622eca76089f9c3b1af358f8c7cfa7937fbe5b0a~ at ~/home/cormacc/dev/agents/pi/pi~; observed clean at intake. Dotagents baseline: ~44f3fd37b444eec7e1bc7fd2ec8c49727e5a8a3c~ with existing implementation, settings and Org changes preserved. Source-checkout/installed-runtime comparison is no longer a delivery gate because no native fix is planned.
+- Installed Pi 1.5.0 ~dist/core/agent-session.js~, ~setModel~: awaits ~checkAuth~ before committing selection; the inspected path has no active continuation signal or generation check at commit. ~dist/core/auth-storage.js~, ~readLatestData~: unchanged file revisions use cached data; changed revisions reload through the native lock. These inspected installed paths, not assumptions about login readiness, explain the limitation.
+
+* Validation
+- Root evidence: ~.tmp/multi-subscription-execution/task4-root-native-auth-gate.log~. Native-lock positive control switches and continues; abort suppresses the replacement request but still leaves the replacement selected. The manual native-lock ordering control passes and is not proof of general manual-selection safety.
+- Planner verification: ~.tmp/multi-subscription-execution/planner-public-store-verification.log~, from the retained ~task4-resumed-public-store-probe.ts~ run with a 40-second outer bound. Exit 1 is the expected old safety assertion failure: four public CredentialStore scenarios, two passing positive controls and two manual-selection overwrite violations. Both named Anthropic and OpenAI Codex targets use supported catalogue/auth paths; no model requests are issued. This verifies a supported asynchronous-store interleaving, not its frequency with the native file store.
+- Implementation tests must promote relevant disposable fixtures into the existing test directory rather than depend on scratch files. Use synthetic credentials, fake endpoints, blocked external provider traffic and complete exit-status summaries. Exercise actual installed extension loading as well as controller unit tests.
+- Integration gates remain: existing account/routing suites, task 4 installed-runtime recovery matrix, task 5 independent acceptance and explicitly authorised visual/real-account checks. No runtime build, release or installation is required by this decision. A warning-only implementation is not completion of task 4.

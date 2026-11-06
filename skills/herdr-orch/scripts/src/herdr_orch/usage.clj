@@ -1,5 +1,5 @@
 (ns herdr-orch.usage
-  "Read-only subscription collection with harness-owned credentials and refresh.
+  "Read-only subscription collection with harness-owned credentials.
 
   Only fresh, resolved account and exact model bounds grant routing credit."
   (:require [babashka.fs :as fs]
@@ -259,24 +259,24 @@
         (if (>= (- now (:snapshot-at state now)) stale-ceiling-ms) (diagnostic-windows evidence []) evidence)
         (and (not failure?) (<= (:fetched-at state) now) (< now (:next-fetch-at state))
              (or (not fresh) coalesced?)) evidence))))
-(defn- collect-provider [provider harness {:keys [credential-context cache-dir http-fn fresh]}]
+(defn- collect-provider [provider harness account {:keys [credential-context cache-dir http-fn fresh]}]
   (let [context (or credential-context (credentials/environment))
         now (:now-ms context)
-        credential (credentials/credentials harness provider context)]
+        credential (credentials/credentials harness provider context account)]
     (if-not (= "ready" (:status credential)) (unknown (:reason credential))
       (let [path (fs/path (or cache-dir (default-cache-dir)) (str (:context-key credential) ".json"))
             initial (read-state path)]
         (with-cache-lock (str path ".lock")
           (fn []
             (let [current-context (or credential-context (credentials/environment))
-                  current (credentials/credentials harness provider current-context)
+                  current (credentials/credentials harness provider current-context account)
                   now (:now-ms current-context)
                   state (read-state path)]
               (if (not= (:context-key credential) (:context-key current))
                 (unknown (or (:reason current) "credentials-changed"))
                 (or (cached-answer state now fresh initial)
                   (let [out (fetch provider credential (or http-fn default-http-fn) now)
-                        latest (credentials/credentials harness provider (or credential-context (credentials/environment)))
+                        latest (credentials/credentials harness provider (or credential-context (credentials/environment)) account)
                         out (if (= (:context-key credential) (:context-key latest)) out
                                 (unknown (or (:reason latest) "credentials-changed")))
                         success? (= "fresh" (get-in out [:state :status]))
@@ -296,16 +296,36 @@
 
 (defn usage-for
   "Collect owned evidence for configured local providers. Options: :providers
-  (nil means all), :harness (:pi by default, or explicit :claude/:codex), :fresh
+  (nil means all; Pi anthropic expands to its validated named accounts),
+  :harness (:pi by default, or explicit :claude/:codex), :fresh
   bypasses TTL but not in-flight coalescing or failure backoff. Tests can supply
   :credential-context, :http-fn and :cache-dir. Never refresh or install software."
   ([config] (usage-for config {}))
   ([config {:keys [providers harness] :or {harness :pi} :as opts}]
-   {:providers
-    (mapv (fn [local]
-            (if-let [row (get-in config [:providers local])]
-              (if-let [provider (:quota-provider row)]
-                (assoc (collect-provider provider harness opts) :localProvider local :provider provider)
-                {:localProvider local :local true :state {:status "fresh" :stale false} :windows []})
-              (assoc (unknown "not-configured") :localProvider local)))
-          (or providers (sort (keys (:providers config)))))}))
+   (let [accounts (delay (credentials/pi-accounts
+                          (or (:credential-context opts) (credentials/environment))))
+         ;; known-limit: sequential account reads can exceed a UI command budget;
+         ;; revisit scheduling if configured accounts hit that limit.
+         identities (distinct
+                     (mapcat (fn [local]
+                               (if (and (= harness :pi) (= local "anthropic")
+                                        (= "claude" (get-in config [:providers local :quota-provider])))
+                                 (cons local @accounts)
+                                 [local]))
+                             (or providers (sort (keys (:providers config))))))]
+     {:providers
+      (mapv (fn [local]
+              (let [account (when (credentials/pi-account? local) local)
+                    base (if account "anthropic" local)]
+                (if (and account (or (not= harness :pi)
+                                     (not= "claude" (get-in config [:providers base :quota-provider]))))
+                  (assoc (unknown "unsupported-auth-context")
+                         :localProvider local :provider "claude" :baseProvider base :accountId local)
+                  (if-let [row (get-in config [:providers base])]
+                    (if-let [provider (:quota-provider row)]
+                      (assoc (collect-provider provider harness account opts)
+                             :localProvider local :provider provider
+                             :baseProvider base :accountId local)
+                      {:localProvider local :local true :state {:status "fresh" :stale false} :windows []})
+                    (assoc (unknown "not-configured") :localProvider local)))))
+            identities)})))

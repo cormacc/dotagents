@@ -11,9 +11,11 @@ To remove the personal layout, select another layout in Herdr app first. Remove 
 
 The quota mod requires the home-installed `~/.agents/skills/herdr-orch/scripts/oh` and its runtime prerequisites. It runs `oh usage --format json` from your home directory and reports quota for this computer, not a selected remote machine. See the [usage contract](../skills/herdr-orch/scripts/docs/contract.md#usage) for provider setup and cache behaviour.
 
+Named Pi Anthropic subscriptions appear as separate `anthropic-account-<name>` rows alongside the default `anthropic` row. The footer, popup and visibility preferences use the full local account identity, so hiding one account does not hide its sibling. Quota values and unavailable states remain account-specific. The parser retains explicit `baseProvider` and `accountId` fields; older single-account rows remain supported. Account management stays in Pi; the quota command never refreshes or writes credentials.
+
 ## Refresh and limits
 
-Quota refresh starts on display, repeats every 60 seconds, and shares an in-flight request with the Refresh action. A failed request marks the last successful snapshot stale immediately; the popup shows its age and a safe failure category. After five minutes without a successful request, it shows unavailable instead. The app's native command limit is 30 seconds.
+Quota refresh starts on display, repeats every 60 seconds, and shares an in-flight request with the Refresh action. A failed request marks the last successful snapshot stale immediately; the popup shows its age and a safe failure category. After five minutes without a successful request, it shows unavailable instead. The app's native command limit is 30 seconds. The collector reads accounts in sequence, so many slow account reads can reach this limit; the UI then reports a failed or timed-out request, not partial numeric evidence.
 
 The system companion supports CPU and RAM on Linux and macOS; Linux GPU data requires NVIDIA. Missing GPU data does not suppress CPU and RAM. System load follows the selected machine; Activity Monitor is available only for the local macOS machine. Windows, AMD and Intel GPU collection are outside scope.
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { parseQuota, coordinator, elapsed, snapshot, visibleWindows, EVERY, EXPIRE } from "../mods/herdr-orch/quota-state.js";
-import { window, modelWindows, row, envelope, response } from "./quota-fixtures.mjs";
+import { window, modelWindows, namedAccounts, row, envelope, response } from "./quota-fixtures.mjs";
 
 const parse = x => parseQuota(JSON.stringify(x));
 function harness(exec = async () => response()) {
@@ -18,6 +18,17 @@ test("valid envelope preserves aliases and adapter identity without leaking arbi
   assert.deepEqual(providers.map(p => p.adapter), ["claude", "claude"]);
   assert.equal(providers[0].windows[0].percentUsed, 25);
   assert.equal(providers[0].secret, undefined);
+});
+
+test("named accounts retain separate base and account identities and opposite quotas", () => {
+  const providers = parse(envelope(namedAccounts));
+  assert.deepEqual(providers.map(p => p.baseProvider), ["anthropic", "anthropic"]);
+  assert.deepEqual(providers.map(p => p.accountId), ["anthropic-account-a", "anthropic-account-b"]);
+  assert.deepEqual(providers.map(p => p.windows[0].percentUsed), [1, 99]);
+  assert.deepEqual(providers.map(p => p.id), ["anthropic-account-a", "anthropic-account-b"]);
+  for (const changes of [{ baseProvider: {} }, { accountId: [] }, { accountId: "anthropic-account-other" },
+    { baseProvider: "openai-codex" }, { provider: "codex" }])
+    assert.throws(() => parse(envelope([{ ...namedAccounts[0], ...changes }])));
 });
 
 test("scoped windows retain supplied scope, ID and duration without invented values", () => {

@@ -1583,13 +1583,15 @@ export const tests: TestCase[] = [
   { name: "automatic compaction is cancelled and recorded as a violation", async run() {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "herdr-compact-")));
     const saved = process.env.HERDR_ORCH_MEASUREMENT_MANIFEST;
+    const savedAgent = process.env.PI_CODING_AGENT_DIR;
     try {
+      process.env.PI_CODING_AGENT_DIR = root;
       writeFileSync(join(root, "assignment.txt"), ASSIGNMENT);
       writeFileSync(join(root, "manifest.json"), JSON.stringify({ treatment: "", assignmentFile: join(root, "assignment.txt"), tools: [], evidenceDir: join(root, "evidence") }));
       process.env.HERDR_ORCH_MEASUREMENT_MANIFEST = join(root, "manifest.json");
       const handlers = new Map<string, Function>();
-      const adapter = (await import("./measurement-adapter.ts")).default as (pi: any) => void;
-      adapter({ on: (name: string, handler: Function) => handlers.set(name, handler), getActiveTools: () => [], getAllTools: () => [], getThinkingLevel: () => "off" });
+      const adapter = (await import("./measurement-adapter.ts")).default;
+      await adapter({ on: (name: string, handler: Function) => handlers.set(name, handler), getActiveTools: () => [], getAllTools: () => [], getThinkingLevel: () => "off" } as any);
       assert.deepEqual(await handlers.get("session_before_compact")!({}), { cancel: true });
       await handlers.get("message_end")!({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "x" }] } });
       await handlers.get("agent_settled")!({ aborted: false });
@@ -1599,6 +1601,7 @@ export const tests: TestCase[] = [
       assert.deepEqual(terminal.violations, ["automatic compaction is refused"]);
     } finally {
       if (saved === undefined) delete process.env.HERDR_ORCH_MEASUREMENT_MANIFEST; else process.env.HERDR_ORCH_MEASUREMENT_MANIFEST = saved;
+      if (savedAgent === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = savedAgent;
       rmSync(root, { recursive: true, force: true });
     }
   } },
