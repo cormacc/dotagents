@@ -12,7 +12,7 @@ Use Herdr 0.9.5 or later on Linux or macOS, with Babashka, Bash and `ps` on the 
    herdr plugin link "$PWD/herdr-plugin/org-tasks"
    ```
 
-2. The owner's Home Manager module supplies only `~/.local/share/herdr-plugins/org-tasks` as a guarded out-of-store leaf. After an explicitly requested activation, register it with `herdr plugin link "$HOME/.local/share/herdr-plugins/org-tasks"`. Foreign occupants are rejected before activation writes. Registration persists across server restarts; no live server restart is needed to link a plugin. This does not replace the Herdr directory, plugin registry or quota configuration.
+2. The owner's Home Manager module supplies `~/.local/share/herdr-plugins/org-tasks` as a guarded out-of-store leaf. Foreign occupants are rejected before activation writes. After writing the leaf, activation runs `herdr plugin link` on it when `herdr plugin list` does not show `cormacc.org-tasks`. A failure warns and does not abort activation. Without that module, run `herdr plugin link "$HOME/.local/share/herdr-plugins/org-tasks"` yourself. Registration persists across server restarts; no live server restart is needed to link a plugin. This does not replace the Herdr directory, plugin registry or quota configuration.
 
 3. Optionally copy [config.example.edn](config.example.edn) to `config.edn` under the directory printed by `herdr plugin config-dir cormacc.org-tasks`. `:compact-rows` accepts integers 3--20; `:expanded-fraction` accepts numbers 0.3--0.9. Defaults are 6 rows and 0.65. Unknown keys and invalid values fail before pane creation. There is no workspace-root mode or directory map.
 
@@ -28,15 +28,7 @@ herdr plugin log list --plugin cormacc.org-tasks
 
 `open` creates or reuses this tab's owned pane and requests compact mode without taking focus. `expand` requires an open interface and focuses it. `collapse` retains compact context and restores the source agent's focus when that same source terminal still exists. `close` closes only a verified live instance. `Esc` exits the TUI; reopening creates a new instance. Do not invoke the manifest pane directly: the `open` action supplies its private instance and source-tab identity.
 
-A key can invoke an action without changing the existing quota binding. Choose an unused key before adding this optional stanza to Herdr configuration:
-
-```toml
-[[keys.command]]
-key = "prefix+t"
-type = "plugin_action"
-command = "cormacc.org-tasks.open"
-description = "compact task context"
-```
+A key can invoke an action without changing the existing quota binding. The tracked [../../herdr/config.toml](../../herdr/config.toml) binds `prefix+t` to `open`, `prefix+shift+e` to `expand` and `prefix+shift+c` to `collapse`, in `[[keys.command]]` stanzas with `type = "plugin_action"`. Run `herdr server reload-config` after an edit.
 
 Split placement follows the focused pane's native geometry; it does not restructure unrelated panes or span the whole window. Compact sizing targets the configured rows at the owned bottom boundary; expanded sizing uses a fraction of that split's height. Herdr's minimum pane size can clamp either request. Reinvoke the action after an external layout change to reapply sizing.
 

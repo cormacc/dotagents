@@ -28,3 +28,23 @@ key = "prefix+u"
 type = "shell"
 command = "\"$HERDR_BIN_PATH\" plugin pane open --plugin cormacc.herdr-orch --entrypoint quota"
 description = "subscription quota"
+
+# org-tasks plugin controls (temporary explicit bindings; see
+# herdr-plugin/org-tasks/README.md). agents.nix registers the plugin.
+[[keys.command]]
+key = "prefix+t"
+type = "plugin_action"
+command = "cormacc.org-tasks.open"
+description = "open compact task context"
+
+[[keys.command]]
+key = "prefix+shift+e"
+type = "plugin_action"
+command = "cormacc.org-tasks.expand"
+description = "expand task browser"
+
+[[keys.command]]
+key = "prefix+shift+c"
+type = "plugin_action"
+command = "cormacc.org-tasks.collapse"
+description = "collapse task browser"
