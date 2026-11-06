@@ -1,0 +1,145 @@
+(require '[babashka.fs :as fs] '[babashka.process :as p] '[cheshire.core :as j] '[clojure.string :as str])
+(def token (subs (str (random-uuid)) 0 8))
+(def base (str (fs/absolutize (str ".tmp/n" token))))
+(fs/create-dir base)
+(def session (str "ot" token))
+(def binary (str (fs/which "herdr")))
+(def repo (str (fs/cwd)))
+(def env (merge (into {} (remove (fn [[k _]] (str/starts-with? k "HERDR_")) (System/getenv)))
+                {"XDG_CONFIG_HOME" (str base "/config") "XDG_STATE_HOME" (str base "/state")
+                 "XDG_RUNTIME_DIR" (str base "/runtime")}))
+(defn run! [& args]
+  (let [proc (p/process (into [binary "--session" session] args) {:env env :out :string :err :string})
+        result (deref proc 8000 nil)]
+    (when-not result (p/destroy-tree proc) (throw (ex-info "timeout" {:args args})))
+    (spit (str base "/commands.edn") (str (pr-str {:args args :result (select-keys result [:exit :out :err])}) "\n") :append true)
+    (println args (:exit result)) (flush)
+    (when-not (zero? (:exit result)) (throw (ex-info "CLI failed" {:args args :result result})))
+    (if (= ["pane" "read"] (vec (take 2 args)))
+      {:read {:text (:out result)}}
+      (let [value (j/parse-string (:out result) true)]
+        (when (:error value) (throw (ex-info "API error" value))) (:result value)))))
+(defn wait! [label f]
+  (loop [n 50]
+    (let [value (try (f) (catch Exception _ nil))]
+      (if value (do (println "PASS" label value) (flush) value)
+          (if (pos? n) (do (Thread/sleep 150) (recur (dec n)))
+              (throw (ex-info "wait failed" {:label label})))))))
+(defn snap [] (:snapshot (run! "api" "snapshot")))
+(defn owner [] (some (fn [file] (let [v (j/parse-string (slurp (str file)) true)] (when (:instance v) v)))
+                    (fs/glob (str base "/state/herdr/plugins/cormacc.org-tasks") "session-*/*.json")))
+(defn check-owned! [record]
+  (let [pane (some #(when (= (:pane record) (:pane_id %)) %) (:panes (snap)))
+        info (:process_info (run! "pane" "process-info" "--pane" (:pane record)))]
+    (assert (= (:terminal record) (:terminal_id pane)))
+    (assert (some #{(:pid record)} (cons (:shell_pid info) (map :pid (:foreground_processes info)))))))
+(defn signal! [record signal]
+  (check-owned! record)
+  (let [proc (p/process ["ps" "-p" (str (:pid record)) "-o" "lstart=" "-o" "command="] {:out :string :err :string})
+        identity (deref proc 2000 nil)]
+    (when-not identity (p/destroy-tree proc))
+    (assert (= 0 (:exit identity)))
+    (assert (= (:identity record) (str/trim (:out identity)))))
+  (let [proc (p/process ["kill" (str "-" signal) (str (:pid record))] {:out :string :err :string})
+        result (deref proc 2000 nil)]
+    (when-not result (p/destroy-tree proc))
+    (assert (= 0 (:exit result)))))
+(defn action [name] (run! "plugin" "action" "invoke" (str "cormacc.org-tasks." name)))
+(def server (atom nil))
+(println "BASE" base "SESSION" session) (flush)
+(try
+  (fs/create-dirs (str base "/config/herdr")) (fs/create-dirs (str base "/runtime"))
+  (spit (str base "/shell") (str "#!/bin/sh\nexec " (fs/which "bash") " --noprofile --norc\n"))
+  (fs/set-posix-file-permissions (str base "/shell") "rwx------")
+  (spit (str base "/config/herdr/config.toml") (str "onboarding = false\n[terminal]\ndefault_shell = " (pr-str (str base "/shell")) "\n"))
+  ;; Registration is confined to this disposable XDG_CONFIG_HOME.
+  (run! "plugin" "link" (str repo "/herdr-plugin/org-tasks"))
+  (reset! server (p/process [binary "--session" session "server"] {:env env :out :write :out-file (str base "/server.log") :err :out}))
+  (wait! "isolated server" #(try (snap) (catch Exception _ nil)))
+  (doseq [root ["a" "b"]]
+    (fs/create-dirs (str base "/" root))
+    (let [r @(p/process [(str repo "/skills/org-tasks/scripts/ot") "--root" (str base "/" root) "init"] {:out :string :err :string})]
+      (assert (zero? (:exit r)) (:err r))))
+  (let [w (run! "workspace" "create" "--cwd" (str base "/a") "--no-focus")
+        a (get-in w [:root_pane :pane_id])
+        b (get-in (run! "pane" "split" a "--direction" "right" "--cwd" (str base "/b") "--no-focus") [:pane :pane_id])]
+    (let [refused (try (run! "plugin" "pane" "close" a) nil (catch Exception e (ex-data e)))]
+      (assert (= 1 (get-in refused [:result :exit])))
+      (assert (str/includes? (get-in refused [:result :err]) "plugin_pane_not_found"))
+      (assert (some (fn [pane] (= a (:pane_id pane))) (:panes (snap))))
+      (println "PASS native non-plugin pane refusal"))
+    (spit (str base "/pi.c") "#include <stdio.h>\nint main(void) { while (getchar() != EOF) {} return 0; }\n")
+    (let [r @(p/process ["cc" (str base "/pi.c") "-o" (str base "/pi")] {:out :string :err :string})]
+      (assert (zero? (:exit r)) (:err r)))
+    (doseq [pane [a b]] (run! "pane" "run" pane (str "exec '" base "/pi'")))
+    (wait! "eligible owned agents" #(let [agents (:agents (snap))] (when (every? (fn [id] (some (fn [agent] (and (= id (:pane_id agent)) (= "pi" (:agent agent)))) agents)) [a b]) true)))
+    (run! "agent" "focus" a)
+    (action "open")
+    (let [first (wait! "owned interface" owner) pane (:pane first)]
+      (check-owned! first)
+      (action "open")
+      (Thread/sleep 400)
+      (assert (= (:instance first) (:instance (owner))))
+      (wait! "compact height six" #(when (= 6 (get-in (some (fn [p] (when (= pane (:pane_id p)) p)) (get-in (run! "pane" "layout" "--pane" pane) [:layout :panes])) [:rect :height])) true))
+      (action "expand")
+      (wait! "expanded focus" #(when (= pane (:focused_pane_id (snap))) true))
+      (wait! "expanded height twenty-six" #(when (= 26 (get-in (some (fn [p] (when (= pane (:pane_id p)) p)) (get-in (run! "pane" "layout" "--pane" pane) [:layout :panes])) [:rect :height])) true))
+      (action "collapse")
+      (wait! "collapse restores agent" #(when (= a (:focused_pane_id (snap))) true))
+      (let [context-file (str (fs/parent (clojure.core/first (fs/glob (str base "/state/herdr/plugins/cormacc.org-tasks") (str "session-*/" (:instance first) "/owner.json")))) "/context.json")]
+        (wait! "producer sampled A" #(when (= a (:sourcePane (j/parse-string (slurp context-file) true))) true))
+        (signal! first "STOP")
+        (try
+          (run! "agent" "focus" b)
+          (action "expand")
+          (wait! "expanded while producer paused on A" #(when (= pane (:focused_pane_id (snap))) true))
+          (let [request (j/parse-string (slurp (str (fs/parent context-file) "/request.json")) true)]
+            (assert (= b (:sourcePane request)))
+            (assert (= a (:sourcePane (j/parse-string (slurp context-file) true))))
+            (println "PASS captured B before producer resumed from A"))
+          (finally (signal! first "CONT")))
+        (wait! "project B after raced expansion" #(when (= (str base "/b") (:directory (j/parse-string (slurp context-file) true))) true))
+        (action "collapse")
+        (wait! "raced collapse restores B" #(when (= b (:focused_pane_id (snap))) true))
+        (action "expand")
+        (wait! "expanded consumer" #(when (str/includes? (get-in (run! "pane" "read" pane "--source" "visible") [:read :text]) "visible tasks") true))
+        (check-owned! first)
+        (run! "pane" "send-keys" pane "n")
+        (wait! "create prompt" #(when (str/includes? (get-in (run! "pane" "read" pane "--source" "visible") [:read :text]) "New task title") true))
+        (run! "pane" "send-text" pane "Native owned task")
+        (run! "pane" "send-keys" pane "enter")
+        (wait! "native mutation B" #(when (str/includes? (slurp (str base "/b/TASKS.org")) "Native owned task") true))
+        (assert (not (str/includes? (slurp (str base "/a/TASKS.org")) "Native owned task"))))
+      (action "close")
+      (wait! "owned pane closed" #(when (not-any? (fn [p] (= pane (:pane_id p))) (:panes (snap))) true))
+      (run! "agent" "focus" a)
+      (action "open")
+      (let [second (wait! "reopened new instance" #(let [v (owner)] (when (not= (:instance first) (:instance v)) v)))]
+        (check-owned! second)
+        (wait! "compact consumer ready" #(when (str/includes? (get-in (run! "pane" "read" (:pane second) "--source" "visible") [:read :text]) "No selected task") true))
+        (run! "pane" "send-keys" (:pane second) "esc")
+        (wait! "process exit" #(when (not-any? (fn [p] (= (:pane second) (:pane_id p))) (:panes (snap))) true))
+        (run! "agent" "focus" a)
+        (action "open")
+        (let [third (wait! "process-exit reopen" #(let [v (owner)] (when (not= (:instance second) (:instance v)) v)))]
+          (check-owned! third)
+          (let [r @(p/process ["kill" "-TERM" (str (:pid third))] {:out :string :err :string})]
+            (assert (zero? (:exit r))))
+          (Thread/sleep 6000)
+          (run! "agent" "focus" a)
+          (action "open")
+          (wait! "owned supervisor restart" #(let [v (owner)] (when (not= (:instance third) (:instance v)) v)))))))
+  (run! "server" "stop")
+  (when @server (deref @server 3000 nil))
+  (reset! server (p/process [binary "--session" session "server"] {:env env :out :append :out-file (str base "/server.log") :err :out}))
+  (wait! "isolated server restart" #(try (snap) (catch Exception _ nil)))
+  (let [actions (:actions (run! "plugin" "action" "list" "--plugin" "cormacc.org-tasks"))]
+    (assert (= 4 (count actions)))
+    (println "PASS plugin registration survived restart"))
+  (println "NATIVE PASS")
+  (finally
+    (try (println "PLUGIN LOGS" (run! "plugin" "log" "list" "--plugin" "cormacc.org-tasks")) (catch Exception _ nil))
+    (try (run! "server" "stop") (catch Exception e (println "CLEANUP STOP FAILED" (ex-message e))))
+    (when @server (when (nil? (deref @server 3000 nil)) (p/destroy-tree @server)))
+    (try (run! "session" "delete" session "--json") (catch Exception e (println "CLEANUP DELETE FAILED" (ex-message e))))
+    (println "EVIDENCE RETAINED" base)))

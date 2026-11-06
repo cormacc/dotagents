@@ -1,0 +1,100 @@
+BASE /home/cormacc/dotfiles/agents/.tmp/n5d80534f SESSION ot5d80534f
+(plugin link /home/cormacc/dotfiles/agents/herdr-plugin/org-tasks) 0
+(api snapshot) 0
+PASS isolated server {:agents [], :layouts [], :panes [], :protocol 22, :tabs [], :version 0.9.5, :workspaces []}
+(workspace create --cwd /home/cormacc/dotfiles/agents/.tmp/n5d80534f/a --no-focus) 0
+(pane split w1:p1 --direction right --cwd /home/cormacc/dotfiles/agents/.tmp/n5d80534f/b --no-focus) 0
+(plugin pane close w1:p1) 1
+(api snapshot) 0
+PASS native non-plugin pane refusal
+(pane run w1:p1 exec '/home/cormacc/dotfiles/agents/.tmp/n5d80534f/pi') 0
+(pane run w1:p2 exec '/home/cormacc/dotfiles/agents/.tmp/n5d80534f/pi') 0
+(api snapshot) 0
+(api snapshot) 0
+(api snapshot) 0
+PASS eligible owned agents true
+(agent focus w1:p1) 0
+(plugin action invoke cormacc.org-tasks.open) 0
+PASS owned interface {:pane w1:p3, :terminal term_65fa29c2d4c1f3, :tab w1:t1, :pid 3169398, :identity Fri Nov  6 21:51:09 2026 bb --config bb.edn adapter.bb serve, :instance 0fc6384f-98bc-4a04-a4d5-3312b5074ab8, :updatedAt 1794001869865}
+(api snapshot) 0
+(pane process-info --pane w1:p3) 0
+(plugin action invoke cormacc.org-tasks.open) 0
+(pane layout --pane w1:p3) 0
+PASS compact height six true
+(plugin action invoke cormacc.org-tasks.expand) 0
+(api snapshot) 0
+(api snapshot) 0
+PASS expanded focus true
+(pane layout --pane w1:p3) 0
+PASS expanded height twenty-six true
+(plugin action invoke cormacc.org-tasks.collapse) 0
+(api snapshot) 0
+(api snapshot) 0
+PASS collapse restores agent true
+PASS producer sampled A true
+(api snapshot) 0
+(pane process-info --pane w1:p3) 0
+(agent focus w1:p2) 0
+(plugin action invoke cormacc.org-tasks.expand) 0
+(api snapshot) 0
+(api snapshot) 0
+PASS expanded while producer paused on A true
+PASS captured B before producer resumed from A
+(api snapshot) 0
+(pane process-info --pane w1:p3) 0
+PASS project B after raced expansion true
+(plugin action invoke cormacc.org-tasks.collapse) 0
+(api snapshot) 0
+(api snapshot) 0
+PASS raced collapse restores B true
+(plugin action invoke cormacc.org-tasks.expand) 0
+(pane read w1:p3 --source visible) 0
+(pane read w1:p3 --source visible) 0
+PASS expanded consumer true
+(api snapshot) 0
+(pane process-info --pane w1:p3) 0
+(pane send-keys w1:p3 n) 0
+(pane read w1:p3 --source visible) 0
+PASS create prompt true
+(pane send-text w1:p3 Native owned task) 0
+(pane send-keys w1:p3 enter) 0
+PASS native mutation B true
+(plugin action invoke cormacc.org-tasks.close) 0
+(api snapshot) 0
+(api snapshot) 0
+PASS owned pane closed true
+(agent focus w1:p1) 0
+(plugin action invoke cormacc.org-tasks.open) 0
+PASS reopened new instance {:pane w1:p4, :terminal term_65fa29c4ea9f54, :tab w1:t1, :pid 3169971, :identity Fri Nov  6 21:51:11 2026 bb --config bb.edn adapter.bb serve, :instance 4a87692c-1635-4840-bdbf-73e2ed1f407a, :updatedAt 1794001872043}
+(api snapshot) 0
+(pane process-info --pane w1:p4) 0
+(pane read w1:p4 --source visible) 0
+(pane read w1:p4 --source visible) 0
+(pane read w1:p4 --source visible) 0
+(pane read w1:p4 --source visible) 0
+PASS compact consumer ready true
+(pane send-keys w1:p4 esc) 0
+(api snapshot) 0
+(api snapshot) 0
+(api snapshot) 0
+(api snapshot) 0
+PASS process exit true
+(agent focus w1:p1) 0
+(plugin action invoke cormacc.org-tasks.open) 0
+PASS process-exit reopen {:pane w1:p5, :terminal term_65fa29c601c305, :tab w1:t1, :pid 3170131, :identity Fri Nov  6 21:51:13 2026 bb --config bb.edn adapter.bb serve, :instance 971bd0de-a16a-4b38-b7be-59e2ac9442a7, :updatedAt 1794001873193}
+(api snapshot) 0
+(pane process-info --pane w1:p5) 0
+(agent focus w1:p1) 0
+(plugin action invoke cormacc.org-tasks.open) 0
+PASS owned supervisor restart {:pane w1:p6, :terminal term_65fa29cbe1e8a6, :tab w1:t1, :pid 3170506, :identity Fri Nov  6 21:51:19 2026 bb --config bb.edn adapter.bb serve, :instance 5cf28339-b1f5-4c11-9792-f3db78a75b46, :updatedAt 1794001879358}
+(server stop) 0
+(api snapshot) 0
+PASS isolated server restart {:tabs [{:agent_status unknown, :focused true, :label 1, :number 1, :pane_count 3, :tab_id w1:t1, :workspace_id w1}], :protocol 22, :focused_pane_id w1:p1, :focused_tab_id w1:t1, :layouts [{:area {:height 40, :width 120, :x 0, :y 0}, :focused_pane_id w1:p1, :panes [{:focused true, :pane_id w1:p1, :rect {:height 34, :width 60, :x 0, :y 0}} {:focused false, :pane_id w1:p6, :rect {:height 6, :width 60, :x 0, :y 34}} {:focused false, :pane_id w1:p2, :rect {:height 40, :width 60, :x 60, :y 0}}], :splits [{:direction right, :id split_0_root, :ratio 0.5, :rect {:height 40, :width 120, :x 0, :y 0}} {:direction down, :id split_1_0, :ratio 0.85, :rect {:height 40, :width 60, :x 0, :y 0}}], :tab_id w1:t1, :workspace_id w1, :zoomed false}], :focused_workspace_id w1, :version 0.9.5, :workspaces [{:active_tab_id w1:t1, :agent_status unknown, :focused true, :label a, :number 1, :pane_count 3, :tab_count 1, :workspace_id w1}], :agents [], :panes [{:workspace_id w1, :pane_id w1:p1, :revision 0, :cwd /home/cormacc/dotfiles/agents/.tmp/n5d80534f/a, :focused true, :scroll {:max_offset_from_bottom 0, :offset_from_bottom 0, :viewport_rows 24}, :terminal_id term_65fa29cc574d11, :foreground_cwd /home/cormacc/dotfiles/agents/.tmp/n5d80534f/a, :tab_id w1:t1, :agent_status unknown} {:workspace_id w1, :pane_id w1:p6, :revision 0, :cwd /home/cormacc/dotfiles/agents/herdr-plugin/org-tasks, :focused false, :scroll {:max_offset_from_bottom 0, :offset_from_bottom 0, :viewport_rows 24}, :label Org tasks, :terminal_id term_65fa29cc57a8f2, :foreground_cwd /home/cormacc/dotfiles/agents/herdr-plugin/org-tasks, :tab_id w1:t1, :agent_status unknown} {:workspace_id w1, :pane_id w1:p2, :revision 0, :cwd /home/cormacc/dotfiles/agents/.tmp/n5d80534f/b, :focused false, :scroll {:max_offset_from_bottom 0, :offset_from_bottom 0, :viewport_rows 24}, :terminal_id term_65fa29cc581cc3, :foreground_cwd /home/cormacc/dotfiles/agents/.tmp/n5d80534f/b, :tab_id w1:t1, :agent_status unknown}]}
+(plugin action list --plugin cormacc.org-tasks) 0
+PASS plugin registration survived restart
+NATIVE PASS
+(plugin log list --plugin cormacc.org-tasks) 0
+PLUGIN LOGS {:logs [], :type plugin_log_list}
+(server stop) 0
+(session delete ot5d80534f --json) 0
+EVIDENCE RETAINED /home/cormacc/dotfiles/agents/.tmp/n5d80534f

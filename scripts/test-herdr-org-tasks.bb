@@ -20,7 +20,12 @@
 (def b (assoc a :pane_id "agent-b" :terminal_id "term-b"))
 (def task-pane {:pane_id "tasks" :terminal_id "term-tasks" :tab_id tab :focused false})
 (def local-info {:foreground_processes [{:pid 42 :name "pi"}]})
-(defn snapshot [panes] {:panes panes :agents (filter :agent panes) :tabs [{:tab_id tab}]})
+;; :focused_tab_id lets action! resolve the invocation tab without an ambient
+;; HERDR_TAB_ID, so the suite runs outside a Herdr pane.
+(defn snapshot [panes] {:panes panes :agents (filter :agent panes) :tabs [{:tab_id tab}]
+                        :focused_tab_id tab})
+;; NixOS has no /bin/sleep.
+(def sleep-bin (str (fs/which "sleep")))
 
 (deftest source-is-tab-local-and-preserved-only-on-task-focus
   (is (= "agent-a" (:pane_id (host/source (snapshot [a task-pane]) tab "tasks" nil))))
@@ -450,7 +455,7 @@
    (fn [dir]
      (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
        (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
-       (spit (str dir "/sleeper") "#!/bin/sh\nexec /bin/sleep 2\n")
+       (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " 2\n"))
        (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
        (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
        (let [proc (p/process ["bb" race-script]
@@ -473,7 +478,7 @@
    (fn [dir]
      (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
        (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
-       (spit (str dir "/sleeper") "#!/bin/sh\nexec /bin/sleep 3\n")
+       (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " 3\n"))
        (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
        (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
        (let [proc (p/process ["bb" race-script]

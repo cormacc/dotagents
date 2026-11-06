@@ -342,7 +342,7 @@ Add a pane that shows herdr-orch subagent fanout as a tree or hierarchy. Use [[h
 :CUSTOM_ID: 82126d8e-eb54-45b8-abbe-9e76451b3963
 :CREATED: [2026-11-05 Thu 19:54]
 :STARTED: [2026-11-05 Thu 20:16]
-:HANDOFF: Shared/Pi/compact DONE. Terminal WAITING: P2 race fixed and independently approved (see record Validation 'Request/snapshot race correction'); remaining gates are native Linux (needs isolated host) and native macOS validation, then installation via agents.nix. Desktop TODO blocked on terminal. Workspace pinning deferred 16358bea. Preserve unrelated herdr-app/settings.json change.
+:HANDOFF: Shared/Pi/compact DONE. Terminal WAITING: race fixed (b984b0d), scripted native validation PASS on Linux and macOS; remaining: user visual check on attached clients, then agents.nix installation (authorisation needed). Desktop TODO blocked on terminal. Workspace pinning deferred 16358bea. Preserve unrelated herdr-app/settings.json change.
 :END:
 :LOGBOOK:
 - Created [2026-11-05 Thu 19:54]
