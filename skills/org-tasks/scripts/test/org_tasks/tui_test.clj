@@ -288,6 +288,19 @@
           lines (render (subvec long 0 3))]
       (is (pos? (bar-rows lines)) "long details overflow the details pane"))))
 
+(deftest footer-hints-reflow-to-the-pane-width
+  (doseq [width [200 100 60 40]]
+    (let [state (assoc (tasks/initial-state sample-result) :width width :height 30 :color? false)
+          content-w (tasks/content-width state)
+          footer (tasks/footer-lines content-w)
+          lines (str/split-lines (tui/view state))]
+      (is (every? #(<= (count %) content-w) footer) (str width " columns"))
+      (is (= (str/join "  " tasks/footer-hints) (str/join "  " footer)) "every hint, in order")
+      (is (= footer (take-last (count footer) lines)) "the footer closes the view")
+      (is (= 29 (count lines)) "panes shrink to make room")))
+  (is (= 1 (count (tasks/footer-lines 1000))))
+  (is (< 1 (count (tasks/footer-lines 76))) "control: an 80-column terminal needs more than one line"))
+
 (deftest initial-state-expands-selected-path
   (let [state (tasks/initial-state sample-result)]
     (is (= "b" (:selected-id state)))
@@ -351,7 +364,7 @@
                      :layout "auto"
                      :color? false)
         lines (str/split-lines (tui/view state))
-        pane-lines (take 15 lines)
+        pane-lines (take (tasks/viewport-height state) lines)
         separators (map #(.indexOf ^String % " │ ") pane-lines)]
     (is (= 17 (count lines)))
     ;; Keep spare terminal columns so emulators do not auto-wrap at EOL.
@@ -736,7 +749,7 @@
                      :layout "auto"
                      :color? false)
         lines (str/split-lines (tui/view state))
-        pane-lines (take 17 lines)]
+        pane-lines (take (tasks/viewport-height state) lines)]
     (is (every? #(not= -1 (.indexOf ^String % " │ ")) pane-lines))
     (is (some #(str/includes? % "│ Acceptance:") pane-lines))
     (is (some #(str/includes? % "│ - final line stays right") pane-lines))))

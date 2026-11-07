@@ -197,15 +197,8 @@
   (when-let [{:keys [label input]} (:new-task state)]
     (styled state (str label ": " input "█") :fg message-color :bold true)))
 
-(def ^:private footer
-  "↑↓/jk cursor  ←→/hl status  ⇧←→ priority  Enter/Space/Tab collapse  s select  m move  D remove  e edit  p plan  n/N new  A archive  P publish  U unpublish  J issues  Esc/Alt-t quit")
-
 (defn- view-dimensions [state]
-  (let [width (max 1 (:width state 100))
-        ;; Leave spare columns in the normal buffer/Display output so long
-        ;; right-pane lines never hit the terminal's auto-wrap margin, even in
-        ;; terminals whose reported width is slightly optimistic.
-        content-w (max 1 (- width 4))
+  (let [content-w (tasks/content-width state)
         pane-h (tasks/viewport-height state)
         ;; Stack the detail pane below the tree when the terminal is too
         ;; narrow for two useful columns, or in portrait orientation
@@ -417,7 +410,8 @@
            "\n"
            (status-line state content-w)
            "\n"
-           (styled state (crop content-w footer) :fg dim-color)))))
+           (str/join "\n" (map #(styled state (crop content-w %) :fg dim-color)
+                                 (tasks/footer-lines content-w)))))))
 
 (defn- small-view [state]
   (let [cursor (tasks/cursor-task state)

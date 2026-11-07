@@ -178,13 +178,39 @@
     (assoc state :cursor
            (max 0 (or (task-index-by-id (:visible-tasks state) selected-id) 0)))))
 
+(def footer-hints
+  "Key hints for the expanded view's footer, most used first."
+  ["↑↓/jk cursor" "←→/hl status" "⇧←→ priority" "Enter/Space/Tab collapse"
+   "Ctrl-d/u details" "s select" "m move" "D remove" "e edit" "p plan"
+   "n/N new" "A archive" "P publish" "U unpublish" "J issues" "Esc/Alt-t quit"])
+
+(defn content-width
+  "Columns the expanded view writes to. Spare columns keep long lines off the
+  terminal's auto-wrap margin, even when its reported width is optimistic."
+  [state]
+  (max 1 (- (max 1 (:width state 100)) 4)))
+
+(defn footer-lines
+  "`footer-hints` packed into lines of at most `width` columns, two spaces
+  apart. The hints use single-column characters, so length is width."
+  [width]
+  (reduce (fn [lines hint]
+            (let [line (peek lines)]
+              (if (and line (<= (+ (count line) 2 (count hint)) width))
+                (conj (pop lines) (str line "  " hint))
+                (conj lines hint))))
+          []
+          footer-hints))
+
 (defn viewport-height
   "Rows available to the tree/detail panes for the state's `:height`.
   Shared by the view layer and the `:tree/scroll-to-cursor` action so
   scroll math and rendering agree on pane geometry."
   [state]
-  ;; Reserve footer plus one status/prompt line; keep enough room for headers.
-  (max 3 (- (max 5 (:height state 30)) 3)))
+  ;; Reserve the footer, one status/prompt line and one spare row; keep
+  ;; enough room for headers.
+  (let [footer-n (count (footer-lines (content-width state)))]
+    (max 3 (- (max 5 (:height state 30)) 2 footer-n))))
 
 (defn stacked-layout?
   "True when the detail pane renders below the tree instead of beside it.
