@@ -6,13 +6,18 @@ import { resolve, join } from "node:path";
 
 const layout = JSON.parse(readFileSync("herdr-app/layouts/herdr-orch.json", "utf8"));
 const wiringPath = process.env.HERDR_APP_WIRING;
-const leaves = ["mods/herdr-orch", "mods/system", "layouts/herdr-orch.json"];
+const leaves = ["mods/herdr-orch", "mods/system", "mods/org-tasks", "layouts/herdr-orch.json"];
 
 function validateLayout(value) {
   const work = value.children.find(x => x.id === "work");
   const status = work.children.find(x => x.id === "status");
   assert.equal(status.type, "row");
   assert.deepEqual(status.children.map(x => x.content.mod), ["workspace-status", "system", "herdr-orch"]);
+  // The task widget sits between the tab area and the status row; its id is the
+  // `layout.toggle` target that the README's key binding names.
+  const ids = work.children.map(x => x.id);
+  assert.deepEqual(ids.slice(ids.indexOf("work-body")), ["work-body", "org-tasks", "status"]);
+  assert.equal(work.children.find(x => x.id === "org-tasks").content.mod, "org-tasks");
   const text = JSON.stringify(value);
   for (const name of ["workspace-chrome", "spaces", "agents", "tabs", "pane", "files", "changes"])
     assert.ok(text.includes(`"mod":"${name}"`), name);
@@ -30,6 +35,13 @@ test("layout validator rejects missing status", () => {
   validateLayout(layout);
   const bad = structuredClone(layout);
   bad.children.find(x => x.id === "work").children.find(x => x.id === "status").children.pop();
+  assert.throws(() => validateLayout(bad));
+});
+
+test("layout validator rejects a missing task widget", () => {
+  const bad = structuredClone(layout);
+  const work = bad.children.find(x => x.id === "work");
+  work.children = work.children.filter(x => x.id !== "org-tasks");
   assert.throws(() => validateLayout(bad));
 });
 

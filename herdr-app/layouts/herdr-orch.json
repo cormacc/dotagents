@@ -168,6 +168,18 @@
           ]
         },
         {
+          "id": "org-tasks",
+          "type": "block",
+          "size": {
+            "px": 64
+          },
+          "min": 32,
+          "background": "chrome",
+          "content": {
+            "mod": "org-tasks"
+          }
+        },
+        {
           "id": "status",
           "type": "row",
           "size": {

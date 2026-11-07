@@ -1,17 +1,38 @@
 # Herdr app personal layout
 
-This layout combines the bundled workspace status with local quota and system load. The [mod sources](mods/) are the authority for behaviour; the [design record](../design/log/2026-11-05-herdr-app-orch-mod.org) records the accepted contract.
+This layout combines the bundled workspace status with local quota, system load and the selected org-tasks task. The [mod sources](mods/) are the authority for behaviour; the [design record](../design/log/2026-11-05-herdr-app-orch-mod.org) records the accepted contract.
 
 ## Install and select
 
-1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system` and `layouts/herdr-orch.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
+1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks` and `layouts/herdr-orch.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
 2. In Herdr app, explicitly select the `herdr-orch` layout. The existing layout remains selected until you do this.
 
-To remove the personal layout, select another layout in Herdr app first. Remove the three personal leaf declarations and `checkHerdrAppLeaves` guard from the parent `agents.nix`, then reapply the parent configuration using the normal host procedure. Do not remove app-owned directories or the source checkout.
+To remove the personal layout, select another layout in Herdr app first. Remove the four personal leaf declarations and `checkHerdrAppLeaves` guard from the parent `agents.nix`, then reapply the parent configuration using the normal host procedure. Do not remove app-owned directories or the source checkout.
 
 The quota mod requires the home-installed `~/.agents/skills/herdr-orch/scripts/oh` and its runtime prerequisites. It runs `oh usage --format json` from your home directory and reports quota for this computer, not a selected remote machine. See the [usage contract](../skills/herdr-orch/scripts/docs/contract.md#usage) for provider setup and cache behaviour.
 
 Named Pi Anthropic subscriptions appear as separate `anthropic-<N>` rows (`anthropic-1`, `anthropic-2`, ...) alongside the default `anthropic` row. The footer, popup and visibility preferences use the full local account identity, so hiding one account does not hide its sibling. Quota values and unavailable states remain account-specific. The parser retains explicit `baseProvider` and `accountId` fields; older single-account rows remain supported. Account management stays in Pi; the quota command never refreshes or writes credentials.
+
+## Task widget
+
+The `org-tasks` block below the tab area shows the selected task of the focused agent's project: the task, its top-level parent, every STARTED subtask and the next pending one. With no selection it shows the status counts and the key hints. The rows, their order, emphasis and counts come from `ot compact --format json` ([contract](../skills/org-tasks/scripts/docs/contract.md#ot-compact---width-n)); the mod only picks the project and draws the rows in theme colours.
+
+- Project :: the folder of the focused pane when that pane runs a local agent. A shell pane, a space on another machine, a project without `TASKS.org` or a failed `ot` run shows a line that says so, never another project's tasks. A pane's folder is its foreground process's, so a new folder must hold for two one-second polls before the widget switches.
+- Refresh :: on changes to the task files that `ot compact` lists, through `watchFolder` on the project folder, and every 30 seconds as a fallback.
+- Select :: `org-tasks.select` (or a click on the widget) runs `ot tui` in a detached `hc` terminal inside a dialog. `Esc` ends `ot`; the terminal is removed and the dialog closes.
+- Toggle :: `layout.toggle:org-tasks` hides or shows the block. The app saves the state with the layout.
+- Size :: the widget resizes its block to the rows it shows with `layout.resize`. Layout props can name another block id: `{"mod": "org-tasks", "props": {"block": "my-tasks"}}`.
+
+`ot` must be on the app's `PATH`; the parent configuration installs `~/.local/bin/ot`. Layout props can name another executable: `{"mod": "org-tasks", "props": {"ot": "/path/to/ot"}}`.
+
+The repository does not manage `keys.json`. Add these lines to its `global` section; on Linux, use the `ctrl-shift-` forms if `cmd` is not available:
+
+```json
+"cmd-shift-t": "org-tasks.select",
+"cmd-shift-o": "layout.toggle:org-tasks"
+```
+
+They match `prefix t` and `prefix O` in the terminal Herdr plugin. The app's linked mod folder does not hot-reload edits to its source; restart the app, or remove and re-create the link, to load a change.
 
 ## Refresh and limits
 
