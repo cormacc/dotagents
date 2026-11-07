@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { readEffectiveOrgContent } from "./effective.ts";
-import { expandOrgLinkTarget, parseTasks } from "./parser.ts";
+import { expandOrgLinkTarget } from "./parser.ts";
 
 let passed = 0;
 let failed = 0;
@@ -65,8 +65,7 @@ async function main(): Promise<void> {
     assertEqual(effective.includes("#+LINK: plan file:design/log/%s"), true,
       "readEffectiveOrgContent: includes second setupfile");
 
-    const { tasks } = parseTasks(tasksContent, { sourcePath: tasksPath, effectiveSourceContent: effective });
-    const expanded = expandOrgLinkTarget(tasks[0]!.importPath!, tasks[0]!.effectiveSourceContent);
+    const expanded = expandOrgLinkTarget("plan:2026-05-14-evaluate-vulpea-org-memory.org", effective);
     assertEqual(expanded, {
       target: "design/log/2026-05-14-evaluate-vulpea-org-memory.org",
       fromProjectRoot: true,

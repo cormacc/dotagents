@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { buildChangeRecordPrompt, buildSummaryRefreshPrompt } from "./agent.ts";
-import { parseTasks } from "./parser.ts";
+import { loadTasks } from "./index.ts";
 import { runOtResult, otCreateTask } from "./ot.ts";
 
 const { handlePlanEdit } = await import(process.env.TASKS_PROMPTS_CONTROL
@@ -28,8 +28,7 @@ const ctx: any = { cwd: scratch, mode: "rpc", hasUI: true, ui: {
 try {
   await runOtResult(["init"], { root: scratch });
   const created = await otCreateTask({ summary: "Non-visual record" }, { root: scratch });
-  const sourcePath = join(scratch, "TASKS.org");
-  const task = parseTasks(readFileSync(sourcePath, "utf8"), { sourcePath }).tasks[0]!;
+  const task = (await loadTasks(scratch)).tasks[0]!;
   await handlePlanEdit(pi, ctx, task);
   assert.equal(messages.length, 1, JSON.stringify(notices));
   assert.deepEqual(messages[0]!.options, { deliverAs: "followUp" });

@@ -2,9 +2,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import registerTasks, { buildChangeRecordPrompt as legacyPrompt, handlePlanEdit } from "./index.ts";
+import registerTasks, { buildChangeRecordPrompt as legacyPrompt, handlePlanEdit, loadTasks } from "./index.ts";
 import { buildChangeRecordPrompt } from "./agent.ts";
-import { parseTasks } from "./parser.ts";
 import { otCreateTask, otRecordCreate, otRecordPath, runOtResult } from "./ot.ts";
 
 async function main() {
@@ -64,8 +63,7 @@ async function main() {
       "unsafe descriptions are omitted from parent links");
 
     const flow = await otCreateTask({ summary: "Flow parent" }, { root });
-    const sourcePath = join(root, "TASKS.org");
-    const flowTask = parseTasks(readFileSync(sourcePath, "utf8"), { sourcePath }).tasks.find((t) => t.summary === "Flow parent")!;
+    const flowTask = (await loadTasks(root)).tasks.find((t) => t.summary === "Flow parent")!;
     await handlePlanEdit(pi, ctx, flowTask);
     assert.ok(readFileSync(join(root, "notes/flow.org"), "utf8").includes("* Intent"));
     assert.equal(messages.length, 1, JSON.stringify(notices));
@@ -77,7 +75,7 @@ async function main() {
     assert.equal(messages.length, 1, "cancelling path approval sends no follow-up prompt");
 
     assert.equal(legacyPrompt, buildChangeRecordPrompt, "legacy prompt export retains the non-visual builder contract");
-    const promptTask = parseTasks("* TODO Prompt parent\n").tasks[0]!;
+    const promptTask = flowTask;
     for (const mode of ["proactive", "retrospective", "summary"] as const) {
       const prompt = buildChangeRecordPrompt(mode, promptTask, record.importRaw, record.recordPath);
       assert.ok(prompt.includes("`org-plan` and `org-tasks`"));

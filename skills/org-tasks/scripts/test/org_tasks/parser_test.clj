@@ -1,8 +1,7 @@
 (ns org-tasks.parser-test
-  "Parser/serializer tests for the `ot` Clojure port.
+  "Parser/serializer tests for `ot`, the single owner of org parsing.
 
-  Mirrors `pi/extensions/tasks/parser.test.ts` and adds byte-identical
-  round-trip checks against the fixtures under
+  Includes byte-identical round-trip checks against the fixtures under
   `skills/org-tasks/scripts/test/fixtures/round-trip/`."
   (:require [clojure.edn :as edn]
             [clojure.string :as str]

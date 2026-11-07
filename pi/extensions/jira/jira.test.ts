@@ -99,7 +99,7 @@ assertEqual(
   }
 }
 
-// ── getFileKeyword: matches helper behaviour from tasks/parser.ts ─────
+// ── getFileKeyword ──────────────────────────────────────────────────
 
 {
   const content = [

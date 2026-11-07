@@ -1,14 +1,10 @@
 /**
- * Org-mode TASKS.org parser.
+ * Task model and read-only org helpers for the tasks extension.
  *
- * Parses headings of the form:
- *   * STATUS [#PRIORITY] Summary text :tag1:tag2:
- *
- * Valid status tokens: TODO, STARTED, WAITING, DONE, CANCELLED
- * Priority is optional, e.g. [#A], [#B], [#C]
- * Tags are optional, colon-delimited at end of heading
- * Body text between headings becomes the task description.
- * Nested headings become subtasks (arbitrary depth).
+ * `ot` owns parsing and writing TASKS.org; the extension builds `Task`
+ * values from the `ot list` wire format (`wireTaskToTask` in `index.ts`).
+ * These helpers read drawer properties, blockers and `#+LINK:` templates
+ * from those values.
  */
 
 export interface Task {
@@ -62,18 +58,6 @@ export interface Task {
   linkedIssues?: LinkedIssue[];
 }
 
-/** Matches any org heading: `* ...`, `** ...`, etc. */
-const ANY_HEADING_RE = /^(\*+)\s+(.*)$/;
-
-const HEADING_RE =
-  /^(\*+)\s+(TODO|STARTED|WAITING|DONE|CANCELLED)\s+(?:\[#([A-Z])\]\s+)?(.+)$/;
-
-const PROPERTIES_START_RE = /^\s*:PROPERTIES:\s*$/i;
-const LOGBOOK_START_RE = /^\s*:LOGBOOK:\s*$/i;
-const DRAWER_END_RE = /^\s*:END:\s*$/i;
-const PROPERTIES_END_RE = DRAWER_END_RE;
-/** Matches a `#+IMPORT:` keyword anywhere in a file (task body or root level). */
-const IMPORT_KEYWORD_RE = /^\s*#\+IMPORT:\s*(.*?)\s*$/i;
 const ID_PROPERTY_RE = /^\s*:CUSTOM_ID:\s*(\S+)\s*$/i;
 const STARTED_PROPERTY_RE = /^\s*:STARTED:\s*\[([^\]]+)\]\s*$/i;
 /**
@@ -90,37 +74,6 @@ export function extractOrgLinkTarget(value: string): string | null {
   const match = ORG_LINK_RE.exec(value.trim());
   return match?.[1]?.trim() || null;
 }
-
-/**
- * Org link with both target and (optional) description captured.
- *   `[[url]]`             → { target: "url", description: null }
- *   `[[url][label]]`      → { target: "url", description: "label" }
- *   `[[file:path]]`       → { target: "path", description: null }
- */
-const ORG_LINK_FULL_RE = /^\[\[(?:file:)?([^\]]+?)\](?:\[([^\]]*)\])?\]$/;
-
-export interface OrgLink {
-  /** The link target (URL or file path). */
-  target: string;
-  /** The optional description text shown to the user, or null when absent. */
-  description: string | null;
-}
-
-/**
- * Parse an org link expression into target + description.
- * Returns null when the value isn't an org link.
- */
-export function extractOrgLink(value: string): OrgLink | null {
-  const match = ORG_LINK_FULL_RE.exec(value.trim());
-  if (!match) return null;
-  const target = match[1]?.trim();
-  if (!target) return null;
-  const description = match[2] !== undefined ? match[2].trim() : "";
-  return { target, description: description.length > 0 ? description : null };
-}
-
-/** Matches an org CLOSED timestamp line, e.g. `CLOSED: [2026-04-24 Fri 14:30]`. */
-const CLOSED_RE = /^\s*CLOSED:\s*\[([^\]]+)\]\s*$/;
 
 /** Matches the #+SELECTED: keyword in TASKS.local.org. */
 const SELECTED_KEYWORD_RE = /^#\+SELECTED:\s*(\S+)\s*$/im;
@@ -148,86 +101,8 @@ export function formatOrgTimestamp(d: Date = new Date()): string {
   return `${y}-${mo}-${da} ${dow} ${hh}:${mm}`;
 }
 
-/** Format a Date as a date-only org body, e.g. `2026-04-24 Fri`.
- * Used for `#+DATE:` headers where time-of-day is not meaningful. */
-export function formatOrgDate(d: Date = new Date()): string {
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  const y = d.getFullYear();
-  const mo = pad(d.getMonth() + 1);
-  const da = pad(d.getDate());
-  const dow = DAY_ABBR[d.getDay()]!;
-  return `${y}-${mo}-${da} ${dow}`;
-}
-
 export function createdLogEntry(timestamp: string): string {
   return `- Created [${timestamp}]`;
-}
-
-export function stateLogEntry(newStatus: string, oldStatus: string, timestamp: string): string {
-  return `- State \"${newStatus}\" from \"${oldStatus}\" [${timestamp}]`;
-}
-
-export function appendCreatedLog(task: Task, timestamp: string): void {
-  task.logbookLines.push(createdLogEntry(timestamp));
-}
-
-export function appendStateLog(
-  task: Task,
-  newStatus: string,
-  oldStatus: string,
-  timestamp: string = formatOrgTimestamp(),
-): void {
-  task.logbookLines.push(stateLogEntry(newStatus, oldStatus, timestamp));
-}
-
-/**
- * Parse a single heading line into its components.
- * Returns null if the line is not a valid task heading.
- */
-function parseHeading(line: string): {
-  level: number;
-  status: string;
-  priority: string | null;
-  summary: string;
-  tags: string[];
-} | null {
-  const m = HEADING_RE.exec(line);
-  if (!m) return null;
-
-  const level = m[1]!.length;
-  const status = m[2]!;
-  let summary = m[4]!.trimEnd();
-  const tags: string[] = [];
-
-  // Extract trailing tags  :tag1:tag2:
-  const tagMatch = /\s+:([\w:]+):\s*$/.exec(summary);
-  if (tagMatch) {
-    summary = summary.slice(0, tagMatch.index).trimEnd();
-    for (const t of tagMatch[1]!.split(":")) {
-      if (t) tags.push(t);
-    }
-  }
-
-  return { level, status, priority: m[3] ?? null, summary, tags };
-}
-
-/**
- * Result returned by `parseTasks`.
- * `fileImports` collects paths from `#+IMPORT:` lines that appear before any
- * task heading (i.e. at the file root level, with no parent task).
- */
-export interface ParseResult {
-  tasks: Task[];
-  fileImports: string[];
-}
-
-export interface ParseTasksOptions {
-  /** Absolute path of the file being parsed. */
-  sourcePath?: string;
-  /** Original source content. Defaults to the parsed content. */
-  sourceContent?: string;
-  /** Effective content after applying setupfile keywords, used for lookup only. */
-  effectiveSourceContent?: string;
 }
 
 /** Return the org `:CUSTOM_ID:` property value for a task, if present. */
@@ -237,11 +112,6 @@ export function getTaskId(task: Task): string | null {
     if (match) return match[1]!.trim();
   }
   return null;
-}
-
-/** True when a task already has an org `:CUSTOM_ID:` property. */
-export function taskHasId(task: Task): boolean {
-  return getTaskId(task) !== null;
 }
 
 /**
@@ -255,11 +125,6 @@ export function getTaskStarted(task: Task): string | null {
     if (match) return match[1]!.trim();
   }
   return null;
-}
-
-/** True when a task has a recorded `:STARTED:` first-transition timestamp. */
-export function taskHasStartedProperty(task: Task): boolean {
-  return getTaskStarted(task) !== null;
 }
 
 /**
@@ -285,9 +150,6 @@ const PROPERTY_OR_CONTINUATION_LINE_RE =
 /**
  * Return the value of an arbitrary drawer property by name, or null when
  * the property is absent. Case-insensitive match on the property name.
- *
- * Generic accessor for third-party extensions: stable contract that
- * unknown drawer properties round-trip cleanly through the parser.
  */
 export function getDrawerProperty(task: Task, name: string): string | null {
   const target = name.toUpperCase();
@@ -298,38 +160,6 @@ export function getDrawerProperty(task: Task, name: string): string | null {
     }
   }
   return null;
-}
-
-/**
- * Set or clear an arbitrary drawer property by name.
- * - `value === null` removes the property line if present (no-op otherwise).
- * - When the property is already present, the existing line is replaced
- *   in place, preserving the original casing of the property name.
- * - When absent, a new line is appended in `:NAME: value` form using the
- *   `name` argument verbatim.
- *
- * Single-value semantics only: this helper does *not* touch `:NAME+:`
- * continuation lines. To manage multi-valued properties (e.g.
- * `:BLOCKED-BY:` + `:BLOCKED-BY+:`) use `setDrawerPropertyValues`.
- */
-export function setDrawerProperty(
-  task: Task,
-  name: string,
-  value: string | null,
-): void {
-  const target = name.toUpperCase();
-  let replaced = false;
-  task.propertyLines = task.propertyLines.flatMap((line) => {
-    const m = PROPERTY_LINE_RE.exec(line);
-    if (m && m[1]!.toUpperCase() === target) {
-      replaced = true;
-      return value === null ? [] : [`:${m[1]!}: ${value}`];
-    }
-    return [line];
-  });
-  if (!replaced && value !== null) {
-    task.propertyLines.push(`:${name}: ${value}`);
-  }
 }
 
 /**
@@ -352,43 +182,6 @@ export function getDrawerPropertyValues(task: Task, name: string): string[] {
   }
   return values;
 }
-
-/**
- * Replace all values of a multi-valued drawer property. Removes every
- * existing `:NAME:` and `:NAME+:` line, then writes the supplied values:
- * the first as `:NAME: value`, each subsequent as `:NAME+: value`.
- * Empty `values` clears the property entirely.
- *
- * The supplied `name` casing is used verbatim on every written line.
- */
-export function setDrawerPropertyValues(
-  task: Task,
-  name: string,
-  values: string[],
-): void {
-  const target = name.toUpperCase();
-  task.propertyLines = task.propertyLines.filter((line) => {
-    const m = PROPERTY_OR_CONTINUATION_LINE_RE.exec(line);
-    return !(m && m[1]!.toUpperCase() === target);
-  });
-  values.forEach((value, i) => {
-    const suffix = i === 0 ? "" : "+";
-    task.propertyLines.push(`:${name}${suffix}: ${value}`);
-  });
-}
-
-// ── Blockers / readiness (`:BLOCKED-BY:` + `:BLOCKED-BY+:`) ────────────────────────────
-//
-// `:BLOCKED-BY:` carries one or more dependency / blocker references. Each
-// entry is a free-form token; the protocol convention is one of:
-//   `task:<UUID>`    — dependency on another task in the loaded graph
-//   `url:<URL>`      — external URL (e.g. upstream PR/issue)
-//   `human:<text>`   — awaiting human action
-//   `jira:<KEY>`     — Jira issue (rendered by org-jira tooling)
-//   anything else    — opaque blocker, treated as `other`
-//
-// Multiple blockers use org's `:NAME+:` continuation idiom so each entry
-// occupies its own drawer line.
 
 /** Discriminator on the form of a parsed `:BLOCKED-BY:` entry. */
 export type BlockerKind = "task" | "url" | "human" | "jira" | "other";
@@ -421,19 +214,6 @@ export function parseBlocker(raw: string): TaskBlocker {
  */
 export function getTaskBlockers(task: Task): TaskBlocker[] {
   return getDrawerPropertyValues(task, "BLOCKED-BY").map(parseBlocker);
-}
-
-/**
- * Replace the blockers attached to a task. The first entry is written
- * as `:BLOCKED-BY: <raw>`, each subsequent as `:BLOCKED-BY+: <raw>`.
- * Empty `blockers` clears all blocker lines.
- */
-export function setTaskBlockers(
-  task: Task,
-  blockers: readonly TaskBlocker[] | readonly string[],
-): void {
-  const values = blockers.map((b) => (typeof b === "string" ? b : b.raw));
-  setDrawerPropertyValues(task, "BLOCKED-BY", values);
 }
 
 /**
@@ -501,117 +281,6 @@ export function getTaskHandoff(task: Task): string | null {
   const v = getDrawerProperty(task, "HANDOFF");
   return v && v.length > 0 ? v : null;
 }
-
-/** Set or clear the `:HANDOFF:` property. Empty/null clears the line. */
-export function setTaskHandoff(task: Task, value: string | null): void {
-  setDrawerProperty(task, "HANDOFF", value && value.length > 0 ? value : null);
-}
-
-/**
- * Return the value of a file-level `#+KEYWORD:` from raw org content,
- * or null when absent. Case-insensitive match on the keyword name.
- * First occurrence wins; callers wanting `TASKS.local.org` to override
- * `TASKS.org` should call this on each file separately and prefer the
- * local value when present.
- *
- * The value is whatever appears after `:` on the same line, trimmed.
- * Empty values (e.g. `#+JIRA_PROJECT:`) yield the empty string `""` —
- * distinct from null (keyword absent). Only horizontal whitespace
- * (` `, `\t`) is allowed between the colon and the value, so a blank
- * keyword line never leaks into the next line.
- */
-export function getFileKeywords(
-  content: string,
-  name: string,
-): string[] {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // Use [\t ]* (horizontal whitespace only) around the captured value
-  // so an empty `#+NAME:` line doesn't consume the following newline
-  // and bleed into the next line's content.
-  const re = new RegExp(
-    `^[\\t ]*#\\+${escaped}[\\t ]*:[\\t ]*(.*?)[\\t ]*$`,
-    "gim",
-  );
-  const values: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    values.push(m[1] ?? "");
-  }
-  return values;
-}
-
-export function getFileKeyword(
-  content: string,
-  name: string,
-): string | null {
-  return getFileKeywords(content, name)[0] ?? null;
-}
-
-export type PlanParentKind = "task" | "archive";
-
-export interface PlanParentRef {
-  kind: PlanParentKind;
-  uuid: string;
-  summary: string | null;
-}
-
-/** Extract the parent task reference from a navigable `#+PARENT:` org link. */
-export function getPlanParentRef(content: string): PlanParentRef | null {
-  const raw = getFileKeyword(content, "PARENT");
-  if (raw === null) return null;
-  const link = extractOrgLink(raw);
-  if (!link) return null;
-  const match = /^(task|archive):([^\s#\]]+)$/i.exec(link.target);
-  if (!match) return null;
-  return {
-    kind: match[1]!.toLowerCase() as PlanParentKind,
-    uuid: match[2]!.trim(),
-    summary: link.description,
-  };
-}
-
-/** Extract the parent task UUID from a navigable `#+PARENT:` org link. */
-export function getPlanParentId(content: string): string | null {
-  return getPlanParentRef(content)?.uuid ?? null;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Rewrite only the link kind of a plan's `#+PARENT:` link. */
-export function rewriteParentLinkKind(
-  content: string,
-  parentId: string,
-  kind: PlanParentKind,
-): string {
-  const id = escapeRegExp(parentId);
-  const parentLineRe = /^([\t ]*#\+PARENT:[\t ]*)(.*)$/i;
-  const linkTargetRe = new RegExp(
-    `(\\[\\[)(task|archive):${id}(\\](?:\\[[^\\]]*\\])?\\])`,
-    "i",
-  );
-  const lines = content.split(/\r?\n/);
-  let changed = false;
-  const next = lines.map((line) => {
-    const parent = parentLineRe.exec(line);
-    if (!parent) return line;
-    const rewritten = parent[2]!.replace(linkTargetRe, `$1${kind}:${parentId}$3`);
-    if (rewritten !== parent[2]) changed = true;
-    return `${parent[1]}${rewritten}`;
-  }).join("\n");
-  return changed ? next : content;
-}
-
-// ── Linked external issues (`:LINKED_ISSUES:` + `#+LINK`) ───────────────
-//
-// Tracker-agnostic external-issue references stored in the `:LINKED_ISSUES:`
-// drawer property as org-link tokens. Accepted forms:
-//   1. typed link `[[type:key]]`, resolved through a `#+LINK: type URL/%s`.
-//   2. raw URL link `[[https://...][label]]`, resolved directly.
-//
-// Tracker-specific behaviour (workflow, MCP routing, slash commands)
-// lives in companion extensions; this module knows nothing about them.
 
 export interface LinkedIssue {
   /** Resolved URL, or null when a typed link references an undeclared prefix. */
@@ -698,352 +367,9 @@ export function expandOrgLinkTarget(
   return { target: expanded, fromProjectRoot: false };
 }
 
-function splitLinkedIssueTokens(value: string): string[] {
-  const tokens: string[] = [];
-  let i = 0;
-  while (i < value.length) {
-    while (i < value.length && /\s/.test(value[i]!)) i++;
-    if (i >= value.length) break;
-    if (value.startsWith("[[", i)) {
-      const end = value.indexOf("]]", i + 2);
-      if (end >= 0) {
-        tokens.push(value.slice(i, end + 2));
-        i = end + 2;
-        continue;
-      }
-    }
-    let j = i;
-    while (j < value.length && !/\s/.test(value[j]!)) j++;
-    tokens.push(value.slice(i, j));
-    i = j;
-  }
-  return tokens.filter((t) => t.length > 0);
-}
-
 function typedLinkParts(target: string): { prefix: string; key: string } | null {
   if (/^https?:\/\//i.test(target)) return null;
   const match = /^([A-Za-z][A-Za-z0-9+.-]*):(.+)$/.exec(target);
   if (!match) return null;
   return { prefix: match[1]!, key: match[2]! };
-}
-
-/**
- * Parse `:LINKED_ISSUES:` for a task, resolving typed links via `#+LINK:`
- * declarations found in SOURCE-CONTENT. Missing templates are surfaced as
- * entries with `url: null` and `error` populated; callers may choose to render
- * a hard error while preserving the task row.
- */
-export function getLinkedIssues(
-  task: Task,
-  sourceContentOrTemplates: string | LinkTemplateMap | null | undefined,
-): LinkedIssue[] {
-  const value = getDrawerProperty(task, "LINKED_ISSUES");
-  if (!value) return [];
-  const templates = typeof sourceContentOrTemplates === "string"
-    ? parseLinkTemplates(sourceContentOrTemplates)
-    : sourceContentOrTemplates ?? new Map<string, string>();
-  const tokens = splitLinkedIssueTokens(value);
-  return tokens.map((rawToken) => {
-    const link = extractOrgLink(rawToken);
-    if (!link) {
-      return { url: null, label: rawToken, rawToken, error: "LINKED_ISSUES token is not an org link" };
-    }
-    const typed = typedLinkParts(link.target);
-    if (typed) {
-      const template = templates.get(typed.prefix);
-      if (!template) {
-        return {
-          url: null,
-          label: link.description ?? typed.key,
-          rawToken,
-          error: `Missing #+LINK declaration for prefix ${typed.prefix}`,
-        };
-      }
-      return {
-        url: resolveLinkTemplate(template, typed.key),
-        label: link.description ?? typed.key,
-        rawToken,
-      };
-    }
-    return {
-      url: link.target,
-      label: link.description ?? link.target,
-      rawToken,
-    };
-  });
-}
-
-/**
- * Replace the `:LINKED_ISSUES:` drawer property with the given tokens
- * (whitespace-joined). Tokens are written verbatim — callers are
- * responsible for choosing typed-link vs raw-URL org-link form per token.
- * Passing an empty array clears the property.
- */
-export function setLinkedIssues(task: Task, tokens: string[]): void {
-  if (tokens.length === 0) {
-    setDrawerProperty(task, "LINKED_ISSUES", null);
-    return;
-  }
-  setDrawerProperty(task, "LINKED_ISSUES", tokens.join(" "));
-}
-
-/**
- * Parse the full content of a TASKS.org file into a task tree.
- *
- * `#+IMPORT: [[file:path]]` lines are recognised anywhere in the file:
- * - Inside a task body: sets `importPath` on that task.
- * - Before any task heading (file root): collected in `ParseResult.fileImports`.
- */
-export function parseTasks(
-  content: string,
-  options: ParseTasksOptions = {},
-): ParseResult {
-  const lines = content.split("\n");
-  const root: Task[] = [];
-  const fileImports: string[] = [];
-  const sourceContent = options.sourceContent ?? content;
-  const effectiveSourceContent = options.effectiveSourceContent ?? sourceContent;
-
-  // Stack tracks the current nesting path.
-  // Each entry: { task, level } — the task and its heading level.
-  const stack: { task: Task; level: number }[] = [];
-
-  let currentTask: Task | null = null;
-  const descriptionLines: string[] = [];
-
-  const flushDescription = () => {
-    if (currentTask) {
-      // Trim leading/trailing blank lines from description
-      let desc = descriptionLines.join("\n");
-      desc = desc.replace(/^\n+/, "").replace(/\n+$/, "");
-      currentTask.description = desc;
-    }
-    descriptionLines.length = 0;
-  };
-
-  const closeTasksAtOrAbove = (level: number, endLineExclusive: number) => {
-    while (stack.length > 0 && stack[stack.length - 1]!.level >= level) {
-      const closed = stack.pop()!.task;
-      closed.endLine = endLineExclusive;
-    }
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
-    const heading = parseHeading(line);
-    const anyHeading = ANY_HEADING_RE.exec(line);
-
-    if (heading) {
-      // Flush any accumulated description for the previous task
-      flushDescription();
-      closeTasksAtOrAbove(heading.level, i + 1);
-
-      const task: Task = {
-        level: heading.level,
-        status: heading.status,
-        priority: heading.priority,
-        summary: heading.summary,
-        tags: heading.tags,
-        description: "",
-        children: [],
-        propertyLines: [],
-        logbookLines: [],
-        importPath: null,
-        importRaw: null,
-        importError: null,
-        closed: null,
-        sourcePath: options.sourcePath,
-        sourceContent,
-        effectiveSourceContent,
-        lineNumber: i + 1,
-        endLine: lines.length + 1,
-      };
-
-      if (stack.length === 0) {
-        // Top-level task
-        root.push(task);
-      } else {
-        // Child of the task on top of stack
-        stack[stack.length - 1]!.task.children.push(task);
-      }
-
-      stack.push({ task, level: heading.level });
-      currentTask = task;
-    } else if (currentTask && CLOSED_RE.test(line)) {
-      // Emacs writes `CLOSED: [...]` immediately after a heading transitions
-      // to a done state. Capture it as metadata rather than description.
-      const m = CLOSED_RE.exec(line)!;
-      currentTask.closed = m[1]!.trim();
-    } else if (currentTask && PROPERTIES_START_RE.test(line)) {
-      // Org properties drawer — collect all lines verbatim for round-trip.
-      for (i = i + 1; i < lines.length; i++) {
-        const propLine = lines[i]!;
-        if (PROPERTIES_END_RE.test(propLine)) break;
-        currentTask.propertyLines.push(propLine);
-      }
-    } else if (currentTask && LOGBOOK_START_RE.test(line)) {
-      // Org lifecycle drawer — collect lines verbatim for round-trip.
-      for (i = i + 1; i < lines.length; i++) {
-        const logLine = lines[i]!;
-        if (DRAWER_END_RE.test(logLine)) break;
-        currentTask.logbookLines.push(logLine);
-      }
-    } else if (anyHeading) {
-      // Non-task heading (e.g. `* Notes`) — flush the current task's
-      // description and stop attributing subsequent lines to it, so
-      // unrelated content below isn't swallowed into the previous task.
-      flushDescription();
-      closeTasksAtOrAbove(anyHeading[1]!.length, i + 1);
-      currentTask = null;
-    } else if (IMPORT_KEYWORD_RE.test(line)) {
-      // #+IMPORT: keyword — extract path and attach to current task or collect
-      // as a file-level import when no task heading is in scope.
-      const raw = IMPORT_KEYWORD_RE.exec(line)![1]!.trim();
-      if (raw) {
-        const linkTarget = extractOrgLinkTarget(raw);
-        const path = linkTarget ?? raw;
-        if (currentTask) {
-          currentTask.importPath = path;
-          currentTask.importRaw = linkTarget ? raw : null;
-        } else {
-          fileImports.push(path);
-        }
-      }
-    } else {
-      // Non-heading line: accumulate as description for current task
-      if (currentTask) {
-        descriptionLines.push(line);
-      }
-    }
-  }
-
-  // Flush description for the last task and close any open task ranges.
-  flushDescription();
-  closeTasksAtOrAbove(1, lines.length + 1);
-
-  const attachSourceRoot = (tasks: Task[]) => {
-    for (const task of tasks) {
-      if (options.sourcePath) {
-        task.sourceRoot = root;
-        task.sourceContent = sourceContent;
-        task.effectiveSourceContent = effectiveSourceContent;
-      }
-      attachSourceRoot(task.children);
-    }
-  };
-  attachSourceRoot(root);
-
-  return { tasks: root, fileImports };
-}
-
-/**
- * Serialize a task tree back to org-mode text.
- *
- * Top-level tasks are separated by a blank line for readability.
- * Descriptions are emitted verbatim (preserving indentation/blanks the
- * parser stripped from the edges is acceptable: the parser trims only
- * leading and trailing blank lines).
- */
-export function serializeTasks(tasks: Task[]): string {
-  const lines: string[] = [];
-
-  const write = (taskList: Task[], topLevel: boolean) => {
-    for (let i = 0; i < taskList.length; i++) {
-      const t = taskList[i]!;
-      if (topLevel && i > 0) lines.push("");
-      const stars = "*".repeat(t.level);
-      const prio = t.priority ? ` [#${t.priority}]` : "";
-      const tags = t.tags.length > 0 ? ` :${t.tags.join(":")}:` : "";
-      lines.push(`${stars} ${t.status}${prio} ${t.summary}${tags}`);
-      if (t.closed) {
-        lines.push(`CLOSED: [${t.closed}]`);
-      }
-      const propertyLines = [...t.propertyLines];
-      if (propertyLines.length > 0) {
-        lines.push(":PROPERTIES:");
-        lines.push(...propertyLines);
-        lines.push(":END:");
-      }
-      if (t.logbookLines.length > 0) {
-        lines.push(":LOGBOOK:");
-        lines.push(...t.logbookLines);
-        lines.push(":END:");
-      }
-      if (t.importPath) {
-        lines.push(`#+IMPORT: ${t.importRaw ?? t.importPath}`);
-      }
-      if (t.description) {
-        lines.push(t.description);
-      }
-      write(t.children, false);
-    }
-  };
-
-  write(tasks, true);
-  return lines.join("\n") + "\n";
-}
-
-/** Serialize a single task subtree without forcing a trailing newline. */
-function serializeTaskBlock(task: Task): string[] {
-  return serializeTasks([task]).replace(/\n$/, "").split("\n");
-}
-
-/** Original line range occupied by a parsed task subtree. */
-function taskRange(task: Task): { start: number; end: number } {
-  const start = Math.max(0, task.lineNumber - 1);
-  const end = Math.max(start + 1, task.endLine - 1);
-  return { start, end };
-}
-
-/**
- * Serialize root tasks back into their original org file while preserving
- * content outside task subtrees: metadata/preamble, category headings, plan
- * sections, prose notes, and other non-task org content.
- *
- * Existing root tasks are replaced in-place by their original line number.
- * Existing root tasks omitted from `tasks` are removed (used by archiving).
- * New root tasks with no parsed line number are appended to the end of the file.
- */
-export function serializeTasksPreservingFile(
-  originalContent: string,
-  tasks: Task[],
-): string {
-  const lines = originalContent.split("\n");
-  const { tasks: originalRoots } = parseTasks(originalContent);
-  const suppliedByLine = new Map<number, Task>();
-  const newRoots: Task[] = [];
-
-  for (const task of tasks) {
-    if (task.lineNumber > 0) {
-      suppliedByLine.set(task.lineNumber, task);
-    } else {
-      newRoots.push(task);
-    }
-  }
-
-  const edits: { start: number; end: number; replacement: string[] }[] = [];
-
-  for (const original of originalRoots) {
-    const supplied = suppliedByLine.get(original.lineNumber);
-    const range = taskRange(original);
-    edits.push({
-      ...range,
-      replacement: supplied ? serializeTaskBlock(supplied) : [],
-    });
-  }
-
-  // Apply from the bottom up so earlier line ranges remain stable.
-  edits
-    .sort((a, b) => b.start - a.start)
-    .forEach(({ start, end, replacement }) => {
-      lines.splice(start, end - start, ...replacement);
-    });
-
-  for (const task of newRoots) {
-    while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-    if (lines.length > 0) lines.push("");
-    lines.push(...serializeTaskBlock(task));
-  }
-
-  return lines.join("\n").replace(/\n*$/, "\n");
 }

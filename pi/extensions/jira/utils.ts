@@ -19,9 +19,7 @@ export interface JiraConfig {
 /**
  * Match a `#+KEYWORD:` line in raw org content.
  * Horizontal-whitespace only around the value so an empty line doesn't
- * bleed into the next line. Mirrors the helper of the same name in
- * `../tasks/parser.ts` — duplicated here to avoid a cross-extension
- * import cycle.
+ * bleed into the next line.
  */
 export function getFileKeyword(
   content: string,

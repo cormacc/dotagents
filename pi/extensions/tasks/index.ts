@@ -373,13 +373,14 @@ function assignSourceRoots(tasks: Task[]): void {
   for (const task of tasks) assign(task);
 }
 
-interface LoadedTasks {
+export interface LoadedTasks {
   tasks: Task[];
   root: string;
   files: Record<string, string>;
 }
 
-async function loadTasks(cwd: string): Promise<LoadedTasks> {
+/** Load the task tree through `ot list`, as the overlay and commands see it. */
+export async function loadTasks(cwd: string): Promise<LoadedTasks> {
   try {
     await otBackfill({ cwd });
   } catch {

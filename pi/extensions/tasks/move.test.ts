@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import { moveCandidates, runOverlayMove } from "./move.ts";
 import { TasksOverlay } from "./overlay.ts";
 import { otMoveTask, type OtMoveDestination } from "./ot.ts";
-import { getTaskId, parseTasks } from "./parser.ts";
+import { loadTasks } from "./index.ts";
+import { getTaskId } from "./parser.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: here, encoding: "utf8" }).trim();
@@ -23,10 +24,10 @@ const content = `* Tasks\n\n${block(2, sourceId, "Source")}\n${block(3, childId,
 async function main() {
   writeFileSync(path, content);
   writeFileSync(join(root, "TASKS.local.org"), "#+SELECTED:\n");
-  const tasks = parseTasks(content, { sourcePath: path }).tasks;
+  const tasks = (await loadTasks(root)).tasks;
   const source = tasks[0];
-  const imported = parseTasks(block(2, "44444444-4444-4444-8444-444444444444", "Imported"),
-    { sourcePath: join(root, "plan.org") }).tasks;
+  const imported = [{ ...tasks[1], summary: "Imported", children: [], importChildren: [],
+    propertyLines: [":CUSTOM_ID: 44444444-4444-4444-8444-444444444444"], sourcePath: join(root, "plan.org") }];
   source.importChildren = imported;
   assert.deepEqual(moveCandidates(tasks, source).map(getTaskId), [targetId]);
   assert.deepEqual(moveCandidates([...tasks, ...imported], source).map(getTaskId), [targetId]);
@@ -79,7 +80,7 @@ async function main() {
     });
     assert.equal(moved, true);
     assert.deepEqual(calls, [{ kind, value: kind === "section" ? "Later" : targetId }]);
-    const after = parseTasks(readFileSync(path, "utf8"), { sourcePath: path }).tasks;
+    const after = (await loadTasks(root)).tasks;
     const target = after.find((t) => getTaskId(t) === targetId)!;
     if (kind === "parent") assert.equal(getTaskId(target.children[0]), sourceId);
     if (kind === "before") assert.deepEqual(after.map(getTaskId), [sourceId, targetId]);

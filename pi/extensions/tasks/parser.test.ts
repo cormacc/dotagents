@@ -1,42 +1,22 @@
 #!/usr/bin/env tsx
 /**
- * Parser/serializer tests for the tasks extension.
+ * Tests for the read-only task helpers in parser.ts.
  *
- * These cover the round-trip invariants that the rest of the extension
- * relies on:
- *
- * - `CLOSED:` is captured regardless of whether it appears above or
- *   below the `:PROPERTIES:` drawer, and serializes back above the
- *   drawer (matching `org-todo`'s native behaviour).
- * - `:CREATED:` rides through as an ordinary property line.
+ * `ot` owns org parsing and serialization (see skills/org-tasks/scripts/test/);
+ * these tests build `Task` values the way `wireTaskToTask` in index.ts does.
  *
  * Run: `tsx parser.test.ts` (or via `./test.sh`).
  */
 
 import {
   expandOrgLinkTarget,
-  extractOrgLink,
   getDrawerProperty,
   getDrawerPropertyValues,
-  getFileKeyword,
-  getFileKeywords,
-  getLinkedIssues,
-  getPlanParentId,
-  getPlanParentRef,
   getTaskBlockers,
   getTaskHandoff,
   isTaskReady,
   parseBlocker,
   parseLinkTemplates,
-  parseTasks,
-  rewriteParentLinkKind,
-  serializeTasks,
-  serializeTasksPreservingFile,
-  setDrawerProperty,
-  setDrawerPropertyValues,
-  setLinkedIssues,
-  setTaskBlockers,
-  setTaskHandoff,
   type Task,
 } from "./parser.ts";
 
@@ -57,254 +37,12 @@ function assertEqual<T>(actual: T, expected: T, message: string): void {
   }
 }
 
-function assertContains(haystack: string, needle: string, message: string): void {
-  if (haystack.includes(needle)) {
-    passed++;
-    console.log(`ok - ${message}`);
-  } else {
-    failed++;
-    console.log(`not ok - ${message}`);
-    console.log(`  expected to contain: ${JSON.stringify(needle)}`);
-    console.log(`  actual: ${JSON.stringify(haystack)}`);
-  }
-}
-
-// ── CLOSED: above the drawer (org-todo native) ────────────────────────
-
-{
-  const input = [
-    "* DONE [#B] Task one",
-    "CLOSED: [2026-04-25 Sat 12:00]",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555",
-    ":CREATED: [2026-04-24 Fri 09:15]",
-    ":END:",
-    "Some description.",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(input);
-  assertEqual(tasks.length, 1, "parses one task (CLOSED above drawer)");
-  assertEqual(tasks[0]!.closed, "2026-04-25 Sat 12:00",
-    "captures CLOSED above drawer");
-  assertEqual(
-    tasks[0]!.propertyLines,
-    [
-      ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555",
-      ":CREATED: [2026-04-24 Fri 09:15]",
-    ],
-    "preserves :CUSTOM_ID: and :CREATED: property lines",
-  );
-}
-
-// ── CLOSED: below the drawer (parser robustness) ───────────────────
-
-{
-  const input = [
-    "* DONE [#B] Task two",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 22222222-3333-4444-8555-666666666666",
-    ":END:",
-    "CLOSED: [2026-04-25 Sat 12:00]",
-    "Some description.",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(input);
-  assertEqual(tasks.length, 1, "parses one task (CLOSED below drawer)");
-  assertEqual(tasks[0]!.closed, "2026-04-25 Sat 12:00",
-    "captures CLOSED below drawer");
-}
-
-// ── Serializer always emits CLOSED above drawer ───────────────────────
-
-{
-  const inputBelow = [
-    "* DONE [#B] Round-trip",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 33333333-4444-4555-8666-777777777777",
-    ":END:",
-    "CLOSED: [2026-04-25 Sat 12:00]",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(inputBelow);
-  const out = serializeTasks(tasks);
-
-  assertContains(out, "* DONE [#B] Round-trip\nCLOSED: [2026-04-25 Sat 12:00]\n:PROPERTIES:",
-    "serializer emits CLOSED above drawer");
-  // No leftover CLOSED below drawer.
-  const closedCount = (out.match(/^CLOSED:/gm) ?? []).length;
-  assertEqual(closedCount, 1, "exactly one CLOSED line after round-trip");
-}
-
-// ── :CREATED: round-trip ──────────────────────────────────────────────
-
-{
-  const input = [
-    "* TODO New task",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 44444444-5555-4666-8777-888888888888",
-    ":CREATED: [2026-04-28 Tue 10:49]",
-    ":END:",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(input);
-  const out = serializeTasks(tasks);
-  assertContains(out, ":CREATED: [2026-04-28 Tue 10:49]",
-    ":CREATED: survives round-trip in property lines");
-}
-
-// ── Top-level task spacing ───────────────────────────────────────────
-
-{
-  const input = [
-    "** DONE First archived task",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 55555555-6666-4777-8888-999999999991",
-    ":END:",
-    "Body.",
-    "** DONE Second archived task",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 55555555-6666-4777-8888-999999999992",
-    ":END:",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(input);
-  const out = serializeTasks(tasks);
-  assertContains(out, "Body.\n\n** DONE Second archived task",
-    "top-level sibling tasks are separated by one blank line");
-}
-
-// ── :LOGBOOK: lifecycle drawer round-trip ───────────────────────────
-
-{
-  const input = [
-    "* STARTED Task with history",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 55555555-6666-4777-8888-999999999999",
-    ":END:",
-    ":LOGBOOK:",
-    "- Created [2026-04-28 Tue 10:49]",
-    "- State \"STARTED\" from \"TODO\" [2026-04-28 Tue 11:00]",
-    ":END:",
-    "Body text.",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(input);
-  assertEqual(tasks[0]!.logbookLines, [
-    "- Created [2026-04-28 Tue 10:49]",
-    "- State \"STARTED\" from \"TODO\" [2026-04-28 Tue 11:00]",
-  ], ":LOGBOOK: lines parsed structurally");
-  assertEqual(tasks[0]!.description, "Body text.",
-    ":LOGBOOK: is not swallowed into description");
-  const out = serializeTasks(tasks);
-  assertContains(out, ":LOGBOOK:\n- Created [2026-04-28 Tue 10:49]",
-    ":LOGBOOK: survives round-trip");
-}
-
-{
-  const content = "#+PARENT: [[task:80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n";
-  assertEqual(getPlanParentId(content), "80ea589b-501c-42d9-86e7-4d414c0c314e",
-    "getPlanParentId extracts a parent UUID from an abbreviated parent link");
-  assertEqual(getPlanParentRef(content), {
-    kind: "task",
-    uuid: "80ea589b-501c-42d9-86e7-4d414c0c314e",
-    summary: "Parent",
-  }, "getPlanParentRef extracts kind, uuid, and summary");
-  assertEqual(getPlanParentId("#+PARENT: [[file:../../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n"), null,
-    "getPlanParentId rejects legacy file-link parent links");
-  assertEqual(
-    rewriteParentLinkKind(
-      `${content}[[task:other][Other]]\n`,
-      "80ea589b-501c-42d9-86e7-4d414c0c314e",
-      "archive",
-    ),
-    "#+PARENT: [[archive:80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n[[task:other][Other]]\n",
-    "rewriteParentLinkKind rewrites only the matching #+PARENT link target",
-  );
-}
-
-// ── Generic round-trip: unknown #+ keywords + drawer properties ──────
-//
-// Third-party extensions (e.g. `jira`) build on the contract that the
-// parser/serializer pass unknown keywords and drawer properties through
-// untouched. Lock that in with fictional namespaces so the test does not
-// also exercise any first-party conventions.
-
-{
-  const input = [
-    "#+TITLE: Fixture",
-    "#+FOO_BAR: hello world",
-    "#+QUUX: 42",
-    "",
-    "* TODO Top-level",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-    ":FOO_BAZ: alpha beta",
-    ":NS_ZIM: gamma",
-    ":END:",
-    "Description line.",
-    "",
-  ].join("\n");
-
-  const out = serializeTasksPreservingFile(input, parseTasks(input).tasks);
-
-  assertContains(out, "#+FOO_BAR: hello world",
-    "unknown file keyword #+FOO_BAR round-trips");
-  assertContains(out, "#+QUUX: 42",
-    "unknown file keyword #+QUUX round-trips");
-  assertContains(out, ":FOO_BAZ: alpha beta",
-    "unknown drawer property :FOO_BAZ: round-trips");
-  assertContains(out, ":NS_ZIM: gamma",
-    "unknown drawer property :NS_ZIM: round-trips");
-}
-
-// ── getFileKeyword helper ────────────────────────────────────────────
-
-{
-  const content = [
-    "#+TITLE: Example",
-    "#+FOO_BAR: alpha",
-    "#+QUUX:42",
-    "",
-    "* TODO Task",
-  ].join("\n");
-
-  assertEqual(getFileKeyword(content, "FOO_BAR"), "alpha",
-    "getFileKeyword returns value for present keyword");
-  assertEqual(getFileKeyword(content, "foo_bar"), "alpha",
-    "getFileKeyword is case-insensitive on name");
-  assertEqual(getFileKeyword(content, "QUUX"), "42",
-    "getFileKeyword tolerates no-space-after-colon");
-  assertEqual(getFileKeyword(content, "MISSING"), null,
-    "getFileKeyword returns null for absent keyword");
-
-  // Regression: an empty #+KEYWORD: line must not leak into the next line.
-  const withBlank = [
-    "#+JIRA_CLOUDID: abc-123",
-    "#+JIRA_PROJECT:",
-    "#+JIRA_BASE_URL: https://example.com",
-    "",
-  ].join("\n");
-  assertEqual(getFileKeyword(withBlank, "JIRA_PROJECT"), "",
-    "getFileKeyword: empty value yields empty string, not next-line content");
-  assertEqual(getFileKeyword(withBlank, "JIRA_BASE_URL"), "https://example.com",
-    "getFileKeyword: line after empty keyword still resolvable");
-
-  const withRepeated = [
-    "#+SETUPFILE: ./TASKS.local.org",
-    "#+SETUPFILE: ./TASKS.setup.org",
-    "#+TITLE: Tasks",
-    "",
-  ].join("\n");
-  assertEqual(getFileKeywords(withRepeated, "SETUPFILE"), ["./TASKS.local.org", "./TASKS.setup.org"],
-    "getFileKeywords returns repeated keywords in declaration order");
-  assertEqual(getFileKeywords(withRepeated, "MISSING"), [],
-    "getFileKeywords returns an empty list for absent keywords");
+function task(status: string, propertyLines: string[]): Task {
+  return {
+    level: 1, status, priority: null, summary: "Fixture", tags: [], description: "",
+    children: [], propertyLines, logbookLines: [], importPath: null, closed: null,
+    lineNumber: 0, endLine: 0,
+  };
 }
 
 // ── parseLinkTemplates helper ─────────────────────────────────────────
@@ -389,306 +127,39 @@ function assertContains(haystack: string, needle: string, message: string): void
     "expandOrgLinkTarget: LinkTemplateMap argument preserves fromProjectRoot");
 }
 
-// ── getDrawerProperty / setDrawerProperty helpers ────────────────────
+// ── getDrawerProperty ─────────────────────────────────────────────────
 
 {
-  const input = [
-    "* TODO Generic-helper subject",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: cccccccc-dddd-4eee-8fff-000011112222",
-    ":FOO_BAZ: original value",
-    ":END:",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(input);
-  const task = tasks[0]!;
-
-  assertEqual(getDrawerProperty(task, "FOO_BAZ"), "original value",
+  const t = task("TODO", [":CUSTOM_ID: cccccccc-dddd-4eee-8fff-000011112222", ":FOO_BAZ: original value"]);
+  assertEqual(getDrawerProperty(t, "FOO_BAZ"), "original value",
     "getDrawerProperty returns value for present property");
-  assertEqual(getDrawerProperty(task, "foo_baz"), "original value",
+  assertEqual(getDrawerProperty(t, "foo_baz"), "original value",
     "getDrawerProperty is case-insensitive on name");
-  assertEqual(getDrawerProperty(task, "MISSING"), null,
+  assertEqual(getDrawerProperty(t, "MISSING"), null,
     "getDrawerProperty returns null for absent property");
-
-  // Update existing.
-  setDrawerProperty(task, "FOO_BAZ", "updated value");
-  assertEqual(getDrawerProperty(task, "FOO_BAZ"), "updated value",
-    "setDrawerProperty replaces existing value in place");
-
-  // Add new.
-  setDrawerProperty(task, "NS_NEW", "hello");
-  assertEqual(getDrawerProperty(task, "NS_NEW"), "hello",
-    "setDrawerProperty appends new property line");
-
-  // Verify ordering and round-trip.
-  const out = serializeTasks(tasks);
-  assertContains(out, ":FOO_BAZ: updated value",
-    "setDrawerProperty replacement appears in serialized output");
-  assertContains(out, ":NS_NEW: hello",
-    "setDrawerProperty appended property appears in serialized output");
-
-  // Remove.
-  setDrawerProperty(task, "FOO_BAZ", null);
-  assertEqual(getDrawerProperty(task, "FOO_BAZ"), null,
-    "setDrawerProperty(name, null) removes property");
-  const out2 = serializeTasks(tasks);
-  assertEqual((out2.match(/:FOO_BAZ:/g) ?? []).length, 0,
-    "removed property no longer appears in serialized output");
 }
-
-// ── extractOrgLink helper ────────────────────────────────────────────
-
-{
-  assertEqual(
-    extractOrgLink("[[https://example/x][label]]"),
-    { target: "https://example/x", description: "label" },
-    "extractOrgLink: target + description",
-  );
-  assertEqual(
-    extractOrgLink("[[https://example/x]]"),
-    { target: "https://example/x", description: null },
-    "extractOrgLink: target only",
-  );
-  assertEqual(
-    extractOrgLink("[[file:design/log/foo.org][Plan]]"),
-    { target: "design/log/foo.org", description: "Plan" },
-    "extractOrgLink: file: prefix stripped from target",
-  );
-  assertEqual(
-    extractOrgLink("MBFW-123"),
-    null,
-    "extractOrgLink: bare token returns null",
-  );
-  assertEqual(
-    extractOrgLink("[[unterminated"),
-    null,
-    "extractOrgLink: malformed link returns null",
-  );
-}
-
-// ── getLinkedIssues + setLinkedIssues round-trip ──────────────────────
-
-{
-  const input = [
-    "* TODO Mixed typed-link and raw org-link tokens",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: dddddddd-eeee-4fff-8000-111122223333",
-    ":LINKED_ISSUES: [[jira:MBFW-123]] [[jira:MBE-45]] [[https://github.com/foo/bar/issues/42][gh#42]]",
-    ":END:",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(input);
-  const task = tasks[0]!;
-  const content = "#+LINK: jira https://your-org.atlassian.net/browse/%s";
-  const issues = getLinkedIssues(task, content);
-
-  assertEqual(issues.length, 3, "getLinkedIssues: returns three tokens");
-  assertEqual(
-    issues[0],
-    {
-      url: "https://your-org.atlassian.net/browse/MBFW-123",
-      label: "MBFW-123",
-      rawToken: "[[jira:MBFW-123]]",
-    },
-    "getLinkedIssues: typed Jira link resolves via #+LINK template",
-  );
-  assertEqual(
-    issues[1],
-    {
-      url: "https://your-org.atlassian.net/browse/MBE-45",
-      label: "MBE-45",
-      rawToken: "[[jira:MBE-45]]",
-    },
-    "getLinkedIssues: second typed Jira link resolves",
-  );
-  assertEqual(
-    issues[2],
-    {
-      url: "https://github.com/foo/bar/issues/42",
-      label: "gh#42",
-      rawToken: "[[https://github.com/foo/bar/issues/42][gh#42]]",
-    },
-    "getLinkedIssues: org-link token uses target+description",
-  );
-}
-
-{
-  const input = [
-    "* TODO Missing link template",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: eeeeeeee-ffff-4000-8111-222233334444",
-    ":LINKED_ISSUES: [[jira:MBFW-123]]",
-    ":END:",
-    "",
-  ].join("\n");
-
-  const { tasks } = parseTasks(input);
-  const issues = getLinkedIssues(tasks[0]!, "");
-  assertEqual(issues.length, 1, "getLinkedIssues: typed link without template still listed");
-  assertEqual(issues[0]!.url, null,
-    "getLinkedIssues: typed link without template has null url");
-  assertEqual(issues[0]!.error, "Missing #+LINK declaration for prefix jira",
-    "getLinkedIssues: missing template is a hard-resolution error");
-}
-
-{
-  // Empty/absent property
-  const input = [
-    "* TODO No linked issues",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: ffffffff-0000-4111-8222-333344445555",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  assertEqual(getLinkedIssues(tasks[0]!, "#+LINK: jira https://x/%s").length, 0,
-    "getLinkedIssues: returns [] when property absent");
-}
-
-{
-  // setLinkedIssues round-trip
-  const input = [
-    "* TODO Set property",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 00112233-4455-4666-8777-8899aabbccdd",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  const task = tasks[0]!;
-
-  setLinkedIssues(task, ["[[jira:MBFW-123]]", "[[jira:MBE-45]]"]);
-  assertEqual(getDrawerProperty(task, "LINKED_ISSUES"), "[[jira:MBFW-123]] [[jira:MBE-45]]",
-    "setLinkedIssues: writes whitespace-joined org-link tokens");
-
-  const out = serializeTasks(tasks);
-  assertContains(out, ":LINKED_ISSUES: [[jira:MBFW-123]] [[jira:MBE-45]]",
-    "setLinkedIssues: round-trips through serializer");
-
-  setLinkedIssues(task, []);
-  assertEqual(getDrawerProperty(task, "LINKED_ISSUES"), null,
-    "setLinkedIssues([]): clears the property");
-}
-
-// ── Round-trip preserves :LINKED_ISSUES: line verbatim ─────────────────
-
-{
-  const input = [
-    "#+LINK: jira https://your-org.atlassian.net/browse/%s",
-    "",
-    "* TODO Round-trip",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 11223344-5566-4777-8888-99aabbccddee",
-    ":LINKED_ISSUES: [[jira:MBFW-123]] [[https://x/y][y]]",
-    ":END:",
-    "Body.",
-    "",
-  ].join("\n");
-
-  const out = serializeTasksPreservingFile(input, parseTasks(input).tasks);
-  assertContains(out,
-    "#+LINK: jira https://your-org.atlassian.net/browse/%s",
-    "#+LINK preamble round-trips",
-  );
-  assertContains(out,
-    ":LINKED_ISSUES: [[jira:MBFW-123]] [[https://x/y][y]]",
-    ":LINKED_ISSUES: drawer line round-trips verbatim",
-  );
-}
-
-// ── Summary ───────────────────────────────────────────────────────────
 
 // ── Multi-valued :BLOCKED-BY: + ready-task query ──────────────────────
 
 {
-  // Single-value :BLOCKED-BY: backward compatibility (round-trip).
-  const input = [
-    "* WAITING [#C] Single blocker :nix:",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: aaaa1111-2222-4333-8444-555555555555",
-    ":BLOCKED-BY: url:https://example.com/pr/1",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  assertEqual(
-    getDrawerPropertyValues(tasks[0]!, "BLOCKED-BY"),
-    ["url:https://example.com/pr/1"],
-    "single-value :BLOCKED-BY: read via getDrawerPropertyValues",
-  );
-  assertEqual(
-    getDrawerProperty(tasks[0]!, "BLOCKED-BY"),
-    "url:https://example.com/pr/1",
-    "single-value :BLOCKED-BY: still readable via the single-value getter",
-  );
-  const out = serializeTasks(tasks);
-  assertContains(
-    out,
-    ":BLOCKED-BY: url:https://example.com/pr/1",
-    "single-value :BLOCKED-BY: round-trips byte-identically",
-  );
+  const t = task("WAITING", [":CUSTOM_ID: aaaa1111-2222-4333-8444-555555555555", ":BLOCKED-BY: url:https://example.com/pr/1"]);
+  assertEqual(getDrawerPropertyValues(t, "BLOCKED-BY"), ["url:https://example.com/pr/1"],
+    "single-value :BLOCKED-BY: read via getDrawerPropertyValues");
+  assertEqual(getDrawerProperty(t, "BLOCKED-BY"), "url:https://example.com/pr/1",
+    "single-value :BLOCKED-BY: still readable via the single-value getter");
 }
 
 {
-  // Multi-value :BLOCKED-BY: + :BLOCKED-BY+: continuation lines parse in order.
-  const input = [
-    "* TODO [#C] Multi blocker",
-    ":PROPERTIES:",
+  const t = task("TODO", [
     ":CUSTOM_ID: bbbb1111-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:cccc1111-2222-4333-8444-555555555555",
     ":BLOCKED-BY+: url:https://example.com/pr/2",
     ":BLOCKED-BY+: human: waiting on Alice",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  assertEqual(
-    getDrawerPropertyValues(tasks[0]!, "BLOCKED-BY"),
-    [
-      "task:cccc1111-2222-4333-8444-555555555555",
-      "url:https://example.com/pr/2",
-      "human: waiting on Alice",
-    ],
-    "multi-value :BLOCKED-BY: collects base + continuation lines in order",
-  );
-}
-
-{
-  // setDrawerPropertyValues replaces all matching lines (base + continuation).
-  const input = [
-    "* TODO Replace blockers",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: dddd1111-2222-4333-8444-555555555555",
-    ":BLOCKED-BY: task:old-1",
-    ":BLOCKED-BY+: task:old-2",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  setDrawerPropertyValues(tasks[0]!, "BLOCKED-BY", [
-    "task:new-1",
-    "task:new-2",
-    "url:https://example.com",
   ]);
   assertEqual(
-    getDrawerPropertyValues(tasks[0]!, "BLOCKED-BY"),
-    ["task:new-1", "task:new-2", "url:https://example.com"],
-    "setDrawerPropertyValues: replaces all matching lines",
-  );
-  const out = serializeTasks(tasks);
-  assertContains(out, ":BLOCKED-BY: task:new-1",
-    "setDrawerPropertyValues: writes first as :NAME:");
-  assertContains(out, ":BLOCKED-BY+: task:new-2",
-    "setDrawerPropertyValues: writes second as :NAME+:");
-  assertContains(out, ":BLOCKED-BY+: url:https://example.com",
-    "setDrawerPropertyValues: writes third as :NAME+:");
-  setDrawerPropertyValues(tasks[0]!, "BLOCKED-BY", []);
-  assertEqual(
-    getDrawerPropertyValues(tasks[0]!, "BLOCKED-BY"),
-    [],
-    "setDrawerPropertyValues([]): clears all base + continuation lines",
+    getDrawerPropertyValues(t, "BLOCKED-BY"),
+    ["task:cccc1111-2222-4333-8444-555555555555", "url:https://example.com/pr/2", "human: waiting on Alice"],
+    "multi-value :BLOCKED-BY: collects base + continuation lines in order",
   );
 }
 
@@ -713,194 +184,65 @@ function assertContains(haystack: string, needle: string, message: string): void
 }
 
 {
-  const input = [
-    "* TODO With blockers",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: eeee1111-2222-4333-8444-555555555555",
-    ":BLOCKED-BY: task:dep-1",
-    ":BLOCKED-BY+: human: review pending",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  const blockers = getTaskBlockers(tasks[0]!);
+  const blockers = getTaskBlockers(task("TODO", [":BLOCKED-BY: task:dep-1", ":BLOCKED-BY+: human: review pending"]));
   assertEqual(blockers.length, 2, "getTaskBlockers: returns one entry per line");
   assertEqual(blockers[0]!.kind, "task", "getTaskBlockers: kind for task: entry");
   assertEqual(blockers[1]!.kind, "human", "getTaskBlockers: kind for human: entry");
 }
 
 {
-  const input = [
-    "* TODO Setter",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: ffff1111-2222-4333-8444-555555555555",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  setTaskBlockers(tasks[0]!, ["task:a", "url:https://x"]);
-  assertEqual(
-    getDrawerPropertyValues(tasks[0]!, "BLOCKED-BY"),
-    ["task:a", "url:https://x"],
-    "setTaskBlockers: accepts a string[] of raw tokens",
-  );
-  setTaskBlockers(tasks[0]!, getTaskBlockers(tasks[0]!));
-  assertEqual(
-    getDrawerPropertyValues(tasks[0]!, "BLOCKED-BY"),
-    ["task:a", "url:https://x"],
-    "setTaskBlockers: round-trips through TaskBlocker[]",
-  );
-}
-
-{
-  const input = [
-    "* TODO Solo",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 1111aaaa-2222-4333-8444-555555555555",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  const report = isTaskReady(tasks[0]!, () => null);
+  const report = isTaskReady(task("TODO", [":CUSTOM_ID: 1111aaaa-2222-4333-8444-555555555555"]), () => null);
   assertEqual(report.ready, true, "isTaskReady: no blockers → ready");
   assertEqual(report.gating.length, 0, "isTaskReady: no blockers → empty gating");
 }
 
 {
-  const input = [
-    "* DONE Done dep",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 2222aaaa-2222-4333-8444-555555555555",
-    ":END:",
-    "",
-    "* TODO Gated",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 3333aaaa-2222-4333-8444-555555555555",
-    ":BLOCKED-BY: task:2222aaaa-2222-4333-8444-555555555555",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  const byId = new Map<string | null, Task>(
-    tasks.map((t) => [getDrawerProperty(t, "CUSTOM_ID"), t]));
-  const report = isTaskReady(tasks[1]!, (id) => byId.get(id) ?? null);
-  assertEqual(report.ready, true,
-    "isTaskReady: task: blocker resolving to DONE → ready");
+  const dep = task("DONE", [":CUSTOM_ID: 2222aaaa-2222-4333-8444-555555555555"]);
+  const gated = task("TODO", [":BLOCKED-BY: task:2222aaaa-2222-4333-8444-555555555555"]);
+  const report = isTaskReady(gated, (id) => (id === "2222aaaa-2222-4333-8444-555555555555" ? dep : null));
+  assertEqual(report.ready, true, "isTaskReady: task: blocker resolving to DONE → ready");
 }
 
 {
-  const input = [
-    "* TODO Open dep",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 4444aaaa-2222-4333-8444-555555555555",
-    ":END:",
-    "",
-    "* TODO Gated",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 5555aaaa-2222-4333-8444-555555555555",
-    ":BLOCKED-BY: task:4444aaaa-2222-4333-8444-555555555555",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  const byId = new Map<string | null, Task>(
-    tasks.map((t) => [getDrawerProperty(t, "CUSTOM_ID"), t]));
-  const report = isTaskReady(tasks[1]!, (id) => byId.get(id) ?? null);
-  assertEqual(report.ready, false,
-    "isTaskReady: open task: blocker → not ready");
+  const dep = task("TODO", [":CUSTOM_ID: 4444aaaa-2222-4333-8444-555555555555"]);
+  const gated = task("TODO", [":BLOCKED-BY: task:4444aaaa-2222-4333-8444-555555555555"]);
+  const report = isTaskReady(gated, (id) => (id === "4444aaaa-2222-4333-8444-555555555555" ? dep : null));
+  assertEqual(report.ready, false, "isTaskReady: open task: blocker → not ready");
   assertEqual(report.gating.length, 1, "isTaskReady: one gating entry");
-  assertEqual(report.gating[0]!.reason, "unresolved-task",
-    "isTaskReady: reason 'unresolved-task' for open dep");
+  assertEqual(report.gating[0]!.reason, "unresolved-task", "isTaskReady: reason 'unresolved-task' for open dep");
 }
 
 {
-  const input = [
-    "* TODO Gated",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 6666aaaa-2222-4333-8444-555555555555",
-    ":BLOCKED-BY: task:does-not-exist",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  const report = isTaskReady(tasks[0]!, () => null);
+  const report = isTaskReady(task("TODO", [":BLOCKED-BY: task:does-not-exist"]), () => null);
   assertEqual(report.ready, false, "isTaskReady: missing task ref → not ready");
-  assertEqual(report.gating[0]!.reason, "missing-task",
-    "isTaskReady: reason 'missing-task' for unknown UUID");
+  assertEqual(report.gating[0]!.reason, "missing-task", "isTaskReady: reason 'missing-task' for unknown UUID");
 }
 
 {
-  const input = [
-    "* TODO Opaque",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 7777aaaa-2222-4333-8444-555555555555",
-    ":BLOCKED-BY: url:https://example.com/pr/1",
-    ":BLOCKED-BY+: human: review pending",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  const report = isTaskReady(tasks[0]!, () => null);
-  assertEqual(report.ready, false,
-    "isTaskReady: opaque blockers → not ready");
+  const report = isTaskReady(
+    task("TODO", [":BLOCKED-BY: url:https://example.com/pr/1", ":BLOCKED-BY+: human: review pending"]), () => null);
+  assertEqual(report.ready, false, "isTaskReady: opaque blockers → not ready");
   assertEqual(report.gating.length, 2, "isTaskReady: every opaque entry gates");
-  assertEqual(
-    report.gating.every((g) => g.reason === "opaque"),
-    true,
-    "isTaskReady: opaque entries report reason 'opaque'",
-  );
+  assertEqual(report.gating.every((g) => g.reason === "opaque"), true,
+    "isTaskReady: opaque entries report reason 'opaque'");
 }
 
 {
-  const input = [
-    "* DONE Closed dep",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 8888aaaa-2222-4333-8444-555555555555",
-    ":END:",
-    "",
-    "* TODO Mixed",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: 9999aaaa-2222-4333-8444-555555555555",
-    ":BLOCKED-BY: task:8888aaaa-2222-4333-8444-555555555555",
-    ":BLOCKED-BY+: url:https://example.com",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  const byId = new Map<string | null, Task>(
-    tasks.map((t) => [getDrawerProperty(t, "CUSTOM_ID"), t]));
-  const report = isTaskReady(tasks[1]!, (id) => byId.get(id) ?? null);
-  assertEqual(report.ready, false,
-    "isTaskReady: opaque blocker still gates even when task: dep is closed");
+  const dep = task("DONE", [":CUSTOM_ID: 8888aaaa-2222-4333-8444-555555555555"]);
+  const mixed = task("TODO", [":BLOCKED-BY: task:8888aaaa-2222-4333-8444-555555555555", ":BLOCKED-BY+: url:https://example.com"]);
+  const report = isTaskReady(mixed, (id) => (id === "8888aaaa-2222-4333-8444-555555555555" ? dep : null));
+  assertEqual(report.ready, false, "isTaskReady: opaque blocker still gates even when task: dep is closed");
   assertEqual(report.gating.length, 1, "isTaskReady: only opaque gates");
-  assertEqual(report.gating[0]!.reason, "opaque",
-    "isTaskReady: opaque reason for url: blocker");
+  assertEqual(report.gating[0]!.reason, "opaque", "isTaskReady: opaque reason for url: blocker");
 }
 
 // ── :HANDOFF: ─────────────────────────────────────────────────────────
 
 {
-  const input = [
-    "* STARTED Active",
-    ":PROPERTIES:",
-    ":CUSTOM_ID: hand1111-2222-4333-8444-555555555555",
-    ":HANDOFF: Pick up at the parser delimiter test.",
-    ":END:",
-    "",
-  ].join("\n");
-  const { tasks } = parseTasks(input);
-  assertEqual(getTaskHandoff(tasks[0]!),
+  assertEqual(getTaskHandoff(task("STARTED", [":HANDOFF: Pick up at the parser delimiter test."])),
     "Pick up at the parser delimiter test.",
     "getTaskHandoff: returns the trimmed value when present");
-
-  setTaskHandoff(tasks[0]!, "Updated note");
-  const out = serializeTasks(tasks);
-  assertContains(out, ":HANDOFF: Updated note",
-    "setTaskHandoff: writes the line back through serializer");
-
-  setTaskHandoff(tasks[0]!, null);
-  assertEqual(getTaskHandoff(tasks[0]!), null,
-    "setTaskHandoff(null): clears the property");
+  assertEqual(getTaskHandoff(task("STARTED", [])), null, "getTaskHandoff: null when absent");
 }
 
 console.log(`\n# ${passed} passed, ${failed} failed`);
