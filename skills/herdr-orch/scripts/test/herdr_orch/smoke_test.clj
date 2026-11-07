@@ -5,6 +5,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [herdr-orch.backend :as backend]
             [herdr-orch.cli :as cli]
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
@@ -458,15 +459,18 @@
                                       (swap! usage-calls conj options)
                                       fixture-usage)
                     herdr/preflight! (constantly true)
+                    backend/preflight! (constantly true)
                     herdr/invoke (fn [argv] (throw (ex-info "LIVE HERDR FORBIDDEN" {:argv argv})))
                     cli/own-persona (constantly "worker") cli/own-role-absent? (constantly false)
                     cli/own-task (constantly "synthetic-caller-task")
                     cli/parent-identity (constantly {:parent-kind "pi" :parent-model model :parent-session-kind "path" :parent-session source})
                     ledger/read! (constantly {:role-snapshot (core/role-snapshot "worker" worker)})]
+        ;; Pin the backend so the in-process preview does not depend on the host terminal.
         (doseq [persona [nil "scout"]]
           (let [opts {:context ["fork"] :task ["synthetic"]}
-                implicit (cli/preview! persona opts "blocking")
-                explicit (cli/preview! persona (assoc opts :model [model]) "blocking")]
+                preview! #(binding [backend/*context* (delay {:backend :herdr})] (cli/preview! persona % "blocking"))
+                implicit (preview! opts)
+                explicit (preview! (assoc opts :model [model]))]
             (is (= "anthropic/claude-sonnet-5-5" (:model-canonical implicit)))
             (is (= model (:model-canonical explicit)))
             (is (= ["--model" model] (:model-args explicit)))

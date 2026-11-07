@@ -9,6 +9,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [herdr-orch.backend :as backend]
             [herdr-orch.cli :as cli]
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
@@ -4359,6 +4360,7 @@
 ;; that wins the lock becomes visible to the guard. A publication that loses waits until the
 ;; prompt and count update finish. This test checks the complete critical-section boundary.
 (deftest ^:serial poke-holds-child-lock-through-final-check-prompt-and-update
+  (binding [backend/*context* (delay {:backend :herdr})]
   (let [task "00000000-0000-4000-8000-000000000000"
         child "reviewer-lock-boundary"
         entry {:task task :child child :parent-session "parent" :pane-id "pane"
@@ -4370,6 +4372,7 @@
               (ns-resolve 'herdr-orch.ledger 'entries) (fn [] [entry])
               (ns-resolve 'herdr-orch.ledger 'update!) (fn [& _] (swap! events conj [:update @held?]))
               (ns-resolve 'herdr-orch.herdr 'preflight!) (fn [] nil)
+              (ns-resolve 'herdr-orch.backend 'preflight!) (fn [] true)
               (ns-resolve 'herdr-orch.herdr 'prompt!) (fn [& _] (swap! events conj [:prompt @held?]))
               (ns-resolve 'herdr-orch.cli 'parent-identity) (fn [] {:parent-session "parent"})
               (ns-resolve 'herdr-orch.cli 'assert-pokeable!) (fn [& _] (swap! events conj [:guard @held?]))
@@ -4385,7 +4388,7 @@
     (is (= [[:guard false] [:guard true] [:prompt true] [:update true]] @events))
     (is (= "poked" (:status outcome)))
     (is (= 1 (:pokes outcome)))
-    (is (false? @held?) "the child lock is released after poke returns")))
+    (is (false? @held?) "the child lock is released after poke returns"))))
 
 ;; An entry that predates the removal of dispatch verification can still carry a stale
 ;; `:dispatch {:status "unconfirmed" ...}` field. `poke` no longer reads it: the field
@@ -5165,9 +5168,11 @@
       (is (nil? (:closed-at (closed-entry dir theirs)))))))
 
 (deftest ^:serial mechanical-cli-groups-dispatch-to-herdr
+  (binding [backend/*context* (delay {:backend :herdr})]
   (let [calls (atom [])
         record! (fn [op & args] (swap! calls conj (into [op] args)))]
-    (with-redefs [herdr/caller-rect! (fn [& _] {:width 160 :height 80})
+    (with-redefs [backend/preflight! (fn [] true)
+                  herdr/caller-rect! (fn [& _] {:width 160 :height 80})
                   herdr/split! (fn [opts] (record! :pane/split opts) {:pane_id "split"})
                   herdr/pane-run! (fn [pane command] (record! :pane/run pane command))
                   herdr/pane-read! (fn [pane opts] (record! :pane/read pane opts) "output")
@@ -5213,7 +5218,7 @@
                :agent/start :agent/prompt :agent/wait :agent/read :agent/send-keys :agent/focus :agent/rename :agent/list :agent/get}
              (set (map first @calls))))
       (is (true? (get-in (first (filter #(= :tab/create (first %)) @calls)) [1 :focus])))
-      (is (true? (get-in (first (filter #(= :ws/create (first %)) @calls)) [1 :focus]))))))
+      (is (true? (get-in (first (filter #(= :ws/create (first %)) @calls)) [1 :focus])))))))
 
 ;; oh -> Herdr argv for the raw passthrough options task af7273fd restored, checked on the
 ;; fake-herdr call log (the final argv), not on any in-process proxy.
@@ -9180,14 +9185,16 @@
       (is (= ["--model" "fable"] (:model-args claude)) "native claude spelling")
       (is (= [astra] (map :canonical (get-in codex [:model-route :candidates]))) "codex sees only openai-codex")
       (is (= ["--model" "gpt-6-astra"] (:model-args codex)) "native codex spelling"))
+    ;; Codex, not Claude: on macOS native Claude credentials live in the Keychain, which
+    ;; quota-credentials never reads, so a Claude allowance is unknown rather than exhausted.
     (testing "an exhausted own-provider candidate refuses even when the other provider has credit"
-      (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 100.0 :codex-used 5})))
+      (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 5.0 :codex-used 100})))
       (clear-usage! dir)
-      (let [proc (call! env "task" "start" "claude-heavy" "--task" "filtered")]
+      (let [proc (call! env "task" "start" "codex-heavy" "--task" "filtered")]
         (is (= 1 (:exit proc)))
-        (is (re-find #"no candidate of model alias 'heavy' has allowance for kind claude" (:out proc)) (:out proc))
-        (is (str/includes? (:out proc) fable))
-        (is (not (str/includes? (:out proc) astra)) "the codex candidate is filtered, not listed")
+        (is (re-find #"no candidate of model alias 'heavy' has allowance for kind codex" (:out proc)) (:out proc))
+        (is (str/includes? (:out proc) astra))
+        (is (not (str/includes? (:out proc) fable)) "the anthropic candidate is filtered, not listed")
         (is (zero? (ledger-count dir)))
         (is (empty? (filter mutating? (calls (:log fixture)))))))))
 
