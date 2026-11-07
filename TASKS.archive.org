@@ -5002,3 +5002,33 @@ CLOSED: [2026-11-07 Sat 20:49]
 :END:
 #+IMPORT: [[plan:2026-11-05-org-tasks-herdr-ui.org]]
 Explore moving the org-tasks UI into a Herdr plugin. Options are a Herdr widget or an embedded terminal pane at the foot of the Herdr window running the org-tasks TUI. The embedded terminal pane is the preferred candidate as the likely cleanest strategy, not a settled design. Consider adding a collapsed mode to the TUI that replicates the selected-task overlay in Pi.
+
+** CANCELLED Implement herdr-orch delivery: Pi watcher extension and non-blocking publish push :herdr_orch:
+CLOSED: [2026-11-07 Sat 02:41]
+:PROPERTIES:
+:CUSTOM_ID: 486df916-c1f0-4ab8-ab34-775c1d92d503
+:CREATED: [2026-11-07 Sat 01:37]
+:STARTED: [2026-11-07 Sat 02:22]
+:ARCHIVED: [2026-11-07 Sat 02:41]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-07 Sat 01:37]
+- State "STARTED" from "TODO" [2026-11-07 Sat 02:22]
+- State "DONE" from "STARTED" [2026-11-07 Sat 02:41]
+- State "CANCELLED" from "DONE" [2026-11-07 Sat 21:01]
+:END:
+#+IMPORT: [[plan:2026-11-07-herdr-orch-delivery.org]]
+Follow-on from the accepted decision in design/log/2026-11-06-herdr-orch-comms.org (Decisions "Delivery augmentation"). Scope is that decision; the prototype under design/log/2026-11-06-herdr-orch-comms/prototype/ is the reference behaviour.
+
+Acceptance criteria:
+- pi/extensions/herdr-orch/ watches <assignment-root>/.tmp/herdr-orch/ only when the session is an orchestrator (HERDR_ENV=1 or HC_TERMINAL_ID, and the assignment root resolves); an ordinary Pi session starts no watcher.
+- Startup scan, fs.watch and a 5 s poll fallback each deliver a new complete item exactly once; the delivered set is keyed by item path and persisted as <session-file>.herdr-orch-delivered.json, so a reload re-delivers nothing.
+- Delivery is pi.sendMessage({customType: "herdr-orch-item"}, {deliverAs: "steer", triggerTurn: true}) whose text carries only CHILD, TASK, STATUS, the first SUMMARY line, the `oh task collect <task>` instruction and the advisory line; FINDINGS, NEXT, PROCESS and artifacts are not included.
+- An item whose ledger entry records another parent session is not delivered; an item with no ledger entry under this root is delivered once.
+- publish skips the push for a parent of kind pi ({"push":"skipped","reason":"watcher"}) and returns within 1 s on a busy parent.
+- For a non-Pi parent the settle wait and prompt run in a detached process; publish returns {"push":"detached"} and the outcome is written to <item>.push.json, which collect reports under `push`.
+- contract.md section "Parent push" documents the Pi skip, the detached wait and the outcome file; the offline fixtures cover both branches and the hc (session unobservable) case.
+- The presentation bench from the record re-runs with the shipped code in place of oh-nb and proto-ext.ts, with medians within the prototype range.
+- Must not: change item format, sealing, collect semantics, or the WAITING/blocking-policy push rules.
+Pointer: notify-parent! and push-decision in skills/herdr-orch/scripts/src/herdr_orch/cli.clj; pi/extensions/herdr-orch/ caller gate; prototype proto-ext.ts and oh-nb in the record folder.

@@ -1,6 +1,6 @@
 #+TITLE: Implement herdr-orch delivery: Pi watcher extension and non-blocking publish push
 #+DATE: 2026-11-07 Sat
-#+PARENT: [[task:486df916-c1f0-4ab8-ab34-775c1d92d503][Implement herdr-orch delivery: Pi watcher extension and non-blocking publish push]]
+#+PARENT: [[archive:486df916-c1f0-4ab8-ab34-775c1d92d503][Implement herdr-orch delivery: Pi watcher extension and non-blocking publish push]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
