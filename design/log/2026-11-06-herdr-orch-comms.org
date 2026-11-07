@@ -1,0 +1,271 @@
+#+TITLE: Evaluate efficient herdr-orch inter-agent communication
+#+DATE: 2026-11-06 Fri
+#+PARENT: [[archive:1a58c66c-5b2b-453f-aaa3-836f9c3dbe0b][Evaluate efficient herdr-orch inter-agent communication]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/org-execute/SKILL.md]]
+
+* Intent
+Decide, with measured evidence, whether herdr-orch's result-file plus advisory-push mechanism is sufficient for inter-agent communication, or whether to augment it with a durable mailbox behind ~oh~. Record a keep/adopt/augment decision. Implementing a chosen augmentation is a follow-on task, not this one.
+
+* Summary
+*Level:* prototype · *Tests:* smoke · *Docs:* record only
+
+Decision: augment delivery, keep the pipe. The file pipe (immutable result items plus ~collect --any --wait~ polling at 1000 ms) costs under 1 s per item at 1-6 children and is the smallest term in a real round. The measured delay lives in delivery into the parent model and in model turns: a Pi parent on herdr-app is never pushed (hc cannot observe its session), the terminal push blocks the child's ~publish~ for the parent's whole settle wait, and real-ledger publish-to-capture has median 11 s and p75 39 s. A Pi extension that watches the result directory and steers each item once removes the delivery term on both hosts; the follow-on task [[task:486df916-c1f0-4ab8-ab34-775c1d92d503]] implements it and makes the push non-blocking. No mailbox store, broker, MCP server or catalogue package is adopted.
+
+Measured chain for one round (medians): child decision from last evidence to ~publish~ 9.7 s (153 real sessions); publish to item link under 0.2 s; detection by polling 0.5-0.7 s at 1000 ms, 0.15-0.2 s at 250 ms; presentation into an idle Pi parent 0.4 s by push, under 60 ms by watcher; into a busy parent, the remainder of its current tool call under either mechanism; then the parent's own decision to collect.
+
+** Scope
+*** In scope
+- A disposable bench (isolated Herdr server, stub ~pi~ agents with real ~oh~ ledger entries, ABAB rounds, per-round medians, ~herdr~ subprocess counts) for detection and for presentation into a real Pi parent, idle and busy.
+- The herdr-app completion-delivery gap, folded in from task f2365984 and classified.
+- A constraint-by-package audit of the five catalogue packages.
+- A delivery prototype under ~.tmp/~ (result-directory watcher extension and a push-skipping ~oh~ wrapper), re-measured on the bench and checked once from a herdr-app Pi parent.
+*** Out of scope
+- A socket broker and an MCP server (paper-assessed only); adopting a catalogue package's orchestration layer; the implementation itself, which is [[task:486df916-c1f0-4ab8-ab34-775c1d92d503]].
+
+** Acceptance
+*** Core functionality
+- [X] A scripted bench measures publication-to-capture delay for ~collect --any --wait~ at 1, 3 and 6 children, ABAB against the comparator, with each round's median recorded.
+- [X] The same bench measures message-to-presentation delay for an idle Pi parent and for a busy Pi parent.
+- [X] The desktop delivery gap is classified: session observation, by design.
+- [X] Subprocess activity per capture is counted for baseline and comparator.
+- [X] Restart recovery: items published while no collector ran are captured exactly once by a fresh process at every N.
+- [X] The five catalogue packages are audited in one table; nothing is marked exercised.
+- [X] The prototype exists only after the gate recorded a measured gap, lives under ~.tmp/~ (copied to the record folder at closure) and alters no ~publish~/~collect~ semantics.
+- [X] Decisions states the keep/adopt/augment outcome with the medians beside it.
+*** Edge cases
+- [X] Lost notification: every stub-parent sample ran with the push skipped and was captured by poll within one interval.
+- [X] Duplicate delivery: 16 items, 16 deliveries, no duplicate path; a reload with 16 known items delivered only the added control.
+- [X] Crash between item link and delivery replays on the next scan (delivered set written only after a successful parse).
+- [X] A replaced parent process resumed from the ledger and captured every item once. ~continue~ was not exercised: a stub child never settles to idle, so the verb refuses it; the ledger-based capture it relies on is the same path.
+- [X] A delivered item carries only child, task, status and summary line plus the collect instruction and the advisory line; the extension never runs ~oh~.
+*** Anti-criteria
+- [X] Must not: implement a socket broker or an MCP server.
+- [X] Must not: adopt a catalogue package's orchestration layer.
+- [X] Must not: leave prototype code or ledger state outside ~.tmp/~ at closure (bench and prototype sources moved to the record folder).
+
+** Decisions
+- Augment delivery, keep the pipe :: Chosen on the measurements above. Rejected: keep as-is (hc parents never pushed, child blocked up to ~--notify-timeout~); a separate ~oh mail~ store with cursors (the result directory already is the store and the item path is the dedup key); a 250 ms poll (saves about 0.4 s for twice the ~agent list~ traffic); a socket broker (agent-comms shows the cost: port ownership, coordinator election, identity keys, in-memory state that dies with the last peer); MCP (a drain without wake-up; at most an optional read interface); any catalogue package (all Pi-only except agent-comms; pi-messenger imports orchestration; patterns from pi-session-mail are reimplemented, not vendored).
+- Delivery augmentation, the shape the follow-on implements :: In ~pi/extensions/herdr-orch/~, active only for an orchestrator session (~HERDR_ENV=1~ or ~HC_TERMINAL_ID~ with a resolvable assignment root): at ~session_start~ load the delivered set from ~<session-file>.herdr-orch-delivered.json~, scan ~<assignment-root>/.tmp/herdr-orch/~, start ~fs.watch~ and a 5 s poll fallback. A new item whose envelope parses is added to the set, persisted, then delivered with ~pi.sendMessage({customType: "herdr-orch-item"}, {deliverAs: "steer", triggerTurn: true})~; the text carries only ~CHILD~, ~TASK~, ~STATUS~, the first ~SUMMARY~ line, the ~oh task collect <task>~ instruction and the advisory line. Items whose ledger entry names another parent session are not delivered. In ~cli.clj~, ~push-decision~ skips the push for a parent of kind ~pi~ (the watcher owns delivery; a duplicate push queued behind the steer turn cost 3 s in the bench); for other kinds the settle wait and prompt run detached from ~publish~, which returns ~{:push "detached"}~ at once, and the outcome is written to ~<item>.push.json~ for ~collect~ to report. ~contract.md~ 'Parent push' changes accordingly; item format, sealing and ~collect~ do not.
+- Measure first, prototype on evidence :: The bench and baseline existed before any delivery code; the 250 ms poll variant was the mandatory comparator so an ABAB comparison existed even for a keep decision. Rejected: prototype first (biases toward augment); package first (Pi-only packages leave the CLI path and non-Pi harnesses unserved).
+- Child simulation: stub ~pi~ on ~PATH~ :: ~oh task start~ runs unchanged; the ~pi~ it launches is a compiled stub first on the disposable server's ~PATH~, and the parent pane runs the same stub, which forks the bench script so ~oh~ has a recognised caller. A child's publication runs with its ledger identity injected as environment. For the presentation bench the parent is a real Pi (~anthropic-1/claude-haiku-4-5~) with a bench extension that logs events and forces a one-word system prompt.
+- Desktop gap folded in :: Task f2365984 became the hc evidence. Classification: session observation by design; ~oh agent get~ on a herdr-app Pi pane returns ~agent_session null~, so ~push-decision~ always yields ~session-mismatch~. The org-execute rule to collect explicitly is the correct response to a mechanism that cannot push; the fix is in delivery, not guidance.
+
+** Shipped
+- No tracked code or contract changed: this is an investigation record. The declared specs (~contract.md~ 'Parent push', the herdr-orch and org-execute skills) are the ones the follow-on task modifies; their ~spec-untouched~ warning on this record is expected.
+- ADDED [[file:2026-11-06-herdr-orch-comms/]]: package audit, bench scripts, raw bench results and events, the reference prototype, and the hc check evidence.
+
+** Gotchas
+- The push outcome (~sent~, ~skipped~, ~prompt-failed~) is returned only on the publishing child's stdout and never persisted, so delivery cannot be audited from the ledger. The follow-on adds ~<item>.push.json~.
+- ~ot create --parent~ on a task that already carries ~#+IMPORT:~ inserts into ~TASKS.org~, and ~ot move~ cannot cross files. Create and order plan tasks under the parent before ~ot record create~, which migrates them.
+- A disposable Herdr server's XDG tree must sit under a short path such as ~/tmp/cb-<token>~: under the repository ~.tmp/~ the socket path exceeds the macOS ~sun_path~ limit.
+- ~oh~ calls from a pane fail with ~agent_not_found~ until Herdr classifies the pane (about 0.6 s after ~exec pi~); the second concurrent write-enabled child needs the work root to be a git repository.
+- ~collect --any~ without ~--wait~ reports reason ~timeout~, not ~no-candidates~, when nothing is unconsumed (observed, not investigated).
+- ~pi -p~ with a steer at startup prints "Agent is already processing"; harmless interactively, noisy in print mode.
+
+** Follow-ups
+- [[task:486df916-c1f0-4ab8-ab34-775c1d92d503][Implement herdr-orch delivery: Pi watcher extension and non-blocking publish push]].
+
+* Plan
+** DONE Harness spike: stub children with real ledger entries
+CLOSED: [2026-11-06 Fri 23:25]
+:PROPERTIES:
+:CUSTOM_ID: a80d9557-4ae7-4875-8459-7472451e3b1a
+:CREATED: [2026-11-06 Fri 23:15]
+:STARTED: [2026-11-06 Fri 23:21]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 23:15]
+- State "STARTED" from "TODO" [2026-11-06 Fri 23:21]
+- State "DONE" from "STARTED" [2026-11-06 Fri 23:25]
+:END:
+Acceptance criteria:
+- A bench under .tmp/comms-bench/ starts a disposable Herdr server with isolated XDG and ORCH_ASSIGNMENT_ROOT, opens N panes, and each pane holds a child that `oh agent list` reports as kind pi without running a model.
+- Each child has a real ledger entry, publishes one item with `oh task publish`, and `oh task collect --any --wait` captures each item exactly once.
+- The bench records t_publish (item file mtime) and t_capture (collect envelope) per item and writes results.json.
+- The record Decisions entry "Child simulation is a spike" is updated with the method that worked (stub pi on PATH, direct ledger write, or real cheap-model fallback).
+
+** DONE Detection bench: baseline vs polling comparator
+CLOSED: [2026-11-06 Fri 23:49]
+:PROPERTIES:
+:CUSTOM_ID: 20ac4945-a770-413c-9705-0bfe4370c026
+:CREATED: [2026-11-06 Fri 23:16]
+:BLOCKED-BY: task:a80d9557-4ae7-4875-8459-7472451e3b1a
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 23:16]
+- State "DONE" from "TODO" [2026-11-06 Fri 23:49]
+:END:
+Acceptance criteria:
+- results.json holds publication-to-capture medians per ABAB round (at least five rounds per arm) for `oh task collect --any --wait` with ORCH_POLL_INTERVAL_MS=1000 (baseline) and 250 (comparator), at 1, 3 and 6 children.
+- Process spawns and `agent list` calls per polling interval are counted for each arm through a counting shim ahead of herdr/hc on PATH.
+- Restart recovery: the parent Pi process is replaced mid-round and every published item is captured exactly once; a duplicate capture fails the run.
+- Lost notification: with the push suppressed (busy parent for the whole bound) every item is still captured within the documented bound.
+- The record Validation section gets a dated subsection with the per-round medians and spread.
+
+** DONE Presentation bench: Pi parent, idle and busy arms
+CLOSED: [2026-11-07 Sat 00:13]
+:PROPERTIES:
+:CUSTOM_ID: 039412d5-a8bf-4d85-8d8a-e67530ff0af2
+:CREATED: [2026-11-06 Fri 23:16]
+:BLOCKED-BY: task:a80d9557-4ae7-4875-8459-7472451e3b1a
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 23:16]
+- State "DONE" from "TODO" [2026-11-07 Sat 00:13]
+:END:
+Acceptance criteria:
+- A bench Pi extension under .tmp/comms-bench/ logs, with a wall-clock timestamp and the item task id, when a published item's text enters the parent model context (`message_end` or `input` event; fallback: sentinel found in the session file).
+- Message-to-presentation medians are recorded per ABAB round for an idle parent and for a busy parent (a `bash sleep 30` tool call in flight at publish time), using the existing advisory push path.
+- Duplicate delivery: the same item pushed twice is presented once; the dedup key is the item path.
+- A continued (`oh task continue`) round and a replaced parent session both present only items not yet presented.
+- The record Validation section gets the medians and the observed push outcomes (`shown`, `prompt-failed`, session-mismatch) per round.
+- Child-side decision latency (last tool result before `oh task publish` to the publish call) is read from at least five real child Pi session files, or recorded as unobservable with the reason; the real-ledger publish-to-capture gaps in Validation are cited beside the bench medians.
+
+** DONE Diagnose desktop completion delivery and enforce explicit collection :skill:herdr_orch:
+CLOSED: [2026-11-07 Sat 00:25]
+:PROPERTIES:
+:CUSTOM_ID: f2365984-c97f-4e39-9b86-6c2cc94809a9
+:CREATED: [2026-11-06 Fri 13:16]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 13:16]
+- State "DONE" from "TODO" [2026-11-07 Sat 00:25]
+:END:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-06 Fri 13:15]
+- sender: human
+
+Acceptance criteria:
+- On Herdr desktop (hc adapter) with a Pi parent, a child terminal publication is reproduced and the push outcome is recorded from the publish envelope (`result.parent-push`: shown, skipped by session guard, prompt-failed, or timeout).
+- The gap is classified as delivery (sent and lost), session observation (skipped by design because hc cannot observe the Pi session), or unfollowed guidance (collection not run), with the evidence file linked from the record Validation section.
+- If the classification is session observation, the record Decisions entry "Desktop gap is folded in" is updated and no new workflow rule is added; org-execute guidance is changed only when the classification is unfollowed guidance and the existing rule is shown insufficient.
+
+** DONE Audit catalogue packages against the constraint list
+CLOSED: [2026-11-06 Fri 23:27]
+:PROPERTIES:
+:CUSTOM_ID: 79b6e79d-ddcc-4d9e-a84d-ed01d6cee11c
+:CREATED: [2026-11-06 Fri 23:16]
+:STARTED: [2026-11-06 Fri 23:21]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 23:16]
+- State "STARTED" from "TODO" [2026-11-06 Fri 23:21]
+- State "DONE" from "STARTED" [2026-11-06 Fri 23:27]
+:END:
+Acceptance criteria:
+- One table under design/log/2026-11-06-herdr-orch-comms/package-audit.org: rows are the parent task's design constraints (stable IDs, replay cursors, dedup, stored/presented/answered states, identity checks, bounded queues, quiet vs steering, no authority grant, owner-only storage caveat, portable CLI path, harness adapters), columns are pi-mail, pi-session-mail, pi-agent-comm, pi-messenger, agent-comms.
+- Every cell is marked documented, exercised or unknown; nothing documented is reported as verified unless exercised locally.
+- A closing paragraph states which package parts, if any, are reusable for the mailbox prototype and why the rest are not, including the socket-broker and MCP paper assessment.
+
+** DONE Gate: record measured gap or keep
+CLOSED: [2026-11-07 Sat 00:39]
+:PROPERTIES:
+:CUSTOM_ID: 934b06aa-b2f2-4124-a137-99059e453d42
+:CREATED: [2026-11-06 Fri 23:16]
+:BLOCKED-BY: task:20ac4945-a770-413c-9705-0bfe4370c026
+:BLOCKED-BY+: task:039412d5-a8bf-4d85-8d8a-e67530ff0af2
+:BLOCKED-BY+: task:f2365984-c97f-4e39-9b86-6c2cc94809a9
+:BLOCKED-BY+: task:79b6e79d-ddcc-4d9e-a84d-ed01d6cee11c
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 23:16]
+- State "DONE" from "TODO" [2026-11-07 Sat 00:39]
+:END:
+Acceptance criteria:
+- The record Decisions entry "Decision outcome" states either "keep" with the medians that justify it, or "gap" naming the arm (detection, idle presentation, busy presentation, hc presentation) and the measured delta.
+- On "keep": the mailbox prototype task is set CANCELLED with a one-line reason; on "gap": the prototype task body gains the specific scope the gap justifies (notification mechanism, cursor shape, fallback interval) and nothing more.
+- The desktop classification from the folded-in diagnosis is cited in the entry.
+
+** DONE Delivery prototype: result-directory watcher and non-blocking push
+CLOSED: [2026-11-07 Sat 01:10]
+:PROPERTIES:
+:CUSTOM_ID: bf745060-8f63-4dd7-bac8-47a01d01f457
+:CREATED: [2026-11-06 Fri 23:16]
+:BLOCKED-BY: task:934b06aa-b2f2-4124-a137-99059e453d42
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 23:16]
+- State "DONE" from "TODO" [2026-11-07 Sat 01:10]
+:END:
+Acceptance criteria:
+- A prototype Pi extension under .tmp/comms-bench/ watches the assignment root's `.tmp/herdr-orch/` result directory, scans it at session start, polls it at a low frequency (default 5 s) as fallback, and delivers each new item once with `pi.sendMessage({customType: "herdr-orch-item", ...}, {deliverAs: "steer", triggerTurn: true})`; the dedup key is the item path and the set survives a session reload (persisted beside the session or rebuilt from the ledger's captured items).
+- Delivered text names only the child, task, status, summary line and the `collect` command; the extension refuses or ignores any item content that would read as user authority, delegation or lifecycle permission (it never runs `oh` itself).
+- The child's `publish` returns within 1 s under every parent state: the advisory push is either detached (settle wait and `agent prompt` run in a process that outlives `publish`) or skipped for a Pi parent, as a prototype switch under .tmp/, never a change to tracked `cli.clj`.
+- The presentation bench re-runs ABAB (idle and busy) with the prototype against the current push, and one manual run from a herdr-app Pi parent shows the item delivered with no push; medians and the hc outcome are added to the record Validation section beside the baseline.
+- Crash between item link and watcher delivery, and between delivery and the parent's collect, each recover on the next scan without duplicate delivery.
+- No prototype file is outside .tmp/ and the real ledger is untouched (diff of .tmp/herdr-orch/ledger before and after is empty).
+
+** DONE Decision write-up and closure prune
+CLOSED: [2026-11-07 Sat 01:39]
+:PROPERTIES:
+:CUSTOM_ID: 7ff60d60-b08e-4afc-a0ea-f748ad299895
+:CREATED: [2026-11-06 Fri 23:17]
+:BLOCKED-BY: task:934b06aa-b2f2-4124-a137-99059e453d42
+:BLOCKED-BY+: task:bf745060-8f63-4dd7-bac8-47a01d01f457
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 23:17]
+- State "DONE" from "TODO" [2026-11-07 Sat 01:39]
+:END:
+Acceptance criteria:
+- Record Decisions states keep, adopt or augment with the per-round medians for every measured arm beside it.
+- On augment or adopt, one follow-on TODO task exists in TASKS.org with the chosen mechanism and the contract.md sections it must change; on keep, no follow-on exists.
+- Bench evidence (results.json, extension logs, package-audit.org) is copied to design/log/2026-11-06-herdr-orch-comms/ and linked from Validation; .tmp/comms-bench/ is deleted.
+- Closure prune per org-plan: Plan collapsed, Implementation condensed, acceptance boxes ticked or explicitly not met.
+
+* Implementation
+- Reference prototype in [[file:2026-11-06-herdr-orch-comms/prototype/]]: ~proto-ext.ts~ (watcher, startup scan, 5 s poll, persisted dedup set, steer delivery with the restricted text), ~oh-nb~ (~oh~ with ~notify-parent!~ replaced by a skip, the prototype switch for a non-blocking publish) and ~present-ext.ts~ (bench event log and one-word system prompt). The bench scripts are in [[file:2026-11-06-herdr-orch-comms/bench/]]; the driver resolves ~stub-pi.c~ and the extensions relative to the repository ~.tmp/comms-bench/~ path it was written for, so copy the folder there to rerun.
+- Bench shape worth keeping: a disposable Herdr server with isolated XDG under ~/tmp~, a counting ~herdr~ shim on ~PATH~, stub ~pi~ children spawned by ~oh task start~, a helper forked by the parent's foreground agent, and ~ORCH_ASSIGNMENT_ROOT~ pointed at the disposable tree so the real ledger is never touched.
+
+* Validation
+** Harness spike (2026-11-06)
+macOS, Herdr 0.9.5. ~bb design/log/2026-11-06-herdr-orch-comms/bench/spike-driver.bb 2~ (the bench scripts live under [[file:2026-11-06-herdr-orch-comms/bench/]]; they expect ~stub-pi.c~ and the parent scripts beside the driver) from the repository root: exit 0, ~SPIKE PASS~. Two stub children spawned through ~oh task start~ in 6.5 s and 6.5 s (~prompted~), each published one ~COMPLETE~ item through env-injected identity (publish call 133 ms and 148 ms), and two ~collect --any --wait~ calls captured each task once (98 ms and 129 ms, both ~terminal~). Publication-to-capture for the first item was 260 ms, dominated by the second publish; the detection bench must schedule publications apart. The real ledger contained none of the bench task ids while the current round's entry was present (positive control). Output: [[file:2026-11-06-herdr-orch-comms/bench/spike-results.json]].
+** Package audit (2026-11-06)
+[[file:2026-11-06-herdr-orch-comms/package-audit.org]] compares the five catalogue packages against the constraint list, from their pi.dev pages only; no cell is exercised. pi-session-mail is the closest design match (Maildir claim-by-rename, watcher plus poll, steer/followUp split, pid-plus-start-token liveness) but is Pi-only and keyed by Pi session id. agent-comms is the only cross-harness design and the reference cost of a socket broker. pi-messenger imports orchestration. Reusable parts are patterns, not code.
+** Detection bench (2026-11-06)
+macOS, Herdr 0.9.5, stub parent and stub children (no model), ~bb bench/bench-driver.bb bench/detect-parent.clj <N> BENCH_ROUNDS=5~. The collector (~oh task collect --any --wait~) is already polling when each ~WAITING~ item is published; latency is item mtime to collector return. Five ABAB rounds per arm, one sample per child per round, medians per round in [[file:2026-11-06-herdr-orch-comms/detection-results.txt]].
+
+| N | ~ORCH_POLL_INTERVAL_MS~ 1000 median / p90 | 250 median / p90 | ~herdr~ calls per capture (1000 / 250) |
+|---+---+---+---|
+| 1 | 552 / 625 ms | 149 / 234 ms | 5 / 10 |
+| 3 | 481 / 741 ms | 214 / 276 ms | 5 / 11 |
+| 6 | 695 / 967 ms | 180 / 308 ms | 5 / 11 |
+
+Every per-round median at 1000 ms lies between 200 and 860 ms; at 250 ms between 37 and 276 ms. Concurrency 1 to 6 has no material effect. Each poll tick is one ~agent list~ subprocess of roughly 100-200 ms, which is the floor at 250 ms. Restart recovery: with items published while no collector ran, a fresh process captured each item exactly once at every N, and the following ~collect --any~ captured nothing (its reason is reported as ~timeout~, not ~no-candidates~; noted, not investigated). The push was skipped on every sample (~session-mismatch~, stub parent), so every sample is the pure poll path and the lost-notification case holds by construction. Conclusion: the file pipe plus polling costs under one second; a perceived lag of seconds or more is not the pipe. Halving the interval saves about 0.4 s for twice the subprocess rate.
+** Real-ledger publish-to-capture gaps (2026-11-06)
+~bb bench/wild-gaps.clj~ over the live ledger (~.tmp/herdr-orch/ledger/~, 143 captured items with an existing item file): gap = ledger ~captured-at~ minus item file mtime, which is the parent-side delay in real sessions (pipe plus the parent's decision to collect). Median 11.3 s, p25 4.2 s, p75 38.7 s; 23 items under 2 s, 97 between 2 s and 60 s, 23 over 60 s (several over 15 min, which are ~WAITING~ items captured only when the parent next collected). Output: [[file:2026-11-06-herdr-orch-comms/wild-publish-to-capture.txt]]. Against the detection bench's sub-second pipe, more than 90 % of the real delay is turn-level: the parent is working or has not chosen to collect, and on hc no push is ever sent. The child-side decision latency (work finished to ~publish~) is not observable from the ledger because ~:child-session~ is null for every hc-launched child.
+** Presentation bench (2026-11-07)
+macOS, Herdr 0.9.5, a real Pi parent (~anthropic-1/claude-haiku-4-5~, extension [[file:2026-11-06-herdr-orch-comms/presentation/]] ~present-ext.ts~ in [[file:2026-11-06-herdr-orch-comms/prototype/]]) with stub children; ~bb bench/bench-driver.bb bench/present-parent.clj 0 BENCH_REAL_PI=1 BENCH_ROUNDS=4 BENCH_SLEEP=20~. Latency is item mtime to the ~message_end~ event that puts the item text in the parent's context. "Busy" means a 20 s ~bash sleep~ tool call in flight at publish time. Four ABAB rounds; [[file:2026-11-06-herdr-orch-comms/presentation-results.txt]], raw samples and events under [[file:2026-11-06-herdr-orch-comms/presentation/]].
+
+| arm | mechanism | latency median (min-max) | child's ~publish~ call |
+|---+---+---+---|
+| push-idle | existing advisory ~agent prompt~ on a terminal item | 409 ms (385-413) | 491 ms |
+| watch-idle | extension ~fs.watch~ on the result dir + ~pi.sendMessage(deliverAs: "steer", triggerTurn: true)~ | 7 ms (7-53) | 102 ms |
+| push-busy | existing push; publish waits for the parent to settle | 24.0 s (23.7-25.1) | 24.1 s |
+| watch-busy | watcher + steer | 21.7 s (21.7-22.0) | 128 ms |
+
+Findings. Into an idle parent both paths are sub-second; the watcher is two orders faster but both are negligible against turn time. Into a busy parent neither path can interrupt a running tool call: steer lands after the tool returns (20 s sleep plus the time already elapsed), and the push lands about 2.3 s later still because it waits for the parent to settle, reply, and then accept typed input. The material difference is on the child: the existing push blocks the child's ~publish~ for the whole settle wait (24 s here, bounded only by ~--notify-timeout~), while the watcher returns in about 120 ms. The push was ~sent~ on every sample because the TUI observes the Pi session; on hc it is skipped by design.
+
+Child-side decision latency, read from 153 real child Pi session files that contain a ~task publish~ tool call ([[file:2026-11-06-herdr-orch-comms/child-decision.txt]], ~bench/child-decision.clj~): gap from the child's last tool result to the assistant message that calls ~publish~ has median 9.7 s, p75 15.9 s. That is one model turn of thinking and composing the envelope, and it precedes every number above.
+
+Composite picture for a real round: child decision about 10 s, pipe under 1 s, parent presentation under 1 s when idle, otherwise the remainder of the parent's current tool call plus the parent's own decision to collect (median 11 s, p75 39 s in the live ledger). The pipe is the smallest term.
+** Desktop (hc) delivery classification (2026-11-07)
+Classification: session observation, by design. Evidence from this live herdr-app session rather than a disposable reproduction: the planner round's ledger entry records ~parent-pane t3~ and a ~parent-session~ path; ~oh agent get t3~ at the same time returns ~agent pi, agent_status done, agent_session null~; ~push-decision~ in ~skills/herdr-orch/scripts/src/herdr_orch/cli.clj~ tests session equality first, so the outcome is ~{"push":"skipped","reason":"session-mismatch"}~, which is what that round's own ~COMPLETE~ publication reported. On hc a Pi parent is therefore never pushed for any child; delivery depends entirely on the parent choosing to collect. The push outcome is not persisted on the ledger entry, so it cannot be audited after the fact; the contract already states the limitation ('Parent push'). No workflow rule is missing: the org-execute guidance to collect explicitly is the correct response to a mechanism that cannot push, and the fix belongs in delivery, not in guidance.
+** Delivery prototype re-run (2026-11-07)
+Prototype: [[file:2026-11-06-herdr-orch-comms/prototype/proto-ext.ts]] (result-directory watcher: startup scan, ~fs.watch~, 5 s poll fallback, item path as dedup key, delivered set persisted as ~<session file>.herdr-orch-delivered.json~, delivery by ~pi.sendMessage(deliverAs: "steer", triggerTurn: true)~ with only child, task, status and summary line in the text) and [[file:2026-11-06-herdr-orch-comms/prototype/oh-nb]] (~oh~ with ~notify-parent!~ replaced by a skip, so ~publish~ never waits for the parent). Same bench as the presentation run, four ABAB rounds, 20 s busy tool; raw samples and events under [[file:2026-11-06-herdr-orch-comms/prototype/]]. The ~watch-*~ arms here are the prototype (~WAITING~ items through ~oh-nb~); the ~push-*~ arms keep the real push on ~COMPLETE~ items, with the prototype also delivering those.
+
+| arm | latency median (min-max) | child's ~publish~ call |
+|---+---+---|
+| proto-idle | 8 ms (6-54) | 98 ms |
+| proto-busy | 27.4 s (21.6-35.1) | 131 ms |
+| push-idle, same item also delivered by the prototype | push 3.2 s (2.5-5.0); prototype 59 ms | 488 ms |
+| push-busy, same item also delivered by the prototype | push 25.3 s (23.7-50.9); prototype 21.8 s (19.6-29.8) | 25.4 s (23.8-33.0) |
+
+Findings. The prototype delivers into an idle parent in under 60 ms and returns the child's ~publish~ in about 100 ms in every parent state; the busy-arm latency is the remainder of the parent's tool call, as before. Double delivery costs a turn: with both mechanisms active the typed push queued behind the prototype's steer turn, which is why push-idle rose from 0.4 s to about 3 s; a shipped version drops the push for a parent that runs the watcher. Dedup: 16 items, 16 deliveries, no duplicate path. Reload: resuming the same session file with the 16 items present and a 17th control item added delivered only the control (~known: 16~ at start, one ~proto-fire~, set persisted at 17). Print-mode wart: a startup-scan steer collides with the ~-p~ prompt ("Agent is already processing"), harmless in an interactive session. Outstanding for this task: one manual check from a herdr-app Pi parent, which needs a pane in the live app.
+** herdr-app (hc) prototype check (2026-11-07)
+A Pi parent (~anthropic-1/claude-haiku-4-5~, ~proto-ext.ts~ and ~present-ext.ts~) was started in a disposable herdr-app terminal with ~hc run --bg~ (~t1p~, child of this session's terminal). ~oh agent get t1p~ reported ~agent pi, idle, agent_session null~, the same hc observation limit as the live orchestrator pane. A hand-driven ~oh task publish --status COMPLETE~ (no ledger entry, so no push by contract) wrote the item at mtime 1794013788; the prototype fired at +412 ms (inside the 5 s poll interval, so ~fs.watch~ reported it; the watcher sees writes from any process), the ~herdr-orch-item~ custom message was in context at +425 ms and the model replied ~ack~ 4.8 s later. Evidence: [[file:2026-11-06-herdr-orch-comms/prototype/hc-check/]]. The terminal was killed and removed afterwards; nothing else in the app was touched.

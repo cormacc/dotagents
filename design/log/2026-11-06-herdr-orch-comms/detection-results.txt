@@ -1,0 +1,39 @@
+N=3  spawn-ms=(4338 6698 4399)  recovery exactly-once=true final=timeout
+  round  0 arm 1000  median   658 ms  min  292 max  915  herdr-calls/sample median 5  mismatches 0
+  round  1 arm  250  median   276 ms  min  241 max  327  herdr-calls/sample median 10  mismatches 0
+  round  2 arm 1000  median   325 ms  min  208 max  807  herdr-calls/sample median 5  mismatches 0
+  round  3 arm  250  median   215 ms  min  112 max  269  herdr-calls/sample median 11  mismatches 0
+  round  4 arm 1000  median   481 ms  min  224 max  623  herdr-calls/sample median 5  mismatches 0
+  round  5 arm  250  median   156 ms  min  136 max  214  herdr-calls/sample median 11  mismatches 0
+  round  6 arm 1000  median   701 ms  min  448 max  705  herdr-calls/sample median 5  mismatches 0
+  round  7 arm  250  median   215 ms  min   83 max  329  herdr-calls/sample median 12  mismatches 0
+  round  8 arm 1000  median   369 ms  min  359 max  741  herdr-calls/sample median 5  mismatches 0
+  round  9 arm  250  median   153 ms  min   50 max  209  herdr-calls/sample median 10  mismatches 0
+  arm 1000 overall: 15 samples, median 481 ms, p90 741 ms, median herdr calls 5
+  arm  250 overall: 15 samples, median 214 ms, p90 276 ms, median herdr calls 11
+N=1  spawn-ms=(4370)  recovery exactly-once=true final=timeout
+  round  0 arm 1000  median   552 ms  min  552 max  552  herdr-calls/sample median 5  mismatches 0
+  round  1 arm  250  median    37 ms  min   37 max   37  herdr-calls/sample median 10  mismatches 0
+  round  2 arm 1000  median    37 ms  min   37 max   37  herdr-calls/sample median 5  mismatches 0
+  round  3 arm  250  median   149 ms  min  149 max  149  herdr-calls/sample median 12  mismatches 0
+  round  4 arm 1000  median   625 ms  min  625 max  625  herdr-calls/sample median 6  mismatches 0
+  round  5 arm  250  median   249 ms  min  249 max  249  herdr-calls/sample median 10  mismatches 0
+  round  6 arm 1000  median   637 ms  min  637 max  637  herdr-calls/sample median 5  mismatches 0
+  round  7 arm  250  median   234 ms  min  234 max  234  herdr-calls/sample median 11  mismatches 0
+  round  8 arm 1000  median   201 ms  min  201 max  201  herdr-calls/sample median 5  mismatches 0
+  round  9 arm  250  median   130 ms  min  130 max  130  herdr-calls/sample median 8  mismatches 0
+  arm 1000 overall: 5 samples, median 552 ms, p90 625 ms, median herdr calls 5
+  arm  250 overall: 5 samples, median 149 ms, p90 234 ms, median herdr calls 10
+N=6  spawn-ms=(4354 4386 4402 4415 4416 4411)  recovery exactly-once=true final=timeout
+  round  0 arm 1000  median   778 ms  min   93 max 1007  herdr-calls/sample median 5.0  mismatches 0
+  round  1 arm  250  median   180 ms  min   96 max  323  herdr-calls/sample median 10.5  mismatches 0
+  round  2 arm 1000  median   861 ms  min  624 max 1063  herdr-calls/sample median 6.0  mismatches 0
+  round  3 arm  250  median   139 ms  min   40 max  308  herdr-calls/sample median 10.0  mismatches 0
+  round  4 arm 1000  median   526 ms  min   97 max  973  herdr-calls/sample median 5.0  mismatches 0
+  round  5 arm  250  median   229 ms  min  100 max  346  herdr-calls/sample median 10.0  mismatches 0
+  round  6 arm 1000  median   631 ms  min  368 max  967  herdr-calls/sample median 5.5  mismatches 0
+  round  7 arm  250  median   216 ms  min   92 max  266  herdr-calls/sample median 11.0  mismatches 0
+  round  8 arm 1000  median   274 ms  min   50 max  865  herdr-calls/sample median 5.0  mismatches 0
+  round  9 arm  250  median   177 ms  min   63 max  230  herdr-calls/sample median 11.0  mismatches 0
+  arm 1000 overall: 30 samples, median 695 ms, p90 967 ms, median herdr calls 5.0
+  arm  250 overall: 30 samples, median 180 ms, p90 308 ms, median herdr calls 11.0

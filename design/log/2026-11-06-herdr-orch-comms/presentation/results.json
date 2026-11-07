@@ -1,0 +1,241 @@
+{
+  "rounds" : 4,
+  "sleep-s" : 20,
+  "samples" : [ {
+    "t-publish" : 1794010033749,
+    "push" : {
+      "push" : "sent",
+      "parent-pane" : "w1:p1"
+    },
+    "arm" : "push-idle",
+    "task" : "b55b6825-ace3-4523-a119-3eeb4479da0a",
+    "item" : 1,
+    "round" : 0,
+    "t-input" : 1794010034083,
+    "publish-call-ms" : 491,
+    "latency" : 413,
+    "t-publish-returned" : 1794010034088,
+    "t-presented" : 1794010034162,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010043055,
+    "push" : null,
+    "arm" : "watch-idle",
+    "task" : "587c2e2b-43d0-4512-9ba4-22ee2af43353",
+    "item" : 1,
+    "round" : 0,
+    "t-input" : null,
+    "publish-call-ms" : 100,
+    "latency" : 53,
+    "t-publish-returned" : 1794010043065,
+    "t-presented" : 1794010043108,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010054588,
+    "push" : {
+      "push" : "sent",
+      "parent-pane" : "w1:p1",
+      "waited" : true
+    },
+    "arm" : "push-busy",
+    "task" : "8205a383-4fbd-4c8d-a3c1-4735ca33dbd1",
+    "item" : 1,
+    "round" : 0,
+    "t-input" : 1794010079634,
+    "publish-call-ms" : 25217,
+    "latency" : 25106,
+    "t-publish-returned" : 1794010079638,
+    "t-presented" : 1794010079694,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010086286,
+    "push" : null,
+    "arm" : "watch-busy",
+    "task" : "587c2e2b-43d0-4512-9ba4-22ee2af43353",
+    "item" : 2,
+    "round" : 0,
+    "t-input" : null,
+    "publish-call-ms" : 122,
+    "latency" : 21730,
+    "t-publish-returned" : 1794010086299,
+    "t-presented" : 1794010108016,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010119154,
+    "push" : {
+      "push" : "sent",
+      "parent-pane" : "w1:p1"
+    },
+    "arm" : "push-idle",
+    "task" : "79e69be0-1800-4b27-ae15-e81daa2101da",
+    "item" : 1,
+    "round" : 1,
+    "t-input" : 1794010119483,
+    "publish-call-ms" : 481,
+    "latency" : 385,
+    "t-publish-returned" : 1794010119487,
+    "t-presented" : 1794010119539,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010127007,
+    "push" : null,
+    "arm" : "watch-idle",
+    "task" : "587c2e2b-43d0-4512-9ba4-22ee2af43353",
+    "item" : 3,
+    "round" : 1,
+    "t-input" : null,
+    "publish-call-ms" : 102,
+    "latency" : 7,
+    "t-publish-returned" : 1794010127018,
+    "t-presented" : 1794010127014,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010132987,
+    "push" : {
+      "push" : "sent",
+      "parent-pane" : "w1:p1",
+      "waited" : true
+    },
+    "arm" : "push-busy",
+    "task" : "f8a8e52d-280a-4877-88dc-eb3da9fa85d0",
+    "item" : 1,
+    "round" : 1,
+    "t-input" : 1794010156564,
+    "publish-call-ms" : 23765,
+    "latency" : 23654,
+    "t-publish-returned" : 1794010156571,
+    "t-presented" : 1794010156641,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010163304,
+    "push" : null,
+    "arm" : "watch-busy",
+    "task" : "587c2e2b-43d0-4512-9ba4-22ee2af43353",
+    "item" : 4,
+    "round" : 1,
+    "t-input" : null,
+    "publish-call-ms" : 135,
+    "latency" : 21713,
+    "t-publish-returned" : 1794010163316,
+    "t-presented" : 1794010185017,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010196480,
+    "push" : {
+      "push" : "sent",
+      "parent-pane" : "w1:p1"
+    },
+    "arm" : "push-idle",
+    "task" : "e1557344-cea3-4517-a00d-13b1f19c58e7",
+    "item" : 1,
+    "round" : 2,
+    "t-input" : 1794010196812,
+    "publish-call-ms" : 491,
+    "latency" : 409,
+    "t-publish-returned" : 1794010196819,
+    "t-presented" : 1794010196889,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010203676,
+    "push" : null,
+    "arm" : "watch-idle",
+    "task" : "587c2e2b-43d0-4512-9ba4-22ee2af43353",
+    "item" : 5,
+    "round" : 2,
+    "t-input" : null,
+    "publish-call-ms" : 101,
+    "latency" : 7,
+    "t-publish-returned" : 1794010203687,
+    "t-presented" : 1794010203683,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010209639,
+    "push" : {
+      "push" : "sent",
+      "parent-pane" : "w1:p1",
+      "waited" : true
+    },
+    "arm" : "push-busy",
+    "task" : "71783254-9c38-4783-b73d-f8f4702c807d",
+    "item" : 1,
+    "round" : 2,
+    "t-input" : 1794010233962,
+    "publish-call-ms" : 24505,
+    "latency" : 24400,
+    "t-publish-returned" : 1794010233968,
+    "t-presented" : 1794010234039,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010240170,
+    "push" : null,
+    "arm" : "watch-busy",
+    "task" : "587c2e2b-43d0-4512-9ba4-22ee2af43353",
+    "item" : 6,
+    "round" : 2,
+    "t-input" : null,
+    "publish-call-ms" : 118,
+    "latency" : 22032,
+    "t-publish-returned" : 1794010240181,
+    "t-presented" : 1794010262202,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010274240,
+    "push" : {
+      "push" : "sent",
+      "parent-pane" : "w1:p1"
+    },
+    "arm" : "push-idle",
+    "task" : "8a0344fd-c58c-4c91-b47a-3551c9f9776f",
+    "item" : 1,
+    "round" : 3,
+    "t-input" : 1794010274571,
+    "publish-call-ms" : 493,
+    "latency" : 408,
+    "t-publish-returned" : 1794010274578,
+    "t-presented" : 1794010274648,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010281476,
+    "push" : null,
+    "arm" : "watch-idle",
+    "task" : "587c2e2b-43d0-4512-9ba4-22ee2af43353",
+    "item" : 7,
+    "round" : 3,
+    "t-input" : null,
+    "publish-call-ms" : 103,
+    "latency" : 7,
+    "t-publish-returned" : 1794010281487,
+    "t-presented" : 1794010281483,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010287974,
+    "push" : {
+      "push" : "sent",
+      "parent-pane" : "w1:p1",
+      "waited" : true
+    },
+    "arm" : "push-busy",
+    "task" : "85c759c3-c358-4f9a-879d-622b90e869c7",
+    "item" : 1,
+    "round" : 3,
+    "t-input" : 1794010311549,
+    "publish-call-ms" : 23764,
+    "latency" : 23657,
+    "t-publish-returned" : 1794010311558,
+    "t-presented" : 1794010311631,
+    "t-fire" : null
+  }, {
+    "t-publish" : 1794010317788,
+    "push" : null,
+    "arm" : "watch-busy",
+    "task" : "587c2e2b-43d0-4512-9ba4-22ee2af43353",
+    "item" : 8,
+    "round" : 3,
+    "t-input" : null,
+    "publish-call-ms" : 133,
+    "latency" : 21722,
+    "t-publish-returned" : 1794010317799,
+    "t-presented" : 1794010339510,
+    "t-fire" : null
+  } ]
+}

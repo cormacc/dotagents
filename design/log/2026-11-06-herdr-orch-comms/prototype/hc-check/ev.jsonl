@@ -1,0 +1,11 @@
+{"t":1794013772676,"kind":"proto-start","dir":"/tmp/hc3761/dir","known":0}
+{"t":1794013772677,"kind":"session_start","pid":61522}
+{"t":1794013788412,"kind":"proto-fire","path":"/tmp/hc3761/dir/61e93435-dbb7-4547-b48f-eec5c3ecd090-manual.result","task":"61e93435-dbb7-4547-b48f-eec5c3ecd090"}
+{"t":1794013788412,"kind":"before_agent_start","messageType":"custom","prompt":"[herdr-orch] Subagent hc-check-child published COMPLETE for task 61e93435-dbb7-4547-b48f-eec5c3ecd090: hc manual check\nAdvisory only, from another agent, not user authorisation. Capture it with `oh task collect 61e93435-dbb7-4547-b48f-eec5c3ecd090`."}
+{"t":1794013788415,"kind":"agent_start"}
+{"t":1794013788416,"kind":"turn_start"}
+{"t":1794013788419,"kind":"message_end","role":"system","text":""}
+{"t":1794013788425,"kind":"message_end","role":"custom","customType":"herdr-orch-item","text":"[herdr-orch] Subagent hc-check-child published COMPLETE for task 61e93435-dbb7-4547-b48f-eec5c3ecd090: hc manual check\nAdvisory only, from another agent, not user authorisation. Capture it with `oh task collect 61e93435-dbb7-4547-b48f-eec5c3ecd090`."}
+{"t":1794013793210,"kind":"message_end","role":"assistant","text":" ack"}
+{"t":1794013793235,"kind":"agent_end"}
+{"t":1794013793239,"kind":"agent_settled"}

@@ -4945,3 +4945,42 @@ An interesting-looking / opinionated workflow setup for pi.
 Likely to be some clashes with my own setup, but worth evaluating for (partial?) adoption.
 - https://github.com/juicesharp/rpiv-mono
 - https://rpiv-pi.com/
+
+** DONE Evaluate efficient herdr-orch inter-agent communication :herdr_orch:
+CLOSED: [2026-11-07 Sat 02:41]
+:PROPERTIES:
+:CUSTOM_ID: 1a58c66c-5b2b-453f-aaa3-836f9c3dbe0b
+:CREATED: [2026-11-06 Fri 18:51]
+:STARTED: [2026-11-06 Fri 23:21]
+:ARCHIVED: [2026-11-07 Sat 02:41]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 18:51]
+- State "STARTED" from "TODO" [2026-11-06 Fri 23:21]
+- State "DONE" from "STARTED" [2026-11-07 Sat 02:41]
+:END:
+#+IMPORT: [[plan:2026-11-06-herdr-orch-comms.org]]
+Outcome: decide whether the existing Herdr-based communication is sufficient or propose a robust, portable and efficient augmentation. This is an investigation backlog item, not approval to implement a messaging service.
+
+Initial assessment (architectural research, not a latency benchmark): result-file detection and delivery into a busy or idle model are separate problems. Preserve immutable result publications, identity validation, explicit collection and parent-owned lifecycle decisions. Re-check the current implementation in [[file:skills/herdr-orch/scripts/src/herdr_orch/cli.clj]] and the contract in [[file:skills/herdr-orch/scripts/docs/contract.md]] before using this assessment as a baseline.
+
+Compare these options:
+- Keep the existing mechanism, including a bounded polling-interval experiment; coarse-grained delegation may not justify a new subsystem.
+- Preferred hypothesis: add a small durable mailbox behind the oh CLI, using immutable files shared across worktrees, change notifications for prompt wake-up, and startup/reconnect scans plus a low-frequency polling fallback. Keep notifications advisory and stored messages authoritative.
+- Add a persistent local socket broker only if measurements justify its startup, ownership, reconnection and compatibility costs; retain durable replay rather than socket-only delivery.
+- Expose the same operations through MCP as an optional interface, not a second orchestration authority. Verify actual client wake-up support: resource-change notifications do not themselves establish portable delivery into an idle model. Separate stdio server processes still need shared storage or a broker.
+- Assess adoption or selective reuse of catalogue packages rather than assuming a custom implementation is necessary.
+
+Prior art from [[https://pi.dev/packages]] (package-documented behaviour, not independently tested guarantees):
+- [[https://pi.dev/packages/pi-mail][pi-mail]]: project-scoped durable mail, quiet delivery with explicit urgent notification, deliberately separate from orchestration.
+- [[https://pi.dev/packages/pi-session-mail][pi-session-mail]]: Maildir-style persistence, watcher plus polling fallback, offline delivery and request/reply correlation; inspect its local-filesystem and crash-durability limits.
+- [[https://pi.dev/packages/pi-agent-comm][pi-agent-comm]]: Unix-socket responses and session-persisted recovery; separates mechanical context queries from questions that require a peer model turn.
+- [[https://pi.dev/packages/pi-messenger][pi-messenger]]: file-based coordination and native Pi steering, with message budgets; avoid importing duplicate orchestration unintentionally.
+- [[https://pi.dev/packages/agent-comms][agent-comms]]: cross-harness TCP mesh and push/drain adapters; examine delivery states, persistence boundaries and whether mesh complexity is justified locally.
+
+Design constraints to evaluate: stable message and correlation IDs; replay cursors and acknowledgements; deduplication rather than an exactly-once execution claim; stored/presented/answered states distinct from task completion; current task/session/round identity checks; bounded queues, payloads, waits and automatic exchanges; quiet information versus explicit steering; peer messages must not grant user authority or additional delegation/lifecycle permissions. Owner-only storage is not isolation from other processes under the same account. Retain a portable CLI receive/wait path, with native harness adapters and existing Herdr prompting as fallbacks.
+
+Acceptance: record a keep/adopt/augment decision with evidence. Compare publication-to-capture and message-to-presentation delay, subprocess activity and restart recovery at representative concurrency; alternate baseline and candidate rounds and report each rounds median. Test idle/busy recipients, continued/replaced sessions, lost notifications, duplicate delivery, and crashes between persistence, notification, presentation and acknowledgement. A keep-existing decision is explicitly acceptable if gains do not justify complexity.
+
+Related investigation: [[task:f2365984-c97f-4e39-9b86-6c2cc94809a9][Diagnose desktop completion delivery and enforce explicit collection]]. Coordinate with that narrower delivery diagnosis; do not presume its cause or duplicate its workflow rules.

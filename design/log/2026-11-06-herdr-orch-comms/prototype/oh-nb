@@ -1,0 +1,5 @@
+#!/bin/sh
+# Prototype switch: `oh` with the advisory parent push disabled (watcher delivers instead).
+repo_root="$(cd -P "$(dirname "$0")/../.." && pwd)"
+export HERDR_ORCH_BIN="$repo_root/skills/herdr-orch/scripts/oh"
+exec bb --config "$repo_root/bb.edn" --deps-root "$repo_root" -e "(require 'herdr-orch.cli) (alter-var-root #'herdr-orch.cli/notify-parent! (constantly (fn [_ _] {:push \"skipped\" :reason \"proto-watcher\"}))) (apply herdr-orch.cli/-main *command-line-args*)" -- "$@"

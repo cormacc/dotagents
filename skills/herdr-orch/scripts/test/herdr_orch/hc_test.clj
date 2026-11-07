@@ -142,7 +142,10 @@
     (is (= 2 (count (:prompts (get (state fixture) (:pane-id saved))))))))
 
 (deftest hc-pi-parent-publication-skips-unobservable-session-and-still-collects
-  (doseq [status ["idle" "working" "blocked" "unknown"]]
+  ;; A Pi parent is left to its extension watcher before the session gate is even reached;
+  ;; a non-Pi parent on hc still hits the unobservable session and is skipped for that.
+  (doseq [[app expected-reason] [["pi" "watcher"] ["claude" "session-mismatch"]]
+          status ["idle" "working" "blocked" "unknown"]]
     (let [{:keys [env hc-log] :as fixture} (hc-env {})
           launched (start! fixture) saved (entry fixture (:task launched))
           child-env (merge env (get-in (state fixture) [(:pane-id saved) :round-env])
@@ -152,15 +155,17 @@
       ;; Save the root terminal as observed by a different publishing child.
       (change! fixture assoc "t1" {:address "t1" :pid 222 :created_ms 1000 :state "live"
                                    :labels {:herdr.space "space-parent" :herdr.tab "tab-parent"}
-                                   :status {:app "pi" :state status}})
+                                   :status {:app app :state status}})
       (let [published (cli/call! child-env "task" "publish" "--status" "COMPLETE" "--summary" "published with no push")]
         (is (zero? (:exit published)) (:out published))
         (is (= "COMPLETE" (get-in (cli/result published) [:result :status])))
-        (is (= "session-mismatch" (get-in (cli/result published) [:result :parent-push :reason]))))
+        (is (= expected-reason (get-in (cli/result published) [:result :parent-push :reason])) (str app " " status))
+        (is (= expected-reason (:reason (json/parse-string (slurp (str (:result saved) ".push.json")) true))) (str app " " status)))
       (is (not-any? #(= "send" (first %)) (cli/calls hc-log)))
-      ;; Even a stale inherited path equal to the ledger cannot attest another terminal.
-      (let [observed (probe (assoc child-env "PI_SESSION_FILE" (:parent-session saved)) "status" "agent" "t1")]
-        (is (nil? (get-in (cli/result observed) [:result :agent_session]))))
+      ;; Even a stale inherited path equal to the ledger cannot attest another terminal's Pi.
+      (when (= app "pi")
+        (let [observed (probe (assoc child-env "PI_SESSION_FILE" (:parent-session saved)) "status" "agent" "t1")]
+          (is (nil? (get-in (cli/result observed) [:result :agent_session])))))
       (is (= "COMPLETE" (get-in (cli/result (cli/call! env "task" "collect" (:task saved))) [:result :status]))))))
 
 (deftest hc-failed-start-cleans-only-the-new-terminal

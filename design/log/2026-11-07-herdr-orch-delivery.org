@@ -1,0 +1,162 @@
+#+TITLE: Implement herdr-orch delivery: Pi watcher extension and non-blocking publish push
+#+DATE: 2026-11-07 Sat
+#+PARENT: [[task:486df916-c1f0-4ab8-ab34-775c1d92d503][Implement herdr-orch delivery: Pi watcher extension and non-blocking publish push]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+#+SPEC: [[proj:skills/org-execute/SKILL.md]]
+
+* Intent
+Implement the delivery augmentation decided in [[file:2026-11-06-herdr-orch-comms.org]]: a herdr-orch Pi extension watcher that steers each published result item into the orchestrating session once, on terminal Herdr and herdr-app alike, and an ~oh task publish~ that never blocks the child on the parent's settle wait. The result-item pipe, sealing and explicit ~collect~ stay as they are.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+Design and evidence are in the investigation record's Decisions ("Augment delivery, keep the pipe" and "Delivery augmentation, the shape the follow-on implements") and Validation; this record carries only what implementation adds.
+
+** Scope
+*** In scope
+- ~pi/extensions/herdr-orch/~: a ~delivery.ts~ module with its ~tsx~ test, wired from ~index.ts~ and ~test.sh~.
+- ~skills/herdr-orch/scripts/src/herdr_orch/cli.clj~: ~push-decision~, ~notify-parent!~, the detached push process, ~<item>.push.json~, and ~collect~ reporting; fixtures in ~cli_test.clj~ and ~hc_test.clj~.
+- Contracts: ~contract.md~ 'Parent push' and 'Ledger and completion', the herdr-orch skill and extension README, the org-execute collection wording.
+- Validation with the investigation bench and one herdr-app check.
+*** Out of scope
+- Item format, sealing, ~collect~ semantics, the WAITING and blocking-policy push rules, the 1000 ms poll.
+- Delivery for non-Pi parents beyond detaching the existing push; a mailbox store; broker or MCP transports.
+- Any change to the parent's decision to collect (prompt discipline is org-execute's).
+
+** Acceptance
+*** Core functionality
+- [X] An orchestrator Pi session (~HERDR_ENV=1~ or ~HC_TERMINAL_ID~, resolvable assignment root) receives each new result item once as a ~herdr-orch-item~ steer; a non-orchestrator session starts no watcher.
+- [X] Delivery works without Herdr observing the session: a herdr-app Pi parent receives the item although ~oh agent get~ reports ~agent_session null~.
+- [X] The delivered text contains only child, task, status, first summary line, the collect instruction and the advisory line.
+- [X] ~publish~ returns within 1 s on a busy parent for every parent kind.
+- [X] A Pi parent is not pushed (~parent-push: skipped, watcher~); a non-Pi parent's push outcome is persisted in ~<item>.push.json~ and reported by ~collect~.
+- [X] ~bash pi/extensions/herdr-orch/test.sh~ and ~bb test-clojure~ pass; the contracts describe the shipped behaviour. (Both suites carry pre-existing, environment-dependent failures on this host, identical at the baseline commit: ~private-browser.test.ts~ and ~recovery-integration.test.ts~ in the extension suite, and ~routing-filters-candidates-by-the-resolved-kind~, ~mechanical-cli-groups-dispatch-to-herdr~ and ~poke-holds-child-lock-through-final-check-prompt-and-update~ in ~cli-test~ when run from a shell under herdr-app. Every other test passes, including the new ones.)
+*** Edge cases
+- [X] A session reload re-delivers nothing already in the persisted set.
+- [X] A partially written item is delivered once, after it parses.
+- [X] An item whose ledger entry names another parent session is not delivered to this one.
+- [X] A missing or unreadable result directory disables the watcher without an error toast every poll.
+- [X] The detached push process survives ~publish~ exiting and writes its outcome even when the parent never settles (timeout recorded).
+*** Anti-criteria
+- [X] Must not: deliver FINDINGS, NEXT, PROCESS or artifact paths through the steer.
+- [X] Must not: run ~oh~, capture, close or continue from the extension.
+- [X] Must not: change item sealing, capture, or the result stream layout beyond the sibling ~.push.json~ file.
+
+** Decisions
+- Watcher lives in the existing extension :: ~pi/extensions/herdr-orch/~ already carries the caller gate and the ~herdr_*~ tools; a separate package would duplicate gating. Rejected: a standalone extension, a Herdr plugin (cannot reach a herdr-app session).
+- Parent kind from the publish-time probe :: ~notify-parent!~ already calls ~agent get~ on the parent pane and receives its ~:agent~ kind, so the Pi skip needs no ledger field. Rejected: recording parent kind at spawn (a ledger migration for one branch).
+- Push outcome as a sibling file :: ~<item>.push.json~ beside the immutable item, written only by the detached process, read by ~collect~. Rejected: a ledger field (the detached process would race the unserialised ~ledger/update!~ window the contract already accepts as a residual).
+- First start must be quiet :: The result directory holds every past item (219 on this checkout), and the first session with the watcher has an empty delivered set. The ledger entry filters them: another parent's round, or an item already carrying ~captured-at~ for this session, is skipped and not recorded. A later uncaptured item of a captured round is still delivered. Rejected: seeding the set with everything present at first start (would lose an item published while the session was down).
+- Dedup key is the item path, persisted beside the session file :: matches the prototype; the set is small (one line per item) and dies with the session file. Rejected: a cursor on mtime (fails on identical timestamps and on replayed directories).
+
+** Shipped
+- ADDED ~pi/extensions/herdr-orch/delivery.ts~ and ~delivery.test.ts~; ~index.ts~ registers it; ~test.sh~ runs the suite.
+- MODIFIED ~skills/herdr-orch/scripts/src/herdr_orch/cli.clj~: ~push-decision~ Pi skip, ~notify-parent!~ split into the probe-and-detach front and ~notify-parent-now!~, ~oh task notify-detached --spec~, ~<item>.push.json~ written by both halves, ~capture!~ reports it as ~push~.
+- MODIFIED ~skills/herdr-orch/scripts/docs/contract.md~ 'Parent push' (decision order, detached process, outcome file) and new 'Delivery watcher'; 'Ledger and completion' names the sibling file.
+- MODIFIED ~skills/herdr-orch/SKILL.md~ cardinality note, ~skills/org-execute/SKILL.md~ collect step, ~pi/extensions/herdr-orch/README.md~ new 'Delivery watcher' section.
+- MODIFIED fixtures: ~fake-herdr~ honours ~FAKE_PARENT_AGENT~ on the settle wait; ~cli_test.clj~ push section rewritten for the detached outcome file (new ~a-pi-parent-is-never-pushed-because-the-watcher-delivers~, ~collect-reports-the-persisted-push-outcome~); ~hc_test.clj~ covers Pi and non-Pi parents on hc.
+
+** Risks
+- ~fs.watch~ on macOS can miss or coalesce events :: the 5 s poll is the authority; the watcher only shortens latency. Not observed in the bench or the hc check.
+- Mixed versions :: a parent with the watcher and a child with an old ~oh~ still gets the push and one duplicate turn until both sides update.
+- A non-Pi parent's detached push outlives ~publish~ :: its outcome file is the only trace; ~collect~ reports it, and a lost process leaves the ~publish~-written decision in place.
+
+* Plan
+** DONE Add the delivery watcher module to the herdr-orch Pi extension
+CLOSED: [2026-11-07 Sat 02:27]
+:PROPERTIES:
+:CUSTOM_ID: 316db5a6-93ae-485c-8165-ef22398d4ae4
+:CREATED: [2026-11-07 Sat 02:20]
+:STARTED: [2026-11-07 Sat 02:22]
+:END:
+:LOGBOOK:
+- Created [2026-11-07 Sat 02:20]
+- State "STARTED" from "TODO" [2026-11-07 Sat 02:22]
+- State "DONE" from "STARTED" [2026-11-07 Sat 02:27]
+:END:
+Acceptance criteria:
+- pi/extensions/herdr-orch/delivery.ts exports a start function that index.ts calls from session_start; it returns without starting a watcher unless HERDR_ENV=1 or HC_TERMINAL_ID is set and the assignment root resolves (ORCH_ASSIGNMENT_ROOT, else `git rev-parse --show-toplevel` from ctx.cwd).
+- At start it loads <session-file>.herdr-orch-delivered.json, scans <assignment-root>/.tmp/herdr-orch/ for *.result and *.result.N, starts fs.watch, and polls every 5 s; a file whose envelope does not parse yet is retried by the next scan and never added to the set.
+- A new item is added to the set and persisted before pi.sendMessage({customType: "herdr-orch-item", display: true}, {deliverAs: "steer", triggerTurn: true}); the content is exactly: child, task, status, first SUMMARY line, the `oh task collect <task>` instruction and the advisory line.
+- An item whose ledger entry (<assignment-root>/.tmp/herdr-orch/ledger/<task>.json) records a :parent-session other than ctx.sessionManager.getSessionFile() is skipped and not added to the set; an item without a ledger entry is delivered once.
+- delivery.test.ts (run by test.sh through $TSX) covers: gating off and on, startup scan, watch and poll delivery, dedup across a simulated reload, partial file then completion, foreign parent session skipped, text composition excluding FINDINGS/NEXT/PROCESS/ARTIFACTS, and a positive control that a complete item is delivered.
+
+** DONE Make the advisory push non-blocking in oh publish
+CLOSED: [2026-11-07 Sat 02:34]
+:PROPERTIES:
+:CUSTOM_ID: 5249edc3-c8f6-4273-ab18-025d45e914ea
+:CREATED: [2026-11-07 Sat 02:20]
+:STARTED: [2026-11-07 Sat 02:27]
+:END:
+:LOGBOOK:
+- Created [2026-11-07 Sat 02:20]
+- State "STARTED" from "TODO" [2026-11-07 Sat 02:27]
+- State "DONE" from "STARTED" [2026-11-07 Sat 02:34]
+:END:
+Acceptance criteria:
+- push-decision returns {:push "skipped" :reason "watcher"} when the probed parent agent kind is pi, before the session comparison; the publish envelope reports it under parent-push.
+- For any other parent kind the settle wait and `agent prompt` run in a detached process (setsid on Linux, a plain detached bb process on macOS, stdin /dev/null) that outlives publish; publish returns {:push "detached" :parent-pane ...} within 1 s regardless of parent state.
+- The detached process writes <item>.push.json with the final outcome (sent, skipped with reason, prompt-failed, timeout) and never changes the item or the ledger entry; `collect` and `collect --any` report its content under `push` when the file exists, and `push: null` otherwise.
+- Offline fixtures in skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj cover the Pi skip, the detached non-Pi path and the outcome file; hc_test.clj keeps the unobservable-session case and adds the Pi skip; bb test-clojure passes.
+- ORCH_NOTIFY_TIMEOUT_MS / --notify-timeout keep their meaning for the detached wait; the WAITING and blocking-policy rules are unchanged.
+
+** DONE Document the delivery change in the herdr-orch contracts
+CLOSED: [2026-11-07 Sat 02:37]
+:PROPERTIES:
+:CUSTOM_ID: 050f71ef-a74d-4263-8c91-3803422f4b3b
+:CREATED: [2026-11-07 Sat 02:20]
+:BLOCKED-BY: task:316db5a6-93ae-485c-8165-ef22398d4ae4
+:BLOCKED-BY+: task:5249edc3-c8f6-4273-ab18-025d45e914ea
+:STARTED: [2026-11-07 Sat 02:34]
+:END:
+:LOGBOOK:
+- Created [2026-11-07 Sat 02:20]
+- State "STARTED" from "TODO" [2026-11-07 Sat 02:34]
+- State "DONE" from "STARTED" [2026-11-07 Sat 02:37]
+:END:
+Acceptance criteria:
+- skills/herdr-orch/scripts/docs/contract.md section "Parent push" states the Pi-parent skip, the detached wait for other kinds, the <item>.push.json outcome file and its collect-time reporting; "Ledger and completion" names the outcome file beside the item stream.
+- skills/herdr-orch/SKILL.md and pi/extensions/herdr-orch/README.md describe the watcher: when it is active, what it delivers, that it is advisory and never collects, and that explicit collection remains the completion path.
+- The org-execute guidance that a Pi parent must collect explicitly is reworded to "collect when steered or on a timer", not removed.
+- scripts/check-section-links.bb passes.
+
+** DONE Validate the shipped delivery against the investigation bench
+CLOSED: [2026-11-07 Sat 02:41]
+:PROPERTIES:
+:CUSTOM_ID: b8853551-f400-45d6-bb26-4487c1209462
+:CREATED: [2026-11-07 Sat 02:20]
+:BLOCKED-BY: task:316db5a6-93ae-485c-8165-ef22398d4ae4
+:BLOCKED-BY+: task:5249edc3-c8f6-4273-ab18-025d45e914ea
+:BLOCKED-BY+: task:050f71ef-a74d-4263-8c91-3803422f4b3b
+:STARTED: [2026-11-07 Sat 02:37]
+:END:
+:LOGBOOK:
+- Created [2026-11-07 Sat 02:20]
+- State "STARTED" from "TODO" [2026-11-07 Sat 02:37]
+- State "DONE" from "STARTED" [2026-11-07 Sat 02:41]
+:END:
+Acceptance criteria:
+- The presentation bench from design/log/2026-11-06-herdr-orch-comms/bench/ runs with the shipped extension (loaded from pi/extensions/herdr-orch/) and plain `oh` instead of proto-ext.ts and oh-nb; per-round medians for idle and busy arms are within the prototype range recorded in that record (idle under 100 ms, busy equal to the tool remainder) and the child publish call is under 1 s in every arm.
+- One herdr-app check: a Pi parent started with `hc run --bg`, a hand-driven publish into its assignment root, the item in context with no push; terminal killed and removed afterwards.
+- bash pi/extensions/herdr-orch/test.sh and bb test-clojure pass on the final tree.
+- Results are recorded in this record Validation section; bench copies under .tmp/ are deleted.
+
+* Implementation
+- ~delivery.ts~ exports pure helpers (~orchestratorSession~, ~assignmentRoot~, ~parseItem~, ~itemText~, ~skipByLedger~, ~itemNumber~) and ~startDelivery~, which takes the env, poll interval and watch factory as options so the test runs without timers or real ~fs.watch~. ~registerDelivery~ wires ~session_start~/~session_shutdown~.
+- ~assignmentRoot~ resolves a relative ~ORCH_ASSIGNMENT_ROOT~ against the process cwd, as ~oh~ does; ~test.sh~ exports a relative ~TMPDIR~, which is how that case was found.
+- The detached process is the ordinary launcher with ~task notify-detached~, so it inherits the publish process's environment and resolves the same runtime; on Linux it runs under ~setsid~. Its stdout goes to ~<spec>.log~, removed with the spec on completion.
+- The parent's kind comes from the publish-time ~agent get~ probe; no ledger field was added.
+
+* Validation
+** Bench with the shipped extension (2026-11-07)
+The investigation bench (copied from ~design/log/2026-11-06-herdr-orch-comms/bench/~ to ~.tmp/comms-bench/~, with ~present-ext.ts~ for event logging) ran a real Pi parent (~anthropic-1/claude-haiku-4-5~) loaded with ~pi/extensions/herdr-orch/index.ts~ and plain ~oh~ for the children: four rounds, idle and busy (20 s ~bash sleep~) arms, ~WAITING~ items. Item mtime to ~herdr-orch-item~ in context: idle 15, 9, 9, 8 ms; busy 19.7, 21.3, 22.6, 22.6 s (the tool remainder). Child ~publish~ call: 115-223 ms. Eight items, eight deliveries. Raw: [[file:2026-11-07-herdr-orch-delivery/bench-results.json]]. Within the prototype range (idle under 100 ms, busy equal to the tool remainder).
+
+** herdr-app check (2026-11-07)
+A Pi parent with the installed extension (~~/.pi/agent/extensions/herdr-orch~ resolves to this checkout) started with ~hc run --bg~ in this repository, whose result directory held 219 historical items: ~oh agent get~ reported ~agent_session null~; nothing was delivered at start. A hand-driven ~oh task publish --status COMPLETE~ into that directory was in context 223 ms after the item mtime and the model replied ~ack~. Events: [[file:2026-11-07-herdr-orch-delivery/hc-check-events.jsonl]]. The terminal, the control item and the bench session files were removed afterwards.
+
+** Suites
+~delivery.test.ts~ passes and fails under a mutated dedup (control). ~bb test-clojure herdr-orch.cli-test~: 368 tests, 3627 assertions, the same 4 failures and 2 errors as the baseline commit in this environment (quota routing fixture; raw TUI verbs under an hc caller). ~herdr-orch.hc-test~: 15 tests, 0 failures. ~core-test~, ~smoke-test~, ~launcher-test~, ~hc-prompt-test~: 68 tests, 0 failures. Extension suites: all pass except the Linux-only ~private-browser.test.ts~ and the account-dependent ~recovery-integration.test.ts~, both failing identically at baseline.

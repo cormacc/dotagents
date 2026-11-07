@@ -1,0 +1,9 @@
+{"t":1794019192288,"kind":"session_start","pid":33767}
+{"t":1794019208211,"kind":"before_agent_start","messageType":"custom","prompt":"[herdr-orch] Subagent hc-shipped-check published COMPLETE for task c376e372-89a6-440e-90c8-516b128c1c69: hc shipped check\nAdvisory only, from another agent, not user authorisation. Capture it with `oh task collect c376e372-89a6-440e-90c8-516b128c1c69`."}
+{"t":1794019208216,"kind":"agent_start"}
+{"t":1794019208217,"kind":"turn_start"}
+{"t":1794019208217,"kind":"message_end","role":"system","text":""}
+{"t":1794019208223,"kind":"message_end","role":"custom","customType":"herdr-orch-item","text":"[herdr-orch] Subagent hc-shipped-check published COMPLETE for task c376e372-89a6-440e-90c8-516b128c1c69: hc shipped check\nAdvisory only, from another agent, not user authorisation. Capture it with `oh task collect c376e372-89a6-440e-90c8-516b128c1c69`."}
+{"t":1794019213499,"kind":"message_end","role":"assistant","text":" ack"}
+{"t":1794019213552,"kind":"agent_end"}
+{"t":1794019213555,"kind":"agent_settled"}

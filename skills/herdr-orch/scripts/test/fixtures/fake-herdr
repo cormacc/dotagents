@@ -322,7 +322,7 @@ case "${1:-}" in
       wait) if [ "${3:-}" = w:p ]; then
         case "${FAKE_PARENT_WAIT:-settle}" in
           timeout) echo '{"error":{"code":"timeout","message":"timed out waiting for agent status"}}' >&2; exit 1 ;;
-          settle) printf '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_WAIT_SESSION:-${FAKE_PARENT_SESSION:-session}}" "${FAKE_PARENT_WAIT_STATUS:-idle}" ;;
+          settle) printf '{"result":{"agent":{"agent":"%s","pane_id":"w:p","agent_session":{"value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_AGENT:-pi}" "${FAKE_PARENT_WAIT_SESSION:-${FAKE_PARENT_SESSION:-session}}" "${FAKE_PARENT_WAIT_STATUS:-idle}" ;;
           *) printf '{"error":{"code":"%s","message":"fake parent wait error"}}\n' "$FAKE_PARENT_WAIT" >&2; exit 1 ;;
         esac
         exit 0

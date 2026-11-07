@@ -3333,17 +3333,52 @@
 
 ;; One `agent get` probe, then one advisory `agent prompt` naming the child, the task, and
 ;; the `collect` command. Never `--wait`: that path can return `agent_prompt_stalled`.
+(defn- push-outcome-path [entry] (str (:result entry) ".push.json"))
+;; The push runs in a process that outlives `publish`, so a test reads its outcome from the
+;; file that process writes beside the item, after a bounded wait.
+(defn- await-push! [entry]
+  (loop [n 200]
+    (let [path (push-outcome-path entry)
+          outcome (when (fs/exists? path) (json/parse-string (slurp path) true))]
+      (cond (:detached outcome) outcome
+            (pos? n) (do (Thread/sleep 50) (recur (dec n)))
+            :else (throw (ex-info "detached push never wrote its outcome" {:path path :outcome outcome}))))))
+(def ^:private non-pi-parent {"FAKE_PARENT_AGENT" "claude"})
+
+;; A Pi parent runs the extension watcher, so the item reaches it without a push. The skip
+;; precedes the session gate, so an unobservable session changes nothing for a Pi parent.
+(deftest a-pi-parent-is-never-pushed-because-the-watcher-delivers
+  (doseq [extra [{} {"FAKE_PARENT_SESSION" "replacement"} {"FAKE_PARENT_STATUS" "working"}]]
+    (let [{:keys [env log dir]} (fake-env {})
+          entry (start-child! env dir "pi parent")
+          proc (call! (merge (child-publish-env env entry) extra) "task" "publish" "--status" "COMPLETE" "--summary" "done")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)) (pr-str extra))
+      (is (= {:push "skipped" :reason "watcher" :parent-pane "w:p"} (:parent-push res)) (pr-str extra))
+      ;; The outcome is persisted for `collect` even when nothing was sent.
+      (is (= "watcher" (:reason (json/parse-string (slurp (push-outcome-path entry)) true))) (pr-str extra))
+      (is (empty? (parent-prompts log)) (pr-str extra))
+      (is (empty? (parent-waits log)) (pr-str extra))
+      ;; Exactly one probe at publish time, on top of the single spawn-side identity read.
+      (is (= 2 (count (parent-gets log))) (pr-str extra)))))
+
 (deftest non-blocking-publish-pushes-one-advisory-prompt-to-a-settled-parent
   (doseq [status ["idle" "done"]]
-    (let [{:keys [env log dir]} (fake-env {})
+    (let [{:keys [env log dir]} (fake-env non-pi-parent)
           entry (start-child! env dir (str "push to " status " parent"))
+          t0 (System/currentTimeMillis)
           proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" status})
                       "task" "publish" "--status" "COMPLETE" "--summary" "done")
+          elapsed (- (System/currentTimeMillis) t0)
           res (:result (result proc))
+          outcome (await-push! entry)
           pushes (parent-prompts log)]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "COMPLETE" (:status res)) status)
-      (is (= "sent" (get-in res [:parent-push :push])) status)
+      ;; `publish` returns before the push: it reports detachment, the file reports the send.
+      (is (= "detached" (get-in res [:parent-push :push])) status)
+      (is (= "sent" (:push outcome)) status)
       (is (= 1 (count pushes)) status)
       (let [text (nth (first pushes) 3)]
         (is (str/includes? text (:child entry)))
@@ -3354,16 +3389,17 @@
         (is (str/includes? text (str "close " (:task entry))))
         (is (str/includes? text (str "continue " (:task entry)))))
       (is (not-any? #(some #{"--wait"} %) pushes) status)
-      ;; Exactly one probe at publish time, on top of the single spawn-side identity read.
-      (is (= 2 (count (parent-gets log))) status)
+      ;; One probe in `publish`, one in the detached process, plus the spawn-side read.
+      (is (= 3 (count (parent-gets log))) status)
       (is (empty? (parent-waits log)) status)
+      (is (< elapsed 10000) (str "publish took " elapsed " ms"))
       ;; The operator toast is retained alongside the push.
-      (is (some #(= ["notification" "show"] (vec (take 2 %))) (calls log)) status)
-      (is (empty? (agent-focus-targets log)) status))))
+      (is (some? (:notification res)) status)
+      ;; The spec file and its log are consumed by the detached process.
+      (is (empty? (filter #(str/includes? (str %) ".push-spec.") (fs/list-dir (fs/parent (:result entry))))) status))))
 
-;; Under `blocking` the parent is already in its own wait loop: no probe, no push at all.
 (deftest blocking-publish-never-probes-or-pushes-to-the-parent
-  (let [{:keys [env log dir]} (fake-env {})
+  (let [{:keys [env log dir]} (fake-env non-pi-parent)
         entry (patch-entry! dir (start-child! env dir "blocking policy") :waiting-policy "blocking")
         proc (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "done")
         res (:result (result proc))]
@@ -3371,15 +3407,16 @@
     (is (= "COMPLETE" (:status res)))
     (is (nil? (:parent-push res)))
     (is (nil? (:notification res)))
+    (is (not (fs/exists? (push-outcome-path entry))))
     (is (empty? (parent-prompts log)))
     (is (empty? (parent-waits log)))
     ;; Only the spawn-side identity read: publish added no probe.
     (is (= 1 (count (parent-gets log))))))
 
 ;; Prompt text submitted to a blocked agent lands in its approval UI, so a blocked parent
-;; is never pushed to and never waited for.
+;; is never pushed to and never waited for. The decision is made in `publish` itself.
 (deftest a-blocked-parent-receives-no-push
-  (let [{:keys [env log dir]} (fake-env {})
+  (let [{:keys [env log dir]} (fake-env non-pi-parent)
         entry (start-child! env dir "blocked parent")
         proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" "blocked"})
                     "task" "publish" "--status" "COMPLETE" "--summary" "done")
@@ -3389,13 +3426,14 @@
     (is (fs/exists? (:result entry)))
     (is (= "skipped" (get-in res [:parent-push :push])))
     (is (= "parent-blocked" (get-in res [:parent-push :reason])))
+    (is (= "parent-blocked" (:reason (json/parse-string (slurp (push-outcome-path entry)) true))))
     (is (empty? (parent-prompts log)))
     (is (empty? (parent-waits log)))))
 
 ;; Panes outlive agent sessions: a replacement agent in the reused parent pane must never
 ;; be prompted, the same ownership boundary `close` enforces for pane closure.
 (deftest a-foreign-parent-session-receives-no-push
-  (let [{:keys [env log dir]} (fake-env {})
+  (let [{:keys [env log dir]} (fake-env non-pi-parent)
         entry (start-child! env dir "replaced parent")
         proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_SESSION" "replacement"})
                     "task" "publish" "--status" "COMPLETE" "--summary" "done")
@@ -3408,20 +3446,24 @@
     ;; A foreign session is not waited for either: there is nothing to settle.
     (is (empty? (parent-waits log)))))
 
-;; `working` and `unknown` both get one bounded settle wait, then the single push.
+;; `working` and `unknown` both get one bounded settle wait, then the single push -- in the
+;; detached process, so the child's `publish` returns at once.
 (deftest an-unsettled-parent-is-waited-for-then-pushed-once
   (doseq [[status timeout argv] [["working" "30000" []] ["unknown" "1234" ["--notify-timeout" "1234"]]]]
-    (let [{:keys [env log dir]} (fake-env {})
+    (let [{:keys [env log dir]} (fake-env non-pi-parent)
           entry (start-child! env dir (str status " parent"))
           proc (apply call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" status})
                       "task" "publish" "--status" "COMPLETE" "--summary" "done" argv)
           res (:result (result proc))
+          outcome (await-push! entry)
           waits (parent-waits log)]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "COMPLETE" (:status res)) status)
-      (is (= "sent" (get-in res [:parent-push :push])) status)
+      (is (= "detached" (get-in res [:parent-push :push])) status)
+      (is (= status (get-in res [:parent-push :parent-status])) status)
+      (is (= "sent" (:push outcome)) status)
       ;; `:waited` claims only that a settle wait preceded the outcome, never settlement.
-      (is (true? (get-in res [:parent-push :waited])) status)
+      (is (true? (:waited outcome)) status)
       (is (= 1 (count waits)) status)
       ;; Narrower than herdr's default match set, which also includes `blocked`.
       (is (= ["--until" "idle" "--until" "done"] (vec (take-last 4 (first waits)))) status)
@@ -3430,42 +3472,58 @@
 
 ;; The wait is bounded: an exhausted budget names the outcome and pushes nothing.
 (deftest a-parent-that-never-settles-reports-timed-out-without-pushing
-  (let [{:keys [env log dir]} (fake-env {})
+  (let [{:keys [env log dir]} (fake-env non-pi-parent)
         entry (start-child! env dir "never settles")
         proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" "working" "FAKE_PARENT_WAIT" "timeout"})
                     "task" "publish" "--status" "COMPLETE" "--summary" "done" "--notify-timeout" "50")
-        res (:result (result proc))]
+        res (:result (result proc))
+        outcome (await-push! entry)]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (:status res)))
     (is (fs/exists? (:result entry)))
-    (is (= "timed-out" (get-in res [:parent-push :push])))
-    (is (= 50 (get-in res [:parent-push :timeout-ms])))
-    (is (= "working" (get-in res [:parent-push :parent-status])))
+    (is (= "detached" (get-in res [:parent-push :push])))
+    (is (= "timed-out" (:push outcome)))
+    (is (= 50 (:timeout-ms outcome)))
+    (is (= "working" (:parent-status outcome)))
     (is (= 1 (count (parent-waits log))))
     (is (empty? (parent-prompts log)))))
 
 ;; The settle wait can be satisfied by a *replacement* agent settling in the reused pane,
 ;; so both gates are re-checked on the AgentInfo observed after the wait, not before it.
 (deftest both-gates-are-rechecked-on-the-agent-observed-after-the-wait
-  (let [{:keys [env log dir]} (fake-env {})
+  (let [{:keys [env log dir]} (fake-env non-pi-parent)
         entry (start-child! env dir "replaced mid-wait")
         proc (call! (merge (child-publish-env env entry)
                            {"FAKE_PARENT_STATUS" "working" "FAKE_PARENT_WAIT_SESSION" "replacement"})
                     "task" "publish" "--status" "COMPLETE" "--summary" "done" "--notify-timeout" "500")
-        res (:result (result proc))]
+        res (:result (result proc))
+        outcome (await-push! entry)]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (:status res)))
-    (is (= "skipped" (get-in res [:parent-push :push])))
-    (is (= "session-mismatch" (get-in res [:parent-push :reason])))
-    (is (true? (get-in res [:parent-push :waited])))
+    (is (= "detached" (get-in res [:parent-push :push])))
+    (is (= "skipped" (:push outcome)))
+    (is (= "session-mismatch" (:reason outcome)))
+    (is (true? (:waited outcome)))
     (is (= 1 (count (parent-waits log))))
     (is (empty? (parent-prompts log)))))
+
+;; `collect` reports the persisted outcome beside the captured item, so the parent sees
+;; whether a push was sent, skipped or failed after the child has gone.
+(deftest collect-reports-the-persisted-push-outcome
+  (let [{:keys [env dir]} (fake-env non-pi-parent)
+        entry (start-child! env dir "collect sees push")
+        proc (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "done")
+        _ (await-push! entry)
+        captured (:result (result (call! env "task" "collect" (:task entry))))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "sent" (get-in captured [:push :push])))
+    (is (true? (get-in captured [:push :detached])))))
 
 ;; Publication is committed before the push, so any herdr failure on the push path is
 ;; reported and nothing more: status and exit code are untouched.
 (deftest a-herdr-failure-on-the-push-path-never-affects-publication
   (testing "the probe itself fails"
-    (let [{:keys [env log dir]} (fake-env {})
+    (let [{:keys [env log dir]} (fake-env non-pi-parent)
           entry (start-child! env dir "probe fails")
           proc (call! (merge (child-publish-env env entry) {"FAKE_FAIL_AGENT_GET" "w:p"})
                       "task" "publish" "--status" "COMPLETE" "--summary" "done")
@@ -3479,26 +3537,29 @@
   ;; A failed submission may already have delivered text partially, so it is named
   ;; distinctly from a parent that was never contacted.
   (testing "the submission itself fails"
-    (let [{:keys [env dir]} (fake-env {})
+    (let [{:keys [env dir]} (fake-env non-pi-parent)
           entry (start-child! env dir "prompt fails")
           proc (call! (merge (child-publish-env env entry) {"FAKE_FAIL_PROMPT" "1"})
                       "task" "publish" "--status" "COMPLETE" "--summary" "done")
-          res (:result (result proc))]
+          res (:result (result proc))
+          outcome (await-push! entry)]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "COMPLETE" (:status res)))
       (is (fs/exists? (:result entry)))
-      (is (= "error" (get-in res [:parent-push :push])))
-      (is (= "prompt-failed" (get-in res [:parent-push :reason])))))
+      (is (= "detached" (get-in res [:parent-push :push])))
+      (is (= "error" (:push outcome)))
+      (is (= "prompt-failed" (:reason outcome)))))
   (testing "the settle wait fails with a non-timeout code"
-    (let [{:keys [env log dir]} (fake-env {})
+    (let [{:keys [env log dir]} (fake-env non-pi-parent)
           entry (start-child! env dir "wait fails")
           proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" "working" "FAKE_PARENT_WAIT" "agent_not_found"})
                       "task" "publish" "--status" "COMPLETE" "--summary" "done" "--notify-timeout" "500")
-          res (:result (result proc))]
+          res (:result (result proc))
+          outcome (await-push! entry)]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "COMPLETE" (:status res)))
-      (is (= "error" (get-in res [:parent-push :push])))
-      (is (= "agent_not_found" (get-in res [:parent-push :reason])))
+      (is (= "error" (:push outcome)))
+      (is (= "agent_not_found" (:reason outcome)))
       (is (empty? (parent-prompts log)))))
   ;; The toast is emitted before the push and its failure is already tolerated; it must not
   ;; become fatal now that the entry, rather than the environment, decides it happens.
@@ -3568,7 +3629,8 @@
             "a terminal item bypasses the WAITING throttle")
         (is (= first-text (slurp (:result entry))) "appending never overwrites item 1")
         (is (= 2 (count (filter #(= ["notification" "show"] (vec (take 2 %))) (calls log)))))
-        (is (= 1 (count (parent-prompts log))) "the terminal retains its advisory push")
+        (is (= "watcher" (get-in (result terminal) [:result :parent-push :reason])) "the terminal still decides a push; a Pi parent is left to its watcher")
+        (is (empty? (parent-prompts log)) "a Pi parent is never prompted")
         (is (= 2 (count (parent-gets log))) "only the terminal probes the parent"))))
   (testing "sealed, closed, and superseded rounds refuse before writing another item"
     (let [{:keys [env dir]} (fake-env {})
@@ -4062,7 +4124,7 @@
 ;; policy -- not the spawn's -- drives both the prompt's WAITING clause and `publish!`.
 (deftest continue-round-policy-governs-the-prompt-and-the-publish-path
   (testing "a blocking spawn continued without --wait runs the new round non-blocking"
-    (let [{:keys [env log dir prompt-file]} (fake-env {})
+    (let [{:keys [env log dir prompt-file]} (fake-env non-pi-parent)
           run-proc (call! env "task" "run" "worker" "--task" "round one" "--timeout" "200")
           prior (ledger-entry* dir (get-in (result run-proc) [:result :task]))
           {:keys [proc entry]} (continue! env dir prior "--task" "round two")
@@ -4075,7 +4137,8 @@
                              "task" "publish" "--task" (:task entry) "--status" "COMPLETE" "--summary" "round two done")
             res (:result (result published))]
         (is (zero? (:exit published)) (:err published))
-        (is (= "sent" (get-in res [:parent-push :push])))
+        (is (= "detached" (get-in res [:parent-push :push])))
+        (is (= "sent" (:push (await-push! entry))))
         (is (some? (:notification res)))
         (is (some #(and (= ["agent" "prompt" "w:p"] (vec (take 3 %)))
                         (str/includes? (nth % 3 "") (str "collect " (:task entry))))
@@ -6010,7 +6073,7 @@
 ;; The advisory push carries declared links, labelled as pending validation. Publish still
 ;; performs no existence check, so this artifact deliberately does not exist.
 (deftest publication-advisory-lists-declared-artifacts-as-pending-validation
-  (let [{:keys [env dir prompt-file]} (fake-env {})
+  (let [{:keys [env dir prompt-file]} (fake-env non-pi-parent)
         entry (start-child! env dir "advisory artifact links")
         missing "nonexistent/subagent advisory #1.md"
         second-artifact "second.md"
@@ -6019,9 +6082,10 @@
                     "--artifact" (str missing " :: pending report")
                     "--artifact" second-artifact)
         res (:result (result proc))
+        outcome (await-push! entry)
         pushed (slurp prompt-file)]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= "sent" (get-in res [:parent-push :push])))
+    (is (= "sent" (:push outcome)))
     (testing "the advisory is labelled as advisory/pending collection validation"
       (is (re-find #"(?i)advisory" pushed))
       (is (str/includes? pushed "pending validation by `collect`")))
@@ -6041,13 +6105,14 @@
 
 ;; A publication with no artifacts adds no advisory section at all — not an empty one.
 (deftest publication-advisory-omits-an-empty-artifact-section
-  (let [{:keys [env dir prompt-file]} (fake-env {})
+  (let [{:keys [env dir prompt-file]} (fake-env non-pi-parent)
         entry (start-child! env dir "no advisory artifacts")
         proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" "idle"})
                     "task" "publish" "--status" "COMPLETE" "--summary" "done")
+        outcome (await-push! entry)
         pushed (slurp prompt-file)]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= "sent" (get-in (result proc) [:result :parent-push :push])))
+    (is (= "sent" (:push outcome)))
     ;; The push itself still happens and still names the collect command.
     (is (str/includes? pushed (str "collect " (:task entry))))
     (is (not (re-find #"(?i)declared artifacts" pushed)))

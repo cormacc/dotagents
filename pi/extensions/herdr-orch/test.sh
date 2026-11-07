@@ -19,6 +19,7 @@ node --import tsx ./private-browser.test.ts
 "$TSX" ./accounts-integration.test.ts
 "$TSX" ./index.test.ts
 "$TSX" ./pi-integration.test.ts
+"$TSX" ./delivery.test.ts
 "$TSX" ./recovery.test.ts
 "$TSX" ./recovery-integration.test.ts
 # `herdr-agent-state.ts` is a top-level extension with no directory of its own, so its

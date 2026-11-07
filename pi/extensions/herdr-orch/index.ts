@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
 import { registerAccounts } from "./accounts.ts";
+import { registerDelivery } from "./delivery.ts";
 import { registerRecovery } from "./recovery.ts";
 import { composeHelp, parseSection, rosterArgs, usageArgs, SECTION_DESCRIPTIONS, SECTIONS, type Section } from "./help.ts";
 
@@ -189,6 +190,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   registerRecovery(pi, execute);
+  registerDelivery(pi);
 
   pi.registerEntryRenderer<HelpEntry>(HELP_ENTRY, (entry, { expanded }, theme) => {
     const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));

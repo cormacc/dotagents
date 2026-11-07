@@ -784,12 +784,24 @@
 ;; A published item is immutable, so a result that fails validation cannot become valid.
 ;; Recording it as non-final `invalid` consumes that item without sealing the stream: the
 ;; child can publish a corrected successor and the next collect will capture that item.
+;; The push outcome lives beside the immutable item, written by whichever process decided
+;; it, so `collect` can report it and an audit can read it after the child has gone.
+(defn push-outcome-path [item-path] (str item-path ".push.json"))
+(defn- write-push-outcome! [item-path outcome]
+  (try (let [target (push-outcome-path item-path) temp (str target "." (UUID/randomUUID) ".tmp")]
+         (spit temp (json/generate-string outcome))
+         (fs/move temp target {:replace-existing true :atomic-move true}))
+       (catch Exception _ nil)))
+(defn read-push-outcome [item-path]
+  (let [path (push-outcome-path item-path)]
+    (when (fs/exists? path) (try (json/parse-string (slurp path) true) (catch Exception _ {:push "unreadable"})))))
 (defn capture!
   ([entry] (capture! entry (stream-state* entry)))
   ([entry state]
    (when-let [item (first (unconsumed-stream-items state))]
      (let [result (:result item)
            captured (fn [parsed] (assoc parsed :item (:item item) :item-result result
+                                        :push (read-push-outcome result)
                                         :terminal? (core/terminal-status? (:status parsed))))]
        (try
          (let [validation (get-in state [:validations (:item item)])
@@ -1667,6 +1679,10 @@
 (defn settled-parent? [status] (contains? #{"idle" "done"} status))
 (defn push-decision [entry agent]
   (cond
+    ;; A Pi parent runs the herdr-orch extension's result-directory watcher, which steers
+    ;; the item in without any Herdr observation of its session; a push would only queue a
+    ;; duplicate behind that turn (measured: 0.4 s to 3 s idle presentation).
+    (= "pi" (:agent agent)) {:push "skipped" :reason "watcher"}
     (not= (:parent-session entry) (get-in agent [:agent_session :value])) {:push "skipped" :reason "session-mismatch"}
     (settled-parent? (:agent_status agent)) {:push "send"}
     (= "blocked" (:agent_status agent)) {:push "skipped" :reason "parent-blocked"}
@@ -1682,7 +1698,7 @@
 ;; hand-edited ledger file that omits it is not a supported input -- this surface keeps no
 ;; legacy path anywhere -- and degrades to the `push-failed` catch below rather than
 ;; needing a branch of its own.
-(defn notify-parent! [entry {:keys [child task status timeout work-root artifacts]}]
+(defn notify-parent-now! [entry {:keys [child task status timeout work-root artifacts]}]
   (try
     (let [pane (:parent-pane entry)
           send! (fn [extra]
@@ -1713,6 +1729,41 @@
                        :else (assoc after :push "skipped" :parent-pane pane :waited true)))
             (assoc decision :parent-pane pane)))))
     (catch Exception e {:push "error" :reason "push-failed" :message (.getMessage e)})))
+;; The settle wait can last the whole notify timeout, and it used to be paid by the child's
+;; own `publish` call (measured 24 s on a busy parent). Only the probe runs here: a Pi
+;; parent is skipped at once, and any other parent's wait and prompt run in a process that
+;; outlives this one. That process is `oh task notify-detached --spec <file>`, the same
+;; launcher and environment, so it resolves the same runtime as this call would have.
+(defn notify-parent! [entry {:keys [item-path] :as request}]
+  (let [pane (:parent-pane entry)
+        probe (try {:agent (herdr/status! (herdr/selected!) {:scope :agent :target pane})} (catch Exception e {:error (.getMessage e)}))
+        decision (if (:error probe)
+                   {:push "error" :parent-pane pane :reason "probe-failed" :message (:error probe)}
+                   (assoc (push-decision entry (:agent probe)) :parent-pane pane))
+        outcome (if (contains? #{"send" "wait"} (:push decision))
+                  (let [spec (str (fs/path (fs/parent item-path) (str (fs/file-name item-path) ".push-spec." (UUID/randomUUID) ".json")))
+                        bin (launcher-bin)]
+                    (spit spec (json/generate-string {:entry (select-keys entry [:parent-pane :parent-session :task :child])
+                                                       :request (dissoc request :item-path) :item-path item-path}))
+                    (try
+                      (let [argv (cond-> [bin "task" "notify-detached" "--spec" spec]
+                                   (and (= "Linux" (System/getProperty "os.name")) (fs/which "setsid")) (->> (into ["setsid"])))]
+                        (process/process argv {:out :write :out-file (fs/file (str spec ".log")) :err :out :in nil})
+                        {:push "detached" :parent-pane pane :parent-status (:parent-status decision)})
+                      (catch Exception e {:push "error" :parent-pane pane :reason "detach-failed" :message (.getMessage e)})))
+                  decision)]
+    (write-push-outcome! item-path outcome)
+    outcome))
+;; The detached half: runs the synchronous push and records its outcome, then exits. The
+;; spec file is consumed and removed; a missing spec is a usage error, not a push outcome.
+(defn notify-detached! [opts]
+  (let [spec-path (or (one opts :spec) (usage-error "notify-detached requires --spec PATH" {}))
+        spec (json/parse-string (slurp spec-path) true)
+        outcome (notify-parent-now! (:entry spec) (assoc (:request spec) :timeout (long (or (get-in spec [:request :timeout]) default-notify-timeout-ms))))]
+    (write-push-outcome! (:item-path spec) (assoc outcome :detached true))
+    (fs/delete-if-exists spec-path)
+    (fs/delete-if-exists (str spec-path ".log"))
+    outcome))
 (defn publication-body [opts]
   (if-let [path (one opts :from-file)]
     (let [body (json/parse-string (slurp path) true)]
@@ -1921,6 +1972,7 @@
                             (core/terminal-status? (:status body)))
                    (notify-parent! entry {:child child :task task :status (:status body)
                                           :work-root work-root :artifacts (:artifacts body)
+                                          :item-path (ledger/item-path (:result item) (:item item))
                                           :timeout (parse-notify-timeout (one opts :notify-timeout))}))]
         (cond-> {:task task :result (:result item) :status (:status body) :item (:item item)}
           checkpoint (assoc :checkpoint checkpoint)
@@ -3391,6 +3443,7 @@
            "status <full-task-uuid> [--format json|text] [--raw]"
            "list [--include-failed] [--full] [--format json|text] [--raw]"
            "publish --status COMPLETE|BLOCKED|FAILED|WAITING --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
+           "notify-detached --spec PATH"
            "prune <full-task-uuid>"
            "poke <full-task-uuid>"
            "continue <full-task-uuid> (--task TEXT | --task-file PATH | stdin) [--wait] [--timeout MS]"
@@ -3579,6 +3632,7 @@
                  (task-listing opts)))
     "list" (task-listing opts)
     "publish" (publish! opts)
+    "notify-detached" (notify-detached! opts)
     "prune" (prune! (first positional))
     "poke" (poke! (first positional))
     "continue" (continue! (first positional) opts)

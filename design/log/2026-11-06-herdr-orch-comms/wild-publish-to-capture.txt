@@ -1,0 +1,33 @@
+n 143
+f0f25bd1 COMPLETE worker     non-blocking      4.1 s  2026-11-05T21:30:51.127883Z
+cac453fc COMPLETE worker     non-blocking  12222.9 s  2026-11-06T01:00:29.646312Z
+cac453fc COMPLETE worker     non-blocking      8.5 s  2026-11-06T01:00:33.227266Z
+163ece61 COMPLETE reviewer   non-blocking     50.2 s  2026-11-06T01:03:31.696432Z
+163ece61 COMPLETE reviewer   non-blocking     56.2 s  2026-11-06T01:05:35.310345Z
+5921f353 COMPLETE worker     non-blocking    750.6 s  2026-11-06T01:29:25.081216Z
+5921f353 COMPLETE worker     non-blocking      9.8 s  2026-11-06T01:31:16.892061Z
+851df3bc COMPLETE reviewer   non-blocking      0.8 s  2026-11-06T01:33:45.771177Z
+ce90ea04 BLOCKED  worker     non-blocking     12.9 s  2026-11-06T01:34:00.352591Z
+851df3bc COMPLETE reviewer   non-blocking     46.3 s  2026-11-06T01:37:26.647242Z
+674fdde2 COMPLETE scout      non-blocking     31.9 s  2026-11-06T01:42:00.681185Z
+a194bfc3 COMPLETE worker     non-blocking     38.7 s  2026-11-06T01:45:45.355842Z
+3c5719da COMPLETE reviewer   non-blocking     35.3 s  2026-11-06T01:48:56.901149Z
+3c5719da COMPLETE reviewer   non-blocking     11.7 s  2026-11-06T01:51:16.589857Z
+00438f4e COMPLETE advisor    blocking          2.2 s  2026-11-06T01:55:58.438485Z
+315b20f3 BLOCKED  worker     non-blocking      5.5 s  2026-11-06T01:57:56.243467Z
+2f44f503 BLOCKED  worker     non-blocking   2942.1 s  2026-11-06T09:31:54.476215Z
+2f44f503 BLOCKED  worker     non-blocking   1259.1 s  2026-11-06T09:31:58.482650Z
+2f44f503 BLOCKED  worker     non-blocking     13.7 s  2026-11-06T09:32:02.239762Z
+1fdbd1d3 COMPLETE reviewer   non-blocking     64.4 s  2026-11-06T09:35:35.884469Z
+1fdbd1d3 COMPLETE reviewer   non-blocking      5.1 s  2026-11-06T09:39:19.246590Z
+1f96af8e BLOCKED  worker     non-blocking   1063.9 s  2026-11-06T10:11:36.092741Z
+1f96af8e BLOCKED  worker     non-blocking      9.6 s  2026-11-06T10:11:39.698658Z
+a64ecac1 COMPLETE reviewer   non-blocking    495.8 s  2026-11-06T10:22:27.386835Z
+a64ecac1 COMPLETE reviewer   non-blocking    246.1 s  2026-11-06T10:22:30.909902Z
+a64ecac1 COMPLETE reviewer   non-blocking     19.6 s  2026-11-06T10:22:34.310804Z
+04863108 COMPLETE worker     non-blocking      6.6 s  2026-11-06T21:22:13.607678Z
+f3db2961 COMPLETE reviewer   non-blocking     10.2 s  2026-11-06T21:26:56.791731Z
+b40ad702 COMPLETE worker     non-blocking      7.3 s  2026-11-06T21:28:50.439654Z
+1a9cfc1a COMPLETE reviewer   non-blocking     11.5 s  2026-11-06T21:34:11.033191Z
+median gap s 11.32 p25 4.219 p75 38.674
+under 2 s: 23  2-60 s: 97  over 60 s: 23
