@@ -41,7 +41,11 @@ try {
     `);
     const harness = createHarness(observer, cwd, { args: ["--offline", "--no-mcp", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-themes"] });
     try {
-      for (let round = 0; round < 3; round++) {
+      // separation.test.ts covers every factory combination over three replacements in-process.
+      // Here each mode proves settings-based discovery once, and the combined mode, which loads
+      // both entrypoints, proves that one reload through the installed runtime keeps that result.
+      const rounds = mode === "combined" ? 2 : 1;
+      for (let round = 0; round < rounds; round++) {
         const id = harness.send({ type: "get_commands" });
         const response = await harness.waitFor((e) => e.type === "response" && e.id === id, "discovered commands");
         assert.equal(response.success, true, JSON.stringify(response));
@@ -65,7 +69,7 @@ try {
         else assert.ok(data.watchers > 0, "legacy startup owns watchers");
         assert.ok(!harness.events.some((e: any) => e.type === "agent_start"), "extension commands never reach a provider");
         console.log(`ok - installed Pi discovery ${mode} round ${round}: tasks=${taskCommands.length}, watchers=${data.watchers}, CLI selected=${task.id}, providerRequests=0`);
-        if (round < 2) {
+        if (round < rounds - 1) {
           const reloadSince = harness.events.length;
           const reload = harness.send({ type: "prompt", message: "/separation-reload" });
           const reloaded = await harness.waitFor((e) => e.type === "response" && e.id === reload, "reload response", { since: reloadSince });

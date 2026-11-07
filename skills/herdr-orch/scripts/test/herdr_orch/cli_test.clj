@@ -7969,17 +7969,30 @@
   (and (zero? (ledger-count dir)) (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger" "indices")))
        (empty? (fs/glob (fs/path dir ".tmp" "herdr-orch") "*.result")) (empty? (mutating-calls log))
        (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "measurements"))) (empty? (pi-ops fixture))))
+(deftest context-policy-refuses-the-measurement-option-matrix
+  ;; Pure policy, so each row runs in-process. The subprocess test below keeps one policy row to
+  ;; prove that the check runs before allocation.
+  (doseq [[label persona opts pattern]
+          [["a positional persona" "worker" {:context ["measurement"] :measurement-config ["c"]} #"does not take a persona"]
+           ["--trait" nil {:context ["measurement"] :measurement-config ["c"] :trait ["read-only"]} #"refuses --trait"]
+           ["--prompt-extra" nil {:context ["measurement"] :measurement-config ["c"] :prompt-extra ["be brief"]} #"refuses --prompt-extra"]
+           ["--retro" nil {:context ["measurement"] :measurement-config ["c"] :retro true} #"refuses --retro"]
+           ["--no-retro" nil {:context ["measurement"] :measurement-config ["c"] :no-retro true} #"refuses --no-retro"]
+           ["--spawns" nil {:context ["measurement"] :measurement-config ["c"] :spawns ["none"]} #"refuses --spawns"]
+           ["a missing configuration" nil {:context ["measurement"]} #"requires --measurement-config"]
+           ["--measurement-config on a fresh launch" "worker" {:measurement-config ["c"]} #"accepted only with --context measurement"]
+           ["--measurement-config on a fork" nil {:context ["fork"] :measurement-config ["c"]} #"accepted only with --context measurement"]
+           ["an unknown context" nil {:context ["bogus"]} #"--context must be fresh, fork or measurement"]]]
+    (let [e (try (cli/context-policy persona opts) nil (catch clojure.lang.ExceptionInfo e e))]
+      (is (= :usage (:error-kind (ex-data e))) label)
+      (is (re-find pattern (str (ex-message e))) (str label ": " (ex-message e)))))
+  (testing "passing controls"
+    (is (= {:context "measurement"} (cli/context-policy nil {:context ["measurement"] :measurement-config ["c"]})))
+    (is (= {:context "fresh"} (cli/context-policy "worker" {})))
+    (is (= {:context "fork"} (cli/context-policy nil {:context ["fork"]})))))
 (deftest measurement-option-matrix-is-refused-before-allocation
   (doseq [[label extra args pattern]
-          [["a positional persona" {} ["task" "start" "worker" "--context" "measurement" :config "--task" "x"] #"does not take a persona"]
-           ["--trait" {} ["task" "start" "--context" "measurement" :config "--trait" "read-only" "--task" "x"] #"refuses --trait"]
-           ["--prompt-extra" {} ["task" "start" "--context" "measurement" :config "--prompt-extra" "be brief" "--task" "x"] #"refuses --prompt-extra"]
-           ["--retro" {} ["task" "start" "--context" "measurement" :config "--retro" "--task" "x"] #"refuses --retro"]
-           ["--no-retro" {} ["task" "start" "--context" "measurement" :config "--no-retro" "--task" "x"] #"refuses --no-retro"]
-           ["--spawns" {} ["task" "start" "--context" "measurement" :config "--spawns" "none" "--task" "x"] #"refuses --spawns"]
-           ["a missing configuration" {} ["task" "start" "--context" "measurement" "--task" "x"] #"requires --measurement-config"]
-           ["--measurement-config on a fresh launch" {} ["task" "start" "worker" :config "--task" "x"] #"accepted only with --context measurement"]
-           ["--measurement-config on a fork" {} ["task" "start" "--context" "fork" :config "--task" "x"] #"accepted only with --context measurement"]
+          [["--trait" {} ["task" "start" "--context" "measurement" :config "--trait" "read-only" "--task" "x"] #"refuses --trait"]
            ["a resolved kind that is not pi" {"FAKE_PARENT_AGENT" "claude"} ["task" "start" "--context" "measurement" :config "--task" "x"] #"needs a pi subject"]
            ["a below-root caller" anonymous-caller ["task" "start" "--context" "measurement" :config "--task" "x"] #"never a persona-less child"]
            ["a preview with a refused option" {} ["task" "run" "--context" "measurement" :config "--trait" "read-only" "--print-prompt" "--task" "x"] #"refuses --trait"]]]

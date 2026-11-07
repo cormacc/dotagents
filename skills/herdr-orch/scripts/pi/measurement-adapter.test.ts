@@ -166,27 +166,14 @@ function contamination(api: string, kind: string): string {
       message: `payload.messages[0].content = [{ type: "text", text: "CONTAMINATION " }, ...payload.messages[0].content];`,
       "effort-level": `const m = payload.messages.find((x, i) => x.role === "system" && i < payload.messages.length - 1); if (m) m.output_config.effort = m.output_config.effort === "low" ? "medium" : "low";`,
       "tool-add": `payload.tools = [...(payload.tools ?? []), { name: "extra", description: "x", input_schema: { type: "object", properties: {}, required: [] } }];`,
-      "tool-desc": `payload.tools[0].description += " (altered)";`,
-      "schema-desc": `payload.tools[0].input_schema.properties.path.description += " (altered)";`,
-      "schema-prop": `payload.tools[0].input_schema.properties.injected = { type: "string", description: "INJECTED" };`,
       "tool-history": `const b = ${anthropicBlocks}.find((x) => x.type === "tool_use"); if (!b) return; b.name = "other";`,
-      "tool-result": `const b = ${anthropicBlocks}.find((x) => x.type === "tool_result"); if (!b) return; b.content = "INJECTED " + b.content;`,
-      "assistant-text": `const m = payload.messages.find((x) => x.role === "assistant"); if (!m) return; m.content.push({ type: "text", text: "INJECTED" });`,
-      "tool-args": `const b = ${anthropicBlocks}.find((x) => x.type === "tool_use"); if (!b) return; b.input = { ...b.input, path: "other.txt" };`,
-      "tool-id": `const u = ${anthropicBlocks}.find((x) => x.type === "tool_use"); const r = ${anthropicBlocks}.find((x) => x.type === "tool_result"); if (!u) return; u.id += "X"; r.tool_use_id += "X";`,
       "audit-throws": `payload.tools = "not-a-list";`,
       "fallback-alter": `payload.fallbacks = [{ model: "other" }];`,
       "fallback-add": `payload.fallbacks = [...(payload.fallbacks ?? []), { model: "extra" }];`,
       "fallback-drop": `delete payload.fallbacks;`,
       // Top-level encoding: each changed or added value fails on the first request.
       "enc-output-config": `payload.output_config = { ...(payload.output_config ?? {}), effort: "max", format: { type: "json_schema", schema: { type: "object", description: "INJECTED-FORMAT-TEXT" } } };`,
-      "enc-effort": `if (!payload.output_config) return; payload.output_config.effort = payload.output_config.effort === "low" ? "high" : "low";`,
       "enc-budget": `if (payload.thinking?.type !== "enabled") return; payload.thinking.budget_tokens = 31999;`,
-      "enc-thinking-field": `if (!payload.thinking) return; payload.thinking.injected = "INJECTED";`,
-      "enc-tool-choice": `payload.tool_choice = { type: "any" };`,
-      "enc-metadata": `payload.metadata = { user_id: "INJECTED" };`,
-      "enc-max-tokens": `payload.max_tokens += 1;`,
-      "enc-beta": `payload.betas = [...(payload.betas ?? []), "extra-beta-2026-01-01"];`,
       // The betas the runtime would compute without a configured anthropic-beta header.
       "enc-beta-computed": `payload.betas = ["interleaved-thinking-2025-05-14"];`,
     },
@@ -194,20 +181,9 @@ function contamination(api: string, kind: string): string {
       system: `const m = payload.messages.find((x) => x.role === "system" || x.role === "developer"); m.content += " CONTAMINATION";`,
       message: `const u = payload.messages.find((x) => x.role === "user"); u.content = "CONTAMINATION " + (${FIRST_TEXT})(u.content);`,
       "tool-add": `payload.tools = [...(payload.tools ?? []), { type: "function", function: { name: "extra", description: "x", parameters: { type: "object", properties: {} } } }];`,
-      "tool-desc": `payload.tools[0].function.description += " (altered)";`,
-      "schema-desc": `payload.tools[0].function.parameters.properties.path.description += " (altered)";`,
-      "schema-prop": `payload.tools[0].function.parameters.properties.injected = { type: "string", description: "INJECTED" };`,
       "tool-history": `const m = payload.messages.find((x) => x.tool_calls); if (!m) return; m.tool_calls[0].function.name = "other";`,
-      "tool-result": `const m = payload.messages.find((x) => x.role === "tool"); if (!m) return; m.content = "INJECTED " + m.content;`,
-      "assistant-text": `const m = payload.messages.find((x) => x.role === "assistant"); if (!m) return; m.content = "INJECTED";`,
-      "tool-args": `const m = payload.messages.find((x) => x.tool_calls); if (!m) return; m.tool_calls[0].function.arguments = JSON.stringify({ path: "other.txt" });`,
-      "tool-id": `const m = payload.messages.find((x) => x.tool_calls); const t = payload.messages.find((x) => x.role === "tool"); if (!m) return; m.tool_calls[0].id += "X"; t.tool_call_id += "X";`,
       "audit-throws": `payload.tools = "not-a-list";`,
-      "enc-effort": `payload.reasoning_effort = payload.reasoning_effort === "low" ? "high" : "low";`,
       "enc-kwargs": `payload.chat_template_kwargs = { enable_thinking: true, extra: "INJECTED-TEMPLATE-TEXT" };`,
-      "enc-format": `payload.response_format = { type: "json_schema", json_schema: { name: "x", schema: { type: "object", description: "INJECTED-FORMAT-TEXT" } } };`,
-      "enc-tool-choice": `payload.tool_choice = "required";`,
-      "enc-nested": `payload.stream_options = { ...payload.stream_options, injected: "INJECTED" };`,
       "enc-retention-drop": `delete payload.prompt_cache_retention;`,
       "enc-sampling": `payload.top_p = 0.9; payload.temperature = 0.7;`,
       "enc-or-effort": `if (!payload.reasoning) return; payload.reasoning = { ...payload.reasoning, effort: "xhigh" };`,
@@ -227,33 +203,21 @@ function contamination(api: string, kind: string): string {
       message: `const u = payload.input.find((x) => x.role === "user"); u.content[0].text = "CONTAMINATION " + u.content[0].text;`,
       "effort-level": `const m = payload.input.find((x, i) => x.type === "configuration_update" && i < payload.input.length - 1); if (m) m.reasoning.effort = m.reasoning.effort === "low" ? "medium" : "low";`,
       "tool-add": `payload.tools = [...(payload.tools ?? []), { type: "function", name: "extra", description: "x", parameters: { type: "object", properties: {} } }];`,
-      "tool-desc": `payload.tools[0].description += " (altered)";`,
-      "schema-desc": `payload.tools[0].parameters.properties.path.description += " (altered)";`,
-      "schema-prop": `payload.tools[0].parameters.properties.injected = { type: "string", description: "INJECTED" };`,
       "tool-history": `const c = payload.input.find((x) => x.type === "function_call"); if (!c) return; c.name = "other";`,
-      "tool-result": `const o = payload.input.find((x) => x.type === "function_call_output"); if (!o) return; o.output = "INJECTED " + o.output;`,
-      "assistant-text": `const i = payload.input.findIndex((x) => x.type === "function_call"); if (i < 0) return; payload.input.splice(i, 0, { type: "message", role: "assistant", content: [{ type: "output_text", text: "INJECTED", annotations: [] }], status: "completed", id: "msg_x" });`,
-      "tool-args": `const c = payload.input.find((x) => x.type === "function_call"); if (!c) return; c.arguments = JSON.stringify({ path: "other.txt" });`,
-      "tool-id": `const c = payload.input.find((x) => x.type === "function_call"); const o = payload.input.find((x) => x.type === "function_call_output"); if (!c) return; c.call_id += "X"; o.call_id += "X";`,
       "audit-throws": `payload.tools = "not-a-list";`,
       "config-drop": `const i = payload.input.map((x) => x.type).lastIndexOf("configuration_update"); if (i < 0) return; payload.input.splice(i, 1);`,
       "config-add": `payload.input.push({ type: "configuration_update", reasoning: { effort: "high" } });`,
       "config-field": `const c = payload.input.find((x) => x.type === "configuration_update"); if (!c) return; c.reasoning.summary = "INJECTED";`,
-      "enc-effort": `if (!payload.reasoning) return; payload.reasoning = { ...payload.reasoning, effort: "xhigh" };`,
-      "enc-format": `payload.text = { ...(payload.text ?? {}), format: { type: "json_schema", name: "x", description: "INJECTED-FORMAT-TEXT", schema: { type: "object" } } };`,
-      "enc-include": `payload.include = [...(payload.include ?? []), "file_search_call.results"];`,
-      "enc-tool-choice": `payload.tool_choice = "required";`,
       "enc-cache-key": `payload.prompt_cache_key = "other-session";`,
     },
   };
   table["openai-codex-responses"] = { ...table["openai-responses"], system: `payload.instructions += " CONTAMINATION";`, "codex-default": `payload.instructions = "You are a helpful assistant.";`,
-    "enc-verbosity": `payload.text = { ...payload.text, verbosity: "high" };`, "enc-parallel": `payload.parallel_tool_calls = false;` };
-  // Generic kinds: a literal swap anywhere in the request, an extra image on the result, all images dropped.
+    "enc-verbosity": `payload.text = { ...payload.text, verbosity: "high" };` };
+  // Generic kinds: a literal swap anywhere in the request, and an extra image on the result.
   if (kind.startsWith("swap:")) {
     const [from, to] = JSON.parse(kind.slice(5));
     return `const text = JSON.stringify(payload); if (!text.includes(${JSON.stringify(from)})) return; return JSON.parse(text.replace(${JSON.stringify(from)}, ${JSON.stringify(to)}));`;
   }
-  if (kind === "image-drop") return `const drop = (x) => Array.isArray(x) ? x.filter((v) => !(v && typeof v === "object" && ["image", "image_url", "input_image"].includes(v.type))).map(drop) : x && typeof x === "object" ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, drop(v)])) : x; return drop(payload);`;
   if (kind === "image-extra") {
     return {
       "anthropic-messages": `const m = payload.messages.find((x) => Array.isArray(x.content) && x.content.some((b) => b.type === "tool_result")); if (!m) return; m.content.push({ type: "image", source: { type: "base64", media_type: "image/png", data: "AAAA" } });`,
@@ -375,8 +339,12 @@ const hasAdapterFile = (run: Run, name: string) => { try { run.adapter(name); re
 const textOfContent = (c: any): string => (typeof c === "string" ? c : c.map((b: any) => b.text).join(""));
 const requestText = (run: Run) => JSON.stringify(run.requests);
 
-const HISTORY_KINDS = ["tool-history", "tool-result", "assistant-text", "tool-args", "tool-id"] as const;
-const REQUEST_KINDS = ["system", "message", "tool-add", "tool-desc", "schema-desc", "schema-prop"] as const;
+// Each kind costs a full Pi launch. The in-process test "audit: full recorded history is compared
+// on all four APIs" already applies every history, tool-description and schema mutation to each
+// API's payload, so end to end keeps only the kinds that test does not cover, plus one history
+// kind to prove that the second request is audited too.
+const HISTORY_KINDS = ["tool-history"] as const;
+const REQUEST_KINDS = ["system", "message", "tool-add"] as const;
 const knownBadRequests = (api: Api): TestCase => (
 { name: `e2e ${api}: known-bad requests fail the audit after the passing control; complete payloads are retained`, async run() {
       const script: Scripted[] = [{ toolUse: { id: "call_1", name: "read", input: { path: "data.txt" } } }, { text: "done" }];
@@ -1252,18 +1220,6 @@ export const tests: TestCase[] = [
     assert.equal(ok.adapter("terminal.json").success, true);
     assert.equal(ok.adapter("terminal.json").aborted, false);
   } },
-  { name: "e2e: a deliberately contaminated request fails the audit after a passing control", async run() {
-    const control = await runSubject({ system: "SYS", contaminate: "none" });
-    assert.equal(control.adapter("terminal.json").success, true);
-    for (const kind of ["system", "message"] as const) {
-      const bad = await runSubject({ system: "SYS", contaminate: kind });
-      assert.equal(bad.requests.length, 0, "the contaminated request is never sent");
-      const terminal = bad.adapter("terminal.json");
-      assert.equal(terminal.success, false);
-      assert.match(terminal.reason, /request-context audit failed/);
-      assert.equal(hasAdapterFile(bad, "audit-1.json") && bad.adapter("audit-1.json").ok, false);
-    }
-  } },
   // ---- OpenAI-family end to end: installed provider code against fake transports ----------------
   ...(["openai-completions", "openai-responses", "openai-codex-responses"] as const).flatMap((api) => [
     { name: `e2e ${api}: baseline request carries exactly the treatment, assignment, tool and history`, async run() {
@@ -1331,8 +1287,8 @@ export const tests: TestCase[] = [
       assert.ok(tampered.requests.length <= 1, `${kind}: the first or second request is blocked`);
       assert.equal(tampered.adapter("terminal.json").success, false, kind);
       assert.match(tampered.adapter("terminal.json").reason, /request-context audit failed/, kind);
+      if (kind === "config-drop") assert.equal(tampered.requests.length, 0, "the first request already lacks its trailing update");
     }
-    assert.equal((await runSubject({ ...common, contaminate: "config-drop" })).requests.length, 0, "the first request already lacks its trailing update");
   } },
   ...APIS.map((api): TestCase => ({ name: `e2e ${api}: an audit or evidence failure ends the run before the request is sent, even when failure evidence cannot be written`, async run() {
     const common = { api, system: "SYS" };
@@ -1367,8 +1323,10 @@ export const tests: TestCase[] = [
       ["mixed", false, (t) => { assert.equal(t.includes(PNG), false); assert.ok(t.includes(OMIT)); }],
       ["image", false, (t) => { assert.equal(t.includes(PNG), false); assert.ok(t.includes(OMIT)); }],
     ];
+    const passing = new Map<string, Run>();
     for (const [mode, vision, check] of shapes) {
       const run = await runSubject({ ...base, vision, script: script(mode) });
+      passing.set(`${mode}:${vision}`, run);
       const label = `${api} ${mode} vision=${vision}`;
       assert.equal(run.code, 0, `${label}: ${run.stderr.slice(0, 300)} ${JSON.stringify(run.adapter("terminal.json"))}`);
       assert.equal(run.requests.length, 2, label);
@@ -1379,28 +1337,15 @@ export const tests: TestCase[] = [
       assert.deepEqual(run.adapter("request-2.json"), run.requests[1], `${label}: the complete payload is retained`);
     }
     // Known-bad: each mutation acts on the second request, so a blocked second request proves it applied and was caught.
-    const swap = (from: string, to: string) => `swap:${JSON.stringify([from, to])}`;
+    // The in-process test "audit: tool-result images, captions, bridges, omission text and placeholders
+    // are derived per API; tampering fails" covers every image, caption and placeholder tamper on each
+    // API; end to end keeps one tamper with and one without vision to prove the wiring.
     const bad: [string, boolean, string][] = [
-      ["mixed", true, swap(PNG, "iVBORw0KGgx=")],
-      ["mixed", true, swap("image/png", "image/gif")],
-      ["mixed", true, swap("caption", "CAPTION")],
       ["mixed", true, "image-extra"],
-      ["mixed", true, "image-drop"],
-      ["image", false, swap(OMIT, `${OMIT} (altered)`)],
       ["image", false, "image-extra"],
-      ["empty", true, swap("(no tool output)", "(no tool output) (altered)")],
-      ["image", true, swap("(see attached image)", "(see attached image) (altered)")],
-      ["mixed", true, swap("Attached image(s) from tool result:", "Attached image(s) from tool result (altered):")],
-      ["error", true, swap("Images from the error result", "Images from the failed result")],
-      ["error", true, swap("(image attached after the tool results)", "(image attached)")],
     ];
-    let ran = 0;
     for (const [mode, vision, kind] of bad) {
-      // Each kind only applies where the API encodes the text it swaps.
-      const wanted = kind.startsWith("swap:") ? JSON.parse(kind.slice(5))[0] : undefined;
-      const control = await runSubject({ ...base, vision, script: script(mode) });
-      if (wanted !== undefined && !second(control).includes(wanted)) continue;
-      if (kind === "image-drop" && !second(control).includes(PNG)) continue;
+      const control = passing.get(`${mode}:${vision}`)!;
       const run = await runSubject({ ...base, vision, script: script(mode), contaminate: kind });
       const label = `${api} ${mode} vision=${vision} ${kind}`;
       assert.equal(run.requests.length, 1, `${label}: the second request is blocked`);
@@ -1408,9 +1353,7 @@ export const tests: TestCase[] = [
       assert.match(run.adapter("terminal.json").reason, /request-context audit failed/, label);
       assert.equal(run.adapter("audit-2.json").ok, false, label);
       assert.notDeepEqual(run.adapter("request-2.json"), control.adapter("request-2.json"), `${label}: the retained payload is the contaminated one`);
-      ran += 1;
     }
-    assert.ok(ran >= 7, `${api}: ${ran} known-bad cases ran`);
   } })),
   { name: "e2e anthropic-messages: declared fallbacks are derived; tampering fails; the served model is recorded per turn with unknown provenance never guessed", async run() {
     const fb = { provider: "fakeanth", model: "fallback-model", cost: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } };
@@ -1474,23 +1417,26 @@ export const tests: TestCase[] = [
   } },
   { name: "e2e: top-level encoding from the installed providers matches the derivation per API; changed effort, budget, format, template, tool choice and nested fields fail after passing controls", async run() {
     const sans = (r: any) => { const { prompt_cache_key: _k, ...rest } = r ?? {}; return rest; };
+    // Each kind costs a full Pi launch. The in-process test "audit: top-level encoding is derived per
+    // API ..." applies every changed, added and missing value; end to end keeps each group's
+    // passing control and one kind to prove that the installed request reaches the audit.
     const groups: { label: string; options: RunOptions; check: (request: any) => void; kinds: string[] }[] = [
       { label: "anthropic adaptive", options: { reasoning: true, compat: { forceAdaptiveThinking: true }, modelArgs: ["--thinking", "low"] },
         check: (r) => { assert.deepEqual(r.output_config, { effort: "low" }); assert.equal(r.thinking.type, "adaptive"); },
-        kinds: ["enc-output-config", "enc-effort", "enc-tool-choice", "enc-metadata", "enc-max-tokens", "enc-beta"] },
+        kinds: ["enc-output-config"] },
       // The configured thinking budget (settings.json thinkingBudgets) is a runtime input the derivation reads like the runtime does.
       { label: "anthropic budget", options: { reasoning: true, modelArgs: ["--thinking", "low"], settings: { thinkingBudgets: { low: 1500 } } },
         check: (r) => { assert.deepEqual(r.thinking, { type: "enabled", budget_tokens: 1500, display: "summarized" }); assert.deepEqual(r.betas, ["interleaved-thinking-2025-05-14"]); },
-        kinds: ["enc-budget", "enc-thinking-field", "enc-beta"] },
+        kinds: ["enc-budget"] },
       { label: "openai-completions effort", options: { api: "openai-completions", reasoning: true, modelArgs: ["--thinking", "low"] },
         check: (r) => { assert.equal(r.reasoning_effort, "low"); },
-        kinds: ["enc-effort", "enc-kwargs", "enc-format", "enc-tool-choice", "enc-nested"] },
+        kinds: ["enc-kwargs"] },
       { label: "openai-responses reasoning", options: { api: "openai-responses", reasoning: true, modelArgs: ["--thinking", "low"] },
         check: (r) => { assert.deepEqual(r.reasoning, { effort: "low", summary: "auto" }); assert.deepEqual(r.include, ["reasoning.encrypted_content"]); },
-        kinds: ["enc-effort", "enc-format", "enc-include", "enc-tool-choice", "enc-cache-key"] },
+        kinds: ["enc-cache-key"] },
       { label: "openai-codex-responses reasoning", options: { api: "openai-codex-responses", reasoning: true, modelArgs: ["--thinking", "low"] },
         check: (r) => { assert.deepEqual(r.reasoning, { effort: "low", summary: "auto" }); assert.deepEqual(r.text, { verbosity: "low" }); },
-        kinds: ["enc-effort", "enc-format", "enc-tool-choice", "enc-verbosity", "enc-parallel", "enc-cache-key"] },
+        kinds: ["enc-verbosity"] },
     ];
     for (const g of groups) {
       const common = { system: "SYS", ...g.options };
