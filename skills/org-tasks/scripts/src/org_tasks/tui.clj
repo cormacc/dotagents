@@ -223,27 +223,69 @@
      :tree-w tree-w
      :detail-w detail-w}))
 
-(defn- detail-view-lines [state detail-w]
-  (->> (detail-lines (tasks/cursor-task state))
-       (wrap-lines (max 1 detail-w))
-       (detail-lines-styled state)
-       (drop (:details-scroll state 0))))
+(defn scrollbar
+  "A column of `height` cells showing a viewport of `visible` lines at
+  `offset` into `total` lines: a thumb on a track, or blanks when everything
+  fits. Returns `[kind char]` pairs, `kind` being `:thumb`, `:track` or `nil`."
+  [total visible offset height]
+  (if (or (<= total visible) (< height 1))
+    (repeat height [nil " "])
+    (let [thumb (max 1 (min height (Math/round (double (/ (* visible height) total)))))
+          span (- total visible)
+          start (Math/round (double (/ (* (min (max 0 offset) span) (- height thumb)) span)))]
+      (for [i (range height)]
+        (if (< (dec start) i (+ start thumb)) [:thumb "┃"] [:track "│"])))))
 
-(defn- tree-pane-lines [state tasks tree-h]
+(defn- with-scrollbar
+  "Pad each of `lines` to `width - 1` columns and end it with its scrollbar
+  cell. The thumb uses the default foreground; the track is dim."
+  [state width lines bar]
+  (map (fn [line [kind ch]]
+         (str (pad-right (max 0 (dec width)) line)
+              (if (= kind :track) (styled state ch :fg dim-color) ch)))
+       lines bar))
+
+(defn- scrolled-body
+  "`height` lines of `lines` from `offset`, clamped so the last page stays
+  full, with a scrollbar in the last of `width` columns."
+  [state width height lines offset]
+  (let [total (count lines)
+        offset (max 0 (min (or offset 0) (- total height)))]
+    (with-scrollbar state width
+      (fit-lines (drop offset lines) height)
+      (scrollbar total height offset height))))
+
+(defn- detail-view-lines
+  "Every wrapped, styled details line for the cursor task; one column is
+  left for the scrollbar."
+  [state detail-w]
+  (->> (detail-lines (tasks/cursor-task state))
+       (wrap-lines (max 1 (dec detail-w)))
+       (detail-lines-styled state)))
+
+(defn- tree-pane-lines [state tasks tree-w tree-h]
   (let [title (styled state "org-tasks" :fg accent-color :bold true)
         subtitle (styled state (str (count tasks) " visible tasks") :fg dim-color)
         ;; Compute the selected tree once per frame, not once per row.
         state (assoc state :selected-tree (selected-tree-ids state))
-        visible-tree (->> tasks
-                          (map-indexed #(task-line state %2 %1))
-                          (drop (:tree-scroll state 0)))]
-    (fit-lines (concat [title subtitle] visible-tree) tree-h)))
+        rows (map-indexed #(task-line state %2 %1) tasks)]
+    (fit-lines (concat [title subtitle]
+                       (scrolled-body state tree-w (max 0 (- tree-h 2)) rows (:tree-scroll state)))
+               tree-h)))
 
-(defn- detail-pane-lines [state detail-lines pane-h]
-  (fit-lines (concat [(styled state "Details" :fg accent-color :bold true)
-                      (styled state "-------" :fg dim-color)]
-                     detail-lines)
-             pane-h))
+(defn- detail-heading [state]
+  [(styled state "Details" :fg accent-color :bold true)
+   (styled state "-------" :fg dim-color)])
+
+(defn- detail-pane-lines
+  "Details heading and body in `height` rows of `width` columns."
+  [state width height]
+  (let [body-h (max 0 (- height 2))]
+    (fit-lines (concat (detail-heading state)
+                       (scrolled-body state width body-h
+                                      (detail-view-lines state width)
+                                      (:details-scroll state)))
+               height)))
 
 (defn- render-wide [tree-w detail-w tree-lines detail-pane]
   (map (fn [l r]
@@ -251,11 +293,10 @@
        tree-lines
        detail-pane))
 
-(defn- render-stacked [state tree-w detail-w pane-h tree-lines detail-lines]
+(defn- render-stacked [tree-w detail-w pane-h tree-lines detail-pane]
   (fit-lines (concat (map #(crop tree-w %) tree-lines)
-                     ["" (styled state "Details" :fg accent-color :bold true)
-                      (styled state "-------" :fg dim-color)]
-                     (map #(crop detail-w %) detail-lines))
+                     [""]
+                     (map #(crop detail-w %) detail-pane))
              pane-h))
 
 (defn- context-notice [state]
@@ -343,14 +384,32 @@
                 (cons notice lines) lines)]
     (take (max 1 (:height state 30)) lines)))
 
+(defn- details-geometry
+  "Details pane `[width body-height]` for the expanded view."
+  [state]
+  (let [{:keys [pane-h tree-h stacked? detail-w]} (view-dimensions state)
+        detail-h (if stacked? (max 0 (- pane-h tree-h 1)) pane-h)]
+    [detail-w (max 0 (- detail-h 2))]))
+
+(defn clamp-details-scroll
+  "Keep `:details-scroll` within the last full page of the cursor task's
+  details, so scrolling back starts moving at once."
+  [state]
+  (if (and (:details-scroll state) (not= "compact" (:mode state)))
+    (let [[w body-h] (details-geometry state)
+          most (max 0 (- (count (detail-view-lines state w)) body-h))]
+      (update state :details-scroll #(max 0 (min % most))))
+    state))
+
 (defn- expanded-view [state]
   (let [{:keys [visible-tasks]} state
         {:keys [content-w pane-h tree-h stacked? tree-w detail-w]} (view-dimensions state)
-        detail-lines (detail-view-lines state detail-w)
-        tree-lines (tree-pane-lines state visible-tasks tree-h)
-        detail-pane (detail-pane-lines state detail-lines pane-h)
+        tree-lines (tree-pane-lines state visible-tasks tree-w tree-h)
+        ;; Stacked: a blank separator row sits between the tree and details.
+        [_ detail-body-h] (details-geometry state)
+        detail-pane (detail-pane-lines state detail-w (+ 2 detail-body-h))
         lines (if stacked?
-                (render-stacked state tree-w detail-w pane-h tree-lines detail-lines)
+                (render-stacked tree-w detail-w pane-h tree-lines detail-pane)
                 (render-wide tree-w detail-w tree-lines detail-pane))]
     (if (:move-task state)
       (move-picker-view state)
@@ -492,7 +551,7 @@
         (let [next-state @store]
           (if (get next-state dispatch/quit-marker)
             [(dissoc next-state dispatch/quit-marker) program/quit-cmd]
-            [(embedding/sync-context opts next-state false) nil])))
+            [(clamp-details-scroll (embedding/sync-context opts next-state false)) nil])))
       [state (when poll? (poll-cmd))])))
 
 (defn- title-writer

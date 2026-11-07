@@ -267,6 +267,27 @@
                      [removal-child-id removal-parent-id])
                    (mapv :id rows)))))))))
 
+(deftest scrollbar-tracks-the-viewport
+  (testing "no bar when everything fits"
+    (is (= (repeat 4 [nil " "]) (tui/scrollbar 4 4 0 4)))
+    (is (= (repeat 4 [nil " "]) (tui/scrollbar 2 4 0 4))))
+  (let [kinds #(mapv first (apply tui/scrollbar %&))]
+    (is (= [:thumb :thumb :track :track] (kinds 8 4 0 4)) "top: half the content shown")
+    (is (= [:track :track :thumb :thumb] (kinds 8 4 4 4)) "bottom")
+    (is (= [:track :thumb :thumb :track] (kinds 8 4 2 4)) "middle")
+    (is (= [:thumb :track :track :track] (kinds 100 4 0 4)) "a thumb is at least one cell")
+    (is (= [:track :track :track :thumb] (kinds 100 4 500 4)) "offsets past the end clamp")))
+
+(deftest panes-show-scrollbars-only-when-content-overflows
+  (let [rows (vec (for [i (range 40)] {:id (str "id" i) :summary (str "Task " i) :status "TODO" :level 1}))
+        render #(str/split-lines (tui/view (assoc (tasks/initial-state {:selectedId "id0" :rows %}) :width 80 :height 30 :color? false)))
+        bar-rows (fn [lines] (count (filter #(re-find #"[┃│]$" %) lines)))]
+    (is (pos? (bar-rows (render rows))) "40 tasks overflow the tree pane")
+    (is (zero? (bar-rows (render (subvec rows 0 3)))) "control: 3 tasks fit, so no bar")
+    (let [long (assoc-in rows [0 :description] (str/join "\n" (map #(str "line " %) (range 60))))
+          lines (render (subvec long 0 3))]
+      (is (pos? (bar-rows lines)) "long details overflow the details pane"))))
+
 (deftest initial-state-expands-selected-path
   (let [state (tasks/initial-state sample-result)]
     (is (= "b" (:selected-id state)))
@@ -279,7 +300,17 @@
     (is (= "c" (:id (tasks/cursor-task (update state :down)))))
     (is (= "a" (:id (tasks/cursor-task (update state :up)))))
     (is (not (contains? (:expanded (update (assoc state :cursor 0) :enter)) "a")))
-    (is (= 5 (:details-scroll (first (tui/update-fn {} state {:type :key-press :key "d" :ctrl true})))))
+    (let [ctrl-d #(first (tui/update-fn {} % {:type :key-press :key "d" :ctrl true}))
+          ctrl-u #(first (tui/update-fn {} % {:type :key-press :key "u" :ctrl true}))
+          long-body (str/join "\n" (map #(str "line " %) (range 60)))
+          long-state (assoc (tasks/initial-state (assoc-in sample-result [:rows 1 :description] long-body))
+                            :width 100 :height 30)]
+      (is (= 0 (:details-scroll (ctrl-d state))) "short details cannot scroll")
+      (is (= 5 (:details-scroll (ctrl-d long-state))))
+      (let [bottom (nth (iterate ctrl-d long-state) 30)]
+        (is (< 0 (:details-scroll bottom) 150) "clamped to the last page")
+        (is (= (- (:details-scroll bottom) 5) (:details-scroll (ctrl-u bottom)))
+            "scrolling back moves at once")))
     (is (= 0 (:details-scroll (first (tui/update-fn {} state {:type :key-press :key "u" :ctrl true})))))))
 
 (deftest rendering-shows-overlay-affordances

@@ -139,7 +139,7 @@ Inbound task blockers prevent removal with `inbound-blockers`. Pass `--prune-blo
 
 Bare `ot` on an interactive terminal launches the standalone task browser. It is harness-agnostic: any human or agent with a TTY can use it -- no pi extension required. The pi tasks extension is a pi-specific overlay with the same currently-exposed key map; both surfaces dispatch their exposed mutations through the same `ot` commands (`status --cycle`, `priority --cycle`, `select`, `archive`, and others). Both expose removal on `D`: the standalone TUI previews the impact and requires a second `D` on the same cursor task, while pi uses its modal confirmation. Confirmed `D` removal requests inbound-blocker pruning; neither UI exposes a separate blocker-prune key.
 
-Layout: task tree (status, id prefix, priority, summary) plus a details pane. The details pane renders beside the tree on landscape terminals and stacks below it when the terminal is narrow (< 80 columns) or portrait (width < height × 2, correcting for the ~1:2 cell aspect). Colours are shared with `ot list` via `styling/palette-256`.
+Layout: task tree (status, id prefix, priority, summary) plus a details pane. The details pane stacks below the tree by default; `--layout auto` renders it beside the tree on landscape terminals, stacking only when the terminal is narrow (< 80 columns) or portrait (width < height × 2, correcting for the ~1:2 cell aspect). Each pane shows a scrollbar in its right-hand column when its content exceeds its height. Colours are shared with `ot list` via `styling/palette-256`.
 
 Key map:
 
