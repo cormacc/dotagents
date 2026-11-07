@@ -1,17 +1,27 @@
 # Herdr app personal layout
 
-This layout combines the bundled workspace status with local quota, system load and the selected org-tasks task. The [mod sources](mods/) are the authority for behaviour; the [design record](../design/log/2026-11-05-herdr-app-orch-mod.org) records the accepted contract.
+This layout combines the bundled workspace status with one sidebar list of spaces and their agents, local quota, system load and the selected org-tasks task. The [mod sources](mods/) are the authority for behaviour; the [design record](../design/log/2026-11-05-herdr-app-orch-mod.org) records the accepted contract.
 
 ## Install and select
 
-1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks`, `layouts/herdr-orch.json` and, on macOS, `keys.darwin.json` as `keys.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
+1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks`, `mods/orch-spaces`, `layouts/herdr-orch.json` and, on macOS, `keys.darwin.json` as `keys.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
 2. In Herdr app, explicitly select the `herdr-orch` layout. The existing layout remains selected until you do this.
 
-To remove the personal layout, select another layout in Herdr app first. Remove the four personal leaf declarations and `checkHerdrAppLeaves` guard from the parent `agents.nix`, then reapply the parent configuration using the normal host procedure. Do not remove app-owned directories or the source checkout.
+To remove the personal layout, select another layout in Herdr app first. Remove the personal leaf declarations and `checkHerdrAppLeaves` guard from the parent `agents.nix`, then reapply the parent configuration using the normal host procedure. Do not remove app-owned directories or the source checkout.
 
 The quota mod requires the home-installed `~/.agents/skills/herdr-orch/scripts/oh` and its runtime prerequisites. It runs `oh usage --format json` from your home directory and reports quota for this computer, not a selected remote machine. See the [usage contract](../skills/herdr-orch/scripts/docs/contract.md#usage) for provider setup and cache behaviour.
 
 Named Pi Anthropic subscriptions appear as separate `anthropic-<N>` rows (`anthropic-1`, `anthropic-2`, ...) alongside the default `anthropic` row. The footer, popup and visibility preferences use the full local account identity, so hiding one account does not hide its sibling. Quota values and unavailable states remain account-specific. The parser retains explicit `baseProvider` and `accountId` fields; older single-account rows remain supported. Account management stays in Pi; the quota command never refreshes or writes credentials.
+
+## Spaces and agents
+
+The `orch-spaces` block replaces the bundled Spaces and Agents lists. It is the bundled `spaces` mod with each space's agents under it ([provenance](mods/orch-spaces/UPSTREAM.md)).
+
+- Tree :: an agent is shown under the terminal that started it while that terminal is live, else under its space. A sub-agent that has its own pane is shown once, under its parent.
+- Name :: the `oh.label` that `oh` gives an agent it starts (`planner-1-heavy`, nested `planner-1/scout-2-fable`), else the terminal's name, else the program's name.
+- Click :: an agent with a pane gets focus; one without a pane opens in a peek.
+- Order :: `agent.next` and `agent.prev` follow the list as shown.
+- Rail :: the narrow sidebar shows spaces only, with the control that widens it again.
 
 ## Task widget
 
