@@ -41,6 +41,26 @@
     (is (= 3 (:exit p)) (:out p))
     (is (re-find #"UNAVAILABLE .*d\.org:2 mermaid: mmdc is not on PATH" (:out p)))))
 
+(defn- fake-mmdc! [dir stderr]
+  (let [bin (fs/create-dirs (fs/path dir "fake-bin"))
+        mmdc (fs/path bin "mmdc")]
+    (spit (str mmdc) (str "#!/bin/sh\ncat >&2 <<'EOF'\n" stderr "\nEOF\nexit 1\n"))
+    (fs/set-posix-file-permissions mmdc "rwxr-xr-x")
+    (str bin ":" (System/getenv "PATH"))))
+
+(deftest a-renderer-failure-reports-its-cause
+  (let [dir (fs/create-temp-dir {:prefix "check-diagrams-test-"})
+        doc (doc! dir "d.md" "```mermaid\ngraph TD\n  A-->B\n```\n")
+        run (fn [stderr] (run-check {"PATH" (fake-mmdc! dir stderr)} "--out" (str (fs/path dir "out")) doc))]
+    (testing "a missing browser is unavailable, not a broken diagram"
+      (let [p (run "Error: Could not find chrome-headless-shell (ver. 1).\n    at ChromeLauncher.resolveExecutablePath (x.js:1:1)")]
+        (is (= 3 (:exit p)) (:out p))
+        (is (re-find #"UNAVAILABLE .*d\.md:2 mermaid: mmdc cannot start a browser: Error: Could not find chrome-headless-shell" (:out p)))))
+    (testing "control: a diagram error fails and names the error, not the last stack frame"
+      (let [p (run "Error: Parse error on line 2:\n    at cli (index.js:1:1)")]
+        (is (= 1 (:exit p)) (:out p))
+        (is (re-find #"FAIL .*d\.md:2 mermaid: Error: Parse error on line 2:" (:out p)))))))
+
 (deftest usage-errors
   (is (= 2 (:exit (run-check nil))))
   (is (= 2 (:exit (run-check nil "notes.txt")))))
@@ -49,16 +69,20 @@
   (if-not (fs/which tool)
     (println (str "SKIP rendering test for " (name lang) ": " tool " is not on PATH"))
     (let [dir (fs/create-temp-dir {:prefix "check-diagrams-test-"})
-          out (str (fs/path dir "out"))]
-      (testing (str (name lang) ": a valid block passes and writes an image")
-        (let [p (run-check nil "--out" out (doc! dir "good.md" (str "```" (name lang) "\n" good "\n```\n")))]
-          (is (zero? (:exit p)) (:out p))
-          (is (re-find #"PASS .*good\.md:2" (:out p)))
-          (is (seq (fs/glob out "good-01.png")))))
-      (testing (str (name lang) ": a broken block fails (positive control)")
-        (let [p (run-check nil "--out" out (doc! dir "bad.org" (str "#+begin_src " (name lang) "\n" bad "\n#+end_src\n")))]
-          (is (= 1 (:exit p)) (:out p))
-          (is (re-find #"FAIL .*bad\.org:2" (:out p))))))))
+          out (str (fs/path dir "out"))
+          good-run (run-check nil "--out" out (doc! dir "good.md" (str "```" (name lang) "\n" good "\n```\n")))]
+      ;; A renderer that cannot start reports UNAVAILABLE, so neither block can be judged here.
+      (if (re-find #"UNAVAILABLE" (:out good-run))
+        (println (str "SKIP rendering test for " (name lang) ": " (first (str/split-lines (:out good-run)))))
+        (do
+          (testing (str (name lang) ": a valid block passes and writes an image")
+            (is (zero? (:exit good-run)) (:out good-run))
+            (is (re-find #"PASS .*good\.md:2" (:out good-run)))
+            (is (seq (fs/glob out "good-01.png"))))
+          (testing (str (name lang) ": a broken block fails (positive control)")
+            (let [p (run-check nil "--out" out (doc! dir "bad.org" (str "#+begin_src " (name lang) "\n" bad "\n#+end_src\n")))]
+              (is (= 1 (:exit p)) (:out p))
+              (is (re-find #"FAIL .*bad\.org:2" (:out p))))))))))
 
 (deftest mermaid-rendering
   (rendering-test :mermaid "mmdc" "flowchart TD\n  A --> B" "flowchart TD\n  A[\"unclosed --> B"))

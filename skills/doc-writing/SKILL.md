@@ -74,7 +74,7 @@ Render every diagram that you add or change, then look at the images: a block ca
 bb <skill-dir>/scripts/check-diagrams.bb --out <scratch-dir> FILE.org FILE.md ...
 ```
 
-It prints PASS, FAIL or UNAVAILABLE (tool not installed) for each block, and WARN for known traps. Exit codes: 0 every block passed, 1 a block failed, 3 a tool was unavailable. Do not report a diagram as checked when its tool was unavailable.
+It prints PASS, FAIL or UNAVAILABLE (tool not installed, or `mmdc` cannot start its browser) for each block, and WARN for known traps. Exit codes: 0 every block passed, 1 a block failed, 3 a tool was unavailable. Do not report a diagram as checked when its tool was unavailable.
 
 ### Technical documents
 

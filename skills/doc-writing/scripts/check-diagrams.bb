@@ -10,7 +10,8 @@
 ;;   --format  png (default, easy to view) or svg.
 ;;
 ;; Mermaid needs `mmdc` (@mermaid-js/mermaid-cli); PlantUML needs `plantuml`.
-;; A missing tool makes its blocks UNAVAILABLE, not PASS.
+;; A missing tool, or an mmdc that cannot start its browser, makes its blocks
+;; UNAVAILABLE, not PASS.
 ;;
 ;; Exit codes: 0 every block passed, 1 a block failed, 2 usage error,
 ;; 3 no failure but at least one block was unavailable.
@@ -80,10 +81,18 @@
                                   (if (= lang :mermaid)
                                     ["mmdc" "-q" "-i" src "-o" img]
                                     ["plantuml" "-failfast2" (str "-t" ext) "-o" (str dir) src]))]
-      (if (and (zero? exit) (fs/exists? img))
-        {:status :pass :image img}
-        {:status :fail :detail (let [msg (str/trim (str err "\n" out))]
-                                 (if (str/blank? msg) (str "exit " exit ", no image") (last (str/split-lines msg))))}))))
+      (let [msg (str/trim (str err "\n" out))
+            lines (str/split-lines msg)
+            ;; A stack trace ends with a frame, not the cause, so prefer the first error line.
+            detail (cond (str/blank? msg) (str "exit " exit ", no image")
+                         :else (or (first (filter #(re-find #"(?i)error" %) lines)) (last lines)))]
+        (cond
+          (and (zero? exit) (fs/exists? img)) {:status :pass :image img}
+          ;; mmdc renders through Puppeteer; without a browser it cannot judge the diagram.
+          (and (= lang :mermaid)
+               (re-find #"Could not find (?:Chrome|chrome-headless-shell)|Failed to launch the browser process" msg))
+          {:status :unavailable :detail (str "mmdc cannot start a browser: " detail)}
+          :else {:status :fail :detail detail})))))
 
 (defn- file-format [path]
   (cond (str/ends-with? path ".org") :org
