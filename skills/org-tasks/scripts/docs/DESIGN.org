@@ -14,10 +14,11 @@ flowchart TD
         TUI["tui.clj\ncharm view/glue"]
         TUID["tui/dispatch.clj\nnexus actions (charm-free)"]
         TUIT["tui/tasks.clj\nstate model + command bridge"]
+        COMPACT["compact.clj\ncompact view model"]
     end
     subgraph Commands
         REG["commands/registry.clj\nspecs + handlers + summaries"]
-        FAM["commands/{list_show,create,move,removal,status,\narchive_publish,record,links,maintenance}.clj"]
+        FAM["commands/{list_show,create,move,removal,status,\narchive_publish,record,links,maintenance,view}.clj"]
         UTIL["commands/util.clj\ncontext + id resolution"]
     end
     subgraph Core
@@ -58,6 +59,9 @@ flowchart TD
     FAM --> OUT
     FAM --> STYLE
     TUI --> STYLE
+    TUI --> COMPACT
+    FAM --> COMPACT
+    COMPACT --> TUIT
     UTIL --> ROOT
 #+end_src
 
@@ -68,6 +72,7 @@ Notable boundaries:
 
 - =styling.clj= (bling, one-shot CLI text) and the TUI (charm, interactive screen) are intentionally separate rendering stacks, but share one colour definition: =styling/palette-256= is canonical, bling keyword codes are pinned by test, and the TUI builds charm =ansi256= colours from the same map.
 - =tui/dispatch.clj= is charm-free by design: nexus actions over plain state maps, individually testable without a terminal.
+- =compact.clj= owns the compact selected-task view model: row choice, order, emphasis, progress and status counts. The TUI compact view and =ot compact= render from it, and native hosts consume its JSON, so no renderer re-derives that logic.
 - The TUI reuses command handlers in-process through =tui/tasks.clj='s data-level bridge (=output/emit-result= returns the envelope map; =*exit-fn*= carries errors), rather than shelling out or re-parsing printed JSON.
 
 * Graph load pipeline

@@ -14,7 +14,7 @@
             [charm.render.core :as render]
             [charm.style.core :as style]
             [clojure.string :as str]
-            [org-tasks.lifecycle :as lifecycle]
+            [org-tasks.compact :as compact]
             [org-tasks.styling :as styling]
             [org-tasks.task :as task]
             [org-tasks.output :as out]
@@ -114,7 +114,7 @@
 (defn- selected-tree-ids
   "IDs of the selected task and its descendants; nil without a selection."
   [{:keys [tasks selected-id]}]
-  (when (some #(= selected-id (:id %)) tasks)
+  (when (and selected-id (some #(= selected-id (:id %)) tasks))
     (let [children (group-by :parentId tasks)]
       (loop [acc #{} pending [selected-id]]
         (if-let [[id & more] (seq pending)]
@@ -293,15 +293,6 @@
                                  "Type section name  Enter confirm  Esc cancel"
                                  "↑↓/jk choose  Enter confirm  Esc cancel")])))))
 
-(defn- home-shortened [path]
-  (when path
-    (let [home (System/getProperty "user.home")
-          prefix (str (str/replace home #"/+$" "") "/")]
-      (cond
-        (= path home) "~"
-        (str/starts-with? path prefix) (str "~/" (subs path (count prefix)))
-        :else path))))
-
 (defn- right-justified
   "Pad `text` so `token` ends at `width`; drop the token when both do not fit."
   [width text token]
@@ -309,96 +300,45 @@
     (str (pad-right (- width (text-width token)) text) token)
     (crop width text)))
 
-(defn- compact-task-text
-  "Status-led task text. The status keeps its palette colour; the remainder
-  uses the terminal's default foreground for a current task and the
+(defn- compact-row-text
+  "Status-led row text. The status keeps its palette colour; the remainder
+  uses the terminal's default foreground for a current row and the
   theme-defined muted colour otherwise, so emphasis follows light and dark
   themes."
-  [state t current?]
-  (let [status (:status t)
-        body (str (:summary t) " [" (task/id-prefix (:id t)) "]")]
-    (str (if-let [color (status-colors status)]
-           (styled state status :fg color)
-           status)
-         " "
-         (if current? body (styled state body :fg muted-color)))))
-
-(defn- selected-context
-  "The selected task with its top-level parent, nearest linked plan and
-  descendants."
-  [state]
-  (let [rows (:tasks state)
-        selected (first (filter #(= (:selected-id state) (:id %)) rows))
-        ancestors (tasks/ancestor-ids rows (:selected-id state))
-        by-id (into {} (map (juxt :id identity)) rows)
-        plan-owner (first (filter :importPath (take-while some?
-                                                          (iterate #(get by-id (:parentId %)) selected))))]
-    {:selected selected
-     :parent (first (filter #(and (contains? ancestors (:id %))
-                                  (not (contains? ancestors (:parentId %)))) rows))
-     :plan (:importPath plan-owner)
-     :descendants (filter #(contains? (tasks/ancestor-ids rows (:id %))
-                                      (:selected-id state)) rows)}))
-
-(defn- plan-file-name
-  "File name of an import link such as `plan:2026-11-05-x.org`."
-  [plan]
-  (some-> plan (str/replace #"^[a-z][a-z0-9-]*:" "") fs/file-name str))
+  [state {:keys [status label current]}]
+  (str (if-let [color (status-colors status)]
+         (styled state status :fg color)
+         status)
+       " "
+       (if current label (styled state label :fg muted-color))))
 
 (defn window-title
-  "Terminal title naming the project folder and the selected task's plan. A
-  host can mirror it into its pane label; the `:: <plan>` part is omitted when
-  the selected task has no plan."
+  "Terminal title naming the project folder and the selected task's plan
+  (see `org-tasks.compact/model`). A host can mirror it into its pane label."
   [state]
-  (let [folder (some-> (:task-memory-path state) fs/parent str home-shortened)
-        plan (plan-file-name (:plan (selected-context state)))]
-    (str/join " :: " (remove nil? ["Tasks" folder plan]))))
-
-(defn- status-summary
-  "`<N> tasks: <n> TODO / <n> STARTED ...`: the total, then each status with
-  a non-zero count in canonical order and its palette colour."
-  [state]
-  (let [counts (frequencies (map :status (:tasks state)))
-        parts (for [status lifecycle/status-cycle
-                    :let [n (get counts status 0)]
-                    :when (pos? n)]
-                (str n " " (styled state status :fg (status-colors status))))]
-    (str (count (:tasks state)) " tasks"
-         (when (seq parts) (str ": " (str/join " / " parts))))))
+  (:title (compact/model state)))
 
 (defn compact-lines
-  "Height-bounded selected-task context: the selected task, its top-level
-  parent, every STARTED descendant, then the next pending descendant. The
-  first STARTED line carries the right-justified `done/total` descendant
-  count, which the task line carries when nothing has started. The next line
-  ends with a right-justified ellipsis when further pending work is hidden.
-  STARTED descendants are current; the selected task is current when none has
-  started."
+  "Height-bounded rendering of `org-tasks.compact/model`: rows in model order,
+  right-justified tokens, and without a selection the status counts followed
+  by any host-supplied key hints."
   [state]
-  (let [{:keys [selected parent descendants]} (selected-context state)
+  (let [m (compact/model state)
         width (max 1 (:width state 100))
-        completed? #(#{"DONE" "CANCELLED"} (:status %))
-        started? #(= "STARTED" (:status %))
-        started (filter started? descendants)
-        [next-task & hidden] (remove #(or (completed? %) (started? %)) descendants)
-        current-ids (set (map :id (or (seq started) [selected])))
-        current? #(contains? current-ids (:id %))
         muted #(styled state % :fg muted-color)
-        progress (str (count (filter completed? descendants)) "/" (count descendants))
-        subtask-line (fn [t token]
-                       (right-justified width
-                                        (str (muted "... ") (compact-task-text state t (current? t)))
-                                        (some-> token muted)))
-        lines (if selected
-                (concat [(right-justified width (compact-task-text state selected (current? selected))
-                                          (when (empty? started) (muted progress)))]
-                        (when parent [(muted (str "Parent: " (:summary parent)))])
-                        (map-indexed #(subtask-line %2 (when (zero? %1) progress)) started)
-                        (when next-task [(subtask-line next-task (when (seq hidden) "..."))]))
-                (cond
-                  (:selected-id state) [(str "Stale selection: " (:selected-id state))]
-                  ;; Host-supplied key hints explain how to select in that host.
-                  :else (cons (status-summary state) (:hints state))))
+        line (fn [{:keys [role summary token] :as r}]
+               (if (= "parent" role)
+                 (muted (str "Parent: " summary))
+                 (right-justified width
+                                  (str (when (#{"started" "next"} role) (muted "... "))
+                                       (compact-row-text state r))
+                                  (some-> token muted))))
+        lines (case (:selection m)
+                "selected" (map line (:rows m))
+                "stale" [(str "Stale selection: " (:selectedId m))]
+                ;; Host-supplied key hints explain how to select in that host.
+                (cons (compact/status-summary m #(styled state % :fg (status-colors %)))
+                      (:hints state)))
         lines (if-let [notice (context-notice state)]
                 (cons notice lines) lines)]
     (take (max 1 (:height state 30)) lines)))

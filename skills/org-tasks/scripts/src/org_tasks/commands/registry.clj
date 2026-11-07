@@ -24,7 +24,8 @@
             [org-tasks.commands.record :as record]
             [org-tasks.commands.removal :as removal]
             [org-tasks.commands.spec :as spec]
-            [org-tasks.commands.status :as status]))
+            [org-tasks.commands.status :as status]
+            [org-tasks.commands.view :as view]))
 
 ;; ── Option specs ───────────────────────────────────────────────────
 
@@ -242,6 +243,9 @@
    {:cmds ["selected"]           :fn list-show/selected-cmd
     :spec include-content-spec
     :summary ["" "Show the currently-selected task"]}
+   {:cmds ["compact"]            :fn view/compact-cmd
+    :spec {:width {:desc "Text width for right-justified tokens (default 80)" :ref "<n>" :coerce :long}}
+    :summary ["[--width <n>]" "Show the compact selected-task view (--format json for its view model)"]}
    {:cmds ["archive"]            :fn archive-publish/archive-cmd
     :spec include-content-spec :args->opts [:id]
     :tui-key :archive

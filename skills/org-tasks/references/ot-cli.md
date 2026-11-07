@@ -45,6 +45,8 @@ ot list --format json
 ot list --levels 0
 ot selected --format json  # the selection query: {"selected": null} + exit 0 when nothing
                         # is selected, so it is the safe resume probe
+ot compact --format json   # compact selected-task view model for native widgets;
+                        # text prints the TUI compact lines (--width, default 80)
 ot show <id-or-selected>  # text mode appends a non-empty task body after metadata
                         # JSON/EDN retain the Task.description payload
                         # strict: `show selected` exits 1 when nothing is selected
@@ -177,6 +179,8 @@ Exit contract: the TUI reserves stdout for a final org-tasks/v1 selected-task en
 ### Compact and embedded use
 
 `ot tui --mode compact` opens the shared passive selected-task view. It shows the selected task, its top-level parent, every `STARTED` descendant, and then the next pending descendant. Each task row starts with its colour-coded status; descendant rows start with `... `. The first `STARTED` row shows the right-justified descendant completion as `completed/total`; when no descendant has started, the selected row shows it. The next-task row ends with a right-justified `...` when more pending descendants are hidden. `STARTED` descendants are current; the selected task is current when no descendant has started. Current text uses the terminal's default foreground; other text uses the theme's muted colour. In both modes, the TUI sets the terminal title (OSC 2) to `Tasks :: <project folder> :: <plan file>`, with the home directory shortened to `~`; it omits `:: <plan file>` when the selected task has no linked plan. `Esc`, `Alt-t` or `Ctrl-c` exits; expand through the embedding snapshot to browse or mutate. Standalone `ot tui` defaults to expanded mode and accepts `--root` like other commands. Expanded mode stacks the details pane below the task tree; `--layout auto` puts it beside the tree on wide landscape terminals. `--exit-on-select` makes the browser exit after a successful `s` (select or clear).
+
+`ot compact --format json` returns the same view as data, for hosts that draw it natively, such as the herdr-app widget: [../scripts/docs/contract.md#`ot compact [--width <n>]`](../scripts/docs/contract.md#ot-compact---width-n).
 
 A host can run `ot tui --context-file /absolute/private/context.json --instance <instance-id>` in its owned terminal. The JSON snapshot supplies source directory, compact/expanded mode, availability, context identity, a renewable lease and optional key hints, which compact mode shows when no task is selected. The shared TUI owns root resolution, graph refresh and safe switching; the host owns source selection, placement and focus. There are no host-specific task-rendering calls. Exact producer requirements and fixtures: [../scripts/docs/contract.md#Embedded TUI context contract](../scripts/docs/contract.md#embedded-tui-context-contract).
 

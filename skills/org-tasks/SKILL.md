@@ -44,6 +44,7 @@ ot root
 ot list --format json  # compact rows + root, selectedId, count; --full includes tree, files and sources
 ot selected --format json  # selection query: {"selected": null} and exit 0 when nothing is selected
 ot show <id-or-selected>  # text output includes the task body; JSON/EDN retain Task.description
+ot compact --format json  # compact selected-task view model, for native task widgets
 ot create "New task" --section Improvements --body 'Description text' --tag mytag --linked-issue '[[jira:ABC-1]]'
 ot create "New plan task" --parent <id>  # nests under <id>, including a task inside a change-record
 ot move <id> --parent <dest-id>   # append as last child (--section <name> appends in an existing section)

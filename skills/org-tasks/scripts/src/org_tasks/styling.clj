@@ -10,9 +10,15 @@
   (bling for one-shot CLI text, charm for the interactive screen), but
   they share one set of colour definitions: `palette-256` below is the
   canonical palette, and the TUI builds charm `ansi256` colours from it."
-  (:require [bling.core :refer [bling]]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [org-tasks.output :as out]))
+
+;; bling's colour detection (fireworks 0.20.0, `detect-color-level`) prints
+;; "color level could not be detected" to stdout while it loads whenever TERM
+;; and COLORTERM give no clue, as for a GUI app's subprocess. That line would
+;; precede the JSON envelope on stdout, so load bling with stdout on stderr.
+(binding [*out* *err*] (require 'bling.core))
+(def ^:private bling (requiring-resolve 'bling.core/bling))
 
 (def status-palette
   {"TODO" :yellow

@@ -337,6 +337,37 @@ It writes only for `cleared-stale`. Valid and absent local files remain byte-ide
 
 Same payload as `ot show <selectedId>`, or `{"selected": null, "selectedId": ...}` with exit 0 when the selection cannot be shown. `selectedId` discriminates the two reasons: `null` means nothing is selected, while a non-null value is a stale `#+SELECTED:` pointer to a task that no longer exists (`ot doctor` reports `selected-not-found`).
 
+### `ot compact [--width <n>]`
+
+The compact selected-task view model. The TUI compact view renders from the same model, and text output prints its lines at `--width` (default 80). Native hosts render the JSON themselves and keep only presentation: status colours, emphasis and alignment.
+
+```json
+{
+  "title": "Tasks :: ~/project :: 2026-11-05-plan.org",
+  "folder": "~/project",
+  "memory": true,
+  "plan": "2026-11-05-plan.org",
+  "selectedId": "…",
+  "selection": "selected",
+  "total": 12,
+  "counts": [{"status": "TODO", "count": 7}, {"status": "STARTED", "count": 2}, {"status": "DONE", "count": 3}],
+  "rows": [{"role": "task", "id": "…", "status": "STARTED", "summary": "…", "label": "… [8-char id]", "current": false, "token": null}],
+  "files": ["/abs/project/TASKS.org", "/abs/project/TASKS.local.org"]
+}
+```
+
+| Field | Contract |
+| --- | --- |
+| `title` | `Tasks :: <folder>`, plus ` :: <plan>` when the selected task or an ancestor links a plan. The TUI sets it as the terminal title. |
+| `folder` / `plan` | Home-shortened project folder; plan file name, or null. |
+| `memory` | False when the resolved project has no `TASKS.org`; renderers should say so rather than show `0 tasks`. |
+| `selection` | `selected`, `none`, or `stale` (a non-null `selectedId` that resolves to no task). |
+| `total` / `counts` | Every task in the graph; each status with a non-zero count, in canonical status order. |
+| `rows` | Empty unless `selected`. In order: the selected task (`task`), its top-level parent (`parent`), every STARTED descendant (`started`), then the next pending descendant (`next`). |
+| `rows[].current` | True for STARTED descendants, or for the selected task when none has started. Renderers emphasise current rows. |
+| `rows[].token` | Right-justified text or null: the `done/total` descendant progress on the first `started` row (on the `task` row when nothing has started), and `...` on the `next` row when more pending descendants are hidden. |
+| `files` | Absolute paths of the task files the view reads: `TASKS.org`, `TASKS.local.org`, `TASKS.setup.org` and every loaded import. The archive is excluded. Watch them to refresh. |
+
 ### `ot remove <id> [--prune-blockers] --yes`
 
 ```json

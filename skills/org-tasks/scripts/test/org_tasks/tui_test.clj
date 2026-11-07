@@ -354,6 +354,16 @@
         (is (= 4 (count l)))
         (is (not-any? #(str/includes? % muted) (vals l)))))))
 
+(deftest a-task-without-an-id-is-never-the-absent-selection
+  (let [rows [{:id "a" :summary "Has id" :status "TODO"}
+              {:summary "No id" :status "TODO"}]
+        state (assoc (tasks/initial-state {:selectedId nil :rows rows}) :color? true :cursor 99)]
+    (is (not-any? #(str/includes? % "\u001b[90m")
+                  (map-indexed #(tui/task-line state %2 %1) (:visible-tasks state)))
+        "no row is muted, because nothing is selected")
+    (is (= "2 tasks: 2 TODO"
+           (first (tui/compact-lines (assoc state :mode "compact" :color? false)))))))
+
 (deftest task-line-renders-priority-token
   (let [mk (fn [prio] {:id "aaaabbbb-0000-4000-8000-000000000000"
                        :status "TODO" :summary "Sample" :level 1

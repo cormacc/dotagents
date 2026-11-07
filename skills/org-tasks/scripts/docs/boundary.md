@@ -4,6 +4,8 @@ The protocol engine (`ot`, in Babashka) owns durable org-tasks behaviour and the
 
 The shared compact/expanded terminal renderer also supports embedding. Host adapters own context production, pane/terminal identity, placement, focus and sizing; `ot` owns context validation, liveness, root resolution, safe modal switching and graph refresh. The owning producer/consumer contract is [contract.md#Embedded TUI context contract](contract.md#embedded-tui-context-contract). The existing Pi visual surface remains independent; this boundary adds no host APIs or cross-harness event bus.
 
+Native hosts draw the compact view from `ot compact --format json` ([contract.md#`ot compact [--width <n>]`](contract.md#ot-compact---width-n)). `ot` owns row choice, order, emphasis, progress and counts; the host owns project choice, refresh triggers and presentation. The herdr-app widget is such a host.
+
 ## Ownership table
 
 | Concern                                        | `ot` | pi extension | Notes                                                                                                          |
@@ -35,7 +37,8 @@ The shared compact/expanded terminal renderer also supports embedding. Host adap
 | `:HANDOFF:` get/set/clear                        | ✅   |              |                                                                                                                |
 | Standalone and embedded terminal task browser (`ot`, `ot tui`) | ✅ | | Shared compact/expanded rendering, input, confirmations, external graph refresh and context safety. Standalone stdout emits final selected-task JSON; embedded stdout is empty. |
 | Overlay rendering (split pane, highlighting)    |      | ✅           | Pi-owned expanded overlay; behaviour mirrors the standalone TUI where practical.                               |
-| Compact selected-task widget                     |      | ✅           | Layout, truncation rules, side-bar markers.                                                                    |
+| Compact selected-task widget (Pi legacy UI)      |      | ✅           | Layout, truncation rules, side-bar markers.                                                                    |
+| Compact selected-task view model (`ot compact`)  | ✅   |              | Rows, order, emphasis, progress, status counts and watched files for native hosts and the TUI compact view.   |
 | Pi overlay keybindings (`s`, `m`, `D`, `e`, `p`, `n`, `N`, `A`, `P`, `U`, `J`, scroll, status cycle) |      | ✅           | Standalone TUI has its own Clojure key loop; pi event wiring stays in TypeScript. Status-cycle and create-placement *policy* now live in `ot` (both UIs only send direction / anchor+relation). |
 | Pi file watchers (`TASKS.org`, `TASKS.local.org`, plan files) | | ✅ | Pi-specific watchers remain separate from the shared TUI's per-instance polling. |
 | Confirmation / input prompts | ✅ | ✅ | Each UI owns interaction state; `ot` commands own validation and writes. Embedded terminal interactions freeze the original root. |
