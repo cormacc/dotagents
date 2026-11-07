@@ -6,7 +6,7 @@
          '[babashka.fs :as fs]
          '[babashka.process :as p]
          '[clojure.string :as str]
-         '[clojure.test :refer [deftest is run-tests]])
+         '[clojure.test :refer [deftest is run-tests testing]])
 
 (defn temporary [f]
   (fs/create-dirs ".tmp")
@@ -50,30 +50,32 @@
    (fn [dir]
     (let [a (assoc a :foreground_cwd (str (fs/create-dir (fs/path dir "a"))))
           b (assoc b :foreground_cwd (str (fs/create-dir (fs/path dir "b"))))
-          first (host/context nil "instance" a local-info "compact" 100)
-        beat (host/context first "instance" a local-info "compact" 200)
-        switched (host/context beat "instance" b local-info "expanded" 300)
-        back (host/context switched "instance" a local-info "compact" 400)]
+          hints ["ctrl+b t: Select a task from the backlog"]
+          first (host/context nil "instance" a local-info hints 100)
+          beat (host/context first "instance" a local-info hints 200)
+          switched (host/context beat "instance" b local-info hints 300)
+          back (host/context switched "instance" a local-info nil 400)]
     (is (= "org-tasks-embed/v1" (:schema first)))
     (is (= "local" (:availability first)))
-    (is (= "local" (:availability (host/context nil "unmanaged" (dissoc a :interactive_ready) local-info "compact" 100))))
+    (is (= "compact" (:mode first)) "the embedded pane is always compact")
+    (is (= hints (:hints first)))
+    (is (not (contains? back :hints)) "no bindings, no hints field")
     (is (= 200 (:updatedAt beat)))
     (is (= (:contextId first) (:contextId beat)))
     (is (not= (:contextId first) (:contextId switched)))
     (is (not= (:contextId first) (:contextId back)))
-    (is (= "expanded" (:mode switched)))
     (is (= (:foreground_cwd b) (:directory switched)))
     (is (= (:foreground_cwd a) (:directory back)))
-    (is (= "remote" (:availability (host/context first "instance" a {:foreground_processes [{:name "ssh"}]} "compact" 500))))
+    (is (= "remote" (:availability (host/context first "instance" a {:foreground_processes [{:name "ssh"}]} nil 500))))
     (doseq [[candidate info] [[nil nil] [a {:foreground_processes [{:name "bash"}]}] [a {}] [(assoc a :foreground_cwd "relative") local-info]]]
-      (is (= "unavailable" (:availability (host/context first "instance" candidate info "compact" 500)))))))))
+      (is (= "unavailable" (:availability (host/context first "instance" candidate info nil 500)))))))))
 
 (deftest real-producer-is-accepted-by-consumer-and-expires
   (temporary
    (fn [dir]
      (let [private (host/private-dir! (fs/path dir "instance"))
            file (str (fs/path private "context.json"))
-           c (host/context nil "instance" a local-info "expanded" 10000)
+           c (host/context nil "instance" a local-info ["hint"] 10000)
            opts {:context-file file :instance "instance"}]
        (host/atomic! file c)
        (is (= "rwx------" (fs/posix->str (fs/posix-file-permissions private))))
@@ -82,9 +84,9 @@
        (is (= :ready (:status (embed/read-context opts 15000))))
        (is (= :stale (:status (embed/read-context opts 15001))))
        (is (= :invalid (:status (embed/read-context (assoc opts :instance "foreign") 10000))))
-       (host/atomic! file (host/context c "instance" nil nil "compact" 10001))
+       (host/atomic! file (host/context c "instance" nil nil nil 10001))
        (is (= :unavailable (:status (embed/read-context opts 10001))))
-       (host/atomic! file (host/context c "instance" a {:foreground_processes [{:name "ssh"}]} "compact" 10002))
+       (host/atomic! file (host/context c "instance" a {:foreground_processes [{:name "ssh"}]} nil 10002))
        (is (= :remote (:status (embed/read-context opts 10002))))
        (is (= ["context.json"] (mapv (comp str fs/file-name) (fs/list-dir private))))))))
 
@@ -121,93 +123,138 @@
              [(dissoc record :identity) s info nil 11000]]]
       (is (not (host/owned? r snap process identity time))))))
 
-(deftest config-refuses-unsupported-root-modes-and-invalid-sizing
+(deftest config-refuses-unknown-keys-and-invalid-sizing
   (temporary
    (fn [dir]
      (is (= host/defaults (host/config! dir)))
-     (doseq [bad [{:mode :workspace} {:compact-rows 0} {:expanded-fraction 1} {:compact-rows "six"}]]
+     (doseq [bad [{:mode :workspace} {:compact-rows 0} {:expanded-fraction 0.5} {:compact-rows "six"}]]
        (spit (str (fs/path dir "config.edn")) (pr-str bad))
        (is (thrown? Exception (host/config! dir)))))))
 
-(defn fake-host [dir f]
-  (let [s (atom (snapshot [a])) calls (atom [])
-        live (atom true) timestamp (atom 10000)
+(deftest hints-render-the-configured-prefix-and-bindings
+  (let [config (str "[keys]\nprefix = \"ctrl+a\" # comment\n\n"
+                    "[[keys.command]]\nkey = \"prefix+t\"\ntype = \"plugin_action\"\n"
+                    "command = \"cormacc.org-tasks.select\"\n\n"
+                    "[[keys.command]]\nkey = \"prefix+shift+o\"\ntype = \"plugin_action\"\n"
+                    "command = \"cormacc.org-tasks.toggle\"\n")]
+    (is (= ["ctrl+a t: Select a task from the backlog"
+            "ctrl+a O: Disable/enable org-tasks overlay"]
+           (host/hints config)))
+    (is (= ["ctrl+b t: Select a task from the backlog"
+            "ctrl+b O: Disable/enable org-tasks overlay"]
+           (host/hints (str/replace config "[keys]\nprefix = \"ctrl+a\" # comment\n" "")))
+        "Herdr's default prefix applies when keys.prefix is absent")
+    (is (= ["ctrl+a O: Disable/enable org-tasks overlay"]
+           (host/hints (str/replace config "cormacc.org-tasks.select" "other.plugin.select")))
+        "an unbound action has no hint")
+    (is (= ["ctrl+a f12: Select a task from the backlog"]
+           (host/hints (str "[keys]\nprefix = [\"ctrl+a\", \"f12\"]\n"
+                            "[[keys.command]]\ncommand = \"cormacc.org-tasks.select\"\nkey = \"prefix+f12\"\n")))
+        "the first of several prefixes; key and command in either order")
+    (is (nil? (host/hints nil)))
+    (is (= "alt+x" (host/display-key "ctrl+b" "alt+x")) "a binding without the prefix is shown as is")))
+
+(def tab2 "w1:t9")
+(def c (assoc a :pane_id "agent-c" :terminal_id "term-c" :tab_id tab2))
+
+(defn fake-host
+  "Two tabs with one agent each. Plugin pane opens create `tasks-<tab>` panes
+  whose supervisor is live while `live` holds."
+  [dir f]
+  (let [s (atom (assoc (snapshot [a c]) :tabs [{:tab_id tab} {:tab_id tab2}]))
+        calls (atom []) live (atom true) timestamp (atom 10000)
+        display (str (fs/path dir "plugin-state"))
         dispatch
         (fn [& args]
           (swap! calls conj (vec args))
           (case (vec (take 2 args))
             ["api" "snapshot"] {:snapshot @s}
-            ["pane" "process-info"] {:process_info (if (= "tasks" (last args))
+            ["pane" "process-info"] {:process_info (if (str/starts-with? (last args) "tasks")
                                                     (if @live {:shell_pid 22} {:shell_pid 23})
                                                     local-info)}
             ["pane" "resize"] (do (Double/parseDouble (last args)) {})
-            ["pane" "layout"] {:layout {:panes [{:pane_id "tasks" :rect {:x 0 :y 21 :width 100 :height 19}}]
-                                         :splits [{:direction "down" :rect {:x 0 :y 0 :width 100 :height 40}}]}}
+            ["pane" "layout"] {:layout {:panes [] :splits []}}
             ["plugin" "pane"]
             (case (nth args 2)
-              "open" (let [env (filter #(and (string? %) (.startsWith % "OT_HOST_")) args)
-                           values (into {} (map #(str/split % #"=" 2) env))
-                           instance (get values "OT_HOST_INSTANCE")
-                           owner {:pane "tasks" :terminal "term-tasks" :tab tab :pid 22 :identity "start command"
-                                  :instance instance :updatedAt @timestamp}]
-                       (swap! s update :panes conj task-pane)
-                       (host/atomic! (fs/path dir instance "owner.json") owner)
-                       (host/atomic! (fs/path dir instance "context.json")
-                                     {:sourcePane "agent-a" :sourceTerminal "term-a"})
-                       {:plugin_pane {:pane task-pane}})
-              "close" (do (swap! s update :panes #(remove (fn [x] (= "tasks" (:pane_id x))) %)) {})
-              "focus" {})
+              "open" (let [values (into {} (map #(str/split % #"=" 2))
+                                        (filter #(and (string? %) (re-find #"^[A-Z_]+=" %)) args))]
+                       (if-let [instance (get values "OT_HOST_INSTANCE")]
+                         (let [owner-tab (get values "OT_HOST_TAB")
+                               task {:pane_id (str "tasks-" owner-tab) :terminal_id (str "term-tasks-" owner-tab)
+                                     :tab_id owner-tab :focused false}
+                               owner {:pane (:pane_id task) :terminal (:terminal_id task) :tab owner-tab :pid 22
+                                      :identity "start command" :instance instance :updatedAt @timestamp}]
+                           (swap! s update :panes conj task)
+                           (host/atomic! (fs/path dir instance "owner.json") owner)
+                           {:plugin_pane {:pane task}})
+                         {:ok true}))
+              "close" (do (swap! s update :panes #(remove (fn [x] (= (nth args 3) (:pane_id x))) %)) {}))
             {}))]
+    (fs/create-dirs display)
     (with-redefs [host/call! dispatch host/state-root! (constantly dir)
+                  host/plugin-state-dir (constantly display)
                   host/identity! (constantly "start command") host/now #(deref timestamp)]
       (f {:state s :calls calls :live live :time timestamp}))))
 
-(deftest explicit-open-reuses-and-focus-controls-never-type-input
+(defn- opens [calls] (filter #(= ["plugin" "pane" "open"] (take 3 %)) @calls))
+(defn- task-panes [state] (sort (keep #(when (str/starts-with? (:pane_id %) "tasks") (:pane_id %)) (:panes @state))))
+
+(deftest ensure-opens-every-tab-once-without-focus-or-input
   (temporary
    (fn [dir]
      (fake-host dir
-      (fn [{:keys [calls]}]
-        (host/action! "open" dir)
-        (host/action! "open" dir)
-        (is (= 1 (count (filter #(= ["plugin" "pane" "open"] (take 3 %)) @calls))))
-        (is (some #(and (= ["plugin" "pane" "open"] (take 3 %))
-                        (some #{"down"} %) (some #{"--no-focus"} %)) @calls))
-        (host/action! "expand" dir)
-        (is (some #{["plugin" "pane" "focus" "tasks"]} @calls))
-        (is (some #(and (= ["pane" "resize"] (take 2 %)) (some #{"up"} %)) @calls))
-        (host/action! "collapse" dir)
-        (is (some #{["agent" "focus" "agent-a"]} @calls))
-        (is (some #(and (= ["pane" "resize"] (take 2 %)) (some #{"down"} %)) @calls))
-        (is (not-any? #(some #{"send-text" "send-keys" "run"} %) @calls))
-        (host/action! "close" dir)
-        (is (some #{["plugin" "pane" "close" "tasks"]} @calls)))))))
+      (fn [{:keys [calls state]}]
+        (is (host/display-enabled?) "display defaults to enabled")
+        (host/ensure-all! host/defaults)
+        (host/ensure-all! host/defaults)
+        (is (= [(str "tasks-" tab2) (str "tasks-" tab)] (task-panes state)))
+        (is (= 2 (count (opens calls))) "a live instance is reused")
+        (is (every? #(and (some #{"--no-focus"} %) (some #{"down"} %)) (opens calls)))
+        (is (not-any? #(some #{"send-text" "send-keys" "run" "focus"} %) @calls)))))))
+
+(deftest toggle-is-global-and-persists
+  (temporary
+   (fn [dir]
+     (fake-host dir
+      (fn [{:keys [calls state]}]
+        (host/ensure-all! host/defaults)
+        (host/toggle! host/defaults)
+        (is (false? (host/display-enabled?)))
+        (is (empty? (task-panes state)) "disabling closes the pane in every tab")
+        (reset! calls [])
+        (host/ensure-all! host/defaults)
+        (is (empty? (opens calls)) "startup and tab.created stay closed while disabled")
+        (host/toggle! host/defaults)
+        (is (host/display-enabled?))
+        (is (= 2 (count (task-panes state))) "enabling reopens every tab"))))))
 
 (deftest stale-process-and-foreign-pane-are-not-controlled
   (temporary
    (fn [dir]
      (fake-host dir
       (fn [{:keys [calls live state]}]
-        (host/action! "open" dir)
+        (host/ensure-all! host/defaults)
         (reset! calls [])
         (reset! live false)
-        (host/action! "close" dir)
+        (host/close-tab! dir tab)
         (is (not-any? #(= ["plugin" "pane" "close"] (take 3 %)) @calls))
-        (is (thrown? Exception (host/action! "expand" dir)))
         (reset! live true)
-        (swap! state update :panes #(mapv (fn [pane] (if (= "tasks" (:pane_id pane)) (assoc pane :terminal_id "foreign") pane)) %))
+        (swap! state update :panes #(mapv (fn [p] (if (= (str "tasks-" tab) (:pane_id p)) (assoc p :terminal_id "foreign") p)) %))
         (reset! calls [])
-        (host/action! "close" dir)
-        (is (not-any? #(= ["plugin" "pane" "close"] (take 3 %)) @calls)))))))
+        (host/close-tab! dir tab)
+        (is (not-any? #(= ["plugin" "pane" "close"] (take 3 %)) @calls))
+        (host/close-tab! dir tab2)
+        (is (some #{["plugin" "pane" "close" (str "tasks-" tab2)]} @calls) "positive control"))))))
 
 (deftest process-exit-reopen-uses-new-instance
   (temporary
    (fn [dir]
      (fake-host dir
       (fn [{:keys [state]}]
-        (host/action! "open" dir)
+        (host/open-tab! dir tab host/defaults)
         (let [old (:instance (host/read-json (fs/path dir (str tab ".json"))))]
-          (reset! state (snapshot [a]))
-          (host/action! "open" dir)
+          (swap! state update :panes #(remove (fn [p] (str/starts-with? (:pane_id p) "tasks")) %))
+          (host/open-tab! dir tab host/defaults)
           (is (not= old (:instance (host/read-json (fs/path dir (str tab ".json"))))))))))))
 
 (deftest pending-open-reservation-is-not-replaced
@@ -217,10 +264,39 @@
       (fn [{:keys [calls]}]
         (host/atomic! (fs/path dir (str tab ".json"))
                       {:instance (host/uuid) :tab tab :pending true :updatedAt 10000})
-        (is (thrown? Exception (host/action! "open" dir)))
-        (is (not-any? #(= ["plugin" "pane" "open"] (take 3 %)) @calls)))))))
+        (host/open-tab! dir tab host/defaults)
+        (is (empty? (opens calls)))
+        (host/open-tab! dir tab2 host/defaults)
+        (is (= 1 (count (opens calls))) "positive control: another tab opens"))))))
 
-(deftest concurrent-open-actions-reuse-one-host-pane
+(deftest select-opens-a-popup-for-the-compact-pane-project
+  (temporary
+   (fn [dir]
+     (fake-host dir
+      (fn [{:keys [calls state]}]
+        (let [project (str (fs/create-dir (fs/path dir "project")))
+              select-env #(some (fn [x] (when (str/starts-with? (str x) "OT_SELECT_DIR=") x))
+                                (last (filter (fn [call] (some #{"select"} call)) @calls)))]
+          (swap! state update :panes #(mapv (fn [p] (if (= "agent-a" (:pane_id p)) (assoc p :foreground_cwd project) p)) %))
+          (swap! state assoc :agents (filter :agent (:panes @state)))
+          (host/open-tab! dir tab host/defaults)
+          (host/select!)
+          (is (= (str "OT_SELECT_DIR=" project) (select-env)))
+          (is (not-any? #(some #{"--placement"} %) (filter #(some #{"select"} %) @calls))
+              "the manifest supplies the popup placement")
+          (testing "with the task pane focused, the retained source still names the project"
+            (let [record (host/read-json (fs/path dir (str tab ".json")))]
+              (host/atomic! (fs/path dir (:instance record) "context.json") {:sourcePane "agent-a"})
+              (swap! state assoc :layouts [{:tab_id tab :focused_pane_id (str "tasks-" tab)}])
+              (host/select!)
+              (is (= (str "OT_SELECT_DIR=" project) (select-env)))))
+          (testing "a shell pane gives no project"
+            (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-a"}])
+            (with-redefs [host/process! (constantly {:foreground_processes [{:name "bash"}]})]
+              (host/select!))
+            (is (= "OT_SELECT_DIR=" (select-env))))))))))
+
+(deftest concurrent-ensure-actions-reuse-one-host-pane
   (temporary
    (fn [dir]
      (host/atomic! (fs/path dir "host.json") (assoc (snapshot [a]) :focused_tab_id tab))
@@ -288,169 +364,57 @@
              (finally (p/destroy-tree waiter))))
          (finally (p/destroy-tree holder)))))))
 
-(deftest expansion-hands-off-the-agent-focused-between-polls
-  (temporary
-   (fn [dir]
-     (let [a (assoc a :foreground_cwd (str (fs/create-dir (fs/path dir "a"))))
-           b (assoc b :foreground_cwd (str (fs/create-dir (fs/path dir "b"))))
-           instance (host/uuid)
-           private (host/private-dir! (fs/path dir instance))
-           record {:pane "tasks" :terminal "term-tasks" :tab tab :pid 22
-                   :identity "fixture" :instance instance :updatedAt 10000}
-           state (atom (assoc (snapshot [(assoc a :focused false) b task-pane])
-                              :layouts [{:tab_id tab :focused_pane_id "agent-b"}]))
-           calls (atom [])
-           file (fs/path private "context.json")
-           previous (host/context nil instance a local-info "expanded" 10000)]
-       (host/atomic! (fs/path dir (str tab ".json")) record)
-       (host/atomic! (fs/path private "owner.json") record)
-       (host/atomic! file previous)
-       (with-redefs [host/state-root! (constantly dir) host/identity! (constantly "fixture")
-                     host/now (constantly 10000)
-                     host/call! (fn [& args]
-                                  (swap! calls conj (vec args))
-                                  (case (vec (take 2 args))
-                                    ["api" "snapshot"] {:snapshot @state}
-                                    ["pane" "process-info"] {:process_info (if (= "tasks" (last args)) {:shell_pid 22} local-info)}
-                                    ["pane" "layout"] {:layout {:panes [] :splits []}}
-                                    ["plugin" "pane"] (do
-                                                        (is (= "agent-b" (:sourcePane (host/read-json (fs/path private "request.json")))) "handoff exists before focus moves")
-                                                        (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "tasks"}]) {})
-                                    ["agent" "focus"] {}))]
-         (is (= "agent-b" (:pane_id (host/source @state tab "tasks" a))) "positive pre-focus control")
-         (host/action! "expand" dir)
-         (let [request (host/read-json (fs/path private "request.json"))
-               sampled (host/sample! @state record a previous request nil)
-               c (:context sampled)]
-           (is (= "agent-b" (:sourcePane request)))
-           (is (= "term-b" (:sourceTerminal request)))
-           (is (= (:foreground_cwd b) (:directory c)))
-           (is (not= (:contextId previous) (:contextId c)))
-           (is (= (:contextId c) (get-in (host/sample! @state record (:candidate sampled) c request request) [:context :contextId])))
-           (host/atomic! file c)
-           (is (= :ready (:status (embed/read-context {:context-file (str file) :instance instance} 10000))))
-           (is (= (:foreground_cwd b) (get-in (embed/read-context {:context-file (str file) :instance instance} 10000) [:context :directory])))
-           (host/action! "collapse" dir)
-           (is (some #{["agent" "focus" "agent-b"]} @calls))))))))
+(deftest pane-label-mirrors-the-tui-title-and-tolerates-failure
+  (let [calls (atom [])]
+    (with-redefs [host/call! (fn [& args] (swap! calls conj (vec args)) {})]
+      (host/sync-label! (assoc task-pane :label "Org tasks" :terminal_title "Tasks :: ~/p :: plan.org"))
+      (host/sync-label! (assoc task-pane :label "Tasks :: ~/p" :terminal_title "Tasks :: ~/p"))
+      (host/sync-label! (assoc task-pane :label "Org tasks"))
+      (host/sync-label! (assoc task-pane :label "Org tasks" :terminal_title " ")))
+    (is (= [["pane" "rename" "tasks" "Tasks :: ~/p :: plan.org"]] @calls)
+        "only a changed, non-blank title renames the pane"))
+  (with-redefs [host/call! (fn [& _] (throw (ex-info "Herdr request timed out" {})))]
+    (is (nil? (host/sync-label! (assoc task-pane :terminal_title "Tasks"))))))
 
-(deftest handoff-validation-and-live-eligibility-fail-closed
-  (temporary
-   (fn [dir]
-     (let [record {:pane "tasks" :terminal "term-tasks" :tab tab :instance "instance"}
-           b (assoc b :foreground_cwd dir)
-           s (assoc (snapshot [(assoc a :focused false) b task-pane])
-                    :layouts [{:tab_id tab :focused_pane_id "tasks"}])
-           request {:requestId "handoff-b" :instanceId "instance" :tabId tab
-                    :targetTerminal "term-tasks" :updatedAt 10000 :mode "expanded"
-                    :availability "local" :sourcePane "agent-b" :sourceTerminal "term-b"
-                    :directory (:foreground_cwd a)}
-           previous (host/context nil "instance" a local-info "expanded" 10000)]
-       (with-redefs [host/now (constantly 10000) host/process! (constantly local-info)]
-         (doseq [bad [(assoc request :instanceId "foreign") (assoc request :tabId "other-tab")
-                      (assoc request :targetTerminal "foreign") (assoc request :sourceTerminal "foreign")
-                      (assoc request :sourcePane "missing") (assoc request :updatedAt 4999)
-                      (assoc request :updatedAt 11001) (dissoc request :requestId)
-                      (assoc request :availability "unknown") (assoc request :mode "unknown") nil]]
-           (let [one (host/sample! s record a previous bad {:requestId "older"})
-                 two (host/sample! s record (:candidate one) (:context one) bad bad)]
-             (is (= "unavailable" (get-in one [:context :availability])) (pr-str bad))
-             (is (nil? (get-in two [:context :directory])) "invalid handoff must not resurrect A")))
-         (doseq [time [5000 11000]]
-           (is (= dir (get-in (host/sample! s record a previous (assoc request :updatedAt time) nil) [:context :directory]))))
-         (let [one (host/sample! s record a previous request nil)
-               two (with-redefs [host/now (constantly 16000)]
-                     (host/sample! s record (:candidate one) (:context one) request request))]
-           (is (= dir (get-in one [:context :directory])) "handoff directory is ignored in favour of live host cwd")
-           (is (= (:contextId (:context one)) (:contextId (:context two)))))
-         (doseq [[info expected] [[{:foreground_processes [{:name "ssh"}]} :remote]
-                                 [{} :unavailable]
-                                 [{:foreground_processes [{:name "bash"}]} :unavailable]]]
-           (let [c (with-redefs [host/process! (constantly info)]
-                     (:context (host/sample! s record a previous request nil)))
-                 file (str (fs/path dir "context.json"))]
-             (host/atomic! file c)
-             (is (nil? (:directory c)))
-             (is (= expected (:status (embed/read-context {:context-file file :instance "instance"} 10000))))))
-         (doseq [changed [(assoc b :terminal_id "replacement") (assoc b :tab_id "other-tab") (dissoc b :agent)]]
-           (let [changed-s (assoc s :panes [(assoc a :focused false) changed task-pane] :agents [a])]
-             (is (= "unavailable" (get-in (host/sample! changed-s record a previous request nil) [:context :availability]))))))))))
+(def probe-script (str (fs/absolutize *file*)))
 
-(deftest collapse-validates-the-unconsumed-handoff-instead-of-old-context
-  (temporary
-   (fn [dir]
-     (fake-host dir
-      (fn [{:keys [calls state]}]
-        (host/action! "open" dir)
-        (swap! state update :panes conj b)
-        (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-b"}])
-        (host/action! "expand" dir)
-        (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "tasks"}])
-        (let [record (host/read-json (fs/path dir (str tab ".json")))
-              file (fs/path dir (:instance record) "request.json")
-              request (host/read-json file)]
-          (doseq [bad [(assoc request :instanceId "foreign") (assoc request :sourceTerminal "replacement")
-                       (assoc request :updatedAt 4999) (assoc request :updatedAt 11001)
-                       (assoc request :tabId "other-tab") (assoc request :targetTerminal "foreign") nil]]
-            (host/atomic! file bad)
-            (reset! calls [])
-            (host/action! "collapse" dir)
-            (is (not-any? #(= ["agent" "focus"] (take 2 %)) @calls) "no old A fallback"))
-          (host/atomic! file request)
-          (reset! calls [])
-          (let [process-info host/process!]
-            (with-redefs [host/process! (fn [id] (if (= id "agent-b") {:foreground_processes [{:name "ssh"}]} (process-info id)))]
-              (host/action! "collapse" dir)))
-          (is (not-any? #(= ["agent" "focus"] (take 2 %)) @calls) "remote handoff cannot restore a local agent")
-          (host/atomic! file request)
-          (reset! calls [])
-          (host/action! "collapse" dir)
-          (is (some #{["agent" "focus" "agent-b"]} @calls) "positive control: fresh pending B restores B without a poll")))))))
-
-(def race-script (str (fs/absolutize *file*)))
-
-(defn race-probe
-  "Child process: the user focuses B and expands after a supervisor poll has taken its
-  snapshot (A focused) but before that poll could be reconciled with request.json."
+(defn supervisor-probe
+  "Child process: run the real supervisor loop against a fake Herdr while the
+  focused agent moves from A to B, and report every published context."
   [root]
   (let [instance (System/getenv "OT_HOST_INSTANCE")
         a (assoc a :foreground_cwd (str root "/a")) b (assoc b :foreground_cwd (str root "/b"))
-        state (atom (assoc (snapshot [a b task-pane])
+        state (atom (assoc (snapshot [a b (assoc task-pane :terminal_title "Tasks :: ~/a")])
                            :layouts [{:tab_id tab :focused_pane_id "agent-a"}]))
-        action-at (parse-long (or (System/getenv "RACE_ACTION_AT") "2"))
-        snapshots (atom 0) acted (atom false) contexts (atom []) post (atom []) real-atomic host/atomic!]
+        snapshots (atom 0) contexts (atom []) renames (atom []) real-atomic host/atomic!]
     (with-redefs [host/call! (fn [& args]
                                (case (vec (take 2 args))
                                  ["api" "snapshot"]
-                                 (let [old @state n (swap! snapshots inc)]
-                                   (when (= n action-at)
-                                     (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-b"}])
-                                     (host/action! "expand" root)
-                                     (reset! acted true))
-                                   {:snapshot (if (= n action-at) old @state)})
+                                 (do (when (= 3 (swap! snapshots inc))
+                                       (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-b"}]))
+                                     {:snapshot @state})
                                  ["pane" "process-info"] {:process_info (if (= "tasks" (last args))
                                                                            {:shell_pid (.pid (java.lang.ProcessHandle/current))}
                                                                            local-info)}
-                                 ["pane" "layout"] {:layout {:panes [] :splits []}}
-                                 ["plugin" "pane"] (do (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "tasks"}]) {})
-                                 ["agent" "focus"] {}))
+                                 ["pane" "rename"] (do (swap! renames conj (vec (drop 2 args))) {})))
+                  host/herdr-config-text (constantly "[[keys.command]]\nkey = \"prefix+t\"\ncommand = \"cormacc.org-tasks.select\"\n")
                   host/state-root! (constantly root) host/identity! (constantly "fixture")
                   host/atomic! (fn [file value]
                                  (when (= "context.json" (str (fs/file-name file)))
-                                   (when (:requestId value) (swap! contexts conj value))
-                                   (when @acted (swap! post conj (:sourcePane value))))
+                                   (swap! contexts conj value))
                                  (real-atomic file value))]
       (host/supervise! (str root "/sleeper")))
-    (let [c (last @contexts) file (str root "/observed.json")
-          _ (host/atomic! file c)
-          result (embed/read-context {:context-file file :instance instance} (host/now))]
-      (println (pr-str {:post @post :polls (count @contexts) :sources (mapv :sourcePane @contexts)
-                        :status (:status result) :directory (get-in result [:context :directory])})))))
+    (println (pr-str {:sources (mapv :sourcePane @contexts)
+                      :directories (vec (distinct (keep :directory @contexts)))
+                      :modes (set (map :mode @contexts))
+                      :hints (set (map :hints @contexts))
+                      :renames @renames}))))
 
-(when-let [root (System/getenv "RACE_PROBE_ROOT")]
-  (race-probe root)
+(when-let [root (System/getenv "SUPERVISOR_PROBE_ROOT")]
+  (supervisor-probe root)
   (System/exit 0))
 
-(deftest supervisor-reconciles-a-request-with-a-snapshot-no-older-than-it
+(deftest supervisor-follows-the-focused-agent-and-publishes-hints
   (temporary
    (fn [dir]
      (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
@@ -458,8 +422,8 @@
        (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " 2\n"))
        (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
        (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
-       (let [proc (p/process ["bb" race-script]
-                             {:extra-env {"RACE_PROBE_ROOT" dir "OT_HOST_DIR" private
+       (let [proc (p/process ["bb" probe-script]
+                             {:extra-env {"SUPERVISOR_PROBE_ROOT" dir "OT_HOST_DIR" private
                                           "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
                                           "HERDR_PANE_ID" "tasks"}
                               :out :string :err :string})
@@ -467,33 +431,10 @@
          (when-not result (p/destroy-tree proc))
          (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
          (let [out (read-string (last (str/split-lines (:out result))))]
-           (is (= :ready (:status out)))
-           (is (= "agent-b" (last (:sources out))) "the expanded-from agent B is retained, not stale A")
-           (is (= (str dir "/b") (:directory out)))))))))
-
-;; The supervisor has already published a poll that sampled A when the user focuses B
-;; and expands inside the next poll's snapshot call.
-(deftest supervisor-never-publishes-a-sample-incoherent-with-its-request
-  (temporary
-   (fn [dir]
-     (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
-       (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
-       (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " 3\n"))
-       (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
-       (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
-       (let [proc (p/process ["bb" race-script]
-                             {:extra-env {"RACE_PROBE_ROOT" dir "OT_HOST_DIR" private "RACE_ACTION_AT" "3"
-                                          "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
-                                          "HERDR_PANE_ID" "tasks"}
-                              :out :string :err :string})
-             result (deref proc 15000 nil)]
-         (when-not result (p/destroy-tree proc))
-         (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
-         (let [out (read-string (last (str/split-lines (:out result))))]
-           (is (seq (:post out)) "positive control: contexts were published after the expansion")
-           (is (not-any? #{"agent-a"} (:post out)) (str "no post-expansion context names A: " (:post out)))
-           (is (= :ready (:status out)))
-           (is (= "agent-b" (last (:sources out))))))))))
+           (is (= [(str dir "/a") (str dir "/b")] (:directories out)) "A first, then B after the focus change")
+           (is (= #{"compact"} (:modes out)))
+           (is (= #{["ctrl+b t: Select a task from the backlog"]} (:hints out)))
+           (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")))))))
 
 (let [{:keys [fail error]} (run-tests)]
   (System/exit (if (zero? (+ fail error)) 0 1)))

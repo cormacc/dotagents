@@ -1,9 +1,18 @@
 id = "cormacc.org-tasks"
 name = "Org tasks"
-version = "0.1.0"
+version = "0.2.0"
 min_herdr_version = "0.9.5"
 description = "Tab-local shared org-tasks terminal interface"
 platforms = ["linux", "macos"]
+
+# Show the compact pane in every tab while display is enabled. Both hooks are
+# idempotent, so neither reads the event payload.
+[[startup]]
+command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
+
+[[events]]
+on = "tab.created"
+command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
 
 [[panes]]
 id = "tasks"
@@ -11,22 +20,22 @@ title = "Org tasks"
 placement = "split"
 command = ["bb", "--config", "bb.edn", "adapter.bb", "serve"]
 
-[[actions]]
-id = "open"
-title = "Open compact task context"
-command = ["bb", "--config", "bb.edn", "adapter.bb", "open"]
+# The browser runs in a popup: it takes all input, closes when `ot` exits on
+# Esc, and Herdr then restores the earlier focus.
+[[panes]]
+id = "select"
+title = "Select task"
+placement = "popup"
+width = "80%"
+height = "80%"
+command = ["bb", "--config", "bb.edn", "adapter.bb", "select-pane"]
 
 [[actions]]
-id = "expand"
-title = "Expand task browser"
-command = ["bb", "--config", "bb.edn", "adapter.bb", "expand"]
+id = "select"
+title = "Select a task from the backlog"
+command = ["bb", "--config", "bb.edn", "adapter.bb", "select"]
 
 [[actions]]
-id = "collapse"
-title = "Collapse task browser"
-command = ["bb", "--config", "bb.edn", "adapter.bb", "collapse"]
-
-[[actions]]
-id = "close"
-title = "Close owned task interface"
-command = ["bb", "--config", "bb.edn", "adapter.bb", "close"]
+id = "toggle"
+title = "Disable/enable org-tasks overlay"
+command = ["bb", "--config", "bb.edn", "adapter.bb", "toggle"]

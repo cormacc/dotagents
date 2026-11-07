@@ -26,4 +26,4 @@
               {:plugin_pane {:pane pane}})))]
     (with-redefs [host/state-root! (constantly root) host/call! dispatch
                   host/identity! (constantly "fixture")]
-      (host/action! "open" root))))
+      (host/open-tab! root tab host/defaults))))
