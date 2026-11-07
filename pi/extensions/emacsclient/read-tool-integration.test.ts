@@ -109,7 +109,8 @@ function startEmacs() {
   ], {
     encoding: "utf-8",
     timeout: 30000,
-    env: { ...process.env, HOME: tempDir },
+    // Emacs reads $XDG_CONFIG_HOME/emacs before $HOME; without this the user's init loads.
+    env: { ...process.env, HOME: tempDir, XDG_CONFIG_HOME: join(tempDir, ".config") },
   });
   emacsclient("(emacs-pid)");
 }

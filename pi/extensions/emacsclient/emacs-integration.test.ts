@@ -102,6 +102,8 @@ function startEmacs() {
     env: {
       ...process.env,
       HOME: tempDir,
+      // Emacs reads $XDG_CONFIG_HOME/emacs before $HOME; without this the user's init loads.
+      XDG_CONFIG_HOME: join(tempDir, ".config"),
       DISPLAY: "", // Prevent X11 issues
     },
     stdio: "pipe",

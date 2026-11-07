@@ -272,12 +272,14 @@ async function runTest(name: string, testFn: (tempDir: string) => Promise<boolea
   );
   mkdirSync(tempDir, { recursive: true });
 
+  // An uncleared losing timer keeps the process alive for 30s after the last test.
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
     const result = await Promise.race([
       testFn(tempDir),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Test timeout (30s)")), 30000)
-      ),
+      new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error("Test timeout (30s)")), 30000);
+      }),
     ]);
 
     if (result === true) {
@@ -288,6 +290,7 @@ async function runTest(name: string, testFn: (tempDir: string) => Promise<boolea
   } catch (err: any) {
     testFail(name, err.message);
   } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     rmSync(tempDir, { recursive: true, force: true });
   }
 }

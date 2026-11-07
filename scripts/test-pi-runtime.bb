@@ -26,7 +26,7 @@
                  "if [ \"$1\" = --version ]; then echo fixture-version; exit 0; fi\n"
                  "if [ \"$HERDR_ORCH_EXPECT_PI_VERSION\" != fixture-version ]; then echo 'runtime mismatch'; exit 1; fi\n"
                  "test -n \"$HERDR_ORCH_FORBID_BUNDLE_PREFIX\" || exit 8\n"
-                 "printf '%s\\n' 'SUITE fork-adapter passed=1 failed=0' 'SUITE fork-provider-context passed=1 failed=0' 'SUITE measurement-adapter passed=1 failed=0'\n"))
+                 "printf '%s\\n' 'SUITE fork-adapter passed=1 failed=0' 'SUITE fork-provider-context passed=1 failed=0' 'SUITE measurement-adapter passed=1 failed=0' 'SUITE account-launch passed=1 failed=0'\n"))
       (spit (str (fs/path npm-bin "pi"))
             (str "#!" bash-bin "\nprintf '%s\\n' shim >> '" shim-log "'\necho repository-pi-selected\nexit 9\n"))
       (doseq [bin [installed-bin npm-bin]]
