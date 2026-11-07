@@ -305,20 +305,6 @@ Scaffold a herdr-app mod for herdr-orch. Its first feature is the subscription q
 :END:
 Add a pane that shows herdr-orch subagent fanout as a tree or hierarchy. Use [[https://github.com/mashhoodr/herdr-space-sidebar][herdr-space-sidebar]] as a tree/hierarchy design reference. Additional reference: [[https://github.com/yoshiori/herdr-configurable-picker][herdr-configurable-picker]].
 
-** STARTED Rework the org-tasks UI as a Herdr plugin
-:PROPERTIES:
-:CUSTOM_ID: 82126d8e-eb54-45b8-abbe-9e76451b3963
-:CREATED: [2026-11-05 Thu 19:54]
-:STARTED: [2026-11-05 Thu 20:16]
-:HANDOFF: PARKED. Shared/Pi/compact DONE. Terminal WAITING on user visual check only: fix + scripted native validation done on Linux/macOS; plugin registered via agents.nix and keys bound (prefix+t/shift+e/shift+c) on Mac; xps15 needs pull + HM switch. See handoff on ca3e7ac4 for steps. User intends to propose a streamlined UX replacing the explicit bindings. Desktop TODO blocked on terminal.
-:END:
-:LOGBOOK:
-- Created [2026-11-05 Thu 19:54]
-- State "STARTED" from "TODO" [2026-11-05 Thu 20:16]
-:END:
-#+IMPORT: [[plan:2026-11-05-org-tasks-herdr-ui.org]]
-Explore moving the org-tasks UI into a Herdr plugin. Options are a Herdr widget or an embedded terminal pane at the foot of the Herdr window running the org-tasks TUI. The embedded terminal pane is the preferred candidate as the likely cleanest strategy, not a settled design. Consider adding a collapsed mode to the TUI that replicates the selected-task overlay in Pi.
-
 ** TODO Validate herdr-app herdr-orch mod on Linux :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: a5cbd996-628f-4883-929a-e5d54338f9b8
@@ -440,6 +426,16 @@ Acceptance criteria:
 - The presentation bench from the record re-runs with the shipped code in place of oh-nb and proto-ext.ts, with medians within the prototype range.
 - Must not: change item format, sealing, collect semantics, or the WAITING/blocking-policy push rules.
 Pointer: notify-parent! and push-decision in skills/herdr-orch/scripts/src/herdr_orch/cli.clj; pi/extensions/herdr-orch/ caller gate; prototype proto-ext.ts and oh-nb in the record folder.
+
+** TODO Validate the org-tasks Herdr UIs natively on Linux and after installation
+:PROPERTIES:
+:CUSTOM_ID: 2b49d0fd-413d-47a3-a5da-61e655dea4a1
+:CREATED: [2026-11-07 Sat 20:47]
+:END:
+:LOGBOOK:
+- Created [2026-11-07 Sat 20:47]
+:END:
+The terminal plugin and the herdr-app widget were checked live on macOS only (2026-11-07). On xps15: (1) terminal plugin: startup and tab.created display, global prefix+shift+o toggle, prefix+t popup selection with Esc and focus return, label title; (2) herdr-app widget: install via the parent HM switch, project follow, refresh, selection dialog, toggle, block fitting, and the keys.json spelling (cmd-shift-t / cmd-shift-o, else ctrl-shift-). On macOS after darwin-rebuild: confirm the herdr-app widget loads from the installed leaf and survives an app restart. Record: [[archive:82126d8e-eb54-45b8-abbe-9e76451b3963]].
 
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:

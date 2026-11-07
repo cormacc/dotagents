@@ -1,6 +1,6 @@
 #+TITLE: Rework the org-tasks UI as a Herdr plugin
 #+DATE: 2026-11-05 Thu
-#+PARENT: [[task:82126d8e-eb54-45b8-abbe-9e76451b3963][Rework the org-tasks UI as a Herdr plugin]]
+#+PARENT: [[archive:82126d8e-eb54-45b8-abbe-9e76451b3963][Rework the org-tasks UI as a Herdr plugin]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/org-tasks/SKILL.md]]
@@ -17,105 +17,56 @@ Provide a harness-independent task interface in terminal Herdr and the Herdr des
 * Summary
 *Level:* production · *Tests:* thorough · *Docs:* README
 
-One shared TUI supplies compact selected-task context and expanded task browsing. Thin host adapters supply project context, placement, focus and sizing. This record describes agreed design, not shipped behaviour.
+Terminal Herdr shows the selected task in a compact pane in every tab and opens the task browser in a popup; the Herdr desktop app shows the same view as a native widget and opens the browser in a dialog. `ot` owns every task decision: the compact view model (`ot compact`) feeds the TUI and the desktop widget. Pi's visual task UI is switched off in this repository's settings and remains available for Pi users without Herdr.
 
 ** Scope
 *** In scope
-- Shared TUI: ~skills/org-tasks/scripts/src/org_tasks/tui.clj~, ~tui/tasks.clj~, ~tui/dispatch.clj~, ~cli.clj~ and ~commands/registry.clj~; add an embedding boundary within the same ownership layer. Extend ~skills/org-tasks/scripts/test/org_tasks/tui_test.clj~, CLI/launcher tests and disposable project fixtures.
-- Pi separation: ~pi/extensions/tasks/~, its prompt helpers, exported callers and integration tests; account for ~pi/extensions/jira/~ and ~pi/extensions/test/event-subscriptions.test.ts~. Add an independently loadable legacy UI entrypoint. Preserve current CLI-based agent access; correct stale tool-registration claims in the ownership documentation.
-- Terminal host: new ~herdr-plugin/org-tasks/~ plugin sources, configuration and README; add an offline Babashka test runner beside ~scripts/test-herdr-plugin.bb~. Keep the existing quota plugin unchanged.
-- Desktop host: new ~herdr-app/mods/org-tasks/~ adapter and tests; integrate a terminal block into ~herdr-app/layouts/herdr-orch.json~ without removing the existing quota/system components.
-- Installation and exports: update root ~bb.edn~ test wiring, relevant README discovery links and Pi loading documentation/configuration. Parent repository ~/dotfiles/agents.nix~ owns installation links; use its existing out-of-store mechanism without replacing foreign paths.
-- Living contracts: update the declared specs with their owning changes. New host READMEs own host setup and configuration; ~contract.md~ owns the embedding input contract. Preserve the current working tree's unrelated modifications.
+- Shared `ot` TUI: compact view, embedding context contract, compact view model and `ot compact`.
+- Pi separation: non-visual `tasks/agent.ts`, legacy visual entrypoints, and the cutover in `pi/settings.json`.
+- Terminal host: `herdr-plugin/org-tasks/` and `scripts/test-herdr-org-tasks.bb`.
+- Desktop host: `herdr-app/mods/org-tasks/`, the `org-tasks` block in `herdr-app/layouts/herdr-orch.json`, and the herdr-app tests.
+- Installation: parent `agents.nix` leaves and `herdr/config.toml` bindings.
 *** Out of scope
-- Remote task operations, Windows, a window-wide terminal-Herdr footer, native terminal-Herdr widget support and host-core changes.
-- Workspace pinning in either host is deferred by the user on 2026-11-06 to [[task:16358bea-c42f-4342-883b-6409d14c7281][Add workspace pinning to the Herdr org-tasks adapters]]. This delivery follows the active eligible local agent only.
-- A second Org parser, task database, task-mutation implementation or new third-party dependency.
-- Recreating removed Pi task tools, automatic agent-prompt injection from Herdr, cross-harness status-event broadcasting and deletion of the legacy Pi UI.
+- Remote task operations, Windows and host-core changes.
+- Workspace pinning, deferred by the user on 2026-11-06 to [[task:16358bea-c42f-4342-883b-6409d14c7281][Add workspace pinning to the Herdr org-tasks adapters]].
+- A second Org parser, task database or task-mutation implementation; deleting the legacy Pi UI.
+
+** Shipped
+- MODIFIED `skills/org-tasks/scripts/docs/contract.md`: embedded TUI context contract (with `hints`) and `ot compact` view model.
+- MODIFIED `skills/org-tasks/references/ot-cli.md`, `SKILL.md`, `DESIGN.org`, `boundary.md`: compact view, `ot compact`, `--layout`, `--exit-on-select`, terminal title.
+- ADDED `herdr-plugin/org-tasks/`: compact pane in every tab (startup and `tab.created` hooks), global `prefix+shift+o` toggle, `prefix+t` popup selection, pane label from the TUI title.
+- ADDED `herdr-app/mods/org-tasks/`: native widget from `ot compact`, `cmd-shift-t` selection dialog, `layout.toggle:org-tasks`, block sized to its rows.
+- MODIFIED `pi/extensions/tasks/README.md` and `pi/settings.json`: non-visual Pi integration by default.
 
 ** Acceptance
-*** Core functionality
-- [ ] Bare interactive ~ot~ retains standalone task browsing.
-- [ ] Non-interactive ~ot~ retains its selected-task JSON contract.
-- [ ] Compact mode displays the selected task's top-level parent.
-- [ ] Compact mode displays linked-plan context when present.
-- [ ] Compact mode displays subtasks within the available height.
-- [ ] Compact mode has no separate task-memory path header.
-- [ ] The selected-task row includes a right-aligned task-memory path, with the user's home directory shortened to =~=.
-- [ ] The selected-task and linked-plan rows show ~(completed/total)~ tokens for their respective scopes.
-- [ ] Compact mode has no separate completed-count or more-count summary rows.
-- [ ] Compact truncation removes completed history before pending work.
-- [ ] Compact truncation keeps the selected task identifiable.
-- [ ] Expanded mode retains the existing TUI action set documented in ~ot-cli.md~.
-- [ ] External changes to task memory refresh the displayed graph without reopening the UI.
-- [ ] External changes to imported plan files refresh the displayed graph without reopening the UI.
-- [ ] Active-pane root mode is the default.
-- [ ] Active-pane mode resolves task memory from the active local agent pane's working directory.
-- Deferred by the user on 2026-11-06 to [[task:16358bea-c42f-4342-883b-6409d14c7281]]: workspace-root mode resolves task memory from the configured workspace root.
-- Deferred by the user on 2026-11-06 to the same follow-up: pane focus changes do not change the root in workspace-root mode.
-- [ ] Focusing the task interface preserves its source project.
-- [ ] Repeated terminal-host open requests reuse the owned task pane in that tab.
-- [ ] Terminal Herdr opens the task UI as a bottom split in the active tab.
-- [ ] Expansion focuses the task browser.
-- [ ] Collapse leaves a compact view without taking agent input focus.
-- [ ] Desktop integration embeds the same TUI in a live terminal block.
-- [ ] Pi prompt helpers remain usable without loading the legacy visual entrypoint.
-- [ ] Pi retains agent access to ~ot~ when its visual UI is disabled.
-- [ ] The legacy Pi UI can be loaded independently during coexistence.
-- [ ] Terminal-host installation survives restart.
-- [ ] Desktop-host installation survives restart.
-- [ ] Terminal-host native validation passes on Linux.
-- [ ] Terminal-host native validation passes on macOS.
-- [ ] Desktop-host native validation passes on Linux after terminal delivery.
-- [ ] Desktop-host native validation passes on macOS after terminal delivery.
-*** Edge cases
-- [ ] A pending project switch is visible while an input or confirmation is open.
-- [ ] An open mutation interaction remains bound to its original task root.
-- [ ] The pending root takes effect when that interaction ends.
-- [ ] Refresh results for a superseded context cannot replace the current graph.
-- [ ] Missing task memory has an explicit empty state.
-- Deferred by the user on 2026-11-06 to [[task:16358bea-c42f-4342-883b-6409d14c7281]]: a missing workspace root has an explicit unavailable state.
-- [ ] A tab without an eligible source agent has an explicit unavailable state.
-- [ ] An absent selection has an explicit compact empty state.
-- [ ] A stale selection is distinguished from an absent selection.
-- [ ] Remote context has an explicit unsupported state.
-- [ ] Invalid embedding input disables task mutations.
-- [ ] Lost adapter context disables task mutations.
-- [ ] Reopening after task-process exit creates a usable owned interface.
-- [ ] Narrow or short terminals retain usable navigation and visible state.
+Reversed on 2026-11-07 with the user: expand/collapse, the right-aligned memory path, the plan row and `(completed/total)` tokens gave way to popup selection, the title (`Tasks :: <folder> :: <plan>`) and one right-justified `done/total` token; the desktop terminal block gave way to a native widget, because herdr-app has no plugin pane host and the widget can draw `ot compact` data.
+- [X] Bare interactive `ot` retains standalone task browsing; non-interactive `ot` retains its selected-task JSON.
+- [X] Compact mode shows the selected task, its top-level parent, every STARTED descendant and the next pending one, with status-led rows and current-row emphasis.
+- [X] Without a selection, compact mode shows status counts and host key hints; a stale selection is distinguished.
+- [X] External changes to task memory and imported plans refresh the view without reopening.
+- [X] The project follows the focused local agent; a shell pane, remote context or missing task memory has an explicit state.
+- [X] An open mutation interaction stays bound to its original root; superseded refreshes cannot replace the current graph.
+- [X] Terminal Herdr: the compact pane opens in every tab while display is on; selection opens in a popup and Esc restores focus.
+- [X] Desktop: the widget renders `ot compact`, opens `ot tui` in a dialog that closes with Esc, and toggles with `layout.toggle`.
+- [X] Pi prompt helpers and agent access to `ot` work without the visual entrypoint; the legacy UI can still load.
+- [ ] Native Linux validation of both hosts and the desktop restart check: follow-up [[task:2b49d0fd-413d-47a3-a5da-61e655dea4a1]].
 *** Anti-criteria
-- [ ] Must not: use a remote working-directory string as a local task root.
-- [ ] Must not: initialise missing task memory merely because host focus changes.
-- [ ] Must not: close, replace or send input into an unowned pane.
-- [ ] Must not: duplicate Org parsing or task-mutation policy in a host adapter.
-- [ ] Must not: register legacy widgets, watchers or UI keybindings in Pi's non-visual integration.
-- [ ] Must not: recreate the removed task-tool registrations.
-- [ ] Must not: weaken task-file concurrency, path-sandboxing or destructive-action confirmation.
-- [ ] Must not: overwrite the existing quota/system layout work or foreign installation paths.
+- [X] Must not: use a remote working directory as a local task root.
+- [X] Must not: initialise missing task memory because host focus changes.
+- [X] Must not: close, replace or send input into an unowned pane.
+- [X] Must not: duplicate Org parsing, task selection or mutation policy in a host adapter.
+- [X] Must not: overwrite the quota/system layout work, shipped app files or foreign installation paths.
 
 ** Decisions
-- Shared TUI with thin adapters :: Reuse ~ot~ rendering and in-process command dispatch. Rejected: separate native desktop task widget duplicates interaction behaviour; native widgets in both hosts require terminal-host changes outside scope.
-- Terminal-first delivery :: Shared TUI and Pi separation precede the terminal adapter's delivery gate. Desktop implementation follows a validated terminal integration, rather than blocking it.
-- Tab-local terminal pane :: Explicit, idempotent opening is sufficient; no persistent window-wide footer or automatic pane creation on focus changes. The bottom split follows native split geometry rather than restructuring user panes to span the window.
-- Root policy :: Follow the current tab's last focused eligible local agent pane; ignore the task interface as a source. Supply its directory to the existing ~ot~ resolver. Missing context is unavailable, not a fallback to the plugin checkout or another tab. The user deferred workspace pinning in both hosts on 2026-11-06 to [[task:16358bea-c42f-4342-883b-6409d14c7281]]; no workspace-root configuration or substitute directory map is required in this delivery.
-- Embedding boundary :: Add a documented TUI entrypoint accepting a private per-instance JSON context-file path. The host atomically supplies directory, requested compact/expanded mode, context identity and availability. Validate the input before replacing state; distinguish unavailable/remote context from a usable local directory. Add a bounded liveness mechanism so an orphaned snapshot is not indefinitely authoritative. Final field names and CLI syntax belong in ~contract.md~ with producer/consumer fixtures; they are new API, not existing identifiers.
-- Lifecycle ownership :: Host adapters own pane/terminal identity, sizing, focus restoration and context production. The TUI owns graph refresh, rendering and interaction state. Context updates are data, never simulated keyboard commands. End instance-owned polling/watchers on exit; reopening must not reuse stale process identity.
-- Safe switching :: Freeze the original root during a form, picker or removal confirmation; show a pending switch and apply it after completion/cancellation. A context failure blocks mutations. Use the existing optimistic-concurrency writer rather than adding a competing write path.
-- Compact behaviour :: Preserve parent/plan/subtask context and completed-first truncation, adapted to actual terminal geometry. Remove the separate path header; right-align its home-shortened path on the selected-task row. Replace completed-count and more-count summary rows with ~(completed/total)~ tokens on the task and plan rows. Keep the selected task identifiable at narrow widths without adding a path row. Compact mode is passive; expand to browse or mutate.
+- Shared logic in `ot` :: Hosts present; `ot` decides. The terminal host embeds the TUI; the desktop host draws the `ot compact` model natively.
+- Selection in a popup or dialog :: A modal host surface that closes when `ot` exits returns focus without host focus handling, which removed the terminal plugin's expand/collapse handoff.
+- Global display toggle :: One preference for every tab, saved in plugin state; startup and new-tab hooks are idempotent and read no event payload.
+- Root policy :: Follow the focused eligible local agent; missing context is unavailable, never another project. A pane's folder is its foreground process's, so the desktop widget switches only after a new folder holds for two polls.
 
-Compact layout example (illustrative counts, not a live progress report):
-#+BEGIN_EXAMPLE
-* STARTED Rework the org-tasks UI as a Herdr plugin (1/4)                 ~/dotfiles/agents/TASKS.org
-  ./plan:2026-11-05-org-tasks-herdr-ui.org (1/4)
-#+END_EXAMPLE
-- Pi coexistence :: Separate prompt construction and CLI access from visual registration. Keep legacy UI opt-in after Herdr becomes the default task surface. The source scan found no current registrations for the three historical task tools listed in ~boundary.md~; do not restore them. Retain existing in-overlay event semantics for the optional legacy UI; a new Herdr-to-Pi event bus is not part of this change.
-
-** Risks
-- Host APIs differ :: Validate placement, focus restoration, resize, tab changes, process exit and restart on each native host. A failed capability check returns to the owner, not an unapproved UI substitution.
-- Rapid focus changes or asynchronous refresh can target the wrong project :: Test two disposable task roots, delayed results and a root switch during confirmation. Keep context identity separate from task UUID identity.
-- Context files can outlive their producer :: Validate instance ownership and liveness; reject malformed, stale or missing context before mutations. Define the lease/poll bound in the embedding contract and test producer failure.
-- Pi source/docs have drifted :: Inventory current exports and consumers before extraction. Test non-visual-only, legacy-only and combined loading; preserve event cleanup on reload.
-- Native validation hosts may be unavailable :: Linux and macOS checks are delivery gates, not claims inferred from offline fixtures. Report an unavailable host as a remaining dependency.
+** Gotchas
+- Herdr reflows the alternate screen on resize; JLine's diffing display then shows duplicated rows. The TUI uses a full-screen display and repaints on resize.
+- bling's colour detection prints to stdout while loading when TERM and COLORTERM give no clue, as in a GUI app's subprocess. `ot` loads bling with stdout on stderr.
+- A herdr-app mod folder linked into the app does not hot-reload source edits; re-create the link or restart the app.
 
 * Plan
 ** DONE Add compact and embedded modes to the shared org-tasks TUI
@@ -130,19 +81,7 @@ CLOSED: [2026-11-06 Fri 01:06]
 - State "STARTED" from "TODO" [2026-11-05 Thu 20:34]
 - State "DONE" from "STARTED" [2026-11-06 Fri 01:06]
 :END:
-Acceptance criteria:
-- Compact rendering shows parent, selected task, linked-plan context and height-bounded subtasks; completed history is elided first.
-- Expanded mode retains the documented standalone action set.
-- A documented embedding entrypoint consumes validated per-instance JSON context; producer/consumer fixtures pin its directory, mode, context identity, availability and liveness contract.
-- Root resolution remains owned by ot; missing memory is not initialised by context updates.
-- Root switches wait for open forms, pickers and confirmations to finish; the original action root stays fixed.
-- Missing, malformed, stale or remote context disables mutations with an explicit state.
-- External task/import changes refresh the UI; results from superseded contexts are ignored.
-- Standalone terminal cleanup and final selected-task JSON behaviour remain unchanged.
-- Focused TUI, CLI and launcher tests cover two project roots, narrow geometry, empty/stale selection, atomic replacement and adapter loss.
-- Update the declared ot usage, ownership, architecture and embedding contracts in the same change.
-- Must not: add host API calls to task rendering, duplicate task mutation policy or add a dependency.
-Pointer: skills/org-tasks/scripts/src/org_tasks/tui.clj view, msg->actions, update-fn and run!; state/bridge is tui/tasks.clj and effects are tui/dispatch.clj. Scope includes CLI/registry wiring, test/org_tasks/tui_test.clj, CLI/launcher fixtures and the ot specs declared in this record.
+Compact and embedded modes with the private context-file consumer; later refined to the status-led compact view.
 
 ** DONE Reduce compact task-view height
 CLOSED: [2026-11-06 Fri 01:51]
@@ -156,15 +95,7 @@ CLOSED: [2026-11-06 Fri 01:51]
 - State "STARTED" from "TODO" [2026-11-06 Fri 01:31]
 - State "DONE" from "STARTED" [2026-11-06 Fri 01:51]
 :END:
-Acceptance criteria:
-- The compact view has no separate TASKS.org path header.
-- The selected-task row shows the task label and completion token on the left and the task-memory path right-aligned on the same row.
-- A path beneath the user home directory uses ~ in place of that directory, without changing similar path prefixes.
-- The linked-plan row ends with a (completed/total) token; the selected-task row also shows its completion token, as in the approved example.
-- Separate completed-count and more-count summary rows are removed; pending subtasks can still use the available height.
-- Narrow layouts keep the selected task identifiable and do not wrap the path into an extra header row.
-- Focused rendering tests cover path shortening, right alignment, progress counts, zero subtasks and narrow geometry; update the compact-view usage contract.
-Pointer: shared compact rendering in skills/org-tasks/scripts/src/org_tasks/tui.clj and focused tui_test.clj; preserve the accepted embedding safety and standalone contracts. Counts mean completed tasks / total tasks in the represented task or plan scope.
+Compact height reduction; superseded by the title and single progress token agreed on 2026-11-07.
 
 ** DONE Separate Pi task prompts and CLI access from the legacy visual UI
 CLOSED: [2026-11-06 Fri 01:37]
@@ -178,25 +109,14 @@ CLOSED: [2026-11-06 Fri 01:37]
 - State "STARTED" from "TODO" [2026-11-06 Fri 01:06]
 - State "DONE" from "STARTED" [2026-11-06 Fri 01:37]
 :END:
-Acceptance criteria:
-- Pi can use the existing task prompt helpers without registering the overlay, compact widget, file watchers or UI keybindings.
-- CLI-based agent access remains available when the visual entrypoint is disabled.
-- The visual UI has an independently loadable legacy entrypoint.
-- Non-visual-only, legacy-only and combined loading have explicit tested behaviour without duplicate registrations.
-- Current prompt-helper exports retain their contracts or their callers change in the same task.
-- Jira callers and legacy status-event consumers retain their existing semantics.
-- Reload/shutdown tests demonstrate listener and watcher cleanup.
-- The ownership docs and extension README remove stale claims about historical task-tool registrations.
-- Loading instructions describe coexistence and explicit cutover after terminal delivery; preserve the user's current settings until cutover is requested.
-- Must not: recreate removed task tools or add a Herdr-to-Pi event bus.
-Pointer: pi/extensions/tasks/index.ts buildChangeRecordPrompt, buildSummaryRefreshPrompt, handlePlanEdit and refreshTaskUi; update record.test.ts, pi-integration.test.ts, test.sh, pi/extensions/jira/ consumers and pi/extensions/test/event-subscriptions.test.ts together. Read ext-dev and current Pi extension docs before changing entrypoint/loading behaviour.
+Non-visual `tasks/agent.ts`, legacy visual entrypoints and loading tests; cutover applied in `pi/settings.json` on 2026-11-07.
 
-** WAITING Deliver the terminal-Herdr org-tasks plugin
+** DONE Deliver the terminal-Herdr org-tasks plugin
+CLOSED: [2026-11-07 Sat 13:08]
 :PROPERTIES:
 :CUSTOM_ID: ca3e7ac4-9f7f-4718-a23e-a6fa1c51ae46
 :CREATED: [2026-11-05 Thu 20:23]
 :STARTED: [2026-11-06 Fri 01:52]
-:HANDOFF: PARKED for interactive visual check. Done: race fix b984b0d; harness portability + native driver 8f5a4fc; scripted native PASS Linux (xps15) and macOS (record Validation 'Native Linux scripted validation'). Installed on Mac: dotfiles 54e0b80 activation registers plugin (herdr plugin list shows cormacc.org-tasks, live-editable checkout path); keys in herdr/config.toml f7fc132: prefix+t open, prefix+shift+e expand, prefix+shift+c collapse (temporary; user will propose streamlined UX). Next: (1) xps15: git pull + submodule update, HM switch, herdr server reload-config; (2) user visual check on both hosts: open/reuse, expand focus, collapse restores agent, A->B project switch, mutation in B, Esc+reopen, unavailable states (shell pane, no TASKS.org); (3) then terminal acceptance via fresh independent validators (Class C) and desktop dispatch. At closure delete review*, reproduce-focus-race.bb, reproduction-output.txt, native-*.bb, *-native-output.txt. Workspace pinning deferred 16358bea. Leave herdr-app/settings.json (app-written zoom) uncommitted.
 :BLOCKED-BY: task:e24d5b39-25f8-45c6-8816-2b0d72aa7458
 :BLOCKED-BY+: task:b47ba721-fff9-4e5d-9ec3-edcfce9a11c9
 :BLOCKED-BY+: task:c44d7d75-0996-453d-8948-3ea6d5b2a9f4
@@ -207,85 +127,29 @@ Pointer: pi/extensions/tasks/index.ts buildChangeRecordPrompt, buildSummaryRefre
 - State "WAITING" from "STARTED" [2026-11-06 Fri 01:58]
 - State "STARTED" from "WAITING" [2026-11-06 Fri 08:34]
 - State "WAITING" from "STARTED" [2026-11-06 Fri 09:33]
+- State "DONE" from "WAITING" [2026-11-07 Sat 13:08]
 :END:
-Acceptance criteria:
-- New herdr-plugin/org-tasks/ supplies a manifest, Babashka adapter, configuration and README using the shared embedding contract.
-- Explicit opening creates a plugin-owned bottom split; repeated opening reuses the instance in that tab.
-- Expand focuses the browser; collapse restores agent focus and retains compact display.
-- Active-pane root mode is the default; task-pane focus cannot change the source project.
-- Workspace-root mode and its missing-root handling are deferred to [[task:16358bea-c42f-4342-883b-6409d14c7281]] by the user on 2026-11-06; they do not gate this task.
-- Missing eligible agent and remote context produce explicit unavailable states.
-- Context snapshots are atomically replaced; process loss invalidates them within the documented liveness bound.
-- Closing or reopening handles only owned resources; stale IDs and concurrent open requests cannot target user panes.
-- Offline fixtures cover host responses, focus transitions, context changes, invalid configuration, process exit and recovery.
-- The new test runner is included in bb.edn without losing existing test entries.
-- Parent ~/dotfiles/agents.nix installs the plugin through guarded leaf-path wiring; README documents explicit setup and supported host versions.
-- Native Linux validation covers open, collapse, expansion, project switching, mutation, close and restart.
-- Native macOS validation covers the same scenarios.
-- Must not: modify the quota plugin, restructure unrelated panes, initialise task memory or enable a Pi cutover without user action.
-Pointer: herdr-plugin/herdr-plugin.toml and scripts/test-herdr-plugin.bb are installation/fixture precedents; use the pinned Herdr schema links in this record for plugin pane and focus APIs. Re-read parent repository instructions and current agents.nix before installation edits.
+Terminal plugin with popup selection and a global toggle (dd12f08, 4a2eb3f).
 
-** TODO Deliver the desktop-Herdr adapter over the shared task TUI
+** DONE Deliver the desktop-Herdr adapter over the shared task TUI
+CLOSED: [2026-11-07 Sat 20:48]
 :PROPERTIES:
 :CUSTOM_ID: cfb3bb0e-6d2a-4b20-8869-e1e735a91349
 :CREATED: [2026-11-05 Thu 20:23]
 :BLOCKED-BY: task:ca3e7ac4-9f7f-4718-a23e-a6fa1c51ae46
+:STARTED: [2026-11-07 Sat 13:14]
 :END:
 :LOGBOOK:
 - Created [2026-11-05 Thu 20:23]
+- State "STARTED" from "TODO" [2026-11-07 Sat 13:14]
+- State "DONE" from "STARTED" [2026-11-07 Sat 20:48]
 :END:
-Acceptance criteria:
-- New herdr-app/mods/org-tasks/ embeds the shared TUI through a live terminal block; it does not reimplement task rendering.
-- Native controls drive expansion, collapse and focus restoration.
-- The adapter follows the active eligible local agent through the shared embedding contract; workspace pinning is deferred to [[task:16358bea-c42f-4342-883b-6409d14c7281]].
-- Focus on the terminal block preserves its source project.
-- Remote, missing and failed context states do not expose another project's mutable backlog.
-- Instance ownership, context liveness, terminal exit, layout reload and reopen have fixture coverage.
-- Integration into herdr-app/layouts/herdr-orch.json retains existing quota/system components.
-- Desktop tests are included in the existing herdr-app test runner without replacing current suites.
-- Parent ~/dotfiles/agents.nix installs only the new owned leaf paths and rejects foreign occupants.
-- README documents installation, root configuration, lifecycle limits and explicit Pi legacy-UI cutover.
-- Native Linux checks pass for focus, resize, root changes, mutations, exit, reload and restart.
-- Native macOS checks pass for the same scenarios.
-- Must not: overwrite shipped layouts/mods, change unrelated app settings or substitute a native task renderer.
-Pointer: herdr-app/README.md and scripts/test-herdr-app.bb supply the existing integration pattern; inspect the installed ~/.config/herdr-app/AGENTS.md and herdr.d.ts before implementation because app-generated contracts can change. Implementation starts only after the terminal adapter passes its delivery gates.
+Native herdr-app widget over `ot compact`, selection dialog and fitted block.
 
 * Implementation
-** Shared consumer
-- Compact rendering and the private context-file consumer are implemented; standalone behaviour remains covered by the focused suite. Producer/consumer fields, lease and lifecycle requirements belong to [[file:../../skills/org-tasks/scripts/docs/contract.md]] section 'Embedded TUI context contract'.
-- Compact mode shares its selected-task row with the right-aligned home-shortened memory path and adds task/plan completion tokens without separate count rows. Narrow widths omit the path to retain task identity. The bridge retains the existing list tree to distinguish imported-plan scope from ordinary children.
-- The terminal adapter is implemented but not accepted or installed; the desktop adapter remains pending. The latest independent review leaves a P2 source-handoff race open. Linux native validation remains unrun; macOS checks cover the tested between-polls sequence, not the remaining in-progress-poll interleaving.
-
-** Pi coexistence
-- ~pi/extensions/tasks/agent.ts~ exports non-visual prompt helpers without visual registration. ~index.ts~ retains compatibility loading; ~legacy.ts~ provides explicit visual loading. Use only one visual entrypoint at a time. CLI access stays with ~ot~; user settings and cutover remain unchanged.
-- Fresh independent review found no actionable defects in the Pi separation. Root reran ~bash pi/extensions/tasks/test.sh~ successfully, including installed runtime discovery and shared event-subscription checks. Evidence: [[file:../../.tmp/herdr-ui-execution/pi-review-report.md]] and [[file:../../.tmp/herdr-ui-execution/pi-root-verification.log]]. The reviewer independently reproduced three affected-file type diagnostics at the immutable baseline; the wider type check remains red.
-
-** Source anchors
-- Assignment baseline: ~ffc716dfdb443c266523cbb092bed3ef1d7bb643~. Existing dirty files include ~TASKS.org~, ~bb.edn~, ~pi/settings.json~ and desktop integration work; re-read them before implementation.
-- ~skills/org-tasks/scripts/src/org_tasks/tui.clj~: ~view~, ~msg->actions~, ~update-fn~, ~run!~. ~skills/org-tasks/scripts/docs/DESIGN.org~ documents the command bridge and root-resolution ownership.
-- ~pi/extensions/tasks/index.ts~: ~buildCompactLines~, ~buildChangeRecordPrompt~, ~buildSummaryRefreshPrompt~, ~handlePlanEdit~ and ~refreshTaskUi~. ~pi/extensions/tasks/record.test.ts~ exercises prompt exports. ~pi/extensions/jira/index.ts~ consumes the legacy ~tasks:status-changed~ event.
-- [[https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/api/schema/plugins.rs][Herdr 0.9.5 plugin schema]]: ~PluginPaneOpenParams~, ~PluginPanePlacement~, ~PluginInvocationContext~ provide split placement and host context. [[https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/src/api/schema/events.rs][Event schema]] provides focus and lifecycle subscriptions. Re-check the running server before implementation.
-- Installed desktop contract: =~/.config/herdr-app/AGENTS.md= describes live terminals in layout blocks; =~/.config/herdr-app/herdr.d.ts= defines ~focused()~, ~spaces()~, ~layout.resize~ and terminal lifecycle operations. These files are rewritten by the app; re-read them before implementing the desktop adapter.
+- Embedding contract and compact view model: [[file:../../skills/org-tasks/scripts/docs/contract.md]] sections 'Embedded TUI context contract' and '`ot compact [--width <n>]`'.
+- Terminal plugin: [[file:../../herdr-plugin/org-tasks/README.md]]. Desktop widget: [[file:../../herdr-app/README.md]] section 'Task widget'. Pi cutover: [[file:../../pi/extensions/tasks/README.md]].
 
 * Validation
-** Request/snapshot race correction (2026-11-06)
-The P2 finding in [[file:2026-11-05-org-tasks-herdr-ui/review.md]] is corrected in ~supervise!~: the supervisor reads ~request.json~ before and after ~snapshot!~, samples and publishes only when both reads agree, and still writes the owner heartbeat on a skipped poll. A first correction (request read before the snapshot only) left a one-poll mirror race; see [[file:2026-11-05-org-tasks-herdr-ui/review-2-mirror-race.md]]. Two regressions in ~scripts/test-herdr-org-tasks.bb~ cover both orderings. A fresh reviewer approved the final range with no findings: [[file:2026-11-05-org-tasks-herdr-ui/review-3-approved.md]]. That report states red on HEAD (4 failures) and on the first correction (1 failure), and green on the current code. Root reran ~bb scripts/test-herdr-org-tasks.bb~: exit 0, 19 tests, 145 assertions, 0 failures/errors. Root reran the reproduction: exit 1, so the original defect no longer reproduces. Both the race and control cases publish ~agent-b~. Native Linux and macOS adapter validation are still outstanding; the native Linux gate still needs a reachable isolated host.
-
-** Native Linux scripted validation (2026-11-06)
-On xps15 (Linux 7.3.1, NixOS, Herdr 0.9.5, protocol 22) at ~b984b0d~, root ran [[file:2026-11-05-org-tasks-herdr-ui/native-driver.bb]] over SSH: exit 0, ~NATIVE PASS~, 24 ~PASS~ steps. Output: [[file:2026-11-05-org-tasks-herdr-ui/linux-native-output.txt]]. Run it from the repository root. The driver starts [[file:2026-11-05-org-tasks-herdr-ui/native-probe.bb]] in a disposable Herdr server under ~.tmp/~ with isolated XDG directories and inert compiled agent processes, and cleans up only that server. The steps cover open, reuse, compact and expanded geometry, expansion focus, collapse focus restoration, a project switch with the producer paused on A, a task mutation in B with A unchanged, close and reopen, process-exit reopen, supervisor restart and plugin registration after a server restart. The probe derives from the earlier macOS recipe; it resolves ~bash~ from ~PATH~, because NixOS has no ~/bin/bash~. This is a scripted check, not an attached-client visual check, which is still outstanding.
-
-Root ran the same driver on macOS 27.2 with Herdr 0.9.5, against the final code including the harness fix: exit 0, ~NATIVE PASS~, 24 ~PASS~ steps. Output: [[file:2026-11-05-org-tasks-herdr-ui/macos-native-output.txt]]. This is also scripted, not visual.
-
-On Linux the offline suite exposed two harness defects, which are now fixed in ~scripts/test-herdr-org-tasks.bb~. The suite depended on an ambient ~HERDR_TAB_ID~: it also failed on macOS outside a Herdr pane. The new regressions hard-coded ~/bin/sleep~. After the fix the suite passes in three environments: macOS inside Herdr, macOS with all ~HERDR_*~ variables unset, and xps15 with no ~HERDR_*~ variables. Each run: exit 0, 19 tests, 145 assertions. The reproduction script still hard-codes ~/bin/sleep~ and is removed at closure. With that path and ~HERDR_TAB_ID~ supplied, it gives the post-fix result on xps15: exit 1, and both cases publish ~agent-b~.
-
-** Linux continuation checkpoint
-The checkpoint preserves an unresolved wrong-project race, not an accepted terminal delivery. Root reran [[file:2026-11-05-org-tasks-herdr-ui/reproduce-focus-race.bb]] successfully: its positive control retains B, while the in-progress-poll case captures B but repeatedly publishes A as ready. Run ~bb design/log/2026-11-05-org-tasks-herdr-ui/reproduce-focus-race.bb~ from the repository root; exit 0 means the recorded defect and positive control were reproduced, not that the product is correct. Current output: [[file:2026-11-05-org-tasks-herdr-ui/reproduction-output.txt]].
-
-The independent [[file:2026-11-05-org-tasks-herdr-ui/review.md]] contains the finding, source anchors and verification limits. Its historical ~.tmp/~ evidence references are not all included in the checkpoint. These supporting files are retained for cross-machine continuation and must be removed during eventual task closure after the defect is fixed and verified. Linux native validation and desktop delivery remain outstanding; workspace pinning is deferred to [[task:16358bea-c42f-4342-883b-6409d14c7281]].
-
-** Component evidence
-Shared TUI: root reran ~bb test-clojure org-tasks.embedding-test org-tasks.tui-test org-tasks.cli-test org-tasks.launcher-test~ on the integrated checkout: 63 tests, 1398 assertions, zero failures/errors. Fresh independent review approved the shared-consumer range and exercised negative guard controls. Evidence: [[file:../../.tmp/herdr-ui-execution/shared-review-report.md]] and [[file:../../.tmp/herdr-ui-execution/root-focused-review.log]]. Worker-reported native macOS PTY checks are not native Herdr adapter validation. The worker reports four cross-skill routing failures reproduced at its immutable baseline; root has not independently verified that attribution.
-
-Compact-height refinement: root reran the same four focused namespaces: 66 tests, 1416 assertions, zero failures/errors. Fresh independent review approved the compact-specific range, exercised pre-change and ordering controls, and reports two disposable native macOS PTY checks. These are not native Herdr adapter checks. Evidence: [[file:../../.tmp/herdr-ui-execution/compact-root-focused.log]] and [[file:../../.tmp/herdr-ui-execution/compact-review-report.md]].
-
-Remaining delivery validation uses new offline host-adapter suites wired into ~bb.edn~ and native host checks. Use disposable task roots and fake host commands in automated tests; native checks create and clean up only owned UI resources.
+- Offline: `bb test-clojure`, `bb scripts/test-herdr-org-tasks.bb` and `HERDR_APP_WIRING=../agents.nix bb scripts/test-herdr-app.bb` pass; the herdr-app suite runs the real `ot compact` against disposable projects.
+- macOS live (2026-11-07): terminal plugin title mirroring in a disposable tab; desktop widget through a temporary mod link: project follow and switch, refresh, counts and hints, selection dialog with Esc, toggle and block fitting. Linux and post-install checks: [[task:2b49d0fd-413d-47a3-a5da-61e655dea4a1]].

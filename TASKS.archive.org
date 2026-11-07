@@ -4984,3 +4984,21 @@ Design constraints to evaluate: stable message and correlation IDs; replay curso
 Acceptance: record a keep/adopt/augment decision with evidence. Compare publication-to-capture and message-to-presentation delay, subprocess activity and restart recovery at representative concurrency; alternate baseline and candidate rounds and report each rounds median. Test idle/busy recipients, continued/replaced sessions, lost notifications, duplicate delivery, and crashes between persistence, notification, presentation and acknowledgement. A keep-existing decision is explicitly acceptable if gains do not justify complexity.
 
 Related investigation: [[task:f2365984-c97f-4e39-9b86-6c2cc94809a9][Diagnose desktop completion delivery and enforce explicit collection]]. Coordinate with that narrower delivery diagnosis; do not presume its cause or duplicate its workflow rules.
+
+** DONE Rework the org-tasks UI as a Herdr plugin
+CLOSED: [2026-11-07 Sat 20:49]
+:PROPERTIES:
+:CUSTOM_ID: 82126d8e-eb54-45b8-abbe-9e76451b3963
+:CREATED: [2026-11-05 Thu 19:54]
+:STARTED: [2026-11-05 Thu 20:16]
+:HANDOFF: PARKED. Shared/Pi/compact DONE. Terminal WAITING on user visual check only: fix + scripted native validation done on Linux/macOS; plugin registered via agents.nix and keys bound (prefix+t/shift+e/shift+c) on Mac; xps15 needs pull + HM switch. See handoff on ca3e7ac4 for steps. User intends to propose a streamlined UX replacing the explicit bindings. Desktop TODO blocked on terminal.
+:ARCHIVED: [2026-11-07 Sat 20:49]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 19:54]
+- State "STARTED" from "TODO" [2026-11-05 Thu 20:16]
+- State "DONE" from "STARTED" [2026-11-07 Sat 20:49]
+:END:
+#+IMPORT: [[plan:2026-11-05-org-tasks-herdr-ui.org]]
+Explore moving the org-tasks UI into a Herdr plugin. Options are a Herdr widget or an embedded terminal pane at the foot of the Herdr window running the org-tasks TUI. The embedded terminal pane is the preferred candidate as the likely cleanest strategy, not a settled design. Consider adding a collapsed mode to the TUI that replicates the selected-task overlay in Pi.
