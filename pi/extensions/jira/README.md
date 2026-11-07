@@ -166,7 +166,7 @@ Runs `jira.test.ts`: the pure helpers, the trigger shape of every flow, and each
 handlers and the auto-transition listener against throwaway `ot` projects. No
 test calls Jira. The `tasks:status-changed` listener's session-scoped cleanup is
 covered by `pi/extensions/test/event-subscriptions.test.ts` (run from
-`pi/extensions/emacsclient/test.sh`). Live smoke tests use `SAND` as their
+`pi/extensions/test/test.sh`). Live smoke tests use `SAND` as their
 sandbox project.
 
 The runner also executes `exploration.test.ts`, which extracts the JavaScript blocks from the exploration reference and runs them against `exploration.fixtures.json`. Fixtures preserve the observed MCP response shapes with synthetic identifiers and content. The tests cover fulfilled error envelopes, partial failures, unsupported shapes, scope/size boundaries, visible truncation/cursors/warnings and a deliberately blocked write. They make no live Atlassian calls; native code-mode and live read-only trials are separate checks.

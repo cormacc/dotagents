@@ -2,6 +2,8 @@
 
 Each extension keeps its own assertions and `test.sh`. The shared helpers own process and dependency plumbing, not extension behaviour.
 
+`test.sh` in this directory runs every `*.test.ts` here: the cross-extension suites, the suites for top-level extensions that have no directory of their own, and `locked-tools.test.ts`.
+
 ## Locked tools
 
 Runners source `support/locked-tools.sh` after changing to their extension directory. It resolves the repository's `node_modules/.bin/tsx` and `tsc`; it never downloads a tool or selects an ambient `tsx`. Install dependencies with `npm ci` at the repository root. Extensions with local runtime dependencies also need their own `npm ci`.

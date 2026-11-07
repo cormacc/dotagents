@@ -29,21 +29,6 @@ fi
 
 # ── structural sanity ────────────────────────────────────────────────
 
-if [ ! -f "index.ts" ]; then
-  echo "not ok - index.ts not found"
-  exit 1
-fi
-
-if ! grep -q "^export default function" index.ts; then
-  echo "not ok - index.ts missing default export"
-  exit 1
-fi
-
-if ! grep -q "pi.registerCommand" index.ts; then
-  echo "not ok - index.ts does not register any commands"
-  exit 1
-fi
-
 # A `void someAsyncCall()` is a floating promise. From a timer or watcher
 # callback there is no caller to await it, so a rejection becomes an
 # `uncaughtException` and kills the entire pi process rather than the one
@@ -61,8 +46,9 @@ fi
 CODE=0
 
 # Every *.test.ts beside this runner, plus the shared lib test. Globbed rather
-# than listed so a new test file cannot be added without being run.
-for t in ./*.test.ts ../lib/agent-paths.test.ts ../test/locked-tools.test.ts ../test/event-subscriptions.test.ts; do
+# than listed so a new test file cannot be added without being run. The shared
+# suites in ../test/, including the tasks entrypoint checks, run from ../test/test.sh.
+for t in ./*.test.ts ../lib/agent-paths.test.ts; do
   echo "# Running $t..."
   "$TSX" "$t" || CODE=1
 done

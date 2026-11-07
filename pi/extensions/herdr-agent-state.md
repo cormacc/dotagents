@@ -18,7 +18,7 @@ Herdr, which supplies the socket and the environment variables. No npm dependenc
 
 ## Tests
 
-`../test/herdr-agent-state.test.ts` drives the file through a disposable UNIX socket that stands in for Herdr. `herdr-orch/test.sh` runs it.
+`../test/herdr-agent-state.test.ts` drives the file through a disposable UNIX socket that stands in for Herdr. `test/test.sh` runs it.
 
 ## Compatibility review
 

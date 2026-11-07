@@ -22,7 +22,3 @@ node --import tsx ./private-browser.test.ts
 "$TSX" ./delivery.test.ts
 "$TSX" ./recovery.test.ts
 "$TSX" ./recovery-integration.test.ts
-# `herdr-agent-state.ts` is a top-level extension with no directory of its own, so its
-# suite lives in the shared `pi/extensions/test/` directory and is run from here -- the
-# same pattern `tasks/test.sh` uses for `../lib/agent-paths.test.ts`.
-"$TSX" ../test/herdr-agent-state.test.ts
