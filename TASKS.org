@@ -34,22 +34,6 @@
 
 * Explorations
 
-** STARTED [#B] herdr-orch: LLM usage limit fallback :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: c3ae685d-bb3c-4329-b233-cfa0604075bc
-:CREATED: [2026-08-11 Tue 17:54]
-:STARTED: [2026-11-04 Wed 00:54]
-:END:
-:LOGBOOK:
-- Created [2026-08-11 Tue 17:54]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:54]
-:END:
-#+IMPORT: [[plan:2026-11-04-model-fallback.org]]
-It would be useful for sessions to fallback  after hitting session limits (anthropic -> openai -> local, openai -> anthropic -> local)
-Take a look at https://github.com/luongnv89/ccl, which implements a solution for pi, claude and codex. Evaluate whether we can piggyback on this without breaking our model aliasing etc.
-There's also `agent-router`, which is session limit aware: https://github.com/nidhi-singh02/agent-router
-Also evaluate the subscription-failover handling in sova (https://github.com/Naomarik/sova), folded in from the cancelled task 8e199d7c. Verified [2026-10-20 Tue] at e67e868: herdr-orch has no failover mechanism today (no match in contract.md, subagents/config.edn, or core.clj).
-
 ** STARTED [#C] Explore agent memory options :org:
 :PROPERTIES:
 :CUSTOM_ID: df50e088-86c0-44be-8d0a-3a09fce88d2b

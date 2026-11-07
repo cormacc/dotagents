@@ -25,7 +25,7 @@ Feature delivery, approved live fixture capture and the four owner-approved beha
 - Pi extension: `usage` section in `/oh`; bare `/oh` appends the usage block.
 - Contract: [[proj:skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' (routing, `:providers`, cache) and a new 'Usage' section; [[proj:skills/herdr-orch/README.org]] roster embed and merge-rule note; [[proj:pi/extensions/herdr-orch/README.md]] slash command. `cli_test.clj` `shipped-config-invariants` and the contract weight table updated for ranked rows.
 *** Out of scope
-- In-session quota failure, retry and successor handling: [[file:2026-11-04-model-fallback.org]] (task c3ae685d). That work consumes this routing and `oh usage`.
+- In-session quota failure, retry and successor handling: task c3ae685d (archived without child failover). That work consumes this routing and `oh usage`.
 - Credential refresh, rotation or any write to a credential store.
 - Anthropic `extra_usage` and Codex `credits`/Reserve balances.
 - macOS Keychain credential store for claude (Linux credential file only).
@@ -70,7 +70,7 @@ Feature delivery, approved live fixture capture and the four owner-approved beha
 - [X] Must not: let the `/oh` usage entry enter model context (same session-entry mechanism as the roster).
 
 ** Decisions
-- Keep fallback discrete :: task c3ae685d ([[file:2026-11-04-model-fallback.org]]) is in-session failure classification and successor authorisation; its open questions concern replay safety, not selection. Its implementation task is blocked on this task; its "allowed fallback targets" question is answered by the alias's ranked set. Rejected: absorbing it, which would force the replay-safety contract into a routing record.
+- Keep fallback discrete :: task c3ae685d (archived without child failover) is in-session failure classification and successor authorisation; its open questions concern replay safety, not selection. Its implementation task is blocked on this task; its "allowed fallback targets" question is answered by the alias's ranked set. Rejected: absorbing it, which would force the replay-safety contract into a routing record.
 - Config shape :: `:models` rows keep canonical keys (native spelling survives) and lose the cross-provider columns; `:aliases` values are a string (single hop, unchanged) or a candidate vector; a new `:providers` map carries `:usage`, `:credentials`, `:cache-ttl-s`, optional `:reserve`; `:harnesses` gains `:providers`. Merge semantics unchanged: `:aliases`/`:defaults` per key, `:models`/`:harnesses`/`:providers` rows wholesale. Rejected: the draft `config.new.edn` inversion (short name → canonical in `:models`), which drops per-kind spellings.
 - Usage adapters inside `oh` (Babashka, `babashka.http-client`), reading harness credential files directly :: routing lives in `oh`, and claude/codex roots have no pi extension. Rejected:
   - Shell out to a harness usage command: none is non-interactive.
