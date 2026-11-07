@@ -10,7 +10,7 @@ The legacy visual extension displays project tasks from `TASKS.org` using an ove
 | `tasks/legacy.ts` | Explicit legacy visual entrypoint with the same behaviour. Load one visual path, not both. |
 | [`tasks/agent.ts`](agent.ts) | Non-visual integration: exports prompt helpers, with no commands, tools, UI keybindings, widgets, watchers or event subscriptions. |
 
-The non-visual entrypoint can load alone or with either visual path. Loading both integrations adds no duplicate registrations. The current settings and visual default remain unchanged. Keep the sibling `tasks/`, `emacsclient/` and `lib/` directories together so their relative helper imports resolve; the installed whole-tree symlink already does this.
+The non-visual entrypoint can load alone or with either visual path. Loading both integrations adds no duplicate registrations. This repository's `pi/settings.json` applies the cutover below: the Herdr task surfaces replace Pi's visual UI, and the visual entrypoints stay in the repository for Pi users without Herdr. Keep the sibling `tasks/`, `emacsclient/` and `lib/` directories together so their relative helper imports resolve; the installed whole-tree symlink already does this.
 
 After terminal-Herdr delivery is validated and the user explicitly requests cutover:
 

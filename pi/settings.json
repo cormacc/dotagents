@@ -17,5 +17,9 @@
   "extensionChangelogVersions": {
     "{\"source\":\"npm:@gotgenes/pi-anthropic-auth\",\"scope\":\"user\"}": "3.4.4",
     "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.47.0"
-  }
+  },
+  "extensions": [
+    "-./extensions/tasks/index.ts",
+    "./extensions/tasks/agent.ts"
+  ]
 }
