@@ -87,7 +87,9 @@
            (if (zero? exit)
              (cond-> [[:state/assoc :message ok-message]
                       [:tree/reload]]
-               (= cmd-key :move) (conj [:tree/reveal-task (:id cmd-opts)]))
+               (= cmd-key :move) (conj [:tree/reveal-task (:id cmd-opts)])
+               ;; A picker host (such as a Herdr popup) closes with the process.
+               (and (= cmd-key :select) (:exit-on-select opts)) (conj [:tui/quit]))
              [[:state/assoc :message (tasks/error-message envelope)]])))))
 
     :remove/preview

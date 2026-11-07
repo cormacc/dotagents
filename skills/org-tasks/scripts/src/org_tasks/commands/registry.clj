@@ -195,8 +195,11 @@
   [{:cmds ["tui"] :fn (fn [result] ((requiring-resolve 'org-tasks.tui/command!) result))
     :spec {:mode (merge {:desc "Display mode"} (enum-opt "mode" [:compact :expanded]))
            :context-file {:desc "Private per-instance embedding JSON file" :ref "<path>"}
-           :instance {:desc "Expected embedding instance identity" :ref "<id>"}}
-    :summary ["[--mode compact|expanded] [--context-file <path> --instance <id>]"
+           :instance {:desc "Expected embedding instance identity" :ref "<id>"}
+           :layout (merge {:desc "Expanded layout: details below the tree, or beside it on wide landscape terminals"}
+                          (enum-opt "layout" [:stacked :auto]))
+           :exit-on-select {:desc "Exit after a successful select (s)" :coerce :boolean}}
+    :summary ["[--mode compact|expanded] [--layout stacked|auto] [--exit-on-select] [--context-file <path> --instance <id>]"
               "Run the shared terminal task UI"]}
    {:cmds ["init"]               :fn maintenance/init-cmd
     :spec {}

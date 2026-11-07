@@ -34,6 +34,8 @@
                      (nonblank? (:contextId c))
                      (#{"compact" "expanded"} (:mode c))
                      (#{"local" "unavailable" "remote"} (:availability c))
+                     (or (nil? (:hints c))
+                         (and (sequential? (:hints c)) (every? string? (:hints c))))
                      (some? age)))
            {:status :invalid :reason "Invalid adapter context"}
 
@@ -99,6 +101,7 @@
       (if (and (= :ready (:status latest))
                (= (context-key c) (context-key (:context latest))))
         (assoc loaded :active-context c :action-opts task-opts :mode (:mode c)
+               :hints (:hints c)
                :pending-context nil
                :context-status (if memory? :ready :missing-memory)
                :context-message (when-not memory? "No task memory in project"))

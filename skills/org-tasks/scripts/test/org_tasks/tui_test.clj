@@ -55,13 +55,13 @@
         rendered (tui/view state)]
     (is (str/includes? rendered "Selected"))
     (is (str/includes? rendered "Parent"))
-    (is (str/includes? rendered "plan:work.org"))
+    (is (not (str/includes? rendered "work.org")) "the plan is in the window title, not a row")
     (is (str/includes? rendered "Pending"))
     (is (not (str/includes? rendered "Finished")))
     (is (<= (count (str/split-lines rendered)) 4))
     (is (= [] (tui/msg->actions state (msg/key-press "n"))))))
 
-(deftest compact-progress-path-and-geometry
+(deftest compact-progress-and-geometry
   (let [home (System/getProperty "user.home")
         result {:selectedId "b" :files {:tasks (str home "/project/TASKS.org")}
                 :tree [{:id "a" :importChildren [{:id "b" :status "STARTED"
@@ -77,32 +77,111 @@
                        {:id "f" :parentId "a" :summary "Local child" :status "CANCELLED" :sourcePath "/tasks"}]}
         state (assoc (tasks/initial-state result) :mode "compact" :width 80 :height 4 :color? false)
         lines (str/split-lines (tui/view state))]
-    (is (str/starts-with? (first lines) "> Selected [--------] STARTED (1/2)"))
-    (is (str/ends-with? (first lines) "~/project/TASKS.org"))
-    (is (= 80 (count (first lines))))
-    (is (some #(= "Plan: plan:work.org (1/4)" %) lines))
-    (is (some #(str/includes? % "Pending") lines))
-    (is (not-any? #(str/includes? % "Done") lines))
-    (let [narrow (str/split-lines (tui/view (assoc state :width 18)))]
+    (testing "with nothing started, the task line carries the right-justified count"
+      (is (str/starts-with? (first lines) "STARTED Selected [--------] "))
+      (is (str/ends-with? (first lines) " 1/2"))
+      (is (= 80 (count (first lines))))
+      (is (not-any? #(str/includes? % "TASKS.org") lines))
+      (is (some #(= "... TODO Pending [--------]" %) lines) "no ellipsis without hidden pending work")
+      (is (not-any? #(str/includes? % "Done") lines)))
+    ;; The status prefix takes 8 columns before the summary.
+    (let [narrow (str/split-lines (tui/view (assoc state :width 26)))]
       (is (str/includes? (first narrow) "Selected"))
-      (is (every? #(<= (count %) 18) narrow)))
-    (let [outside (assoc-in result [:files :tasks] (str home "-other/TASKS.org"))
-          wide (tui/view (assoc (tasks/initial-state outside) :mode "compact" :width 120 :height 4))]
-      (is (str/includes? wide (str home "-other/TASKS.org"))))
+      (is (every? #(<= (count %) 26) narrow)))
     (let [empty-state (assoc (tasks/initial-state (assoc result :rows [(second (:rows result))]))
-                             :mode "compact" :width 80 :height 4)]
-      (is (str/includes? (tui/view empty-state) "(0/0)")))
-    (with-redefs [tasks/load-tasks (fn [_] (assoc-in result [:files :tasks] "/new/TASKS.org"))]
-      (is (str/ends-with? (first (str/split-lines (tui/view (tasks/reload-state {} state))))
-                          "/new/TASKS.org")))))
+                             :mode "compact" :width 80 :height 4 :color? false)]
+      (is (str/ends-with? (tui/view empty-state) " 0/0")))))
+
+(deftest compact-shows-every-started-task-then-the-next
+  (let [owner {:id "a" :summary "Owner" :status "STARTED" :importPath "plan:p.org"}
+        queued {:id "b" :parentId "a" :summary "Queued" :status "TODO"}
+        active {:id "c" :parentId "a" :summary "Active" :status "STARTED"}
+        parallel {:id "d" :parentId "a" :summary "Parallel" :status "STARTED"}
+        waiting {:id "e" :parentId "a" :summary "Later" :status "WAITING"}
+        finished {:id "f" :parentId "a" :summary "Finished" :status "DONE"}
+        local {:id "g" :parentId "a" :summary "Local" :status "STARTED"}
+        plan [queued active parallel waiting finished]
+        result {:selectedId "a" :rows (into [owner] (conj plan local))
+                :tree [(assoc owner :importChildren plan :children [local])]}
+        render (fn [r color?]
+                 (str/split-lines (tui/view (assoc (tasks/initial-state r) :mode "compact"
+                                                   :width 60 :height 8 :color? color?))))
+        strong? (fn [line text] (str/includes? line (str "\u001b[0m " text)))
+        ;; JLine emits theme colour 8 as SGR 90 (bright black).
+        muted "\u001b[90m"
+        status (str "38;5;" (get styling/palette-256 :blue) "m")]
+    (testing "layout"
+      (let [lines (render result false)]
+        (is (= ["STARTED Owner [--------]"
+                "... STARTED Active [--------]"
+                "... STARTED Parallel [--------]"
+                "... STARTED Local [--------]"
+                "... TODO Queued [--------]"]
+               (map #(first (str/split % #"\s{2,}")) lines)))
+        (is (str/ends-with? (nth lines 1) " 1/6") "the first started line carries the count")
+        (is (not-any? #(str/ends-with? % "1/6") (cons (first lines) (drop 2 lines))))
+        (is (str/ends-with? (last lines) " ...") "hidden pending work adds an ellipsis")
+        (is (not-any? #(str/includes? % "Later") lines))
+        (is (not-any? #(str/includes? % "Finished") lines))))
+    (testing "every started descendant is current, but not the started selection"
+      (let [lines (render result true)]
+        (is (strong? (nth lines 1) "Active"))
+        (is (strong? (nth lines 2) "Parallel"))
+        (is (str/includes? (nth lines 1) status))
+        (is (str/starts-with? (nth lines 1) (str muted "... ")))
+        (is (not (strong? (first lines) "Owner")))
+        (is (str/includes? (first lines) muted))
+        (is (strong? (nth lines 3) "Local") "a started child outside the plan is current too")
+        (is (not (strong? (nth lines 4) "Queued")))))
+    (testing "without a started descendant the selected task is current"
+      (let [lines (render (assoc result :rows [owner queued]
+                                 :tree [(assoc owner :importChildren [queued] :children [])])
+                          true)]
+        (is (strong? (first lines) "Owner"))
+        (is (not-any? #(strong? % "Queued") lines))))))
+
+(deftest compact-without-selection-counts-tasks-by-status
+  (let [rows [{:id "a" :status "TODO"} {:id "b" :status "TODO"} {:id "c" :status "STARTED"}
+              {:id "d" :status "DONE"} {:id "e" :status "WAITING"} {:id "f" :status "CANCELLED"}]
+        state (assoc (tasks/initial-state {:rows rows}) :mode "compact" :width 80 :height 5
+                     :hints ["ctrl+b t: Select a task from the backlog"])]
+    (is (= ["6 tasks: 2 TODO / 1 STARTED / 1 WAITING / 1 DONE / 1 CANCELLED" "ctrl+b t: Select a task from the backlog"]
+           (str/split-lines (tui/view (assoc state :color? false)))))
+    (is (str/includes? (tui/view state) (str "38;5;" (get styling/palette-256 :blue) "mSTARTED"))
+        "each status keeps its palette colour")))
+
+(deftest window-title-names-folder-and-plan
+  (let [home (System/getProperty "user.home")
+        owner {:id "a" :summary "Owner" :status "TODO" :importPath "plan:2026-01-01-x.org"}
+        child {:id "b" :parentId "a" :summary "Child" :status "TODO"}
+        result {:selectedId "b" :files {:tasks (str home "/project/TASKS.org")} :rows [owner child]}
+        title #(tui/window-title (tasks/initial-state %))]
+    (is (= "Tasks :: ~/project :: 2026-01-01-x.org" (title result)) "a descendant shows its ancestor's plan")
+    (is (= "Tasks :: ~/project :: plan.org"
+           (title (assoc result :rows [(assoc owner :importPath "file:design/plan.org") child]))))
+    (is (= "Tasks :: ~/project" (title (assoc result :rows [(dissoc owner :importPath) child]))))
+    (is (= "Tasks :: ~/project" (title (assoc result :selectedId nil))))
+    (is (= (str "Tasks :: " home "-other :: 2026-01-01-x.org")
+           (title (assoc-in result [:files :tasks] (str home "-other/TASKS.org")))))
+    (is (= "Tasks" (title (dissoc result :files :selectedId))))))
+
+(deftest title-changes-reach-the-terminal-once-as-osc-2
+  (let [bytes (java.io.ByteArrayOutputStream.)
+        out (java.io.PrintStream. bytes true "UTF-8")
+        {:keys [emit! update]} (#'tui/title-writer (fn [state m] [(merge state m) nil]) out)
+        state (tasks/initial-state {:files {:tasks "/p/TASKS.org"} :rows []})]
+    (emit! state)
+    (is (= [state nil] (update state {})) "update results pass through")
+    (update state {:task-memory-path "/q/TASKS.org"})
+    (is (= "\u001b]2;Tasks :: /p\u0007\u001b]2;Tasks :: /q\u0007" (.toString bytes "UTF-8")))))
 
 (deftest compact-counts-imported-tasks-from-the-same-source
   (let [owner {:id "a" :summary "Owner" :status "TODO" :sourcePath "/tasks" :importPath "file:TASKS.org"}
         child {:id "b" :summary "Imported" :status "DONE" :sourcePath "/tasks" :parentId "a"}
         result {:selectedId "a" :rows [owner child]
                 :tree [(assoc owner :importChildren [child] :children [])]}
-        state (assoc (tasks/initial-state result) :mode "compact" :width 80 :height 3)]
-    (is (str/includes? (tui/view state) "Plan: file:TASKS.org (1/1)"))))
+        state (assoc (tasks/initial-state result) :mode "compact" :width 80 :height 3 :color? false)]
+    (is (str/ends-with? (first (str/split-lines (tui/view state))) " 1/1"))))
 
 (deftest compact-renders-loaded-import-and-refresh
   (test-util/with-temp-dir
@@ -115,16 +194,18 @@
             (str "* Plan\n** DONE Done\n:PROPERTIES:\n:CUSTOM_ID: " removal-child-id
                  "\n:END:\n** TODO Pending\n:PROPERTIES:\n:CUSTOM_ID: " removal-other-child-id "\n:END:\n"))
       (let [opts {:root root}
-            state (assoc (tasks/initial-state (tasks/load-tasks opts)) :mode "compact" :width 180 :height 4)
+            state (assoc (tasks/initial-state (tasks/load-tasks opts)) :mode "compact" :width 180 :height 4 :color? false)
             lines (str/split-lines (tui/view state))]
-        (is (str/includes? (first lines) "(1/2)"))
-        (is (str/ends-with? (first lines) (str root "/TASKS.org")))
-        (is (some #(str/ends-with? % "(1/2)") (rest lines)))
+        (is (str/ends-with? (first lines) " 1/2"))
+        (is (str/ends-with? (tui/window-title state) " :: plan.org"))
         (is (some #(str/includes? % "Pending") lines))
         (spit (str root "/plan.org") (str/replace (slurp (str root "/plan.org")) "TODO Pending" "DONE Pending"))
-        (let [refreshed (str/split-lines (tui/view (tasks/reload-state opts state)))]
-          (is (str/includes? (first refreshed) "(2/2)"))
-          (is (some #(and (str/starts-with? % "Plan:") (str/ends-with? % "(2/2)")) refreshed)))))))
+        (let [refreshed (tasks/reload-state opts state)]
+          (is (str/ends-with? (first (str/split-lines (tui/view refreshed))) " 2/2"))
+          (with-redefs [tasks/load-tasks (let [real tasks/load-tasks]
+                                           (fn [o] (assoc-in (real o) [:files :tasks] "/new/TASKS.org")))]
+            (is (str/starts-with? (tui/window-title (tasks/reload-state opts refreshed))
+                                  "Tasks :: /new :: "))))))))
 
 (deftest move-picker-filters-owner-and-subtree
   (let [rows [{:id "a" :sourcePath "/tasks"}
@@ -236,6 +317,7 @@
         state (assoc (tasks/initial-state (assoc-in sample-result [:rows 1 :description] long-body))
                      :width 80
                      :height 18
+                     :layout "auto"
                      :color? false)
         lines (str/split-lines (tui/view state))
         pane-lines (take 15 lines)
@@ -244,6 +326,33 @@
     ;; Keep spare terminal columns so emulators do not auto-wrap at EOL.
     (is (every? #(<= (count %) 76) lines))
     (is (every? #(= 40 %) separators))))
+
+(deftest selected-tree-keeps-the-foreground-and-other-rows-are-muted
+  (let [rows [{:id "a" :summary "Parent" :status "TODO"}
+              {:id "b" :parentId "a" :summary "Selected" :status "STARTED"}
+              {:id "c" :parentId "b" :summary "Grandchild" :status "DONE" :local true}
+              {:id "d" :summary "Other" :status "DONE" :local true}]
+        ;; JLine emits theme colour 8 as SGR 90 (bright black).
+        muted "\u001b[90m"
+        lines (fn [selected-id]
+                (let [state (assoc (tasks/initial-state {:selectedId selected-id :rows rows})
+                                   :color? true :cursor 99 :expanded #{"a" "b"})
+                      visible (tasks/visible-tasks state)]
+                  (into {} (map-indexed (fn [i t] [(:id t) (tui/task-line state t i)]) visible))))
+        muted? (fn [line text] (str/includes? line (str muted text)))]
+    (testing "with a selection"
+      (let [l (lines "b")]
+        (is (= #{"a" "b" "c" "d"} (set (keys l))) "control: every row renders")
+        (is (muted? (l "a") "Parent") "an ancestor is outside the selected tree")
+        (is (muted? (l "d") "Other"))
+        (is (not (muted? (l "b") "Selected")))
+        (is (not (muted? (l "c") "Grandchild")) "descendants keep the foreground, even when done or local")
+        (is (re-find (re-pattern (str "38;5;" (get styling/palette-256 :green) "m")) (l "d"))
+            "a muted row keeps its status colour")))
+    (testing "without a selection every row keeps the foreground"
+      (let [l (lines nil)]
+        (is (= 4 (count l)))
+        (is (not-any? #(str/includes? % muted) (vals l)))))))
 
 (deftest task-line-renders-priority-token
   (let [mk (fn [prio] {:id "aaaabbbb-0000-4000-8000-000000000000"
@@ -255,6 +364,14 @@
         (is (str/includes? line "[#B]"))
         ;; :orange in styling/palette-256
         (is (str/includes? line (str "38;5;" (get styling/palette-256 :orange) "m")))))
+    (testing "cursor, selected, local and completed rows keep the status colour"
+      (doseq [[label state task] [["cursor" (assoc base :color? true :cursor 0) (mk nil)]
+                                  ["selected" (assoc base :color? true :selected-id "aaaabbbb-0000-4000-8000-000000000000") (mk nil)]
+                                  ["local" (assoc base :color? true) (assoc (mk nil) :local true)]
+                                  ["done" (assoc base :color? true) (assoc (mk nil) :status "DONE")]]]
+        (let [line (tui/task-line state task 0)
+              status (if (= "done" label) :green :yellow)]
+          (is (re-find (re-pattern (str "38;5;" (get styling/palette-256 status) "(;1)?m")) line) label))))
     (testing "plain text when colour is disabled; token precedes the summary"
       (let [line (tui/task-line (assoc base :color? false) (mk "A") 0)]
         (is (str/includes? line "[#A] Sample"))))
@@ -263,11 +380,21 @@
         (is (not (str/includes? line "[#")))
         (is (str/includes? line " Sample"))))))
 
+(deftest stacked-is-the-default-layout
+  (doseq [[w h] [[200 50] [80 24]]]
+    (let [state (assoc (tasks/initial-state sample-result) :width w :height h :color? false)
+          lines (str/split-lines (tui/view state))]
+      (is (true? (tasks/stacked-layout? state)) (str w "x" h))
+      (is (every? #(= -1 (.indexOf ^String % " │ ")) lines))
+      (is (some #(str/includes? % "Details") lines))
+      (is (false? (tasks/stacked-layout? (assoc state :layout "auto"))) "control: auto keeps side by side"))))
+
 (deftest portrait-orientation-stacks-details-below-tree
   (testing "width < height stacks the panes even when width >= 80"
     (let [state (assoc (tasks/initial-state sample-result)
                        :width 90
                        :height 100
+                       :layout "auto"
                        :color? false)
           lines (str/split-lines (tui/view state))]
       ;; No side-by-side separator anywhere; a stacked Details heading instead.
@@ -280,6 +407,7 @@
     (let [state (assoc (tasks/initial-state sample-result)
                        :width 112
                        :height 110
+                       :layout "auto"
                        :color? false)]
       (is (true? (tasks/stacked-layout? state)))
       (let [lines (str/split-lines (tui/view state))]
@@ -291,6 +419,7 @@
       (let [state (assoc (tasks/initial-state sample-result)
                          :width w
                          :height h
+                         :layout "auto"
                          :color? false)]
         (is (false? (tasks/stacked-layout? state)) (str w "x" h))
         (let [lines (str/split-lines (tui/view state))]
@@ -395,7 +524,13 @@
           (is (= "Selection updated." (:message next-state)))
           (is (= "11111111-1111-4111-8111-111111111111" (:selected-id next-state)))
           (is (str/includes? (slurp (str dir "/TASKS.local.org"))
-                             "11111111-1111-4111-8111-111111111111")))
+                             "11111111-1111-4111-8111-111111111111"))
+          (is (nil? (second (tui/update-fn opts state (msg/key-press "s"))))
+              "without --exit-on-select the browser stays open")
+          (let [[_ cmd] (tui/update-fn (assoc opts :exit-on-select true) next-state (msg/key-press "s"))]
+            (is (= program/quit-cmd cmd) "--exit-on-select quits after a successful select"))
+          (let [[_ cmd] (tui/update-fn (assoc opts :exit-on-select true) next-state (msg/key-press :down))]
+            (is (nil? cmd) "navigation does not quit")))
         (finally (fs/delete-tree dir))))))
 
 (deftest create-opts-delegate-placement-to-ot
@@ -557,6 +692,7 @@
                                :description "First paragraph.\n\nAcceptance:\n- final line stays right"}]})
                      :width 100
                      :height 20
+                     :layout "auto"
                      :color? false)
         lines (str/split-lines (tui/view state))
         pane-lines (take 17 lines)]

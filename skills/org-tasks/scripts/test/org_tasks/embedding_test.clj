@@ -66,7 +66,8 @@
             (str availability " age=" age)))
       (doseq [bad [{:schema "foreign"} {:instanceId "another-instance"} {:contextId ""}
                    {:mode "unknown"} {:availability "unknown"} {:updatedAt "10000"}
-                   {:directory "relative"} {:directory nil} {:directory "/absent/project"}]]
+                   {:directory "relative"} {:directory nil} {:directory "/absent/project"}
+                   {:hints "one"} {:hints ["ok" 1]}]]
         (produce! opts a (assoc bad :updatedAt (get bad :updatedAt 10000)))
         (is (= :invalid (:status (embedding/read-context opts 10000))) (pr-str bad)))
       (produce! opts "ssh://remote/looks-local" {:availability "remote" :updatedAt 10000})
@@ -317,9 +318,25 @@
                                (tui/run! opts))))
         (is (identical? original System/out))))))
 
+(deftest compact-host-hints-replace-the-empty-selection-notice
+  (with-roots
+    (fn [{:keys [opts a]}]
+      (spit (str (fs/path a "TASKS.local.org")) "#+SELECTED:\n")
+      (let [hints ["ctrl+b t: Select a task from the backlog"
+                   "ctrl+b O: Disable/enable org-tasks overlay"]]
+        (produce! opts a {:hints hints :mode "compact"})
+        (is (= :ready (:status (embedding/read-context opts))) "hints are a valid additive field")
+        (is (= (str/join "\n" (cons "3 tasks: 3 TODO" hints)) (tui/view (initial opts))))
+        (produce! opts a {:mode "compact"})
+        (is (= "3 tasks: 3 TODO" (tui/view (initial opts))) "without hints only the count line shows")
+        (spit (str (fs/path a "TASKS.local.org")) (str "#+SELECTED: " parent-id "\n"))
+        (produce! opts a {:hints hints :mode "compact"})
+        (is (not (str/includes? (tui/view (initial opts)) "Select a task"))
+            "a selection replaces the hints")))))
+
 (deftest compact-empty-stale-and-small-geometry
   (let [empty (assoc (tasks/initial-state {:rows []}) :mode "compact" :color? false)]
-    (is (= "No selected task" (tui/view empty)))
+    (is (= "0 tasks" (tui/view empty)))
     (is (= "Stale selection: missing" (tui/view (assoc empty :selected-id "missing")))))
   (with-roots
     (fn [{:keys [opts a]}]

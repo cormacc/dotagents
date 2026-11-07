@@ -33,7 +33,9 @@
   (pinned by `styling-test/palette-256-matches-bling`); the TUI builds its
   charm colours from the same map so both stacks stay visually aligned.
   `:cyan` is the TUI-only accent (cursor/titles) — bling has no cyan
-  keyword, so it is not covered by the pin test."
+  keyword, so it is not covered by the pin test. `:muted` is TUI-only too:
+  codes 0-15 come from the terminal theme, so code 8 (bright black) gives a
+  de-emphasised tone that suits both light and dark themes."
   {:yellow  178
    :blue    39
    :orange  172
@@ -42,7 +44,8 @@
    :red     196
    :magenta 201
    :purple  141
-   :cyan    6})
+   :cyan    6
+   :muted   8})
 
 (def palette-keywords
   "Every bling keyword intentionally used by this namespace. Tests assert

@@ -139,7 +139,7 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren": [T
 
 ## Embedded TUI context contract
 
-The shared consumer is `ot tui --context-file /absolute/private/context.json --instance <instance-id>`. This is an interactive terminal entrypoint, not a host API. It emits no final stdout envelope in embedded mode because the project can change during its lifetime. `ot tui [--mode compact|expanded]` without embedding options is standalone and retains the final selected-task envelope. The default standalone mode is expanded. `--root`, `--tasks` and `--archive` cannot accompany `--context-file`; incomplete embedding options fail with `argument-error` and exit 2.
+The shared consumer is `ot tui --context-file /absolute/private/context.json --instance <instance-id>`. This is an interactive terminal entrypoint, not a host API. It emits no final stdout envelope in embedded mode because the project can change during its lifetime. `ot tui [--mode compact|expanded]` without embedding options is standalone and retains the final selected-task envelope. The default standalone mode is expanded. Standalone `--exit-on-select` exits after a successful select command. `--root`, `--tasks` and `--archive` cannot accompany `--context-file`; incomplete embedding options fail with `argument-error` and exit 2.
 
 ### Producer snapshot
 
@@ -166,8 +166,9 @@ Create a private directory for each interface instance (directory mode `0700`, s
 | `directory` | For `local`, an absolute existing local directory. For `remote` or `unavailable`, ignored and may be null. Never mark a remote working-directory string as `local`. |
 | `mode` | `compact` or `expanded`; the snapshot controls mode, not simulated key input. |
 | `updatedAt` | Integer Unix epoch milliseconds. Renew at least once per second, including when context is unavailable. |
+| `hints` | Optional array of strings. When no task is selected, compact mode shows them, one per line, below the status-count line. Use them for host key hints, such as `ctrl+b t: Select a task from the backlog`. |
 
-All fields except `directory` are required. Unknown additive fields are ignored. Instance mismatch, missing fields, unknown enum values, malformed JSON, relative/nonexistent local directories and unreadable files are invalid. Remote context is rejected before any local directory resolution. The producer must publish `unavailable` when no eligible source exists, rather than retaining a different tab's project. Source-pane eligibility, active-pane/workspace-root policy, placement, sizing, focus restoration and resource ownership belong to the host adapter; this contract defines no host methods.
+All fields except `directory` and `hints` are required. Unknown additive fields are ignored. A `hints` value that is not an array of strings is invalid. Instance mismatch, missing fields, unknown enum values, malformed JSON, relative/nonexistent local directories and unreadable files are invalid. Remote context is rejected before any local directory resolution. The producer must publish `unavailable` when no eligible source exists, rather than retaining a different tab's project. Source-pane eligibility, active-pane/workspace-root policy, placement, sizing, focus restoration and resource ownership belong to the host adapter; this contract defines no host methods.
 
 ### Consumer state and liveness
 
@@ -179,7 +180,7 @@ A create input, every move-picker stage (including section input), and armed rem
 
 Graph refresh runs serially through the existing full-list bridge on each poll, including imported files and setupfile changes. Refresh waits while a modal is open. The consumer rereads context after loading and discards the graph if instance, context identity, directory, availability or mode changed; heartbeat-only updates do not supersede a result. There are no parallel graph-refresh jobs that can install an older result later. Poll commands are per-program one-shot commands; exit stops scheduling them and leaves no recurring watcher.
 
-Compact mode is passive except for exit keys. It shows selected-task identity first, then its top-level parent, nearest linked-plan path and descendants within the actual height. Pending descendants take space before `DONE`/`CANCELLED` history. An absent selection says `No selected task`; an unresolved non-null pointer says `Stale selection`. Expanded mode retains the standalone action set. Very small expanded terminals use a single-column cursor/prompt view; navigation remains active and output stays within the reported geometry.
+Compact mode is passive except for exit keys. It shows selected-task identity first, then its top-level parent, every `STARTED` descendant and the next pending descendant within the actual height. `STARTED` descendants are current; when no descendant has started, the selected task is current. The TUI sets the terminal title (OSC 2) to `Tasks :: <project folder> :: <plan file>` and omits `:: <plan file>` when the selected task has no linked plan. A host may mirror this title into its pane label. An absent selection shows a status-count line, such as `12 tasks: 7 TODO / 2 STARTED / 3 DONE`: the total, then each status with a non-zero count in canonical order, followed by the context `hints`; an unresolved non-null pointer says `Stale selection`. Expanded mode retains the standalone action set. Very small expanded terminals use a single-column cursor/prompt view; navigation remains active and output stays within the reported geometry.
 
 ### Producer and consumer fixtures
 

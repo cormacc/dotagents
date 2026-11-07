@@ -187,7 +187,8 @@
   (max 3 (- (max 5 (:height state 30)) 3)))
 
 (defn stacked-layout?
-  "True when the detail pane renders below the tree instead of beside it:
+  "True when the detail pane renders below the tree instead of beside it.
+  `:layout` `stacked` (the default) always stacks. `auto` stacks only for
   narrow terminals (width < 80) or portrait orientation. Orientation is
   judged on physical proportions, not raw cell counts: terminal cells are
   roughly twice as tall as wide, so a portrait screen yields a near-square
@@ -196,7 +197,8 @@
   [state]
   (let [width (max 20 (:width state 100))
         height (max 5 (:height state 30))]
-    (or (< width 80) (< width (* 2 height)))))
+    (or (not= "auto" (:layout state "stacked"))
+        (< width 80) (< width (* 2 height)))))
 
 (defn tree-pane-height
   "Rows available to the tree pane. Stacked layouts give the tree the

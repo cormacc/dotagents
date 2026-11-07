@@ -11,8 +11,10 @@
   (:require [babashka.fs :as fs]
             [charm.message :as msg]
             [charm.program :as program]
+            [charm.render.core :as render]
             [charm.style.core :as style]
             [clojure.string :as str]
+            [org-tasks.lifecycle :as lifecycle]
             [org-tasks.styling :as styling]
             [org-tasks.task :as task]
             [org-tasks.output :as out]
@@ -97,10 +99,9 @@
   (style/ansi256 (get styling/palette-256 k)))
 
 (def ^:private accent-color (palette-fg :cyan))
-(def ^:private selected-color (palette-fg :green))
-(def ^:private local-color (palette-fg :magenta))
 (def ^:private message-color (palette-fg :yellow))
 (def dim-color (palette-fg :gray))
+(def ^:private muted-color (palette-fg :muted))
 
 (def ^:private status-colors
   "Per-status charm colours derived from the shared CLI palette."
@@ -110,10 +111,24 @@
   "Per-priority charm colours derived from the shared CLI palette."
   (update-vals styling/priority-palette palette-fg))
 
+(defn- selected-tree-ids
+  "IDs of the selected task and its descendants; nil without a selection."
+  [{:keys [tasks selected-id]}]
+  (when (some #(= selected-id (:id %)) tasks)
+    (let [children (group-by :parentId tasks)]
+      (loop [acc #{} pending [selected-id]]
+        (if-let [[id & more] (seq pending)]
+          (recur (conj acc id) (into (vec more) (map :id (children id))))
+          acc)))))
+
 (defn task-line [state task idx]
   (let [children? (some #(= (:id task) (:parentId %)) (:tasks state))
         cursor? (= idx (:cursor state))
         selected? (= (:id task) (:selected-id state))
+        ;; As in the compact view, the selected tree keeps the default
+        ;; foreground and other rows use the theme's muted colour. Without a
+        ;; selection every row keeps the default foreground.
+        tree (if (contains? state :selected-tree) (:selected-tree state) (selected-tree-ids state))
         mark (if cursor? ">" " ")
         sel (if selected? "★" " ")
         local (if (:local task) "⊠" " ")
@@ -131,26 +146,23 @@
         status-cell (format "%-9s" (:status task))
         id-cell (format " %-8s " (task/id-prefix (:id task)))
         tail (str (or (:summary task) "") (or issues ""))
-        raw (str prefix status-cell id-cell
-                 (when prio-token (str prio-token " ")) tail)]
-    (cond
-      cursor? (styled state raw :fg accent-color :bold true)
-      selected? (styled state raw :fg selected-color :bold true)
-      (:local task) (styled state raw :fg local-color)
-      (#{"DONE" "CANCELLED"} (:status task)) (styled state raw :fg dim-color)
-      ;; Plain rows colour the status and priority tokens exactly like
-      ;; `ot list` does (shared palettes; see `styling/palette-256`).
-      :else (str prefix
-                 (if-let [color (status-colors (:status task))]
-                   (styled state status-cell :fg color)
-                   status-cell)
-                 id-cell
-                 (when prio-token
-                   (str (if-let [color (priority-colors prio)]
-                          (styled state prio-token :fg color)
-                          prio-token)
-                        " "))
-                 tail))))
+        emphasis? (or cursor? selected?)
+        row-style (cond
+                    cursor? [:fg accent-color :bold true]
+                    selected? [:bold true]
+                    (and tree (not (contains? tree (:id task)))) [:fg muted-color])
+        paint #(if row-style (apply styled state % row-style) %)
+        ;; Every row colours the status and priority tokens exactly like
+        ;; `ot list` does (shared palettes; see `styling/palette-256`); the
+        ;; row style marks cursor, selection, locality and completion.
+        token (fn [text color]
+                (if color (styled state text :fg color :bold emphasis?) (paint text)))]
+    (str (paint prefix)
+         (token status-cell (status-colors (:status task)))
+         (paint id-cell)
+         (when prio-token
+           (str (token prio-token (priority-colors prio)) (paint " ")))
+         (paint tail))))
 
 (defn detail-lines [task]
   (if task
@@ -220,6 +232,8 @@
 (defn- tree-pane-lines [state tasks tree-h]
   (let [title (styled state "org-tasks" :fg accent-color :bold true)
         subtitle (styled state (str (count tasks) " visible tasks") :fg dim-color)
+        ;; Compute the selected tree once per frame, not once per row.
+        state (assoc state :selected-tree (selected-tree-ids state))
         visible-tree (->> tasks
                           (map-indexed #(task-line state %2 %1))
                           (drop (:tree-scroll state 0)))]
@@ -288,48 +302,103 @@
         (str/starts-with? path prefix) (str "~/" (subs path (count prefix)))
         :else path))))
 
-(defn- compact-progress [rows completed?]
-  (str "(" (count (filter completed? rows)) "/" (count rows) ")"))
+(defn- right-justified
+  "Pad `text` so `token` ends at `width`; drop the token when both do not fit."
+  [width text token]
+  (if (and token (<= (+ (text-width text) 1 (text-width token)) width))
+    (str (pad-right (- width (text-width token)) text) token)
+    (crop width text)))
 
-(defn- compact-selected-line [width label path]
-  (if (and path (<= (+ (text-width label) 1 (text-width path)) width))
-    (str (pad-right (- width (text-width path)) label) path)
-    (crop width label)))
+(defn- compact-task-text
+  "Status-led task text. The status keeps its palette colour; the remainder
+  uses the terminal's default foreground for a current task and the
+  theme-defined muted colour otherwise, so emphasis follows light and dark
+  themes."
+  [state t current?]
+  (let [status (:status t)
+        body (str (:summary t) " [" (task/id-prefix (:id t)) "]")]
+    (str (if-let [color (status-colors status)]
+           (styled state status :fg color)
+           status)
+         " "
+         (if current? body (styled state body :fg muted-color)))))
 
-(defn compact-lines
-  "Height-bounded selected-task context. Keep identity before ancestry, plan and
-  descendants; pending descendants take space before completed history."
+(defn- selected-context
+  "The selected task with its top-level parent, nearest linked plan and
+  descendants."
   [state]
   (let [rows (:tasks state)
         selected (first (filter #(= (:selected-id state) (:id %)) rows))
         ancestors (tasks/ancestor-ids rows (:selected-id state))
-        parent (first (filter #(and (contains? ancestors (:id %))
-                                   (not (contains? ancestors (:parentId %)))) rows))
         by-id (into {} (map (juxt :id identity)) rows)
         plan-owner (first (filter :importPath (take-while some?
-                                                          (iterate #(get by-id (:parentId %)) selected))))
-        plan (:importPath plan-owner)
-        descendants (filter #(contains? (tasks/ancestor-ids rows (:id %))
-                                         (:selected-id state)) rows)
-        tree-nodes (tree-seq #(seq (concat (:children %) (:importChildren %)))
-                             #(concat (:children %) (:importChildren %))
-                             {:children (:task-tree state)})
-        plan-node (first (filter #(= (:id plan-owner) (:id %)) tree-nodes))
-        plan-tasks (task/flatten-tree (:importChildren plan-node))
+                                                          (iterate #(get by-id (:parentId %)) selected))))]
+    {:selected selected
+     :parent (first (filter #(and (contains? ancestors (:id %))
+                                  (not (contains? ancestors (:parentId %)))) rows))
+     :plan (:importPath plan-owner)
+     :descendants (filter #(contains? (tasks/ancestor-ids rows (:id %))
+                                      (:selected-id state)) rows)}))
+
+(defn- plan-file-name
+  "File name of an import link such as `plan:2026-11-05-x.org`."
+  [plan]
+  (some-> plan (str/replace #"^[a-z][a-z0-9-]*:" "") fs/file-name str))
+
+(defn window-title
+  "Terminal title naming the project folder and the selected task's plan. A
+  host can mirror it into its pane label; the `:: <plan>` part is omitted when
+  the selected task has no plan."
+  [state]
+  (let [folder (some-> (:task-memory-path state) fs/parent str home-shortened)
+        plan (plan-file-name (:plan (selected-context state)))]
+    (str/join " :: " (remove nil? ["Tasks" folder plan]))))
+
+(defn- status-summary
+  "`<N> tasks: <n> TODO / <n> STARTED ...`: the total, then each status with
+  a non-zero count in canonical order and its palette colour."
+  [state]
+  (let [counts (frequencies (map :status (:tasks state)))
+        parts (for [status lifecycle/status-cycle
+                    :let [n (get counts status 0)]
+                    :when (pos? n)]
+                (str n " " (styled state status :fg (status-colors status))))]
+    (str (count (:tasks state)) " tasks"
+         (when (seq parts) (str ": " (str/join " / " parts))))))
+
+(defn compact-lines
+  "Height-bounded selected-task context: the selected task, its top-level
+  parent, every STARTED descendant, then the next pending descendant. The
+  first STARTED line carries the right-justified `done/total` descendant
+  count, which the task line carries when nothing has started. The next line
+  ends with a right-justified ellipsis when further pending work is hidden.
+  STARTED descendants are current; the selected task is current when none has
+  started."
+  [state]
+  (let [{:keys [selected parent descendants]} (selected-context state)
+        width (max 1 (:width state 100))
         completed? #(#{"DONE" "CANCELLED"} (:status %))
-        label (fn [t] (str (:summary t) " [" (task/id-prefix (:id t)) "] " (:status t)))
+        started? #(= "STARTED" (:status %))
+        started (filter started? descendants)
+        [next-task & hidden] (remove #(or (completed? %) (started? %)) descendants)
+        current-ids (set (map :id (or (seq started) [selected])))
+        current? #(contains? current-ids (:id %))
+        muted #(styled state % :fg muted-color)
+        progress (str (count (filter completed? descendants)) "/" (count descendants))
+        subtask-line (fn [t token]
+                       (right-justified width
+                                        (str (muted "... ") (compact-task-text state t (current? t)))
+                                        (some-> token muted)))
         lines (if selected
-                (concat [(compact-selected-line (max 1 (:width state 100))
-                                                (str "> " (label selected) " " (compact-progress descendants completed?))
-                                                (home-shortened (:task-memory-path state)))]
-                        (when parent [(str "Parent: " (:summary parent))])
-                        (when plan [(str "Plan: " plan " " (compact-progress plan-tasks completed?))])
-                        (map #(str "  " (label %))
-                             (concat (remove completed? descendants)
-                                     (filter completed? descendants))))
-                [(if (:selected-id state)
-                   (str "Stale selection: " (:selected-id state))
-                   "No selected task")])
+                (concat [(right-justified width (compact-task-text state selected (current? selected))
+                                          (when (empty? started) (muted progress)))]
+                        (when parent [(muted (str "Parent: " (:summary parent)))])
+                        (map-indexed #(subtask-line %2 (when (zero? %1) progress)) started)
+                        (when next-task [(subtask-line next-task (when (seq hidden) "..."))]))
+                (cond
+                  (:selected-id state) [(str "Stale selection: " (:selected-id state))]
+                  ;; Host-supplied key hints explain how to select in that host.
+                  :else (cons (status-summary state) (:hints state))))
         lines (if-let [notice (context-notice state)]
                 (cons notice lines) lines)]
     (take (max 1 (:height state 30)) lines)))
@@ -486,26 +555,73 @@
             [(embedding/sync-context opts next-state false) nil])))
       [state (when poll? (poll-cmd))])))
 
+(defn- title-writer
+  "Wrap `update` so each title change reaches the terminal as OSC 2. Charm
+  renders on the same thread after `update` returns, so the sequence never
+  splits a frame."
+  [update out]
+  (let [last-title (atom nil)
+        emit! (fn [state]
+                (let [title (window-title state)]
+                  (when (not= title @last-title)
+                    (reset! last-title title)
+                    (doto ^java.io.PrintStream out
+                      (.print (str "\u001b]2;" (str/replace title #"\p{Cntrl}" "") "\u0007"))
+                      (.flush)))))]
+    {:emit! emit!
+     :update (fn [state m]
+               (let [[next-state _ :as result] (update state m)]
+                 (emit! next-state)
+                 result))}))
+
+(defn- full-screen-renderer
+  "Wrap charm's renderer constructor so its JLine Display runs in full-screen
+  mode and record the renderer in `!renderer`. A host terminal can reflow the
+  alternate screen on resize (Herdr does), which leaves the default diffing
+  Display with a stale model and duplicated rows. In full-screen mode
+  `render/repaint!` clears the screen and redraws every row."
+  [create !renderer]
+  (fn [terminal & opts]
+    (let [renderer (apply create terminal opts)
+          {:keys [width height]} @renderer]
+      (swap! renderer assoc :display (doto (org.jline.utils.Display. terminal true)
+                                       (.resize height width)))
+      (reset! !renderer renderer))))
+
+(defn- repaint-on-resize
+  "Wrap `update` to force a full repaint after each window-size message. Charm
+  resizes the Display before `update` and renders after it."
+  [update !renderer]
+  (fn [state m]
+    (when-let [renderer (and (msg/window-size? m) @!renderer)]
+      (render/repaint! renderer))
+    (update state m)))
+
 (defn- run-program! [opts state0]
-  (let [original-out System/out]
+  (let [original-out System/out
+        !renderer (atom nil)
+        {:keys [emit!] :as titled} (title-writer (partial update-fn opts) System/err)]
     (try
       ;; charm.terminal/create-terminal uses JLine's system terminal. Route its
       ;; writer to stderr while the TUI owns the screen so stdout remains clean
       ;; for the final selected-task JSON emitted after program/run returns.
       (System/setOut System/err)
-      (program/run {:init (fn [] [state0 (poll-cmd)])
-                    :update (partial update-fn opts)
-                    :view view
-                    :alt-screen true
-                    :hide-cursor true
-                    :fps 60})
+      (emit! state0)
+      (with-redefs [render/create-renderer (full-screen-renderer render/create-renderer !renderer)]
+        (program/run {:init (fn [] [state0 (poll-cmd)])
+                      :update (repaint-on-resize (:update titled) !renderer)
+                      :view view
+                      :alt-screen true
+                      :hide-cursor true
+                      :fps 60}))
       (finally
         (System/setOut original-out)))))
 
 (defn run! [opts]
   (let [state0 (-> (tasks/initial-state (if (:context-file opts) {:rows []}
                                          (tasks/load-tasks opts)))
-                   (assoc :color? (not (:no-color opts)) :mode (:mode opts "expanded")))
+                   (assoc :color? (not (:no-color opts)) :mode (:mode opts "expanded")
+                          :layout (some-> (:layout opts) name)))
         state0 (embedding/sync-context opts state0 true)]
     (run-program! opts state0)
     (when-not (:context-file opts)

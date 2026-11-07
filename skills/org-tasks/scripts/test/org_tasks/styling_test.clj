@@ -13,7 +13,7 @@
       (is (string? (bling [k "sample"]))))))
 
 (deftest palette-256-matches-bling
-  (doseq [[k code] (dissoc styling/palette-256 :cyan)]
+  (doseq [[k code] (dissoc styling/palette-256 :cyan :muted)]
     (testing (str k)
       (is (clojure.string/includes? (bling [k "x"]) (str "38;5;" code "m"))
           (str k " should render as ANSI-256 code " code)))))
