@@ -15,7 +15,12 @@ mkdir -p "$HOME" "$PI_CODING_AGENT_DIR/tmp"
 export TMPDIR="$PI_CODING_AGENT_DIR/tmp"
 
 "$TSX" ./accounts.test.ts
-node --import tsx ./private-browser.test.ts
+# Elsewhere the native browser is an absolute path that no PATH stub can intercept.
+if [[ "$(uname -s)" == Linux ]]; then
+  node --import tsx ./private-browser.test.ts
+else
+  printf '%s\n' 'private-browser.test.ts not run: its browser stubs need Linux.'
+fi
 "$TSX" ./accounts-integration.test.ts
 "$TSX" ./index.test.ts
 "$TSX" ./pi-integration.test.ts
