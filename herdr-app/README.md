@@ -4,7 +4,7 @@ This layout combines the bundled workspace status with local quota, system load 
 
 ## Install and select
 
-1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks` and `layouts/herdr-orch.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
+1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks`, `layouts/herdr-orch.json` and, on macOS, `keys.darwin.json` as `keys.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
 2. In Herdr app, explicitly select the `herdr-orch` layout. The existing layout remains selected until you do this.
 
 To remove the personal layout, select another layout in Herdr app first. Remove the four personal leaf declarations and `checkHerdrAppLeaves` guard from the parent `agents.nix`, then reapply the parent configuration using the normal host procedure. Do not remove app-owned directories or the source checkout.
@@ -25,14 +25,7 @@ The `org-tasks` block below the tab area shows the selected task of the focused 
 
 `ot` must be on the app's `PATH`; the parent configuration installs `~/.local/bin/ot`. Layout props can name another executable: `{"mod": "org-tasks", "props": {"ot": "/path/to/ot"}}`.
 
-The repository does not manage `keys.json`. Add these lines to its `global` section; on Linux, use the `ctrl-shift-` forms if `cmd` is not available:
-
-```json
-"cmd-shift-t": "org-tasks.select",
-"cmd-shift-o": "layout.toggle:org-tasks"
-```
-
-They match `prefix t` and `prefix O` in the terminal Herdr plugin. The app's linked mod folder does not hot-reload edits to its source; restart the app, or remove and re-create the link, to load a change.
+On macOS, [keys.darwin.json](keys.darwin.json) is linked as `keys.json` and binds `cmd-shift-t` to `org-tasks.select` and `cmd-shift-o` to `layout.toggle:org-tasks`, matching `prefix t` and `prefix O` in the terminal Herdr plugin. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation. Linux keeps its own unmanaged `keys.json` until a Linux variant is checked; add those two bindings there, with the `ctrl-shift-` forms if `cmd` is not available. The app's linked mod folder does not hot-reload edits to its source; restart the app, or remove and re-create the link, to load a change.
 
 ## Refresh and limits
 

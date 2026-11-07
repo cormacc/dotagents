@@ -29,6 +29,10 @@ function validateWiring(value) {
     assert.ok(value.includes(`check_herdr_app_leaf "\${config.home.homeDirectory}/.config/herdr-app/${leaf}" "\${agentsRoot}/herdr-app/${leaf}"`), leaf);
   }
   assert.ok(value.includes('lib.hm.dag.entryBefore [ "writeBoundary" ]'));
+  // keys.json is a macOS-only leaf with a platform-named source.
+  const keys = ['"${config.home.homeDirectory}/.config/herdr-app/keys.json"', '"${agentsRoot}/herdr-app/keys.darwin.json"'];
+  assert.ok(value.includes(`${keys[0]} = link ${keys[1]};`), "keys link");
+  assert.ok(value.includes(`keys=${keys[0]}`) && value.includes(`check_herdr_app_leaf "$keys" ${keys[1]}`), "keys guard");
 }
 
 test("layout validator rejects missing status", () => {
@@ -49,6 +53,7 @@ test("parent wiring validators reject missing leaf", { skip: wiringPath === unde
   const wiring = readFileSync(wiringPath, "utf8");
   validateWiring(wiring);
   assert.throws(() => validateWiring(wiring.replace('/.config/herdr-app/mods/system" = link', '/.config/herdr-app/mods/other" = link')));
+  assert.throws(() => validateWiring(wiring.replace('herdr-app/keys.darwin.json";', 'herdr-app/keys.json";')));
 });
 
 test("collision guard rejects foreign files, directories and dangling links", { skip: wiringPath === undefined }, () => {
