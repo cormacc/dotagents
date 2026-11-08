@@ -612,7 +612,7 @@
 
 (defn run! [opts]
   (let [state0 (-> (tasks/initial-state (if (:context-file opts) {:rows []}
-                                         (tasks/load-tasks opts)))
+                                         (tasks/load-tasks! opts)))
                    (assoc :color? (not (:no-color opts)) :mode (:mode opts "expanded")
                           :layout (some-> (:layout opts) name)))
         state0 (embedding/sync-context opts state0 true)]

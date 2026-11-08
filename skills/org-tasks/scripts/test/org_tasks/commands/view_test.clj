@@ -79,3 +79,12 @@
             "control: this environment still triggers the upstream stdout print")
         (is (zero? (:exit r)) (:err r))
         (is (str/starts-with? (:out r) "{") "stdout is only the JSON envelope")))))
+
+(deftest compact-reports-a-load-failure-as-an-error-envelope
+  (with-temp-dir
+    (fn [root]
+      (spit (str (fs/path root "TASKS.org"))
+            "* Improvements\n** TODO Broken\n:PROPERTIES:\n:CUSTOM_ID: 11111111-1111-4111-8111-111111111111\n")
+      (let [{:keys [err exit]} (run-cli! "--root" root "--format" "json" "compact")]
+        (is (= 1 exit))
+        (is (= "unterminated-drawer" (:code (parse-json-error err))))))))

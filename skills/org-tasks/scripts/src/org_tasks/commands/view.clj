@@ -8,7 +8,7 @@
   "Emit the compact selected-task view model. Text output prints the lines of
   the TUI compact view at `--width` (default 80)."
   [{:keys [opts]}]
-  (let [list-result (tasks/load-tasks opts)
+  (let [list-result (tasks/load-tasks! opts)
         state (assoc (tasks/initial-state list-result)
                      :watch-files (compact/watch-files list-result)
                      :width (or (:width opts) 80)

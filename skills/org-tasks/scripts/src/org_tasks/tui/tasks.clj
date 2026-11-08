@@ -58,6 +58,17 @@
       (throw (ex-info (get-in envelope [:error :message] "Unable to load tasks")
                       (or envelope {}))))))
 
+(defn load-tasks!
+  "`load-tasks` for a top-level command: a load failure emits the command error
+  envelope and exits instead of escaping as an uncaught exception."
+  [opts]
+  (try
+    (load-tasks opts)
+    (catch clojure.lang.ExceptionInfo e
+      (if-let [error (:error (ex-data e))]
+        (out/emit-error opts error)
+        (throw e)))))
+
 (defn error-message
   "Human-readable message from an error envelope (nil-safe): the
   envelope's `[:error :message]`, falling back to a generic message."
