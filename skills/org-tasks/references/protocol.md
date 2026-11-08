@@ -4,7 +4,7 @@ This is the field-level reference for the `TASKS.org` memory protocol. Agents sh
 
 ## Protocol files
 
-`TASKS.org`, `TASKS.local.org`, `TASKS.archive.org`, `TASKS.setup.org`, and imported change-records are anchored at the project root resolved from CWD. Do not climb into a parent project to find task memory.
+`TASKS.org`, `TASKS.local.org`, `TASKS.archive.org`, `TASKS.setup.org`, and imported change-records are anchored at the project root. `ot` uses an explicit `--root`, else the nearest directory at or above the CWD that holds `TASKS.org`, else the CWD. To start separate task memory inside an existing project, pass `--root .`.
 
 Repositories declare shared options in `TASKS.setup.org` and reference it from task files and change-records:
 
