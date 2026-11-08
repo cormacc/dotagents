@@ -39,8 +39,8 @@ function otCompact(cwd) {
   return { code: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
-async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindings = [], zoom = 1 }) {
-  const elements = [], timers = [], overlays = [], notes = [], hcCalls = [], execCalls = [], runs = [];
+async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindings = [], zoom = 1, run: runOt = otCompact }) {
+  const elements = [], timers = [], overlays = [], notes = [], hcCalls = [], execCalls = [], runs = [], watched = [];
   const cx = { notify() {}, spawn: f => { f(cx); }, timer: { every: (ms, cb) => timers.push({ ms, cb }) } };
   function element() {
     const record = { operations: [] };
@@ -61,13 +61,13 @@ async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindi
     "gpui-kit": { View: class {}, div: element },
     "gpui-base": { h_flex: element, v_flex: element },
     herdr: {
-      exec: (cmd, args, opts) => { execCalls.push([cmd, args, opts]); const p = Promise.resolve(otCompact(opts.cwd)); pendingExec.push(p); return p; },
+      exec: (cmd, args, opts) => { execCalls.push([cmd, args, opts]); const p = Promise.resolve(runOt(opts.cwd)); pendingExec.push(p); return p; },
       hc: async args => { hcCalls.push(args); return { code: 0, stdout: JSON.stringify({ address: "t42" }), stderr: "" }; },
       focused: () => focus(), panes: () => panes(), spaces: () => spaces,
       theme: () => t, keys: () => bindings, props: () => ({}), settings: () => ({ zoom }),
       run: (name, args) => { runs.push([name, args]); },
       openOverlay: o => { overlays.push(o); return "o1"; }, notify: n => notes.push(n),
-      nextCommand: () => new Promise(() => {}), watchFolder: () => new Promise(() => {}),
+      nextCommand: () => new Promise(() => {}), watchFolder: dir => { watched.push(dir); return new Promise(() => {}); },
     },
   };
   const context = vm.createContext({ console, JSON, Promise, Set, String });
@@ -91,7 +91,7 @@ async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindi
   const settle = async () => { await Promise.all(pendingExec); pendingExec = []; await new Promise(r => setImmediate(r)); };
   const render = () => { elements.length = 0; view.render(cx); return elements.flatMap(e => e.operations); };
   const tick = () => timers.find(x => x.ms === 1000).cb(cx);
-  return { view, render, settle, tick, overlays, notes, hcCalls, execCalls, runs };
+  return { view, render, settle, tick, cx, overlays, notes, hcCalls, execCalls, runs, watched };
 }
 
 const words = ops => ops.filter(o => o[0] === "child" && typeof o[1] === "string").map(o => o[1]);
@@ -202,4 +202,32 @@ test("select without a project explains instead of opening", async () => {
   assert.equal(a.overlays.length, 0);
   assert.equal(a.hcCalls.length, 0);
   assert.match(a.notes[0].body, /agent pane/);
+});
+
+test("a pane in a subdirectory watches the project root that ot resolved", async () => {
+  const dir = project(PARENT), sub = join(dir, "src", "deep");
+  mkdirSync(sub, { recursive: true });
+  try {
+    const a = await app({ focus: () => ({ space: "s1", pane: "p1", cwd: sub }),
+                          panes: () => [{ pane: "p1", status: "idle", cwd: sub }] });
+    await a.settle();
+    assert.ok(words(a.render()).includes("Alpha [22222222]"), "control: the subdirectory pane shows the project's tasks");
+    assert.deepEqual(a.watched, [dir]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a slower earlier run never replaces a later result", async () => {
+  const resolvers = [];
+  const a = await app({ focus: () => ({ space: "s1", pane: "p1", cwd: "/fixture" }),
+                        panes: () => [{ pane: "p1", status: "idle", cwd: "/fixture" }],
+                        run: () => new Promise(r => resolvers.push(r)) });
+  a.view.load(a.cx);
+  const result = title => ({ code: 0, stdout: JSON.stringify({ ok: true, result: { title, files: [] } }), stderr: "" });
+  assert.equal(resolvers.length, 2, "the initial run and the reload are both in flight");
+  resolvers[1](result("new"));
+  await new Promise(r => setImmediate(r));
+  assert.equal(a.view.model.title, "new", "control: the later run installs");
+  resolvers[0](result("old"));
+  await new Promise(r => setImmediate(r));
+  assert.equal(a.view.model.title, "new");
 });

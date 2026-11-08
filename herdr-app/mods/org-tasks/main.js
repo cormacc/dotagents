@@ -26,6 +26,8 @@ export default class OrgTasks extends View {
     this.reason = null;
     this.model = null;
     this.generation = 0;
+    this.request = 0;
+    this.watched = null;
     this.follow(cx);
     cx.timer.every(FOCUS_MS, cx => this.follow(cx));
     cx.timer.every(REFRESH_MS, cx => this.dir && this.load(cx));
@@ -46,35 +48,41 @@ export default class OrgTasks extends View {
     this.dir = p.dir ?? null;
     this.reason = p.reason ?? null;
     this.model = null;
-    const generation = ++this.generation;
-    if (this.dir) {
-      this.load(cx);
-      this.watch(cx, this.dir, generation);
-    }
+    this.watched = null;
+    ++this.generation;
+    if (this.dir) this.load(cx);
     cx.notify();
   }
 
   load(cx) {
-    const dir = this.dir, generation = this.generation;
+    const dir = this.dir, generation = this.generation, request = ++this.request;
     cx.spawn(async cx => {
       const result = await exec(ot(), ["compact", "--format", "json"], { cwd: dir })
         .catch(e => ({ code: 127, stdout: "", stderr: String(e?.message ?? e) }));
-      // A focus change during the run supersedes this result.
-      if (generation !== this.generation) return;
+      // A later run, or a focus change, supersedes this result.
+      if (request !== this.request) return;
       const parsed = parse(result);
       this.model = parsed.model ?? null;
       this.reason = parsed.reason ?? null;
+      // ot resolves the project root upwards from the pane's folder, so watch that root.
+      const root = this.model?.root;
+      if (root && root !== this.watched) {
+        this.watched = root;
+        this.watch(cx, root, generation);
+      }
       cx.notify();
     });
   }
 
-  // One watch loop per project; it ends at its next change once superseded.
-  watch(cx, dir, generation) {
+  // One watch loop per project root; it ends at its next change once superseded.
+  // Without a model (a failed run) any change reloads, so a fix shows at once.
+  watch(cx, root, generation) {
+    const current = () => generation === this.generation && root === this.watched;
     cx.spawn(async cx => {
-      while (generation === this.generation) {
-        const changed = await watchFolder(dir).catch(() => null);
-        if (changed === null || generation !== this.generation) return;
-        if (touches(changed, this.model?.files)) this.load(cx);
+      while (current()) {
+        const changed = await watchFolder(root).catch(() => null);
+        if (changed === null || !current()) return;
+        if (!this.model || touches(changed, this.model.files)) this.load(cx);
       }
     });
   }
