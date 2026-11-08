@@ -3,7 +3,8 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { join } from "node:path";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { accountProvider, registerStoredAccounts } from "./accounts.ts";
-import { registerRecovery, PENDING_WARNING } from "./recovery.ts";
+import { PENDING_WARNING } from "./recovery.ts";
+import { registerRecoveryCommand } from "./recovery-fixture-support.ts";
 const work = "anthropic-2", personal = "anthropic-1", model = "claude-sonnet-4-5";
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; };
 
@@ -44,7 +45,7 @@ export default function fixture(outer: ExtensionAPI) {
           extensionFactories: [(pi) => {
             pi.on("before_provider_request", (_event, ctx) => { requests.push(ctx.model?.provider === work ? "work" : "personal"); });
             pi.on("model_select", event => { selections.push(`${event.model.provider}/${event.model.id}`); });
-            registerRecovery(pi, async (args, signal, options) => {
+            registerRecoveryCommand(pi, async (args, signal, options) => {
               const result = await pi.exec(process.env.HERDR_ORCH_BIN!, args, { signal, ...options });
               assert.equal(result.code, 0, result.stderr); const envelope = JSON.parse(result.stdout); assert.equal(envelope.ok, true);
               if (action === "print-positive") {
@@ -90,8 +91,8 @@ export default function fixture(outer: ExtensionAPI) {
             await manualPending.promise;
           }
           if (action === "tier-overlap") {
-            await session.prompt("/oh-tier fixture-tier");
-            await session.prompt("/oh-tier clear");
+            await session.prompt("/oh tier fixture-tier");
+            await session.prompt("/oh tier clear");
             assert.ok(notices.slice(-2).every(s => s.includes("switch is still pending")), "explicit commands cannot overlap unresolved recovery setter");
           }
           if (["removed", "route-removed"].includes(action)) {

@@ -1,5 +1,5 @@
 /**
- * `/oh` sections and pi-specific framing. `oh roster --format markdown` and `oh usage`
+ * `/oh` sections, actions and pi-specific framing. `oh roster --format markdown` and `oh usage`
  * own their listings, so this file adds only what is specific to a pi session: the Herdr
  * status of this pane, usage placement, and the usage notes.
  */
@@ -15,6 +15,45 @@ export const SECTION_DESCRIPTIONS: Record<Section, string> = {
   usage: "Subscription allowance by provider",
   workflows: "Ordinary skills that opt into the workflow catalogue",
 };
+
+/** Subcommands that change session state; the other arguments are read-only sections. */
+export const ACTIONS = ["account", "tier"] as const;
+export type Action = (typeof ACTIONS)[number];
+
+export const ACTION_DESCRIPTIONS: Record<Action, string> = {
+  account: "Show or add Anthropic subscription accounts: account add [N]",
+  tier: "Show or select this session's weight tier: tier <alias> | tier clear",
+};
+
+/** Split `/oh` arguments into an action and its remaining arguments, or return null for a section. */
+export function parseAction(args: string): { action: Action; rest: string } | null {
+  const match = /^\s*(\S+)(?:\s+([\s\S]*))?$/.exec(args);
+  if (!match || !(ACTIONS as readonly string[]).includes(match[1])) return null;
+  return { action: match[1] as Action, rest: (match[2] ?? "").trim() };
+}
+
+type Completion = { value: string; label: string; description?: string };
+
+/**
+ * Complete the whole `/oh` argument text, because Pi replaces all of it with the chosen value.
+ * `aliases` is called only after `tier `, so the first word costs no `oh` process.
+ */
+export async function completeArguments(prefix: string, aliases: () => Promise<string[]>): Promise<Completion[] | null> {
+  const text = prefix.trimStart();
+  const space = text.search(/\s/);
+  if (space === -1) {
+    const items = [...SECTIONS.map((name) => ({ value: name, label: name, description: SECTION_DESCRIPTIONS[name] })),
+      ...ACTIONS.map((name) => ({ value: `${name} `, label: name, description: ACTION_DESCRIPTIONS[name] }))]
+      .filter((item) => item.label.startsWith(text));
+    return items.length ? items : null;
+  }
+  const action = text.slice(0, space);
+  const word = text.slice(space).trimStart();
+  if (/\s/.test(word)) return null;
+  const choices = action === "account" ? ["add"] : action === "tier" ? ["clear", ...await aliases().catch(() => [])] : [];
+  const items = choices.filter((choice) => choice.startsWith(word)).map((choice) => ({ value: `${action} ${choice}`, label: choice }));
+  return items.length ? items : null;
+}
 
 export function parseSection(args: string): Section | null {
   const arg = args.trim();
@@ -48,6 +87,7 @@ const USAGE = [
   "- Write `%name` in your own prompt to expand that trait into your message (pi `traits` extension).",
   "- Workflow skills opt in with `metadata: {herdr-orch: workflow}` in `SKILL.md`. Listing a skill does not run it or grant permission to delegate.",
   "- Override a persona or trait with a same-named file in a higher layer: project `.agents/subagents/` or `.agents/traits/`, or the same under `~/.agents/`.",
+  "- Register another Anthropic subscription with `/oh account add [N]`, then sign in with `/login`. Select a weight tier for this session with `/oh tier <alias>`, or clear it with `/oh tier clear`. Bare `/oh account` and `/oh tier` show the current state.",
   "- Show one section with `/oh personas`, `/oh traits`, `/oh models`, `/oh usage`, or `/oh workflows`. Expand the entry with the tool-output expand key (default `ctrl+o`) for paths, timeouts, retro, every alias, usage credential sources and reset times, and the resolution layers.",
 ];
 

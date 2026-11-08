@@ -1,6 +1,6 @@
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import type { Provider } from "@earendil-works/pi-ai";
-import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, type ExtensionAPI, type ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { privateBrowserOAuth } from "./private-browser.ts";
@@ -63,31 +63,41 @@ export function registerStoredAccounts(pi: Pick<ExtensionAPI, "registerProvider"
   return registered;
 }
 
-export function registerAccounts(pi: ExtensionAPI): void {
+export type SubcommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
+
+const ACCOUNT_USAGE = "Use /oh account add [N] to register anthropic-<N>, then /login to sign in, /model to select this session's account, or /logout to remove its credential.";
+
+/** Register stored accounts and return the `/oh account` handler, which `/oh` dispatches. */
+export function registerAccounts(pi: ExtensionAPI): SubcommandHandler {
   const registered = registerStoredAccounts(pi);
   const add = (id: string) => {
     if (registered.has(id)) return;
     pi.registerProvider(accountProvider(id));
     registered.add(id);
   };
-  pi.registerCommand("oh-account", {
-    description: "Register another Anthropic subscription as anthropic-<N>: /oh-account add [N] (default: the next free number); then use Pi /login, /model and /logout",
-    handler: async (args, ctx) => {
-      if (!ctx.hasUI) return;
-      const parts = args.trim().split(/\s+/);
-      if (parts.length > 2 || parts[0] !== "add") {
-        ctx.ui.notify("Use /oh-account add [N] to register anthropic-<N>, then /login to sign in, /model to select this session's account, or /logout to remove its credential.", "info");
-        return;
-      }
-      try {
-        let n = 1;
-        while (registered.has(accountId(String(n)))) n++;
-        const id = parts.length === 2 ? accountId(parts[1]) : accountId(String(n));
-        add(id);
-        ctx.ui.notify(`Registered ${id}. Use /login and choose ${id}, then /model and choose ${id}/<model>. /logout removes only the chosen account's credential.`, "info");
-      } catch {
-        ctx.ui.notify("Account registration failed. Use a positive account number without leading zeros, such as /oh-account add 2.", "error");
-      }
-    },
-  });
+  return async (args, ctx) => {
+    if (!ctx.hasUI) return;
+    const parts = args.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      // A registered identity can lack a credential until /login, so the listing marks it.
+      let stored: Set<string> | undefined;
+      try { stored = new Set(storedAccountIds()); } catch { stored = undefined; }
+      const rows = [...registered].sort().map((id) => stored === undefined || stored.has(id) ? id : `${id} (no credential: use /login)`);
+      ctx.ui.notify(`${rows.length ? `Registered accounts: ${rows.join(", ")}.` : "No registered accounts."} ${ACCOUNT_USAGE}`, "info");
+      return;
+    }
+    if (parts.length > 2 || parts[0] !== "add") {
+      ctx.ui.notify(ACCOUNT_USAGE, "info");
+      return;
+    }
+    try {
+      let n = 1;
+      while (registered.has(accountId(String(n)))) n++;
+      const id = parts.length === 2 ? accountId(parts[1]) : accountId(String(n));
+      add(id);
+      ctx.ui.notify(`Registered ${id}. Use /login and choose ${id}, then /model and choose ${id}/<model>. /logout removes only the chosen account's credential.`, "info");
+    } catch {
+      ctx.ui.notify("Account registration failed. Use a positive account number without leading zeros, such as /oh account add 2.", "error");
+    }
+  };
 }

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { AgentSessionRuntime, createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type ExtensionAPI, type CreateAgentSessionRuntimeFactory } from "@earendil-works/pi-coding-agent";
 import { accountProvider, registerStoredAccounts } from "./accounts.ts";
-import { registerRecovery } from "./recovery.ts";
+import { registerRecoveryCommand } from "./recovery-fixture-support.ts";
 const work = "anthropic-2", personal = "anthropic-1", model = "claude-sonnet-4-5";
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; };
 
@@ -38,7 +38,7 @@ export default function fixture(outer: ExtensionAPI) {
           const loader = new DefaultResourceLoader({ cwd, agentDir: cwd, settingsManager, noExtensions: true, noSkills: true, noThemes: true, noPromptTemplates: true, noContextFiles: true,
             extensionFactories: [pi => {
               pi.on("before_provider_request", () => { requests++; });
-              registerRecovery(pi, async (args, signal, execOptions) => {
+              registerRecoveryCommand(pi, async (args, signal, execOptions) => {
                 if (args[0] === "route") { routeCalls++; routes.push(JSON.parse(readFileSync(args[2], "utf8"))); }
                 const result = await pi.exec(process.env.HERDR_ORCH_BIN!, args, { signal, ...execOptions });
                 assert.equal(result.code, 0, result.stderr); const envelope = JSON.parse(result.stdout); assert.equal(envelope.ok, true);
@@ -56,7 +56,7 @@ export default function fixture(outer: ExtensionAPI) {
         await owner.session.bindExtensions({ mode: "tui", uiContext: ui });
         try {
           const old = owner.session;
-          const selecting = old.prompt("/oh-tier fixture-tier").then(() => { settled = true; });
+          const selecting = old.prompt("/oh tier fixture-tier").then(() => { settled = true; });
           if (mode.startsWith("inventory-")) {
             await selecting;
             if (mode === "inventory-4097") { assert.equal(routeCalls, 0, "oversize inventory refuses before policy invocation"); assert.equal(old.model?.provider, work); assert.match(notices.at(-1)!, /Tier selection failed/); }
@@ -65,13 +65,13 @@ export default function fixture(outer: ExtensionAPI) {
             await Promise.race([pending.promise, new Promise((_, reject) => setTimeout(() => reject(Error("explicit setter gate not entered")), 10000))]);
             assert.equal(settled, false, "selection really awaits credentials");
             if (mode === "overlap") {
-              await old.prompt("/oh-tier fixture-tier"); await old.prompt("/oh-tier clear");
+              await old.prompt("/oh tier fixture-tier"); await old.prompt("/oh tier clear");
               assert.equal(routeCalls, 1, "overlapping commands never launch another setter"); assert.equal(reads, 1);
               assert.ok(notices.slice(-2).every(s => s.includes("switch is still pending")));
             } else {
               assert.equal((await owner.newSession()).cancelled, false);
               assert.notEqual(owner.session, old, "public runtime replaced the session while idle setter is pending");
-              await owner.session.prompt("/oh-tier clear");
+              await owner.session.prompt("/oh tier clear");
             }
             const before = uiWrites.length;
             release.resolve(); await selecting;

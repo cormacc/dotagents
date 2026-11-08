@@ -69,7 +69,7 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
     await command(h, { type: "get_state" });
     if (mode === "discovery") {
       const result = await command(h, { type: "get_commands" });
-      for (const name of ["oh", "oh-account", "oh-tier"]) assert.equal(result.data.commands.filter((c: any) => c.name === name).length, 1, `native discovery registers ${name} once`);
+      for (const name of ["oh"]) assert.equal(result.data.commands.filter((c: any) => c.name === name).length, 1, `native discovery registers ${name} once`);
       assert.deepEqual(requests, []);
       assert.doesNotMatch(h.diagnostics(), /failed to load extension|extension(?:-| )load error|extension error/i);
       console.log("ok - installed Pi startup discovers extension directory and all primary commands without inference");
@@ -85,7 +85,7 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
       return;
     }
     if (["tier", "tier-nongit", "cross-tier", "reasoning"].includes(mode)) {
-      await command(h, { type: "prompt", message: "/oh-tier fixture-tier" });
+      await command(h, { type: "prompt", message: "/oh tier fixture-tier" });
       // Alias selection resolves to personal first in deterministic named-account order.
       assert.equal((await command(h, { type: "get_state" })).data.model.provider, personal);
       if (mode === "tier" || mode === "tier-nongit") await command(h, { type: "set_model", provider: work, modelId: model });

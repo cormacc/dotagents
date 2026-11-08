@@ -58,6 +58,7 @@ register({
     execOptions.push(options);
     if (backendRefusal) return { stdout: JSON.stringify({ ok: false, schema: "herdr-orch/v1", error: { message: "backend-mismatch: fixture" } }), stderr: "", code: 1, killed: false };
     // `oh roster` and `oh usage` markdown output are renderings, not envelopes.
+    if (args[0] === "roster" && args.includes("json")) return { stdout: JSON.stringify({ ok: true, schema: "herdr-orch/v1", result: { routes: [{ alias: "light" }, { alias: "heavy" }] } }), stderr: "", code: 0, killed: false };
     if (args[0] === "roster") return { stdout: `LISTING ${args.join(" ")}\n`, stderr: "", code: 0, killed: false };
     if (args[0] === "usage") {
       const detail = args.includes("--detail");
@@ -144,9 +145,19 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   same(parseSection("bogus"), null, "unknown section is rejected");
   same(parseSection("workflows"), "workflows", "workflow section is recognised");
   same(parseSection("usage"), "usage", "usage section is recognised");
-  same((oh!.getArgumentCompletions!("u") as Array<{ value: string }>).map((item) => item.value), ["usage"], "usage section is completed");
-  same((oh!.getArgumentCompletions!("w") as Array<{ value: string }>).map((item) => item.value), ["workflows"], "workflow section is completed");
-  same((oh!.getArgumentCompletions!("m") as Array<{ value: string }>).map((item) => item.value), ["models"], "completion narrows by prefix");
+  const complete = async (prefix: string) => ((await oh!.getArgumentCompletions!(prefix)) as Array<{ value: string }> | null)?.map((item) => item.value) ?? null;
+  same(await complete("u"), ["usage"], "usage section is completed");
+  same(await complete("w"), ["workflows"], "workflow section is completed");
+  same(await complete("m"), ["models"], "completion narrows by prefix");
+  same(await complete("a"), ["account "], "account action is completed");
+  same(await complete("t"), ["traits", "tier "], "sections and actions share the first word");
+  let completionCalls = execCalls.length;
+  same(await complete("account "), ["account add"], "account add is completed");
+  same(execCalls.length, completionCalls, "account completion runs no oh process");
+  same(await complete("tier "), ["tier clear", "tier light", "tier heavy"], "tier completes clear and configured aliases");
+  same(await complete("tier l"), ["tier light"], "tier alias completion narrows by prefix");
+  same(execCalls.length, completionCalls + 1, "tier aliases are cached between keystrokes");
+  same(await complete("tier light x"), null, "no completion after the subcommand argument");
 
   const notices: Array<[string, string]> = [];
   const ctx = (mode: string) => ({ mode, hasUI: true, cwd: "/proj", signal: undefined, ui: { notify: (message: string, level: string) => notices.push([message, level]) } });
@@ -325,7 +336,30 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   await oh.handler("setup", ctx);
   same(execCalls.length, beforeSetup, "retired setup command runs nothing");
   ok(notices.at(-1)?.includes("Unknown /oh section"), "retired setup command reports the valid sections");
-  same(oh.getArgumentCompletions!("s"), null, "setup is not completed");
+  same(await oh.getArgumentCompletions!("s"), null, "setup is not completed");
+}
+
+// --- /oh account and /oh tier: actions dispatched before the listing path ---------------
+{
+  const oh = commands.get("oh")!;
+  ok(![...commands.keys()].some((name) => name.startsWith("oh-")), "account and tier are /oh subcommands, not top-level commands");
+  const notices: string[] = [];
+  const ctx = { mode: "tui", hasUI: true, cwd: "/proj", ui: { notify: (message: string) => notices.push(message) } };
+  const before = execCalls.length;
+  const entriesBefore = entries.length;
+  await oh.handler("account", ctx);
+  ok(notices.at(-1)?.startsWith("No registered accounts.") && notices.at(-1)!.includes("/oh account add"), "bare /oh account shows the registered accounts");
+  await oh.handler("account bogus", ctx);
+  ok(notices.at(-1)?.startsWith("Use /oh account add"), "unknown account argument reports usage");
+  await oh.handler("tier", ctx);
+  ok(notices.at(-1)?.startsWith("No tier selected"), "bare /oh tier shows the current tier");
+  same(execCalls.length, before, "state queries run no oh process");
+  same(entries.length, entriesBefore, "actions append no listing entry");
+  const writes: string[] = [];
+  const write = process.stderr.write;
+  process.stderr.write = ((text: string) => { writes.push(text); return true; }) as typeof process.stderr.write;
+  try { await oh.handler(" tier ", { ...ctx, hasUI: false }); } finally { process.stderr.write = write; }
+  ok(writes.at(-1)?.startsWith("No tier selected"), "/oh tier reports to a non-UI host instead of stopping at the UI guard");
 }
 
 {

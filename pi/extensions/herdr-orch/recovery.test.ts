@@ -39,14 +39,14 @@ function fixture(mode = "rpc", history: any[] = []) {
       return next ? { chosen: next.canonical, account: next.account, concrete: `${next.account}/${next.canonical.split('/').slice(1).join('/')}` } : { refused: true };
     })() : routeResult };
   };
-  if (!process.env.RECOVERY_TEST_NO_CONTROLLER) registerRecovery(pi, execute);
+  const tier = process.env.RECOVERY_TEST_NO_CONTROLLER ? undefined : registerRecovery(pi, execute);
   const emit = async (name: string, event: any = {}) => handlers.get(name)?.(event, ctx);
   const fail = async (errorMessage = "429 quota exhausted", provider = selected.provider, id = "failed-entry", requestModel = selected.id) => {
     await emit("turn_start");
     await emit("turn_end", { message: { role: "assistant", provider, model: requestModel, stopReason: "error", errorMessage }, messageEntryId: id });
     return emit("agent_before_settle", { entries: [{ type: "custom", customType: "other", data: {} }] });
   };
-  return { ctx, pi, emit, fail, commands, notices, status, widgets, entries, requests, requestPaths, controller,
+  return { ctx, pi, emit, fail, commands, tier, notices, status, widgets, entries, requests, requestPaths, controller,
     get selected() { return selected; }, get aborts() { return aborts; }, get switches() { return switches; },
     gateSelection() { selectionGate = deferred(); return selectionGate; }, gateRoute() { routeGate = deferred(); return routeGate; },
     setResult(value: any) { routeResult = value; },
@@ -61,7 +61,8 @@ async function main() {
   let tests = 1;
   for (const mode of ["tui", "rpc"]) {
     const f = fixture(mode);
-    assert.ok(f.commands.has("oh-tier"), "primary tier command must be registered");
+    assert.equal(typeof f.tier, "function", "primary tier handler must be returned for /oh tier");
+    assert.equal(f.commands.size, 0, "recovery registers no top-level command");
     const boundary = await f.fail();
     assert.ok(f.requestPaths[0]?.startsWith(join(tmpdir(), "herdr-orch-route-")), "route requests use private runtime temp");
     assert.equal(existsSync(join(f.requestPaths[0], "..")), false, "successful route removes its directory");
@@ -114,9 +115,14 @@ async function main() {
   { const f = fixture(); f.setResult("throw"); assert.equal(await f.fail(), undefined); assert.equal(existsSync(join(f.requestPaths[0], "..")), false); assert.match(f.notices.at(-1)!, /routing unavailable/); tests++; }
   { const f = fixture(); f.setResult({ refused: true }); assert.equal(await f.fail(), undefined); assert.match(f.notices.at(-1)!, /exhausted/); tests++; }
   { const f = fixture(); await f.fail(); f.removeB(); await f.emit("agent_start"); assert.equal(f.switches, 0); assert.ok(f.aborts); tests++; }
-  { const f = fixture(); f.idle(); await f.commands.get("oh-tier").handler("small", f.ctx); assert.equal(f.entries.at(-1).data.tier, "small");
+  { const f = fixture(); await f.tier!("", f.ctx); assert.match(f.notices.at(-1)!, /No tier selected/); f.idle(); await f.tier!("small", f.ctx); assert.equal(f.entries.at(-1).data.tier, "small");
+    const entries = f.entries.length; await f.tier!("", f.ctx); assert.match(f.notices.at(-1)!, /^Tier: small\./); assert.equal(f.entries.length, entries, "a bare query records nothing");
     await f.emit("session_start"); await f.fail("429", "google"); assert.equal(f.requests.at(-1).model, "small");
     await f.manual(); assert.equal(f.entries.at(-1).data.tier, null); tests++; }
+  { const f = fixture(); assert.equal((await f.fail()).continue, true); await f.tier!("", f.ctx); await f.emit("agent_start");
+    assert.equal(f.switches, 1, "a bare tier query keeps staged recovery"); tests++; }
+  { const f = fixture(); assert.equal((await f.fail()).continue, true); await f.tier!("clear", f.ctx); await f.emit("agent_start");
+    assert.equal(f.switches, 0, "a tier change invalidates staged recovery"); tests++; }
   { process.env.HERDR_ORCH_TASK = "fixture-child"; const f = fixture("rpc", [{ type: "custom", customType: "herdr-orch-tier", data: { tier: "small" } }]); delete process.env.HERDR_ORCH_TASK;
     await f.emit("session_start"); assert.equal(await f.fail(), undefined); assert.equal(f.requests.length, 0); tests++; }
   {

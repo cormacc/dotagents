@@ -8,9 +8,9 @@ import { Type } from "typebox";
 import { registerAccounts } from "./accounts.ts";
 import { registerDelivery } from "./delivery.ts";
 import { registerRecovery } from "./recovery.ts";
-import { composeHelp, parseSection, rosterArgs, usageArgs, SECTION_DESCRIPTIONS, SECTIONS, type Section } from "./help.ts";
+import { completeArguments, composeHelp, parseAction, parseSection, rosterArgs, usageArgs, ACTIONS, SECTIONS, type Section } from "./help.ts";
 
-// `/oh` output is a session entry, not a message: it is shown to the user and never enters
+// `/oh` listing output is a session entry, not a message: it is shown to the user and never enters
 // model context, because the skill already gives the model this information.
 const HELP_ENTRY = "herdr-orch-help";
 // `compact` and `detail` are the CLI's Markdown renderings; the tool-output expand state
@@ -165,7 +165,7 @@ function outputText(result: unknown): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  registerAccounts(pi);
+  const account = registerAccounts(pi);
 
   async function execute(args: string[], signal?: AbortSignal, options: { cwd?: string; timeout?: number } = {}) {
     const result = await pi.exec(launcherPath(), args, { signal, ...options });
@@ -189,7 +189,19 @@ export default function (pi: ExtensionAPI) {
     };
   }
 
-  registerRecovery(pi, execute);
+  const tier = registerRecovery(pi, execute);
+  // Completion has no command context, so aliases resolve from the process cwd and are
+  // cached briefly: each keystroke after `tier ` would otherwise start an `oh` process.
+  let aliasCache: { at: number; aliases: Promise<string[]> } | undefined;
+  const tierAliases = () => {
+    if (!aliasCache || Date.now() - aliasCache.at > 30_000) {
+      const aliases = execute(["roster", "--format", "json"], undefined, { cwd: process.cwd(), timeout: 5_000 })
+        .then(({ details }) => ((details as { routes?: { alias: string }[] })?.routes ?? []).map((route) => route.alias))
+        .catch(() => { aliasCache = undefined; return []; });
+      aliasCache = { at: Date.now(), aliases };
+    }
+    return aliasCache.aliases;
+  };
   registerDelivery(pi);
 
   pi.registerEntryRenderer<HelpEntry>(HELP_ENTRY, (entry, { expanded }, theme) => {
@@ -207,17 +219,16 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("oh", {
-    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context: ${SECTIONS.join(" | ")}`,
-    getArgumentCompletions: (prefix) => {
-      const items = SECTIONS.filter((section) => section.startsWith(prefix.trim()))
-        .map((section) => ({ value: section, label: section, description: SECTION_DESCRIPTIONS[section] }));
-      return items.length ? items : null;
-    },
+    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context (${SECTIONS.join(" | ")}), or manage this session's accounts and tier (${ACTIONS.join(" | ")})`,
+    getArgumentCompletions: (prefix) => completeArguments(prefix, tierAliases),
     handler: async (args, ctx) => {
+      // Actions run before the UI guard: `/oh tier` also serves non-UI hosts.
+      const action = parseAction(args);
+      if (action) return (action.action === "account" ? account : tier)(action.rest, ctx);
       if (!ctx.hasUI) return;
       const section = parseSection(args);
       if (!section) {
-        ctx.ui.notify(`Unknown /oh section "${args.trim()}". Use one of: ${SECTIONS.join(", ")}`, "warning");
+        ctx.ui.notify(`Unknown /oh section "${args.trim()}". Use one of: ${[...SECTIONS, ...ACTIONS].join(", ")}`, "warning");
         return;
       }
       // cwd selects the project layer: `oh` resolves it from the git root of its cwd.

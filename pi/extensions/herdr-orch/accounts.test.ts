@@ -28,10 +28,11 @@ try {
   const commands = new Map<string, any>();
   const providers: any[] = [];
   register({ on() {}, registerCommand: (n: string, c: any) => commands.set(n, c), registerProvider: (p: any) => providers.push(p), registerTool() {}, registerEntryRenderer() {} } as any);
-  assert.ok(commands.has("oh-account"), "extension registers account onboarding");
+  assert.ok(commands.has("oh") && !commands.has("oh-account"), "account onboarding is an /oh subcommand");
+  const account = (args: string, c: any) => commands.get("oh").handler(`account ${args}`, c);
   const notices: string[] = [];
   const ctx = { hasUI: true, ui: { notify: (s: string) => notices.push(s) } };
-  await commands.get("oh-account").handler("add 2", ctx);
+  await account("add 2", ctx);
   assert.equal(providers.length, 1);
   assert.equal(providers[0].id, work);
   assert.equal(providers[0].name, work, "the display name is the full key");
@@ -39,15 +40,15 @@ try {
   assert.deepEqual(providers[0].getModels(), anthropicProvider().getModels().map((m) => ({ ...m, provider: work })), "alias retains native model metadata");
   assert.match(notices.at(-1)!, /\/login/);
   assert.deepEqual(read(), preserved, "registration does not swap or write credentials");
-  await commands.get("oh-account").handler("add 2", ctx);
+  await account("add 2", ctx);
   assert.equal(providers.length, 1);
   for (const number of ["", "0", "01", "-1", "1x", "work", "anthropic-1"]) assert.throws(() => accountId(number));
-  for (const args of ["add ../work", "add work", "add 01", "add 1 2"]) await commands.get("oh-account").handler(args, ctx);
+  for (const args of ["add ../work", "add work", "add 01", "add 1 2"]) await account(args, ctx);
   assert.equal(providers.length, 1);
-  await commands.get("oh-account").handler("add", ctx);
+  await account("add", ctx);
   assert.equal(providers.length, 2);
   assert.equal(providers[1].id, personal, "bare add registers the lowest free number");
-  await commands.get("oh-account").handler("add", ctx);
+  await account("add", ctx);
   assert.equal(providers.at(-1).id, "anthropic-3");
   // The retired namespace is built at run time so a repository sweep finds no live literal.
   const retired = ["anthropic", "account", "work"].join("-");

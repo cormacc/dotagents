@@ -37,7 +37,7 @@ async function bomStartup() {
   try {
     const response = await command(h, { type: "get_commands" });
     assert.ok(response.data.commands.some((c: any) => c.name === "oh"));
-    assert.ok(response.data.commands.some((c: any) => c.name === "oh-account"));
+    assert.ok(!response.data.commands.some((c: any) => c.name.startsWith("oh-")), "account and tier commands are /oh subcommands");
     assert.doesNotMatch(h.diagnostics(), /failed to load extension/i);
     console.log("ok - installed Pi starts with a BOM-prefixed default auth store");
   } finally {
@@ -131,7 +131,7 @@ async function main() {
       assert.equal((await command(h, { type: "get_state" })).data.model.provider, alias);
       console.log("ok - two installed Pi primary sessions retain independent account selections outside Herdr");
       const since = h.events.length;
-      await command(h, { type: "prompt", message: "/oh-account add" });
+      await command(h, { type: "prompt", message: "/oh account add" });
       await h.waitFor((e) => e.type === "extension_ui_request" && e.message?.includes("Registered anthropic-3"), "account registration notice", { since });
       const models = await command(h, { type: "get_available_models" });
       assert.ok(!models.data.models.some((m: any) => m.provider === "anthropic-3"));

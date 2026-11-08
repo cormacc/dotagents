@@ -4,7 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { accountBase, isAccountId, storedAccountIds } from "./accounts.ts";
+import { accountBase, isAccountId, storedAccountIds, type SubcommandHandler } from "./accounts.ts";
 
 const TIER_ENTRY = "herdr-orch-tier";
 const WARNING_KEY = "herdr-orch-recovery";
@@ -23,8 +23,11 @@ export function quotaFailure(message: string): boolean {
   return /\b429\b|rate_limit_error|quota[_ -](?:exhausted|exceeded)|usage limit|insufficient_quota/i.test(message);
 }
 
-/** Install primary recovery; delegated children still retain native account registration. */
-export function registerRecovery(pi: ExtensionAPI, execute: Execute): void {
+/**
+ * Install primary recovery and return the `/oh tier` handler, which `/oh` dispatches.
+ * Delegated children still retain native account registration.
+ */
+export function registerRecovery(pi: ExtensionAPI, execute: Execute): SubcommandHandler {
   const pinned = Boolean(process.env.HERDR_ORCH_TASK || process.env.HERDR_ORCH_CHILD || process.env.HERDR_ORCH_RESULT);
   let active = true, generation = 0, tier: string | undefined;
   let attempted = new Map<string, Pair>();
@@ -170,23 +173,25 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): void {
     } catch { if (token === generation) report(ctx, "Quota recovery stopped: routing unavailable.", "error"); }
   });
 
-  pi.registerCommand("oh-tier", {
-    description: "Select a configured weight alias for this primary session: /oh-tier <alias>; /oh-tier clear retains the concrete model",
-    handler: async (args, ctx) => {
-      if (pinned) { report(ctx, "Delegated children keep their launch selection.", "warning"); return; }
-      invalidate();
-      if (setting) { report(ctx, "An account switch is still pending. Wait for its selection report.", "warning"); return; }
-      const alias = args.trim();
-      if (alias === "clear") { retainTier(); report(ctx, "Tier cleared; same-model account recovery only."); return; }
-      if (!ctx.isIdle()) { report(ctx, "Select a tier while idle.", "warning"); return; }
-      const token = generation;
-      try {
-        const roster = (await execute(["roster", "--format", "json"], undefined, { cwd: ctx.cwd, timeout: 30_000 })).details as { routes?: { alias: string }[] };
-        if (!roster?.routes?.some(r => r.alias === alias)) { report(ctx, "Use /oh-tier <configured weight alias>, or /oh models to list aliases.", "warning"); return; }
-        const model = await route(ctx, alias, undefined, pi.getThinkingLevel(), []);
-        if (!model) { report(ctx, "Tier selection exhausted: no eligible account/model.", "warning"); return; }
-        if (await select(ctx, model, pi.getThinkingLevel(), false, token)) retainTier(alias);
-      } catch { report(ctx, "Tier selection failed: routing unavailable.", "error"); }
-    },
-  });
+  return async (args, ctx) => {
+    if (pinned) { report(ctx, "Delegated children keep their launch selection.", "warning"); return; }
+    const alias = args.trim();
+    // A bare query must not invalidate pending recovery, so it returns before invalidate().
+    if (!alias) {
+      report(ctx, `${tier ? `Tier: ${tier}.` : "No tier selected; same-model account recovery only."} Use /oh tier <configured weight alias>, or /oh tier clear.`);
+      return;
+    }
+    invalidate();
+    if (setting) { report(ctx, "An account switch is still pending. Wait for its selection report.", "warning"); return; }
+    if (alias === "clear") { retainTier(); report(ctx, "Tier cleared; same-model account recovery only."); return; }
+    if (!ctx.isIdle()) { report(ctx, "Select a tier while idle.", "warning"); return; }
+    const token = generation;
+    try {
+      const roster = (await execute(["roster", "--format", "json"], undefined, { cwd: ctx.cwd, timeout: 30_000 })).details as { routes?: { alias: string }[] };
+      if (!roster?.routes?.some(r => r.alias === alias)) { report(ctx, "Use /oh tier <configured weight alias>, or /oh models to list aliases.", "warning"); return; }
+      const model = await route(ctx, alias, undefined, pi.getThinkingLevel(), []);
+      if (!model) { report(ctx, "Tier selection exhausted: no eligible account/model.", "warning"); return; }
+      if (await select(ctx, model, pi.getThinkingLevel(), false, token)) retainTier(alias);
+    } catch { report(ctx, "Tier selection failed: routing unavailable.", "error"); }
+  };
 }

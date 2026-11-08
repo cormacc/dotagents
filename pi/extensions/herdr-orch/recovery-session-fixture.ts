@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { accountProvider, registerStoredAccounts } from "./accounts.ts";
-import { registerRecovery } from "./recovery.ts";
+import { registerRecoveryCommand } from "./recovery-fixture-support.ts";
 const model = "claude-sonnet-4-5", work = "anthropic-2", personal = "anthropic-1";
 export default function fixture(outer: ExtensionAPI) {
   registerStoredAccounts(outer);
@@ -20,7 +20,7 @@ export default function fixture(outer: ExtensionAPI) {
           const loader = new DefaultResourceLoader({ cwd, agentDir: cwd, settingsManager, noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
             extensionFactories: [(pi) => {
               pi.on("before_provider_request", (_event, ctx) => { requested.push(ctx.model!.provider); });
-              registerRecovery(pi, async (args, signal, options) => {
+              registerRecoveryCommand(pi, async (args, signal, options) => {
                 if (args[0] === "route") routes.push(JSON.parse(readFileSync(args[2], "utf8")).model);
                 const result = await pi.exec(process.env.HERDR_ORCH_BIN!, args, { signal, ...options }); assert.equal(result.code, 0, result.stderr);
                 const envelope = JSON.parse(result.stdout); assert.equal(envelope.ok, true); return { details: envelope.result };
@@ -34,7 +34,7 @@ export default function fixture(outer: ExtensionAPI) {
         const manager = SessionManager.create(cwd, join(cwd, "sessions"));
         const seed = await create(manager, true);
         try {
-          await seed.prompt("/oh-tier fixture-tier");
+          await seed.prompt("/oh tier fixture-tier");
           assert.equal(seed.model?.provider, personal);
           await seed.prompt("seed successful history");
           assert.ok(manager.getBranch().some(e => e.type === "custom" && e.customType === "herdr-orch-tier" && (e.data as any).tier === "fixture-tier"));
