@@ -61,3 +61,23 @@
               (fs/create-sym-link link outside-file)
               (is (nil? (paths/resolve-project-path
                           project project "linked-outside.org"))))))))))
+
+(deftest symlinked-ancestor-above-missing-directories-rejected
+  ;; Real paths: on macOS the temp root is itself behind a symlink, which
+  ;; would make the lexical fallback fail containment by accident.
+  (with-temp-dir
+    (fn [tmp]
+     (let [project (str (fs/real-path tmp))]
+      (with-temp-dir
+        (fn [outside]
+          (fs/create-sym-link (str (fs/path project "escape")) outside)
+          (testing "control: missing file directly under the symlink"
+            (is (nil? (paths/resolve-project-path project project "escape/record.org"))))
+          (testing "missing directories below the symlink"
+            (is (nil? (paths/resolve-project-path project project "escape/new/deeper/record.org"))))))))))
+
+(deftest missing-in-tree-directories-allowed
+  (with-temp-dir
+    (fn [project]
+      (is (= (str (fs/path (fs/real-path project) "design" "log" "new.org"))
+             (paths/resolve-project-path project project "design/log/new.org"))))))

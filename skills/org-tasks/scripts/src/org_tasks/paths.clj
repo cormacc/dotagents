@@ -3,8 +3,8 @@
 
   Resolves user-supplied paths against a project root and rejects
   anything that escapes after symlink realpath resolution. Supports
-  paths whose parent exists but whose target does not yet (so future
-  scaffold targets can be validated before creation).
+  paths that do not exist yet (so future scaffold targets can be
+  validated before creation).
 
   Public surface:
 
@@ -27,17 +27,15 @@
 
 (defn resolve-existing-or-parent
   "Realpath of an existing path; otherwise the realpath of the nearest
-  existing ancestor joined with the original basename."
+  existing ancestor joined with the missing path components, so a symlinked
+  ancestor above several missing directories is still resolved."
   ^String [^String path]
-  (let [p (fs/path path)]
-    (try
-      (str (fs/real-path p))
-      (catch Throwable _
-        (try
-          (let [parent (fs/real-path (fs/parent p))]
-            (str (fs/absolutize (fs/path (str parent) (fs/file-name p)))))
-          (catch Throwable _
-            (str (fs/absolutize p))))))))
+  (loop [p (fs/absolutize path) missing ()]
+    (if-let [real (try (fs/real-path p) (catch Throwable _ nil))]
+      (str (fs/normalize (apply fs/path real missing)))
+      (if-let [parent (fs/parent p)]
+        (recur parent (cons (str (fs/file-name p)) missing))
+        (str (fs/absolutize path))))))
 
 (defn resolve-project-path
   "Resolve `candidate` (absolute or `base-dir`-relative) under `root`,
