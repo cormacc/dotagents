@@ -438,6 +438,8 @@ Restores only an archive-resolved exact UUID or unique prefix. It refuses unknow
 }
 ```
 
+`from` is the file that held the task, which can be a file-level `#+IMPORT:` file for `unpublish`. Both commands refuse with `conflict` when the source file changed after the graph load.
+
 ### `ot doctor`
 
 ```json

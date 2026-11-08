@@ -398,6 +398,45 @@
         (is (= 1 exit))
         (is (= "validation" (:code e)))))))
 
+(deftest archive-refuses-an-edit-made-after-graph-load
+  (with-temp-dir
+    (fn [root]
+      (let [id "11111111-2222-4333-8444-555555555552"
+            tasks-path (str (fs/path root "TASKS.org"))
+            archive-path (str (fs/path root "TASKS.archive.org"))
+            original (str "* Improvements\n** DONE Closed task\n"
+                          "CLOSED: [2026-05-01 Fri 09:00]\n"
+                          ":PROPERTIES:\n:CUSTOM_ID: " id "\n:END:\n")
+            edited (str/replace original "Closed task" "Edited by human")
+            load-graph loader/load-graph]
+        (spit tasks-path original)
+        (let [{:keys [err exit]}
+              (with-redefs [loader/load-graph (fn [& args]
+                                                (let [g (apply load-graph args)]
+                                                  (spit tasks-path edited)
+                                                  g))]
+                (run-cli! "--root" root "--format" "json" "archive" id))]
+          (is (= 1 exit))
+          (is (= "conflict" (:code (parse-json-error err))))
+          (is (= edited (slurp tasks-path)) "the human edit survives")
+          (is (not (fs/exists? archive-path)) "nothing is archived"))))))
+
+(deftest unpublish-removes-file-level-imported-root-from-its-own-file
+  (with-temp-dir
+    (fn [root]
+      (let [id "11111111-2222-4333-8444-555555555553"
+            import-path (str (fs/path root "import.org"))]
+        (spit (str (fs/path root "TASKS.org")) "#+IMPORT: import.org\n\n* Improvements\n")
+        (spit import-path (str "* Plan\n** TODO Imported\n:PROPERTIES:\n:CUSTOM_ID: " id "\n:END:\n"))
+        (spit (str (fs/path root "TASKS.local.org")) "#+SELECTED:\n")
+        (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "unpublish" id)
+              rows (:rows (parse-json-result
+                            (:out (run-cli! "--root" root "--format" "json" "list"))))]
+          (is (zero? exit) out)
+          (is (= import-path (:from (parse-json-result out))))
+          (is (not (str/includes? (slurp import-path) id)))
+          (is (= [id] (mapv :id (filter #(= id (:id %)) rows))) "one copy remains"))))))
+
 (deftest archive-removes-file-level-imported-root-from-its-own-file
   (testing "a task rooted in a file-level #+IMPORT: is removed from that file, not TASKS.org"
     (with-temp-dir

@@ -32,9 +32,16 @@
                   (mapcat walk (tree/children t))))]
     (set (keep identity (walk root-task)))))
 
+(defn- load-time-content
+  "Content of `path` as the graph load read it. A file that contributed no
+  task has no load-time snapshot, so it is read now."
+  [tasks path]
+  (or (some #(when (= path (:source-path %)) (:source-content %)) tasks)
+      (loader/safe-slurp path)))
+
 (defn- move-locality-cmd [{:keys [opts] :as result}
-                           {:keys [op want-local? moved-fn from-key to-key already-msg missing-msg verb]}]
-  (let [{:keys [project-root tasks files]} (load-context opts)
+                           {:keys [want-local? moved-fn to-key already-msg missing-msg verb]}]
+  (let [{:keys [project-root tasks files selected-id]} (load-context opts)
         id (positional-arg result :id)]
     (cond
       (or (nil? id) (str/blank? id))
@@ -52,7 +59,7 @@
           ;; among its roots) and the new file gains it as a fresh
           ;; append — correct even when the target came from a
           ;; file-level `#+IMPORT:` file rather than TASKS.org/.local.
-          (let [from-path (from-key files)
+          (let [from-path (:source-path target)
                 to-path (to-key files)
                 moved (-> target moved-fn
                           (assoc :line-number 0 :end-line 0
@@ -62,34 +69,31 @@
                 ;; with zero roots (e.g. moving a file's only task),
                 ;; and the moved task's stale `:source-content` must
                 ;; not stand in for the destination file's baseline.
-                known-baselines {from-path (loader/safe-slurp from-path)
-                                 to-path (loader/safe-slurp to-path)}]
+                known-baselines {from-path (:source-content target)
+                                 to-path (load-time-content tasks to-path)}]
             (when-not (:dry-run opts)
               (util/guard-write! opts
                 #(loader/save-source-roots project-root tree-new known-baselines)))
             (out/emit-result
               opts
               {:task (task/task->wire moved nil
-                                      {:include-content? (boolean (:include-content opts))})
+                                      {:include-content? (boolean (:include-content opts))
+                                       :selected-id selected-id})
                :from from-path
                :to to-path
                :text/lines [(str verb " " (:summary target) " → " to-path)]})))))))
 
 (defn publish-cmd [result]
-  (move-locality-cmd result {:op :publish
-                             :want-local? true
+  (move-locality-cmd result {:want-local? true
                              :moved-fn mark-not-local-rec
-                             :from-key :local
                              :to-key :tasks
                              :missing-msg "ot publish requires a task id."
                              :already-msg "Task is already in TASKS.org (not local)."
                              :verb "Published"}))
 
 (defn unpublish-cmd [result]
-  (move-locality-cmd result {:op :unpublish
-                             :want-local? false
+  (move-locality-cmd result {:want-local? false
                              :moved-fn mark-local-rec
-                             :from-key :tasks
                              :to-key :local
                              :missing-msg "ot unpublish requires a task id."
                              :already-msg "Task is already local; nothing to unpublish."
@@ -181,7 +185,9 @@
             (fn []
               (let [archive-path (:archive files)
                     stamp (or (:closed target) (parser/format-org-timestamp))
-                    source-content (loader/safe-slurp (:source-path target))
+                    ;; The load-time bytes, so an edit made after the graph
+                    ;; load fails the baseline check instead of being lost.
+                    source-content (:source-content target)
                     ;; `:ARCHIVE_OLPATH:` records a restore destination, and
                     ;; `ot unarchive` only ever restores into a shared
                     ;; `TASKS.org` section. A root living in a file-level
@@ -227,6 +233,7 @@
                                                      (contains? (subtree-task-ids target)
                                                                 selected-id)))]
                 (when-not (:dry-run opts)
+                  (loader/preflight-baselines! known-baselines)
                   (do
                     (fs/create-dirs (fs/parent archive-path))
                     (loader/atomic-write archive-path archive-content))
@@ -237,7 +244,10 @@
                 (out/emit-result
                   opts
                   {:task (task/task->wire archive-copy nil
-                                          {:include-content? (boolean (:include-content opts))})
+                                          {:include-content? (boolean (:include-content opts))
+                                           :selected-id (when-not (and selection-cleared?
+                                                                       (not (:dry-run opts)))
+                                                          selected-id)})
                    :archivePath archive-path
                    :archivedAt stamp
                    :selectionCleared (and (not (:dry-run opts)) selection-cleared?)
@@ -261,7 +271,7 @@
       (assoc :line-number 0 :end-line 0 :source-path tasks-path)))
 
 (defn unarchive-cmd [{:keys [opts] :as result}]
-  (let [{:keys [project-root tasks files]} (load-context opts)
+  (let [{:keys [project-root tasks files selected-id]} (load-context opts)
         id (positional-arg result :id)]
     (cond
       (or (nil? id) (str/blank? id))
@@ -328,7 +338,8 @@
                 (out/emit-result
                  opts
                  {:task (task/task->wire restored nil
-                                         {:include-content? (boolean (:include-content opts))})
+                                         {:include-content? (boolean (:include-content opts))
+                                          :selected-id selected-id})
                   :from archive-path
                   :to tasks-path
                   :section section
