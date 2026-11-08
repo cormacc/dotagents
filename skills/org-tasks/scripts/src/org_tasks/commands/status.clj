@@ -36,7 +36,7 @@
   "Apply a resolved status transition to `target` and emit the envelope.
   Shared by explicit `ot status <id> <new-status>` and `--cycle`.
   `:no-promote` leaves ancestors unchanged and returns an empty promoted vector."
-  [opts tasks target status]
+  [opts tasks selected-id target status]
   (let [full-id (parser/get-task-id target)
         {updated :task :keys [prev-status timestamp]}
         (lifecycle/apply-status-transition target status)
@@ -69,7 +69,8 @@
     (out/emit-result
       opts
       {:task (task/task->wire (task/find-by-id tree-final full-id) nil
-                              {:include-content? (boolean (:include-content opts))})
+                              {:include-content? (boolean (:include-content opts))
+                               :selected-id selected-id})
        :prevStatus prev-status
        :status status
        :closed (:closed updated)
@@ -92,7 +93,7 @@
   the unset slot) lives in `lifecycle/priority-cycle`: forward from unset
   is A (highest), back from unset is D (lowest)."
   [{:keys [opts] :as result}]
-  (let [{:keys [tasks]} (load-context opts)
+  (let [{:keys [tasks selected-id]} (load-context opts)
         id        (positional-arg result :id)
         cycle-dir (:cycle opts)
         clear?    (:clear opts)
@@ -132,7 +133,8 @@
         (out/emit-result
           opts
           {:task (task/task->wire (task/find-by-id tree-final full-id) nil
-                                  {:include-content? (boolean (:include-content opts))})
+                                  {:include-content? (boolean (:include-content opts))
+                                   :selected-id selected-id})
            :prevPriority prev
            :priority new-prio
            :text/lines
@@ -141,7 +143,7 @@
                  (if new-prio (style/priority opts new-prio) "(none)"))]})))))
 
 (defn status-cmd [{:keys [opts] :as result}]
-  (let [{:keys [tasks]} (load-context opts)
+  (let [{:keys [tasks selected-id]} (load-context opts)
         id        (positional-arg result :id)
         cycle-dir (:cycle opts)
         explicit  (some-> (positional-arg result :new-status 1)
@@ -172,4 +174,4 @@
                            :message (str "Status must be one of "
                                          (str/join ", " (sort valid-statuses)))
                            :details {:value status}})
-          (apply-status-cmd opts tasks target status))))))
+          (apply-status-cmd opts tasks selected-id target status))))))

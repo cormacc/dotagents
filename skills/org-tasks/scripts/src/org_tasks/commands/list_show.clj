@@ -107,7 +107,7 @@
 
 (defn list-cmd [{:keys [opts]}]
   (let [{:keys [project-root tasks selected-id files]} (load-context opts)
-        wire-tasks (mapv #(task/task->wire % nil {:include-content? false}) tasks)
+        wire-tasks (mapv #(task/task->wire % nil {:include-content? false :selected-id selected-id}) tasks)
         rows       (task/flatten-tree wire-tasks)
         status-filter (set (:status-filter opts))
         match?     (fn [row]
@@ -186,9 +186,9 @@
       (let [t (resolve-required-id tasks id opts)
             full-id (parser/get-task-id t)
             include-content? (boolean (:include-content opts))
-            wire (task/task->wire t nil {:include-content? include-content?})
+            wire (task/task->wire t nil {:include-content? include-content? :selected-id selected-id})
             ancestor-tasks (tree/path-to tasks full-id)
-            ancestors (mapv #(task/task->wire % nil {:include-content? false})
+            ancestors (mapv #(task/task->wire % nil {:include-content? false :selected-id selected-id})
                             ancestor-tasks)
             record-task (some #(when (:import-path %) %)
                               (reverse (conj ancestor-tasks t)))]

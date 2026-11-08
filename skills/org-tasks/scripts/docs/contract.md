@@ -98,7 +98,7 @@ Id-accepting commands resolve exact `:CUSTOM_ID:` values first, then accept any 
 
 ## Common task shape (`Task`)
 
-Returned by `list --full` (`rows[]` and within `tree[]`), `show`, `create`, `status`, and as the `task` field of related result payloads.
+Returned by `list --full` (`rows[]` and within `tree[]`), `show`, `selected`, `status`, `priority`, `move`, `publish`/`unpublish`, `archive`/`unarchive`, and as the `task` field of related result payloads. `create` returns a locator instead (see [#`ot create`](#ot-create)).
 
 ```jsonc
 {
@@ -106,14 +106,19 @@ Returned by `list --full` (`rows[]` and within `tree[]`), `show`, `create`, `sta
   "status":        "TODO | STARTED | WAITING | DONE | CANCELLED",
   "priority":      "A | B | C | D | null",
   "summary":       "Heading text",
+  "description":   "Body text below the drawers",
   "tags":          ["backend", "security"],
   "level":         2,
+  "propertyLines": [":CUSTOM_ID: uuid", ":CREATED: [2026-05-18 Mon 08:00]"],
+  "logbookLines":  ["- Created [2026-05-18 Mon 08:00]"],
   "sourcePath":    "/repo/TASKS.org",
   "line":          12,
+  "endLine":       20,
   "local":         false,
   "selected":      false,
-  "importPath":    "[[plan:foo.org]] | null",
-  "importExpandedPath": "/repo/design/log/foo.org | null",
+  "importPath":    "plan:foo.org | null",
+  "importRaw":     "[[plan:foo.org]] | null",
+  "importError":   "Cannot read change-record file: /repo/design/log/foo.org | null",
   "closed":        "2026-05-18 Mon 09:00 | null",
   "started":       "2026-05-18 Mon 08:30 | null",
   "createdAt":     "2026-05-18 Mon 08:00 | null",
@@ -125,6 +130,8 @@ Returned by `list --full` (`rows[]` and within `tree[]`), `show`, `create`, `sta
   "parentId":      "uuid | null"
 }
 ```
+
+`createdAt` is the immutable `:CREATED:` drawer timestamp, or null for a task without one. `selected` is transient: it compares the task with the `#+SELECTED:` pointer that holds after the command, so `archive` reports false for a task whose selection it cleared. `importPath` is the link target and `importRaw` the bracket-link source text; `importRaw` is null when the `#+IMPORT:` value is a plain path.
 
 Tree form additionally carries `"children": [Task]` and an `"importChildren": [Task]` array populated when an `#+IMPORT:` change-record is resolvable. `ot show` / `ot selected` omit `sourceContent` and `effectiveSourceContent` by default; pass `ot show <id> --include-content` to include those raw strings on the returned task tree. `ot list --full` deduplicates large source strings into its `result.sources` map instead.
 
@@ -203,7 +210,7 @@ The JSON and EDN default result is `{root, selectedId, count, rows}`. Each row c
   "files": {
     "tasks":   "/repo/TASKS.org",
     "local":   "/repo/TASKS.local.org",
-    "archive": "/repo/TASKS.archive.org | null"
+    "archive": "/repo/TASKS.archive.org"
   },
   "sources": {
     "/repo/TASKS.org": {

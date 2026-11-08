@@ -152,7 +152,7 @@
 ;; ── Write phase ───────────────────────────────────────────────────
 
 (defn- apply-move!
-  [opts {:keys [source full-id path dest-id section placement]}]
+  [opts {:keys [source full-id path dest-id section placement selected-id]}]
   (let [baseline  (:source-content source)
         ;; A structural move never touches file-level `#+LINK:` /
         ;; `#+SETUPFILE:` keywords, so the load-time effective content
@@ -228,7 +228,8 @@
             (out/emit-result
               opts
               {:task (task/task->wire (or after src-node) nil
-                                      {:include-content? (boolean (:include-content opts))})
+                                      {:include-content? (boolean (:include-content opts))
+                                       :selected-id selected-id})
                :file path
                :parentId parent-id
                :section (when-not dest-id section)
@@ -253,7 +254,7 @@
 
 ;; ── ot move ───────────────────────────────────────────────────────
 
-(defn- resolve-and-move! [opts tasks files id placement destination]
+(defn- resolve-and-move! [opts tasks files selected-id id placement destination]
   (if (and (:none (task/find-by-id-or-prefix tasks id))
            (archived-match files id))
     (out/emit-error opts
@@ -302,7 +303,8 @@
                            :path path
                            :dest-id dest-id
                            :section (when (= :section placement) destination)
-                           :placement placement})))))
+                           :placement placement
+                           :selected-id selected-id})))))
 
 (defn move-cmd [{:keys [opts] :as result}]
   (let [id (arg->value (positional-arg result :id))
@@ -324,7 +326,7 @@
                             :message "ot move requires a destination: --parent <id>, --section <name>, --before <id> or --after <id>."})
 
       :else
-      (let [{:keys [tasks files]} (load-context opts)]
+      (let [{:keys [tasks files selected-id]} (load-context opts)]
         (util/guard! opts
           #(let [[placement destination] (first destinations)]
-             (resolve-and-move! opts tasks files id placement destination)))))))
+             (resolve-and-move! opts tasks files selected-id id placement destination)))))))

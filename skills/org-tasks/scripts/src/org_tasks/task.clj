@@ -133,10 +133,12 @@
   emitting machine envelopes must explicitly choose their contract:
   `{:include-content? false}` for compact task projections (including all
   mutators), or true for the `--include-content` opt-in. `ot list` also uses
-  false because it emits shared source-file content separately."
+  false because it emits shared source-file content separately.
+  `:selected-id` is the persisted selection that `:selected` compares against;
+  callers pass the selection that holds after the command."
   ([task] (task->wire task nil {}))
   ([task parent-id] (task->wire task parent-id {}))
-  ([task parent-id {:keys [include-content?] :or {include-content? true} :as opts}]
+  ([task parent-id {:keys [include-content? selected-id] :or {include-content? true} :as opts}]
    (let [id        (parser/get-task-id task)
          link-tpls (link-templates-for-task task)
          issues    (when link-tpls
@@ -161,6 +163,8 @@
               :importError     (:import-error task)
               :closed          (:closed task)
               :started         (parser/get-task-started task)
+              :createdAt       (parser/get-task-created task)
+              :selected        (boolean (and id (= id selected-id)))
               :blockedBy       (mapv :raw (parser/get-task-blockers task))
               :handoff         (parser/get-task-handoff task)
               :linkedIssues    (mapv (fn [i]

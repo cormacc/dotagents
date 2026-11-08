@@ -6,6 +6,8 @@
   #"(?i)^\s*:CUSTOM_ID:\s*(\S+)\s*$")
 (def ^:private started-property-re
   #"(?i)^\s*:STARTED:\s*\[([^\]]+)\]\s*$")
+(def ^:private created-property-re
+  #"(?i)^\s*:CREATED:\s*\[([^\]]+)\]\s*$")
 (def ^:private property-line-re
   #"^\s*:([A-Za-z][A-Za-z0-9_-]*):\s*(.*?)\s*$")
 (def ^:private property-or-continuation-line-re
@@ -22,11 +24,17 @@
 (defn task-has-id? [task]
   (some? (get-task-id task)))
 
-(defn get-task-started [task]
+(defn- timestamp-property [task re]
   (some (fn [^String line]
-          (when-let [m (re-matches started-property-re line)]
+          (when-let [m (re-matches re line)]
             (str/trim (m 1))))
         (:property-lines task)))
+
+(defn get-task-started [task]
+  (timestamp-property task started-property-re))
+
+(defn get-task-created [task]
+  (timestamp-property task created-property-re))
 
 (defn task-has-started-property? [task]
   (some? (get-task-started task)))

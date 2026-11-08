@@ -26,6 +26,22 @@
           (is (= ["backend"] (:tags first-row)))
           (is (= "STARTED" (:status second-row))))))))
 
+(deftest task-shape-carries-creation-and-selection
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [{:keys [id]} (parse-json-result
+                           (:out (run-cli! "--root" root "--format" "json" "create" "Fresh")))
+            show (fn [] (:task (parse-json-result
+                                 (:out (run-cli! "--root" root "--format" "json" "show" id)))))]
+        (is (re-matches #"\d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}" (:createdAt (show))))
+        (is (false? (:selected (show))))
+        (run-cli! "--root" root "select" id)
+        (is (true? (:selected (show))))
+        (is (true? (:selected (last (:rows (parse-json-result
+                                              (:out (run-cli! "--root" root "--format" "json"
+                                                              "list" "--full"))))))))))))
+
 (deftest compact-list-contract-and-format-parity
   (with-temp-dir
     (fn [root]

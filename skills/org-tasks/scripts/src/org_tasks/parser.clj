@@ -31,6 +31,7 @@
 (def-facade-alias get-task-id properties/get-task-id)
 (def-facade-alias task-has-id? properties/task-has-id?)
 (def-facade-alias get-task-started properties/get-task-started)
+(def-facade-alias get-task-created properties/get-task-created)
 (def-facade-alias task-has-started-property? properties/task-has-started-property?)
 (def-facade-alias get-drawer-property properties/get-drawer-property)
 (def-facade-alias set-drawer-property properties/set-drawer-property)
