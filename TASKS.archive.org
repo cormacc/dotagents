@@ -5052,3 +5052,34 @@ It would be useful for sessions to fallback  after hitting session limits (anthr
 Take a look at https://github.com/luongnv89/ccl, which implements a solution for pi, claude and codex. Evaluate whether we can piggyback on this without breaking our model aliasing etc.
 There's also `agent-router`, which is session limit aware: https://github.com/nidhi-singh02/agent-router
 Also evaluate the subscription-failover handling in sova (https://github.com/Naomarik/sova), folded in from the cancelled task 8e199d7c. Verified [2026-10-20 Tue] at e67e868: herdr-orch has no failover mechanism today (no match in contract.md, subagents/config.edn, or core.clj).
+
+** DONE [#B] Prune unused Pi packages and remnants from ~/.pi/agent :security:
+CLOSED: [2026-11-08 Sun 11:00]
+:PROPERTIES:
+:CUSTOM_ID: 6c82bead-d124-4ff1-b9e9-939ed43454de
+:CREATED: [2026-11-04 Wed 00:43]
+:STARTED: [2026-11-08 Sun 10:46]
+:ARCHIVED: [2026-11-08 Sun 11:00]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:43]
+- State "STARTED" from "TODO" [2026-11-08 Sun 10:46]
+- State "DONE" from "STARTED" [2026-11-08 Sun 11:00]
+:END:
+~/.pi/agent/npm/package.json has 17 dependencies, but pi/settings.json =packages= loads only 7 npm packages and 1 git package. Pi does not delete a package directory when its settings entry is removed. On 2026-11-08, npm audit in ~/.pi/agent/npm reported 10 vulnerable packages (7 high, 2 moderate, 1 low): pi-mcp-adapter, @modelcontextprotocol/client, undici, fast-uri, zod, body-parser, nanoid, qs, smol-toml and esbuild. pi-mcp-adapter is a remnant: commit 1d0598e replaced it with native MCP and codemode, and its fix would be a major upgrade (2.33.0 to 7.0.1). Remove it; do not upgrade it.
+
+Decision (user, 2026-11-08): of the managed npm dependencies that are not in settings =packages=, keep only @gotgenes/pi-anthropic-auth. Remove the others: pi-mcp-adapter, @latentminds/pi-quotas, @ogulcancelik/pi-herdr, @ogulcancelik/pi-sketch, @ogulcancelik/pi-ssh-tools, @ryan_nookpi/pi-extension-diff-review, @tintinweb/pi-subagents, @xl0/pi-lovely-dev-tools, pi-ask-herdr and pi-intercom. Also remove other remnants and references.
+
+Other remnants found on 2026-11-08:
+- ~/.pi/agent/mcp-cache.json and ~/.pi/agent/mcp-onboarding.json: only pi-mcp-adapter names these files. Keep mcp.log and mcp-auth.json, because the Pi 1.5.0 dist names them.
+- Git clones in ~/.pi/agent/git/github.com that settings does not load: cormacc/lemonade-pi-plugin (superseded by lemonade-sdk/lemonade-pi-plugin), cormacc/pi-subagents, edxeth/pi-subagents and DietrichGebert/ponytail.
+- Repository references to pi-herdr: the tag-mapping example in skills/self-improvement/SKILL.md and the comment at the top of skills/herdr-orch/scripts/test/herdr_orch/herdr_test.clj. Change these only if the text is unclear without the package. Keep historical records (TASKS.archive.org, design/log/, the skills/herdr-orch/design.org history list) unchanged.
+
+Acceptance criteria:
+- Before you change anything, copy package.json, package-lock.json, the two MCP state files and the list of git clones to .tmp/, and record the npm audit summary.
+- Remove the npm packages with lifecycle scripts disabled. Confirm that the 7 npm packages in settings and @gotgenes/pi-anthropic-auth are still installed.
+- Compare the dependency list with settings =packages= in a script, not by eye. Before you delete a package, check that no project .pi/settings.json loads it.
+- Run npm audit again. Make a separate task for each advisory that remains in a package that you keep.
+- Start Pi and confirm that the extensions load and the four MCP servers connect.
+- Do not replace an active extension or enable automatic provider routing as part of this work. Live provider calls need a separate approved scope.

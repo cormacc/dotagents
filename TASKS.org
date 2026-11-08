@@ -16,13 +16,12 @@
   - [[#started-b-herdr-orch-llm-usage-limit-fallback][STARTED [#B] herdr-orch: LLM usage limit fallback]]
   - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
   - [[#re-evaluate-pi-context-with-a-week-of-session-data-after-2026-11-10][Re-evaluate pi-context with a week of session data (after 2026-11-10)]]
-  - [[#reconcile-pi-managed-npm-dependencies-after-advisory-research][Reconcile Pi managed npm dependencies after advisory research]]
 - [[#improvements][Improvements]]
   - [[#started-b-herdr-plugin-wrapper-for-herdr-orch][STARTED [#B] herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#started-b-traits-probe-backlog][STARTED [#B] traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
-  - [[#review-pi-development-pin-advisories-before-upgrade][Review Pi development pin advisories before upgrade]]
+  - [[#link-the-running-pi-install-as-the-development-dependency][Link the running Pi install as the development dependency]]
 - [[#fixes][Fixes]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
@@ -65,16 +64,6 @@ https://github.com/TencentCloud/TencentDB-Agent-Memory/blob/feat/server_team/INS
 - Created [2026-11-03 Tue 20:06]
 :END:
 pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) after a one-session trial on 2026-11-03. Trial session 2026-11-03T17-10-13 (gpt-6.1-sol, 311 requests, 3 compactions) had mean context per request 103k against 210k-216k for baseline sessions 2026-11-03T00-22 and 2026-11-03T08-28. To revisit: run the analyze:session tool from a checkout of github.com/ttttmr/pi-context on sessions from the following week, in several projects, and compare mean context per request, peak context, total tokens, compaction count, and re-reads after compaction. Baseline and trial reports and the comparison script are in .tmp/pi-context-trial/ and .tmp/pi-context-compare.clj (scratch; regenerate if gone). The context-mode alternative was rejected because its Pi adapter does not intercept read, bash, or codemode output. In orchestrator sessions (root sessions that spawn through oh), also check each compaction made while a round was uncaptured: the summary must keep the round UUID, the reason for dispatch, and the acceptance criteria. If summaries drop them, add a rule to the herdr-orch Lifecycle bullet (deferred on 2026-11-03 because pi-context's summary contract already asks for running processes and the next step). Undeclared packages context-mode 1.0.146, @ogulcancelik/pi-herdr 0.4.0 and pi-zellij-tools 0.1.4 were removed from ~/.pi/agent/npm on 2026-11-03.
-
-** TODO [#B] Reconcile Pi managed npm dependencies after advisory research :security:
-:PROPERTIES:
-:CUSTOM_ID: 6c82bead-d124-4ff1-b9e9-939ed43454de
-:CREATED: [2026-11-04 Wed 00:43]
-:END:
-:LOGBOOK:
-- Created [2026-11-04 Wed 00:43]
-:END:
-Research task:3d7ea3e7-fc22-49a1-824d-3c400671ee70 found a fresh pi-web-access@0.46.0 resolution with its existing MCP SDK 1.32.1 pin audits clean; the live managed lock still has eight vulnerable packages. Before touching ~/.pi/agent/npm, choose and document the reconciliation mechanism, snapshot the previous package and lock state, retain lifecycle-script suppression, verify other managed packages remain present, and run the runtime audit plus isolated loading checks. Pi 1.4.0 skips unchanged top-level versions during update; its same-source install path does not pass --ignore-scripts. Do not replace the extension or enable automatic provider routing as part of this maintenance. Live provider calls need a separate approved scope.
 
 ** TODO Evaluate hierarchical AGENTS.md discovery for Pi :pi:
 :PROPERTIES:
@@ -230,7 +219,7 @@ Acceptance criteria:
 - Require exactly one match; on no match or several matches, report each candidate location and change nothing.
 - Report the file location of the replacement, and add the tool to the pi-clojure README and to skills/clojure/SKILL.md.
 
-** TODO [#B] Review Pi development pin advisories before upgrade :pi:
+** TODO [#B] Link the running Pi install as the development dependency :pi:
 :PROPERTIES:
 :CUSTOM_ID: a08802a5-e751-43de-a2c7-34638dac66a0
 :CREATED: [2026-11-04 Wed 01:31]
@@ -238,12 +227,21 @@ Acceptance criteria:
 :LOGBOOK:
 - Created [2026-11-04 Wed 01:31]
 :END:
-The repository check passes, but npm audit reports three affected package entries: @earendil-works/pi-coding-agent, minimatch and undici (one high, two moderate). package.json pins the Pi development dependency to 1.4.0, whose installed package manifest pins minimatch to 10.2.6 and undici to 8.10.2. The audit proposes Pi 1.5.0 rather than a lock-only refresh. Audit evidence: .tmp/autonomous-backlog/root-npm-audit.json. This is separate from the installed pi-web-access dependency reconciliation task.
+The original advisories are resolved: commit b8e5e99 moved the =devDependencies= pin of @earendil-works/pi-coding-agent to 1.5.0, and on 2026-11-08 npm audit at the repository root reported 0 vulnerabilities. A fixed pin can still drift from the Pi that runs, which comes from nixpkgs (=pi-coding-agent= in the dotfiles agents.nix). Linux and Darwin follow separate nixpkgs inputs, so the two hosts can run different Pi versions.
+
+Decision (user, 2026-11-08): replace the npm pin with a link to the running install. Types and tests then use the exact Pi that runs. nixpkgs, not this repository's lock, then owns the advisories for Pi's own dependencies.
+
+Facts to use:
+- The package root of the running install is =$(dirname $(readlink -f $(which pi)))/../lib/node_modules/pi-monorepo=; its package.json name is @earendil-works/pi-coding-agent.
+- That directory's node_modules has @earendil-works/pi-ai, @earendil-works/pi-tui and typebox, which this repository declares as =peerDependencies=.
+- =npm ci= deletes node_modules, so a link must be made again after each install.
 
 Acceptance criteria:
-- Confirm advisory applicability and the supported runtime/test baseline before selecting a new pin.
-- Trial any approved version in an isolated fixture with lifecycle scripts disabled; run installed-runtime, adapter and extension checks against the intended version.
-- Update package and lockfile together only after the compatibility and version-policy decision. Do not use npm audit fix --force or change the live Pi installation as an audit shortcut.
+- Remove @earendil-works/pi-coding-agent from =devDependencies= and update package-lock.json in the same change.
+- Add a Babashka script that links pi-coding-agent, pi-ai, pi-tui and typebox from the running install into node_modules. It must fail with a clear message when =pi= is not on PATH or is not a nix store install.
+- Make scripts/check.sh run the link step, or fail when the links are missing or point to a different install than the =pi= on PATH.
+- Run =npm run check= with the links in place; confirm that the type checks and tests resolve Pi through the links.
+- Update the documentation that describes the development dependency.
 
 ** TODO Warn when native CLI and Pi logins use different subscriptions :herdr_orch:
 :PROPERTIES:
@@ -314,7 +312,7 @@ Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. De
 :CUSTOM_ID: 56d4713a-bb0c-4ba8-87e8-7b49023b36fa
 :CREATED: [2026-11-06 Fri 12:22]
 :STARTED: [2026-11-06 Fri 13:21]
-:HANDOFF: No active children. Base committed0be579d; numeric rename61ab7581 DONE and private login afc8a48f WAITING local visual acceptance, both implemented/reviewed. Root live credential key migrated to anthropic-1 under native lock, private backup retained (never stage/read). Private worker e11d21bc and fresh reviewer1401485b captured COMPLETE/closed APPROVED no issues; reports private-browser-report.md/private-browser-review.md. Root combined followup-root-check.clj all4exit0 complete summaries read:472tests4854assertions, Pi17/2/67/1, full extension incl native browser controls, Herdr34pass2skip. User remote: explicitly requested commit here after offline review and will pull/test new local session; DO NOT open remote browser. Next approve/proceed follow-up commit message per git-commit, then user local /reload, /oh-account add, /login anthropic-N check incognito Chrome/Chromium and primary SSO untouched. Task5 and parent stay open pending local follow-up; base real login/two-session/quota display already verified/user-confirmed. All feature changes currently uncommitted vs0be579d; preserve pi/settings.json, no push yet authorised. Feedbackf2365984 and earlier retro candidates remain. No provider-cause conclusion from earlier paused turn.
+:HANDOFF: No active children. Base committed0be579d; numeric rename61ab7581 DONE and private login afc8a48f WAITING local visual acceptance, both implemented/reviewed. Root live credential key migrated to anthropic-1 under native lock, private backup retained (never stage/read). Private worker e11d21bc and fresh reviewer1401485b captured COMPLETE/closed APPROVED no issues; reports private-browser-report.md/private-browser-review.md. Root combined followup-root-check.clj all4exit0 complete summaries read:472tests4854assertions, Pi17/2/67/1, full extension incl native browser controls, Herdr34pass2skip. User remote: explicitly requested commit here after offline review and will pull/test new local session; DO NOT open remote browser. Next approve/proceed follow-up commit message per git-commit, then user local /reload, /oh account add, /login anthropic-N check incognito Chrome/Chromium and primary SSO untouched. Task5 and parent stay open pending local follow-up; base real login/two-session/quota display already verified/user-confirmed. All feature changes currently uncommitted vs0be579d; preserve pi/settings.json, no push yet authorised. Feedbackf2365984 and earlier retro candidates remain. No provider-cause conclusion from earlier paused turn.
 :END:
 :LOGBOOK:
 - Created [2026-11-06 Fri 12:22]
@@ -404,6 +402,44 @@ The terminal plugin and the herdr-app widget were checked live on macOS only (20
 - Created [2026-11-05 Thu 20:50]
 :END:
 Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the existing native validation task a8cb3a32 owns that gate. Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
+
+** TODO Route explicit model requests across subscription accounts :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 547639a6-dcbf-4e8d-ad37-959449d782d3
+:CREATED: [2026-11-07 Sat 23:37]
+:END:
+:LOGBOOK:
+- Created [2026-11-07 Sat 23:37]
+:END:
+A subagent spawned with an explicit string alias or base canonical ID (for example `oh task start reviewer --model fable`) runs on the base `anthropic` account, even when that account has no quota and a named account (`anthropic-1`) has quota. The user states that this is not the design intent: an explicit model request must keep its model but still choose among the authenticated accounts that serve it.
+
+Observed on 2026-11-07: reviewer task 53272a31-4a9d-4ec4-a0df-cf6b9663a10c got `model-canonical: anthropic/claude-fable-5-1` and `model-route: null` while `oh usage --format status` reported `anthropic 0%s 100%w | anthropic-1 19%s 20%w`. A `--print-prompt` preview with `--model heavy` routed to `anthropic-1/claude-fable-5-1`; one with `--model anthropic-1/claude-fable-5-1` was accepted unrouted. The user recovered the child manually.
+
+Cause: skills/herdr-orch/scripts/docs/contract.md section 'Routing' states that a string alias, a canonical ID or an unknown name is never routed and makes no usage call, and that an explicit string alias or canonical ID bypasses routing. The shared route operation already supports same-model account selection for a direct model (its `model` input normalises a named-account model to the base canonical model; `current` prefers same-model sibling accounts). Origin: plan task 85ec22af-7010-4778-8b97-ea95217d5ec8 'Route model-account pairs through primary and subagent entry points' in [[plan:2026-multiple-subscriptions.org]].
+
+Acceptance criteria:
+- A Pi-kind spawn with a string alias or base canonical model selects an eligible account for that same model, using the same evidence and eligibility rules as vector-alias routing, and never changes the model.
+- An explicit concrete account ID (for example `anthropic-1/claude-fable-5-1`) stays unrouted.
+- When no account for the model is eligible, the spawn is refused before any mutation, with the same diagnostic shape as an exhausted vector alias.
+- The ledger, `task start` envelope and `--print-prompt` result carry `:model-route` for these launches; `HERDR_ORCH_MODEL` carries the concrete account/model ID.
+- Native non-Pi kinds keep their single-account behaviour.
+- The contract section 'Routing' and the SKILL.md routing guidance describe the new rule; regression tests cover base-account exhaustion with a named account available.
+
+** TODO Refresh pi-web-access transitive dependencies for advisories :security:
+:PROPERTIES:
+:CUSTOM_ID: ee9a5389-51b9-4909-bb6e-5dd7a50fe9eb
+:CREATED: [2026-11-08 Sun 10:58]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 10:58]
+:END:
+On 2026-11-08, after task:6c82bead-d124-4ff1-b9e9-939ed43454de removed the unused packages, npm audit in ~/.pi/agent/npm reported 5 vulnerable packages (4 high, 1 moderate). pi-web-access@0.47.0 brings in all of them: undici 8.11.2 directly, and body-parser, qs, fast-uri and zod through @modelcontextprotocol/sdk@1.32.1. npm audit reports a non-major fix for each. Evidence: .tmp/pi-prune-20261108/audit-after.json.
+
+Acceptance criteria:
+- Copy package.json and package-lock.json to .tmp/ before the change.
+- Use the flags that Pi uses for managed installs (--legacy-peer-deps --no-audit --no-fund) and add --ignore-scripts. Without --legacy-peer-deps, npm installs Pi itself and its peers into the managed directory.
+- Do not use npm audit fix: Pi skips audit advice because audit fix runs without --legacy-peer-deps.
+- Confirm that the 7 npm packages in settings are still installed, then run npm audit again and start Pi.
 
 * Upstream issues
 
