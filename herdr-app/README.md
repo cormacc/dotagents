@@ -18,8 +18,9 @@ Named Pi Anthropic subscriptions appear as separate `anthropic-<N>` rows (`anthr
 The `orch-spaces` block replaces the bundled Spaces and Agents lists. It is the bundled `spaces` mod with each space's agents under it ([provenance](mods/orch-spaces/UPSTREAM.md)).
 
 - Tree :: an agent is shown under the terminal that started it while that terminal is live, else under its space. A sub-agent that has its own pane is shown once, under its parent.
+- Tabs :: a tab that holds no agent is a row at the root of its space, beside the agents, in tab order. Its name is the tab name (its number when nobody named it). A tab that holds only a sub-agent shows through that sub-agent, under its parent.
 - Name :: the `oh.label` that `oh` gives an agent it starts (`planner-1-heavy`, nested `planner-1/scout-2-fable`), else the terminal's name, else the program's name.
-- Click :: an agent with a pane gets focus; one without a pane opens in a peek.
+- Click :: an agent with a pane gets focus; one without a pane opens in a peek; a tab row selects that tab.
 - Order :: `agent.next` and `agent.prev` follow the list as shown.
 - Rail :: the narrow sidebar shows spaces only, with the control that widens it again.
 

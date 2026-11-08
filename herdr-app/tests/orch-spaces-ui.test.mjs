@@ -6,7 +6,7 @@ import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-const space = (id, name, tab) => ({ id, name, machine: null, active: id === "s1", tabs: [{ id: tab }], status: "idle" });
+const space = (id, name, tabs) => ({ id, name, machine: null, active: id === "s1", tabs, status: "idle" });
 const term = (address, extra = {}) => ({ address, state: "live", parent: null, labels: {}, status: "idle", ...extra });
 const agent = (address, sp, extra = {}) => ({ address, space: sp, pane: `p-${address}`, status: "idle", focused: false, ...extra });
 
@@ -31,7 +31,7 @@ async function app({ agents, terminals, sidebar = 268 }) {
     "gpui-kit": { View: class {}, div: element, svg: element, image: element },
     "gpui-base": { h_flex: element, v_flex: element },
     herdr: {
-      spaces: () => [space("s1", "alpha", "tb1"), space("s2", "beta", "tb2")],
+      spaces: () => [space("s1", "alpha", [{ id: "tb1", name: "1" }, { id: "tb3", name: "notes" }]), space("s2", "beta", [{ id: "tb2", name: "1" }])],
       machines: () => [], panes: () => [], agents: () => agents, terminals: () => terminals,
       focused: () => ({ agent: null }), setAgentOrder: (list) => { orders.push(list); return null; },
       run: (name, args) => { runs.push([name, args]); }, openOverlay() {}, exec: async () => ({ code: 128, stdout: "", stderr: "not a git repository" }),
@@ -70,7 +70,7 @@ const plain = (x) => JSON.parse(JSON.stringify(x));
 const words = (els) => els.flat().filter((o) => o[0] === "child" && typeof o[1] === "string").map((o) => o[1]);
 
 const world = {
-  agents: [agent("t1", "s1"), agent("t2", "s1"), agent("t5", "s2", { status: "working" })],
+  agents: [agent("t1", "s1", { tab: "tb1" }), agent("t2", "s1", { tab: "tb1" }), agent("t5", "s2", { tab: "tb2", status: "working" })],
   terminals: [term("t1", { program: { name: "Pi" } }),
               term("t2", { parent: "t1", labels: { "oh.label": "reviewer-9-astra" } }),
               term("t3", { parent: "t1", labels: { "oh.label": "planner-1-heavy" } }),
@@ -81,8 +81,8 @@ const world = {
 test("each space is followed by its agent tree, named by the oh label", async () => {
   const a = await app(world);
   const w = words(a.render());
-  assert.deepEqual(w.filter((x) => ["alpha", "beta", "Pi", "reviewer-9-astra", "planner-1-heavy", "planner-1/scout-2-fable"].includes(x)),
-    ["alpha", "Pi", "reviewer-9-astra", "planner-1-heavy", "planner-1/scout-2-fable", "beta", "Pi"]);
+  assert.deepEqual(w.filter((x) => ["alpha", "beta", "Pi", "reviewer-9-astra", "planner-1-heavy", "planner-1/scout-2-fable", "notes"].includes(x)),
+    ["alpha", "Pi", "reviewer-9-astra", "planner-1-heavy", "planner-1/scout-2-fable", "notes", "beta", "Pi"]);
   assert.deepEqual(plain(a.orders.at(-1)), ["t1", "t2", "t3", "t4", "t5"], "agent.next follows the tree");
   assert.equal(w.filter((x) => x === "reviewer-9-astra").length, 1, "a sub-agent with its own pane is listed once");
 });
@@ -102,4 +102,12 @@ test("the rail shows spaces only, with the control that widens it", async () => 
   assert.equal(a.orders.length, 0, "no agent order from a list that shows none");
   a.click(els, "collapse");
   assert.equal(a.runs.at(-1)[0], "layout.resize");
+});
+
+test("a tab without an agent is a row named by the tab; a click selects it", async () => {
+  const a = await app(world);
+  const els = a.render();
+  a.click(els, "tab-tb3");
+  assert.deepEqual(plain(a.runs), [["tab.select", { id: "tb3" }]]);
+  assert.equal(a.byId(els, "tab-tb1"), undefined, "a tab that holds an agent has no row of its own");
 });

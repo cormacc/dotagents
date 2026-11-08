@@ -3,12 +3,13 @@
 // when more than one is known. After a space's name, the repo its first terminal
 // is in now, only where unusual: branch, ahead/behind. Click to switch,
 // right-click for its menu, drag to reorder. Under each space, its agents and
-// their live sub-agents as a tree (tree.js), named by their `oh` label.
+// their live sub-agents as a tree (tree.js), named by their `oh` label, and
+// beside them its tabs that hold no agent, named by the tab.
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { spaces, machines, panes, agents, terminals, focused, setAgentOrder, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout } from "herdr";
-import { agentTree, agentName, agentStatus } from "./tree.js";
+import { spaceTree, agentName, agentStatus } from "./tree.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -358,10 +359,37 @@ export default class Spaces extends View {
       );
   }
 
-  // A space's agent rows (render() builds `this.tree`). Tree lines start under the
+  // Tree marks in front of a row.
+  marks(lines, t) {
+    return lines.map((l) => div().self_start().mt(-4).w(9).h(17).mr(4).flex_none()
+      .when(l !== " ", (el) => el.border_l(1.5).border_color(t.input))
+      .when(l === "└" || l === "├", (el) => el.border_b(1.5).rounded_bl(6)));
+  }
+
+  // A tab without an agent: its name; a click shows it.
+  tabRow(w, tree, tab, lines, t) {
+    const on = w.active && tab.id === this.focusedTab;
+    return h_flex()
+      .id(`tab-${tab.id}`)
+      .pl(tree ? 39 : 17)
+      .pr(8)
+      .rounded(8)
+      .h(26)
+      .flex_none()
+      .items_center()
+      .text_size(12.5)
+      .when(on, (el) => el.bg(t.raised))
+      .hover((s) => s.bg(t.hover))
+      .on_click(() => run("tab.select", { id: tab.id }))
+      .children(this.marks(lines, t))
+      .child(div().flex_1().truncate().text_color(on ? t.foreground : t.muted).child(tab.name));
+  }
+
+  // A space's rows (render() builds `this.tree`). Tree lines start under the
   // avatar's middle, or the branch mark's for a worktree space.
   agentRows({ w, tree }, t) {
-    return (this.tree.get(w.id) ?? []).map(({ terminal: k, pane, lines }) => {
+    return (this.tree.get(w.id) ?? []).map(({ terminal: k, tab, pane, lines }) => {
+      if (tab) return this.tabRow(w, tree, tab, lines, t);
       this.order.push(k.address);
       const on = k.address === this.current;
       const pic = icon(k.program, 14, t.foreground);
@@ -378,9 +406,7 @@ export default class Spaces extends View {
         .hover((s) => s.bg(t.hover))
         .tooltip(agentName(k))
         .on_click(() => (pane ? run("pane.focus", { pane }) : run("terminal.peek", { terminal: k.address })))
-        .children(lines.map((l) => div().self_start().mt(-4).w(9).h(17).mr(4).flex_none()
-          .when(l !== " ", (el) => el.border_l(1.5).border_color(t.input))
-          .when(l === "└" || l === "├", (el) => el.border_b(1.5).rounded_bl(6))))
+        .children(this.marks(lines, t))
         .when(Boolean(pic), (el) => el.child(div().mr(8).child(pic)))
         .child(div().flex_1().truncate().text_color(on ? t.foreground : t.muted).child(agentName(k)))
         .child(this.status(t, agentStatus(k, this.listed)));
@@ -425,7 +451,8 @@ export default class Spaces extends View {
     }
     if (changed) setShared("space.colors", kept);
     const list = agents();
-    this.tree = agentTree(list, terminals());
+    this.tree = spaceTree(list, terminals(), sp);
+    this.focusedTab = focused()?.tab;
     this.listed = new Map(list.map((a) => [a.address, a.status]));
     this.current = focused()?.agent ?? list.find((a) => a.focused)?.address;
     this.order = [];
