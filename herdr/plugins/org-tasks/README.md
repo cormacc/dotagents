@@ -1,6 +1,6 @@
 # Terminal org-tasks plugin
 
-`cormacc.org-tasks` embeds the existing `ot` TUI as a compact, passive bottom split in each tab, and opens the task browser in a popup for selection. It owns context, pane lifecycle and sizing, not Org parsing or task writes. The adapter source is [src/org_tasks_host.clj](src/org_tasks_host.clj); the shared input authority is [../../skills/org-tasks/scripts/docs/contract.md#Embedded TUI context contract](../../skills/org-tasks/scripts/docs/contract.md#embedded-tui-context-contract).
+`cormacc.org-tasks` embeds the existing `ot` TUI as a compact, passive bottom split in each tab, and opens the task browser in a popup for selection. It owns context, pane lifecycle and sizing, not Org parsing or task writes. The adapter source is [src/org_tasks_host.clj](src/org_tasks_host.clj); the shared input authority is [../../../skills/org-tasks/scripts/docs/contract.md#Embedded TUI context contract](../../../skills/org-tasks/scripts/docs/contract.md#embedded-tui-context-contract).
 
 ## Requirements and installation
 
@@ -9,7 +9,7 @@ Use Herdr 0.9.5 or later on Linux or macOS, with Babashka, Bash and `ps` on the 
 1. Link this plugin separately from the quota plugin, from the repository root:
 
    ```sh
-   herdr plugin link "$PWD/herdr-plugin/org-tasks"
+   herdr plugin link "$PWD/herdr/plugins/org-tasks"
    ```
 
 2. The owner's Home Manager module supplies `~/.local/share/herdr-plugins/org-tasks` as a guarded out-of-store leaf. Foreign occupants are rejected before activation writes. After writing the leaf, activation runs `herdr plugin link` on it when `herdr plugin list` does not show `cormacc.org-tasks`. A failure warns and does not abort activation. Without that module, run `herdr plugin link "$HOME/.local/share/herdr-plugins/org-tasks"` yourself. Registration persists across server restarts; no live server restart is needed to link a plugin. This does not replace the Herdr directory, plugin registry or quota configuration.
@@ -18,7 +18,7 @@ Use Herdr 0.9.5 or later on Linux or macOS, with Babashka, Bash and `ps` on the 
 
 ## Use
 
-The compact pane shows in every tab by default. The tracked [../../herdr/config.toml](../../herdr/config.toml) binds the actions in `[[keys.command]]` stanzas with `type = "plugin_action"`; run `herdr server reload-config` after an edit. Herdr's default bindings are unchanged.
+The compact pane shows in every tab by default. The tracked [../../config.toml](../../config.toml) binds the actions in `[[keys.command]]` stanzas with `type = "plugin_action"`; run `herdr server reload-config` after an edit. Herdr's default bindings are unchanged.
 
 | Key | Action | Effect |
 | --- | --- | --- |

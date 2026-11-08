@@ -386,7 +386,7 @@
 (defn -main [& [operation]]
   (try
     (let [root (or (System/getenv "HERDR_PLUGIN_ROOT") (throw (ex-info "HERDR_PLUGIN_ROOT is required" {})))
-          ot (str (fs/path root ".." ".." "skills" "org-tasks" "scripts" "ot"))
+          ot (str (fs/path root ".." ".." ".." "skills" "org-tasks" "scripts" "ot"))
           config #(config! (System/getenv "HERDR_PLUGIN_CONFIG_DIR"))]
       (case operation
         "serve" (supervise! ot)

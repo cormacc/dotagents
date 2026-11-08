@@ -52,7 +52,7 @@ npx skills add cormacc/dotagents --skill org-tasks --agent claude-code
 
 ### Terminal Herdr task interface
 
-[herdr-plugin/org-tasks/README.md](herdr-plugin/org-tasks/README.md) documents the tab-local shared `ot` TUI, explicit plugin setup, configuration and safety checks. It is installed separately from the [quota plugin](herdr-plugin/README.md). The terminal adapter follows the active eligible local agent; it does not change Pi settings or the desktop layout.
+[herdr/plugins/org-tasks/README.md](herdr/plugins/org-tasks/README.md) documents the tab-local shared `ot` TUI, explicit plugin setup, configuration and safety checks. It is installed separately from the [quota plugin](herdr/plugins/herdr-orch/README.md). The terminal adapter follows the active eligible local agent; it does not change Pi settings or the desktop layout.
 
 ### Pi package
 
@@ -89,7 +89,7 @@ The consuming `agents.nix` links:
 
 - `skills/` → `~/.agents/skills` (including `skills/herdr-orch/subagents/` packaged persona defaults)
 - `skills/org-tasks/scripts/ot` → `~/.local/bin/ot`
-- `herdr-plugin/org-tasks/` → `~/.local/share/herdr-plugins/org-tasks` (guarded leaf; explicit Herdr registration remains a separate user step)
+- `herdr/plugins/org-tasks/` → `~/.local/share/herdr-plugins/org-tasks` (guarded leaf; explicit Herdr registration remains a separate user step)
 - `home/AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, `pi/settings.json`, and `pi/mcp.json` → `~/.pi/agent/...`. The repo-root `AGENTS.md` is deliberately *not* projected: it is this repository's project file, picked up by ordinary cwd discovery when working here.
 - `home/CLAUDE.md` → `~/.claude/CLAUDE.md` (imports `home/AGENTS.md`, so claude and pi share one set of portable rules)
 

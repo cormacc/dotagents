@@ -1,27 +1,27 @@
 # herdr-orch Herdr plugin
 
-Herdr plugin `cormacc.herdr-orch`. It is an adapter over the `herdr-orch` skill in the same checkout: every entrypoint runs `../skills/herdr-orch/scripts/oh`, resolved from `HERDR_PLUGIN_ROOT`. The plugin contains no orchestration logic.
+Herdr plugin `cormacc.herdr-orch`. It is an adapter over the `herdr-orch` skill in the same checkout: every entrypoint runs `../../../skills/herdr-orch/scripts/oh`, resolved from `HERDR_PLUGIN_ROOT`. The plugin contains no orchestration logic.
 
-The separate [org-tasks plugin](org-tasks/README.md) embeds the shared task TUI in a tab-local bottom split. Link its nested directory separately; the quota plugin and its configuration stay independent.
+The separate [org-tasks plugin](../org-tasks/README.md) embeds the shared task TUI in a tab-local bottom split. It has its own registration and configuration.
 
 ## Prerequisites
 
 - Herdr 0.9.1 or later, on Linux or macOS.
 - Babashka (`bb`) and Bash on the `PATH` of the Herdr server.
-- For quota data: valid Anthropic or OpenAI Codex subscription credentials in Pi's file store (`PI_CODING_AGENT_DIR` or `~/.pi/agent`). The owned Babashka collector needs no npm package. It does not refresh, prompt or fall back to native credentials. Explicit native reporting and unsupported OS stores are described in [../skills/herdr-orch/scripts/docs/contract.md#Usage](../skills/herdr-orch/scripts/docs/contract.md#usage).
+- For quota data: valid Anthropic or OpenAI Codex subscription credentials in Pi's file store (`PI_CODING_AGENT_DIR` or `~/.pi/agent`). The owned Babashka collector needs no npm package. It does not refresh, prompt or fall back to native credentials. Explicit native reporting and unsupported OS stores are described in [../../../skills/herdr-orch/scripts/docs/contract.md#Usage](../../../skills/herdr-orch/scripts/docs/contract.md#usage).
 
 ## Install
 
 From a local checkout:
 
 ```sh
-herdr plugin link "$PWD/herdr-plugin"
+herdr plugin link "$PWD/herdr/plugins/herdr-orch"
 ```
 
 From GitHub:
 
 ```sh
-herdr plugin install cormacc/dotagents/herdr-plugin
+herdr plugin install cormacc/dotagents/herdr/plugins/herdr-orch
 ```
 
 ## Quota pane

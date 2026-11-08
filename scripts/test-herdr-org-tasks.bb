@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 (require '[babashka.classpath :as cp])
-(cp/add-classpath "herdr-plugin/org-tasks/src")
+(cp/add-classpath "herdr/plugins/org-tasks/src")
 (require '[org-tasks-host :as host]
          '[org-tasks.tui.embedding :as embed]
          '[babashka.fs :as fs]
@@ -300,7 +300,7 @@
   (temporary
    (fn [dir]
      (host/atomic! (fs/path dir "host.json") (assoc (snapshot [a]) :focused_tab_id tab))
-     (let [argv ["bb" "-cp" (str host-source-root ":herdr-plugin/org-tasks/test")
+     (let [argv ["bb" "-cp" (str host-source-root ":herdr/plugins/org-tasks/test")
                  "-m" "org-tasks-host-fixture" dir]
            processes [(p/process argv {:out :string :err :string})
                       (p/process argv {:out :string :err :string})]]

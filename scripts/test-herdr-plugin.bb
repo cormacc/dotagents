@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; Smoke test for herdr-plugin/: runs the quota pane and stanza entrypoints the way
+;; Smoke test for herdr/plugins/herdr-orch/: runs the quota pane and stanza entrypoints the way
 ;; Herdr does (plugin directory as cwd, HERDR_PLUGIN_ROOT set) against the offline
 ;; owned HTTP fixture, in a disposable HOME.
 
@@ -10,7 +10,7 @@
          '[clojure.test :refer [deftest is testing run-tests]])
 
 (def root (str/trim (:out (process/shell {:out :string} "git" "rev-parse" "--show-toplevel"))))
-(def plugin (str (fs/path root "herdr-plugin")))
+(def plugin (str (fs/path root "herdr" "plugins" "herdr-orch")))
 (def oh (str (fs/path root "skills" "herdr-orch" "scripts" "oh")))
 (defn with-env
   "Call f with isolated credentials and a test-only, file-backed HTTP transport."
