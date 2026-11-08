@@ -69,7 +69,8 @@
   descendant progress `:token`, which the task row carries when nothing has
   started; the next row's token is `...` when more pending work is hidden.
 
-  `:memory` is false when the project has no TASKS.org.
+  `:memory` is false when the project has no TASKS.org. `:root` is the
+  resolved project root, for watching.
   `:selection` is `selected`, `none` or `stale`. Without a selection,
   `:counts` lists each status with a non-zero count in canonical order.
   `:files` lists the task files the view reads, for change watching."
@@ -85,6 +86,7 @@
         counts (frequencies (map :status (:tasks state)))]
     {:title (str/join " :: " (remove nil? ["Tasks" folder plan-name]))
      :folder folder
+     :root (some-> (:task-memory-path state) fs/parent str)
      :memory (boolean (some-> (:task-memory-path state) fs/exists?))
      :plan plan-name
      :selectedId (:selected-id state)

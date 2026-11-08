@@ -352,6 +352,7 @@ The compact selected-task view model. The TUI compact view renders from the same
 {
   "title": "Tasks :: ~/project :: 2026-11-05-plan.org",
   "folder": "~/project",
+  "root": "/abs/project",
   "memory": true,
   "plan": "2026-11-05-plan.org",
   "selectedId": "…",
@@ -367,6 +368,7 @@ The compact selected-task view model. The TUI compact view renders from the same
 | --- | --- |
 | `title` | `Tasks :: <folder>`, plus ` :: <plan>` when the selected task or an ancestor links a plan. The TUI sets it as the terminal title. |
 | `folder` / `plan` | Home-shortened project folder; plan file name, or null. |
+| `root` | Absolute resolved project root, which can be above the working directory. Watch it for changes to `files`. |
 | `memory` | False when the resolved project has no `TASKS.org`; renderers should say so rather than show `0 tasks`. |
 | `selection` | `selected`, `none`, or `stale` (a non-null `selectedId` that resolves to no task). |
 | `total` / `counts` | Every task in the graph; each status with a non-zero count, in canonical status order. |
