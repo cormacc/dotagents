@@ -109,7 +109,7 @@ Use one or more target tags. The scheme is a **facet plus a name** as two adjace
 - `project_convention`
 - `tier_unknown`
 
-Org tags accept only `[A-Za-z0-9_@#%]`, so the name component must be underscored: map a hyphenated skill/extension directory name by replacing `-` with `_` (`herdr-orch` -> `herdr_orch`, `org-tasks` -> `org_tasks`, `pi-herdr` -> `herdr`). A hyphenated tag does not round-trip -- it is written verbatim onto the heading but read back as no tag at all -- so `ot` rejects it; pass only underscored tokens to `ot create --tag` / `ot tag add`.
+Org tags accept only `[A-Za-z0-9_@#%]`, so the name component must be underscored: map a hyphenated skill/extension directory name by replacing `-` with `_` (`herdr-orch` -> `herdr_orch`, `org-tasks` -> `org_tasks`). A hyphenated tag does not round-trip -- it is written verbatim onto the heading but read back as no tag at all -- so `ot` rejects it; pass only underscored tokens to `ot create --tag` / `ot tag add`.
 
 Body shape:
 

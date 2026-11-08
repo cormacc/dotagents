@@ -5,8 +5,8 @@
             [herdr-orch.herdr :as herdr]))
 
 ;; The mechanical surface intentionally includes pane rename, which the oh launcher
-;; uses even though pi-herdr did not expose it. Keep this set explicit so a missing
-;; wrapper is a test failure rather than an accidental capability regression.
+;; uses. Keep this set explicit so a missing wrapper is a test failure rather than
+;; an accidental capability regression.
 (def expected-operations
   #{["workspace" "list"] ["workspace" "create"] ["workspace" "focus"]
     ["tab" "list"] ["tab" "create"] ["tab" "focus"]
