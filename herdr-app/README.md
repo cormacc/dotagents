@@ -6,7 +6,7 @@ This layout combines the bundled workspace status with one sidebar list of space
 
 ### Without Home Manager
 
-The mods need the dotagents skills at `~/.agents/skills`: the quota mod runs `~/.agents/skills/herdr-orch/scripts/oh` and the task widget runs `~/.agents/skills/org-tasks/scripts/ot`. Link the checkout's `skills/` directory there, or set the `ot` layout prop described in [#Task widget](#task-widget).
+The mods need the dotagents skills at `~/.agents/skills`: the quota mod runs `~/.agents/skills/herdr-orch/scripts/oh` and the task widget runs `~/.agents/skills/org-tasks/scripts/ot`. Link the checkout's `skills/` directory there.
 
 1. From the repository root, link the mods and the layout into the app's folder (`~/.config/herdr-app`, or `$HERDR_APP_HOME`). Move any existing files at these paths aside first.
 
@@ -44,7 +44,7 @@ The `orch-spaces` block replaces the bundled Spaces and Agents lists. It is the 
 
 ## Task widget
 
-The `org-tasks` block below the tab area shows the selected task of the focused agent's project: the task, its top-level parent, every STARTED subtask and the next pending one. With no selection it shows the status counts and the key hints. The rows, their order, emphasis and counts come from `ot compact --format json` ([contract](../skills/org-tasks/scripts/docs/contract.md#ot-compact---width-n)); the mod only picks the project and draws the rows in theme colours.
+The `org-tasks` block below the tab area shows the selected task of the focused terminal's project: the task, its top-level parent, every STARTED subtask and the next pending one. With no selection it shows the status counts and the key hints. The rows, their order, emphasis and counts come from `ot compact --format json` ([contract](../skills/org-tasks/scripts/docs/contract.md#ot-compact---width-n)); the mod only picks the project and draws the rows in theme colours.
 
 - Project :: the folder of the focused terminal, an agent's or a shell's, so a tab without an agent still shows its tasks. A mod pane, a space on another machine, a project without `TASKS.org` or a failed `ot` run shows a line that says so, never another project's tasks. A pane's folder is its foreground process's, so a new folder must hold for two one-second polls before the widget switches.
 - Refresh :: on changes to the task files that `ot compact` lists, through `watchFolder` on the project root that `ot` resolved, and every 30 seconds as a fallback. After a failed `ot` run, any change under that root reloads. A first run that fails has no root to watch and waits for the fallback.

@@ -6,7 +6,7 @@
 
 Use Herdr 0.9.5 or later on Linux or macOS, with Babashka, Bash and `ps` on the server's PATH. Keep the full dotagents checkout: the adapter runs its co-located `skills/org-tasks/scripts/ot`. No new dependencies are required.
 
-1. Link this plugin separately from the quota plugin, from the repository root:
+1. Link this plugin separately from the [herdr-orch plugin](../herdr-orch/README.md), from the repository root:
 
    ```sh
    herdr plugin link "$PWD/herdr/plugins/org-tasks"
@@ -22,7 +22,7 @@ The compact pane shows in every tab by default. The tracked [../../config.toml](
 
 | Key | Action | Effect |
 | --- | --- | --- |
-| `prefix+t` | `select` | Opens the task browser in a popup for the project that the compact pane shows. `s` selects without closing, so you can keep browsing; `Esc` closes it, and Herdr returns focus to the earlier pane. |
+| `prefix+t` | `select` | Opens the task browser in a popup for the focused local project. `s` selects without closing, so you can keep browsing; `Esc` closes it, and Herdr returns focus to the earlier pane. |
 | `prefix+ctrl+o` | `toggle` | Turns the compact pane off or on in every tab. The setting is global and persists across server restarts. |
 
 ```sh

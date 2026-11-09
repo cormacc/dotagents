@@ -1,16 +1,10 @@
 # `ot` machine-output contract
 
-This document pins the JSON / EDN contract every machine-readable `ot` command emits when called with `--format json` or `--format edn`. It is the shared surface between `ot` and any consumer (the pi extension, other coding harnesses, CI scripts, future Emacs companions). Bump rules are in [../../../../design/log/2026-05-18-tasks-extension-ot-cli.org#Decisions](../../../../design/log/2026-05-18-tasks-extension-ot-cli.org#decisions).
+This document defines the JSON / EDN contract for `ot --format json|edn` and its consumers. Compatibility policy belongs to [../../SKILL.md#Compatibility policy](../../SKILL.md#compatibility-policy).
 
 ## Schema version
 
-```
-"schema": "org-tasks/v1"
-```
-
-- Additive fields in `result` are non-breaking and remain `v1`.
-- Renames, removals, or shape changes bump to `v2`.
-- Consumers must accept and ignore unknown additive fields.
+`schema` is `org-tasks/v1`. Consumers must accept and ignore unknown additive fields.
 
 ## Envelope
 

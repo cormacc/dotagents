@@ -52,7 +52,7 @@ npx skills add cormacc/dotagents --skill org-tasks --agent claude-code
 
 ### Terminal Herdr task interface
 
-[herdr/plugins/org-tasks/README.md](herdr/plugins/org-tasks/README.md) documents the tab-local shared `ot` TUI, explicit plugin setup, configuration and safety checks. It is installed separately from the [quota plugin](herdr/plugins/herdr-orch/README.md). The terminal adapter follows the active eligible local agent; it does not change Pi settings or the desktop layout.
+[herdr/plugins/org-tasks/README.md](herdr/plugins/org-tasks/README.md) documents the tab-local shared `ot` TUI, explicit plugin setup, configuration and safety checks. It is installed separately from the [herdr-orch plugin](herdr/plugins/herdr-orch/README.md), which provides quota display and the sidebar agent tree. The task adapter follows the focused local agent or shell pane.
 
 ### Pi package
 
