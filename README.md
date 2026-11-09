@@ -9,18 +9,28 @@ The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org
 ```text
 dotagents/
 ├── AGENTS.md                 # this repo's own project rules (maintenance specifics)
+├── CLAUDE.md                 # imports AGENTS.md for Claude Code in this repo
 ├── home/                     # portable agent rules, projected to each harness
 │   ├── AGENTS.md             # -> ~/.pi/agent/AGENTS.md
 │   └── CLAUDE.md             # -> ~/.claude/CLAUDE.md (one-line import of the above)
 ├── README.md
+├── LICENSE
 ├── RETROLOG.org              # retro evidence behind the rules in AGENTS.md
 ├── TASKS*.org                # repository task memory
 ├── package.json              # agent-org-memory manifest + root checks
 ├── package-lock.json         # package and root validation dependencies
-├── bb.edn / deps.edn         # ot Babashka/tools.deps policy
+├── bb.edn / deps.edn         # ot Babashka/tools.deps policy and bb tasks
+├── install-git-filter.sh     # registers the pi-settings clean filter
+├── scripts/                  # repository checks and test runners
 ├── skills/                   # generic cross-agent skills; ot lives under org-tasks/scripts
-│   └── herdr-orch/subagents/ # packaged Herdr persona defaults
-├── prompts/init.md           # tracked prompt template
+│   └── herdr-orch/
+│       ├── subagents/        # packaged Herdr persona defaults
+│       └── traits/           # packaged trait prompts
+├── subagents/                # home persona overrides and config.edn
+├── traits/                   # home trait layer: extra traits and trait gates
+├── prompts/                  # pi prompt templates
+├── herdr/                    # Herdr config.toml and plugins/{org-tasks,herdr-orch}
+├── herdr-app/                # Herdr desktop app settings, mods and layouts
 ├── emacs/                    # native org-mode protocol companion
 ├── hermes/org-tasks/         # native Desktop renderer + authenticated backend
 ├── design/log/               # durable change-records
@@ -28,12 +38,14 @@ dotagents/
 └── pi/
     ├── settings.json         # owner-local editable-route pi settings
     ├── mcp.json              # native pi MCP server configuration
+    ├── models.json           # pi provider and model overrides
     ├── skills/               # pi-only chromium and ext-dev skills
-    ├── extensions/           # active pi extensions
-    │   ├── tasks, jira, emacsclient
-    │   ├── chromium, dataspex, pi-clojure, lsp
-    │   ├── ext-dev/, herdr-agent-state.ts, question.ts, systemprompt.ts
-    │   └── lib/              # shared code, not an extension entry point
+    └── extensions/           # active pi extensions
+        ├── tasks, jira, emacsclient, herdr-orch, traits
+        ├── chromium, dataspex, pi-clojure, lsp
+        ├── ext-dev/, herdr-agent-state.ts, question.ts, systemprompt.ts
+        ├── test/             # tests for the single-file extensions
+        └── lib/              # shared code, not an extension entry point
 ```
 
 ## Installation routes
@@ -56,11 +68,11 @@ npx skills add cormacc/dotagents --skill org-tasks --agent claude-code
 
 ### Pi package
 
-The root `package.json` exposes four Pi extensions, four skills, and the Hermes adapter:
+The `pi` manifest in the root `package.json` declares four Pi extensions and four skills, and its `files` allowlist also ships the Hermes adapter:
 
-- `pi/extensions/{tasks,jira,emacsclient,herdr-orch}`
-- `skills/{org-tasks,org-plan,org-jira,herdr-orch}`
-- `hermes/org-tasks/{desktop,plugin}`
+- `pi/extensions/{tasks,jira,emacsclient,herdr-orch}` (Pi extensions)
+- `skills/{org-tasks,org-plan,org-jira,herdr-orch}` (Pi skills)
+- `hermes/org-tasks/{desktop,plugin}` (shipped files only; Pi does not load them)
 
 Subscription reporting uses an owned Babashka collector for Anthropic and OpenAI Codex, with no npm collector dependency. It reads the selected harness's credentials and leaves refresh to that harness. The `herdr-orch` extension runs the `oh` launcher of the bundled skill when `~/.agents/skills/herdr-orch` does not exist. The generic skill route uses the same collector without Pi or a separate setup step. See [skills/herdr-orch/scripts/docs/contract.md#Usage](skills/herdr-orch/scripts/docs/contract.md#usage).
 
@@ -87,25 +99,30 @@ git -C ~/dotfiles submodule update --init --recursive
 
 The consuming `agents.nix` links:
 
-- `skills/` → `~/.agents/skills` (including `skills/herdr-orch/subagents/` packaged persona defaults)
+- `skills/` → `~/.agents/skills` (including `skills/herdr-orch/subagents/` packaged persona defaults) and `~/.claude/skills`
+- `subagents/` → `~/.agents/subagents`
+- `traits/` → `~/.agents/traits`
 - `skills/org-tasks/scripts/ot` → `~/.local/bin/ot`
-- `herdr/plugins/{org-tasks,herdr-orch}/` → `~/.local/share/herdr-plugins/{org-tasks,herdr-orch}` (guarded leaves; activation registers each with `herdr plugin link`, and re-links a registration whose root is stale)
-- `home/AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, `pi/settings.json`, and `pi/mcp.json` → `~/.pi/agent/...`. The repo-root `AGENTS.md` is deliberately *not* projected: it is this repository's project file, picked up by ordinary cwd discovery when working here.
+- `home/AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, `pi/settings.json`, `pi/mcp.json`, and `pi/models.json` → `~/.pi/agent/...`. The repo-root `AGENTS.md` is deliberately *not* projected: it is this repository's project file, picked up by ordinary cwd discovery when working here.
 - `home/CLAUDE.md` → `~/.claude/CLAUDE.md` (imports `home/AGENTS.md`, so claude and pi share one set of portable rules)
+- `herdr/config.toml` → `~/.config/herdr/config.toml` (the file only; the directory also holds Herdr's sockets and session state)
+- `herdr/plugins/{org-tasks,herdr-orch}/` → `~/.local/share/herdr-plugins/{org-tasks,herdr-orch}` (guarded leaves)
+- `herdr-app/settings.json`, `herdr-app/mods/{herdr-orch,system,org-tasks,orch-spaces}`, and `herdr-app/layouts/herdr-orch.json` → `~/.config/herdr-app/...` (personal leaves only; bundled mods and layouts stay app-owned)
+- `herdr-app/keys.darwin.json` → `~/.config/herdr-app/keys.json` (macOS only)
 
 Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > home (`~/.agents/subagents/`) > packaged (`skills/herdr-orch/subagents/`). Home Manager manages `~/.agents/subagents/` (out-of-store, from this repo's `subagents/`) so the harness permission overrides ship to every host; it holds home overrides only, never the packaged persona defaults. The parallel `config.edn` chain replaces complete model-ID rows in the same precedence order and never uses a model or weight alias to select kind. The packaged weights are `heavy`, `middle`, `light`, and `feather`; their per-kind values are enumerated once, in [skills/herdr-orch/scripts/docs/contract.md#Model resolution](skills/herdr-orch/scripts/docs/contract.md#model-resolution).
 
-Activation fails early when the submodule is uninitialized. It installs local npm dependencies for chromium, pi-clojure, and dataspex, with lifecycle scripts disabled, when their manifests change. It does not install root validation dependencies; run `npm ci --ignore-scripts` explicitly for development. Chromium and pi-clojure carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
+Activation fails early when the submodule is uninitialised. It registers each Herdr plugin leaf with `herdr plugin link`, and re-links a registration whose root is stale. It runs `./install-git-filter.sh` (see below). It installs local npm dependencies for chromium, pi-clojure, and dataspex, with lifecycle scripts disabled, when their manifests change. It does not install root validation dependencies; run `npm ci --ignore-scripts` explicitly for development. Chromium and pi-clojure carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
 
 This editable route intentionally preserves owner-local settings ownership: tracked `pi/settings.json` is live-linked and may be edited in the submodule. A clone-local `pi-settings` clean filter removes configured volatile fields (`lastChangelogVersion`, `deviceId`) before commit; it requires `jq` on PATH and is declared `required = true`. `defaultProvider` and `defaultModel` are tracked: pi saves them only when you press Ctrl+S on a model in `/model`. Under the dotfiles Home Manager wiring, activation runs the installer on every switch, so a changed field list reaches every clone; on any other clone run `./install-git-filter.sh` from the checkout root (idempotent; it exits early when the filter is current). A git command that rewrites the working tree (`git stash`, `git reset --hard`, `git checkout -- pi/settings.json`) writes back the committed copy without the stripped fields. The package route, by contrast, ships no settings.
 
 Changes in out-of-store links take effect after pi `/reload`; no Home Manager switch is required unless the wiring itself changes.
 
-The third-party `git:github.com/DietrichGebert/ponytail` package is no longer installed. The `simple` trait (`skills/herdr-orch/traits/simple/`), the `prune` trait (`traits/prune/`), and the `simplify` skill replace it. `simple` records its ponytail source in `adapted-from:` metadata, and `simplify` records its ponytail sources in its Provenance section. To compare against upstream again, run `pi install git:github.com/DietrichGebert/ponytail`, and `pi remove` the same source afterwards.
+The `simple` trait (`skills/herdr-orch/traits/simple/`), the `prune` trait (repository-root `traits/prune/`), and the `simplify` skill provide lean-code review adapted from the third-party `git:github.com/DietrichGebert/ponytail` package, which this setup does not install. `simple` records its ponytail source in `adapted-from:` metadata, and `simplify` records its ponytail sources in its Provenance section. To compare against upstream, run `pi install git:github.com/DietrichGebert/ponytail`, and `pi remove` the same source afterwards.
 
 ## Runtime requirements
 
-- **Node.js >= 22.19.0**, matching the installed pi-compatible runtime floor.
+- **Node.js >= 22.19.0**, the highest `engines` floor of the locked dependencies in `package-lock.json`.
 - **pi-coding-agent** for pi extensions and package management.
 - **Babashka (`bb`)** for `ot`; copying the scripts does not provide the runtime.
 - **Emacs/emacsclient** for Emacs-backed tools and task edit actions. Edit/open actions probe the server and can start `emacs --daemon`; direct eval/read/write tools still report connection/startup failures.
@@ -120,9 +137,17 @@ Install declared validation dependencies and run the single root check:
 npm run check
 ```
 
-The command uses the tracked locks (`npm ci`), runs every active extension test runner, the Hermes org-tasks adapter tests, the Babashka task suite, subagent-definition frontmatter validation, skill metadata/inventory and GitLab routing checks, active relative-link and command/tool collision checks, and clean skill-creator validation/packaging.
+The command (`scripts/check.sh`) does these steps:
 
-It requires Node/npm, `bb`, Python 3 with venv support, Emacs, pi on `PATH`, and network access for clean npm/Python dependency installs.
+1. Installs the root, chromium and pi-clojure dependencies from the tracked locks with `npm ci --ignore-scripts`.
+2. Runs `bb test` in an isolated temporary root. This runs the org-tasks and herdr-orch Clojure suites, the herdr-orch Pi adapter suites inside the installed Pi runtime, and the repository and skill script tests (`scripts/test-*.bb` and the `test-*.bb` scripts of individual skills).
+3. Runs each `pi/extensions/*/test.sh`.
+4. Checks that section references resolve (`scripts/check-section-links.bb`).
+5. Validates skill frontmatter with skill-creator in a clean Python venv (`scripts/validate-skills.bb`), and packages one skill as a smoke test.
+
+The command does not run the Hermes org-tasks adapter tests. Run them as [hermes/org-tasks/README.org#Validation](hermes/org-tasks/README.org#validation) describes.
+
+`npm run check` requires Node/npm, `bb`, Python 3 with venv support, Emacs, pi on `PATH`, and network access for clean npm/Python dependency installs.
 
 For task-memory health after repository changes:
 
@@ -133,5 +158,3 @@ ot doctor --format json
 ## Releases
 
 Keep the manifest version and annotated git tag aligned. Git/package consumers choose their own refs; editable submodule consumers update and commit the parent repository's submodule pointer. Do not push tags or submodule updates implicitly.
-
-[pi]: https://github.com/earendil-works/pi-mono
