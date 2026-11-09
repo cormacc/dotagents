@@ -3,12 +3,14 @@
 // chooses the project, watches its task files and presents the rows.
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { exec, hc, focused, panes, spaces, theme, keys, props, settings, run, openOverlay, nextCommand, watchFolder, notify } from "herdr";
+import { exec, hc, home, focused, panes, spaces, theme, keys, props, settings, run, openOverlay, nextCommand, watchFolder, notify } from "herdr";
 import { project, settle, statusColor, countParts, hints, touches, parse, fitHeight } from "./state.js";
 
-// Layout props may name the `ot` executable (default: `ot` on PATH) and the
-// block that holds this widget (default: `org-tasks`), which it sizes to its rows.
-const ot = () => props()?.ot ?? "ot";
+// Layout props may name the `ot` executable and the block that holds this
+// widget (default: `org-tasks`), which it sizes to its rows. The default `ot` is
+// the home-installed skill script by absolute path, like the quota mod's `oh`:
+// a desktop-started app's PATH can omit the user's shell PATH additions.
+const ot = () => props()?.ot ?? home() + "/.agents/skills/org-tasks/scripts/ot";
 const block = () => props()?.block ?? "org-tasks";
 // Vertical padding around the rows, px at zoom 1.
 const PAD_Y = 6;

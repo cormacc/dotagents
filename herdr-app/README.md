@@ -34,7 +34,7 @@ The `org-tasks` block below the tab area shows the selected task of the focused 
 - Toggle :: `layout.toggle:org-tasks` hides or shows the block. The app saves the state with the layout.
 - Size :: the widget resizes its block to the rows it shows with `layout.resize`. Layout props can name another block id: `{"mod": "org-tasks", "props": {"block": "my-tasks"}}`.
 
-`ot` must be on the app's `PATH`; the parent configuration installs `~/.local/bin/ot`. Layout props can name another executable: `{"mod": "org-tasks", "props": {"ot": "/path/to/ot"}}`.
+The mod runs `~/.agents/skills/org-tasks/scripts/ot` by absolute path, not `ot` on `PATH`: an app started from the desktop session can have a `PATH` without the shell's additions, such as `~/.local/bin`. Layout props can name another executable: `{"mod": "org-tasks", "props": {"ot": "/path/to/ot"}}`.
 
 On macOS, [keys.darwin.json](keys.darwin.json) is linked as `keys.json` and binds `cmd-shift-t` to `org-tasks.select` and `cmd-shift-o` to `layout.toggle:org-tasks`, matching `prefix t` and `prefix O` in the terminal Herdr plugin. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation. Linux keeps its own unmanaged `keys.json` until a Linux variant is checked; add those two bindings there, with the `ctrl-shift-` forms if `cmd` is not available. The app's linked mod folder does not hot-reload edits to its source; restart the app, or remove and re-create the link, to load a change.
 

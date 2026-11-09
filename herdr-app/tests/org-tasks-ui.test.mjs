@@ -63,7 +63,7 @@ async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindi
     herdr: {
       exec: (cmd, args, opts) => { execCalls.push([cmd, args, opts]); const p = Promise.resolve(runOt(opts.cwd)); pendingExec.push(p); return p; },
       hc: async args => { hcCalls.push(args); return { code: 0, stdout: JSON.stringify({ address: "t42" }), stderr: "" }; },
-      focused: () => focus(), panes: () => panes(), spaces: () => spaces,
+      home: () => "/home/fixture", focused: () => focus(), panes: () => panes(), spaces: () => spaces,
       theme: () => t, keys: () => bindings, props: () => ({}), settings: () => ({ zoom }),
       run: (name, args) => { runs.push([name, args]); },
       openOverlay: o => { overlays.push(o); return "o1"; }, notify: n => notes.push(n),
@@ -118,7 +118,7 @@ test("selected task renders every STARTED child, then the next one", async () =>
     assert.equal(colourOf(ops, "Parent [11111111]"), "#777777");
     assert.equal(colourOf(ops, "Gamma [44444444]"), "#777777");
     assert.equal(colourOf(ops, "STARTED"), "#0055ff");
-    assert.equal(JSON.stringify(a.execCalls.map(c => [c[0], c[1], c[2].cwd])), JSON.stringify([["ot", ["compact", "--format", "json"], dir]]));
+    assert.equal(JSON.stringify(a.execCalls.map(c => [c[0], c[1], c[2].cwd])), JSON.stringify([["/home/fixture/.agents/skills/org-tasks/scripts/ot", ["compact", "--format", "json"], dir]]));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -176,7 +176,7 @@ test("select opens ot tui in a dialog around a detached terminal", async () => {
                           panes: () => [{ pane: "p1", status: "idle", cwd: dir }] });
     await a.settle();
     await a.view.select();
-    assert.equal(JSON.stringify(a.hcCalls), JSON.stringify([["run", "--json", "--bg", "--no-parent", "--rm", "--cwd", dir, "--", "ot", "tui"]]));
+    assert.equal(JSON.stringify(a.hcCalls), JSON.stringify([["run", "--json", "--bg", "--no-parent", "--rm", "--cwd", dir, "--", "/home/fixture/.agents/skills/org-tasks/scripts/ot", "tui"]]));
     assert.equal(a.overlays.length, 1);
     assert.equal(a.overlays[0].kind, "dialog");
     assert.equal(JSON.stringify(a.overlays[0].layout), JSON.stringify({ type: "block", content: { terminal: "t42" } }));
