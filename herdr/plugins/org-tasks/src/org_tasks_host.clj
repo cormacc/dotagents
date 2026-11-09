@@ -110,51 +110,87 @@
                      (if focused-id (= focused-id (:pane_id %)) (:focused %))) %)
           (:panes snapshot))))
 
-(defn source
-  "Inspect this tab's focused pane; retain it while the task pane is focused."
-  [snapshot tab task-id previous]
-  (let [panes (filter #(= tab (:tab_id %)) (:panes snapshot))
-        focused (tab-focused-pane snapshot tab)
-        candidate (if (= task-id (:pane_id focused))
-                    (some #(when (= (:pane_id previous) (:pane_id %)) %) panes)
-                    focused)]
-    (when (and candidate (not= task-id (:pane_id candidate)))
-      (merge candidate (some #(when (= (:pane_id candidate) (:pane_id %)) %) (:agents snapshot))))))
+(defn plugin-roots!
+  "Registered Herdr plugin roots. A plugin pane starts in its root, so a
+  non-agent pane there is plugin UI, not a project."
+  []
+  (into (set (keep #(some-> (System/getenv %) fs/canonicalize str) ["HERDR_PLUGIN_ROOT"]))
+        (try (keep :plugin_root (:plugins (call! "plugin" "list" "--json")))
+             (catch Exception _ nil))))
 
-(defn source-context [candidate info]
+(defn plugin-pane?
+  ;; known-limit: a shell whose folder is exactly a plugin root also matches;
+  ;; revisit if Herdr reports plugin pane ownership in its snapshot.
+  [plugin-roots pane]
+  (and pane (not (:agent pane)) (contains? plugin-roots (:foreground_cwd pane))))
+
+(defn source
+  "Inspect this tab's focused pane. While the task pane or another plugin's
+  pane is focused, retain the previous source."
+  ([snapshot tab task-id previous] (source snapshot tab task-id previous #{}))
+  ([snapshot tab task-id previous plugin-roots]
+   (let [panes (filter #(= tab (:tab_id %)) (:panes snapshot))
+         focused (tab-focused-pane snapshot tab)
+         candidate (if (or (= task-id (:pane_id focused)) (plugin-pane? plugin-roots focused))
+                     (some #(when (and (= (:pane_id previous) (:pane_id %))
+                                       (not (plugin-pane? plugin-roots %))) %) panes)
+                     focused)]
+     (when (and candidate (not= task-id (:pane_id candidate)))
+       (merge candidate (some #(when (= (:pane_id candidate) (:pane_id %)) %) (:agents snapshot)))))))
+
+(defn source-context
+  "Any local pane is a source: an agent pane or a shell gives its foreground
+  folder, so a tab without an agent still shows its project."
+  [candidate info]
   (let [processes (:foreground_processes info)
         remote? (some #(#{"ssh" "mosh" "mosh-client"} (:name %)) processes)
-        ;; Managed launch readiness excludes agents started by the user. Verify
-        ;; the foreground executable instead of trusting a retained agent label.
-        ;; known-limit: wrappers with no matching name/argv0 are unavailable;
-        ;; revisit with host-authoritative process identity if one is rejected.
-        agent-process? (some (fn [process]
-                               (some #(and (string? %) (= (:agent candidate) (str (fs/file-name %))))
-                                     [(:name process) (:argv0 process)])) processes)
         directory (:foreground_cwd candidate)]
     (cond
       remote? {:availability "remote" :directory nil}
-      (and candidate agent-process? (string? directory)
-           (fs/absolute? directory) (fs/directory? directory))
+      (and candidate (string? directory) (fs/absolute? directory) (fs/directory? directory))
       {:availability "local" :directory directory}
       :else {:availability "unavailable" :directory nil})))
 
-(defn context [old instance candidate info hint-lines time]
-  (let [value (assoc (source-context candidate info) :sourcePane (:pane_id candidate)
-                     :sourceTerminal (:terminal_id candidate))
-        changed? (not= value (select-keys old (keys value)))]
+(defn context-value [candidate info]
+  (assoc (source-context candidate info) :sourcePane (:pane_id candidate)
+         :sourceTerminal (:terminal_id candidate)))
+
+(defn publish [old instance value hint-lines time]
+  (let [changed? (not= value (select-keys old (keys value)))]
     (cond-> (merge value {:schema "org-tasks-embed/v1" :instanceId instance
                           :contextId (if changed? (uuid) (or (:contextId old) (uuid)))
                           :mode "compact" :updatedAt time})
       (seq hint-lines) (assoc :hints (vec hint-lines)))))
 
+(defn context [old instance candidate info hint-lines time]
+  (publish old instance (context-value candidate info) hint-lines time))
+
+;; About one second at the supervisor's 500 ms poll.
+(def hold-samples 3)
+
+(defn settle
+  "The context value to publish, and the next pending state. A source pane's
+  folder moves while its foreground command runs elsewhere, such as an agent's
+  tool call or a shell `cd`, so a new folder in the same pane publishes only
+  after `hold-samples` samples. A source change publishes at once."
+  [old value pending]
+  (if-not (and (= (:sourcePane old) (:sourcePane value))
+               (= "local" (:availability old) (:availability value))
+               (not= (:directory old) (:directory value)))
+    [value nil]
+    (let [seen (if (= (:directory pending) (:directory value)) (inc (:seen pending)) 1)]
+      (if (>= seen hold-samples)
+        [value nil]
+        [(select-keys old (keys value)) {:directory (:directory value) :seen seen}]))))
+
 (defn sample!
   "Sample the tab's live source and publish it with a heartbeat."
-  [snapshot record previous last-context hint-lines]
-  (let [candidate (source snapshot (:tab record) (:pane record) previous)
-        info (when candidate (process! (:pane_id candidate)))]
-    {:candidate candidate
-     :context (context last-context (:instance record) candidate info hint-lines (now))}))
+  [snapshot record previous last-context pending plugin-roots hint-lines]
+  (let [candidate (source snapshot (:tab record) (:pane record) previous plugin-roots)
+        info (when candidate (process! (:pane_id candidate)))
+        [value pending] (settle last-context (context-value candidate info) pending)]
+    {:candidate candidate :pending pending
+     :context (publish last-context (:instance record) value hint-lines (now))}))
 
 ;; ── Ownership ─────────────────────────────────────────────────────
 
@@ -306,7 +342,8 @@
   [root tab snapshot]
   (let [record (tab-record root tab snapshot)
         last-context (when record (read-json (fs/path root (:instance record) "context.json")))
-        candidate (source snapshot tab (:pane record) (pane snapshot (:sourcePane last-context)))
+        candidate (source snapshot tab (:pane record) (pane snapshot (:sourcePane last-context))
+                          (plugin-roots!))
         result (source-context candidate (when candidate (process! (:pane_id candidate))))]
     (when (= "local" (:availability result)) (:directory result))))
 
@@ -323,7 +360,7 @@
 (defn select-pane! [ot]
   (let [dir (System/getenv "OT_SELECT_DIR")]
     (if (str/blank? dir)
-      (do (println "No local agent project in this tab.")
+      (do (println "No local project in this tab.")
           (println "Press Enter to close.")
           (read-line))
       @(p/process [ot "tui"] {:dir dir :in :inherit :out :inherit :err :inherit}))))
@@ -350,7 +387,8 @@
         file (fs/path dir "context.json")
         owner-file (fs/path dir "owner.json")
         index (fs/path (fs/parent dir) (str tab ".json"))
-        hint-lines (hints (herdr-config-text))]
+        hint-lines (hints (herdr-config-text))
+        roots (plugin-roots!)]
     (when-not (and dir instance tab id (= tab (:tab_id current)) (fs/directory? dir)
                    (= instance (str (fs/file-name dir))))
       (throw (ex-info "Invalid task supervisor instance" {})))
@@ -363,7 +401,7 @@
                            {:in :inherit :out :inherit :err :inherit :shutdown p/destroy-tree})]
       (try
         (binding [*request-timeout-ms* 200]
-          (loop [previous nil last-context nil]
+          (loop [previous nil last-context nil pending nil]
             (when (nil? (deref child 0 nil))
               (let [started (now)
                     snapshot (snapshot!)
@@ -372,11 +410,12 @@
                                (= instance (:instance (read-json index))))
                   (throw (ex-info "Task pane moved or disappeared" {})))
                 (sync-label! current)
-                (let [{:keys [candidate context]} (sample! snapshot owner previous last-context hint-lines)]
+                (let [{:keys [candidate context pending]}
+                      (sample! snapshot owner previous last-context pending roots hint-lines)]
                   (atomic! file context)
                   (atomic! owner-file (assoc owner :updatedAt (now)))
                   (Thread/sleep (max 1 (- 500 (- (now) started))))
-                  (recur candidate context))))))
+                  (recur candidate context pending))))))
         (finally
           ;; known-limit: retain private instance metadata for ownership diagnosis;
           ;; add bounded pruning if repeated reopening causes material state growth.

@@ -33,7 +33,8 @@
   (is (nil? (host/source (snapshot [(assoc a :tab_id "another-tab") task-pane]) tab "tasks" nil)))
   (is (= "unavailable" (:availability (host/source-context
                                      (host/source (snapshot [(assoc a :focused false) (assoc task-pane :pane_id "shell" :focused true)]) tab "tasks" a)
-                                     {:foreground_processes [{:name "bash"}]}))))
+                                     {:foreground_processes [{:name "bash"}]})))
+      "a shell with no known folder")
   (is (= "ssh-pane" (:pane_id (host/source (snapshot [(assoc task-pane :pane_id "ssh-pane" :focused true)]) tab "tasks" nil))))
   (is (= "remote" (:availability (host/source-context
                                 (host/source (snapshot [(assoc task-pane :pane_id "ssh-pane" :focused true)]) tab "tasks" nil)
@@ -67,8 +68,45 @@
     (is (= (:foreground_cwd b) (:directory switched)))
     (is (= (:foreground_cwd a) (:directory back)))
     (is (= "remote" (:availability (host/context first "instance" a {:foreground_processes [{:name "ssh"}]} nil 500))))
-    (doseq [[candidate info] [[nil nil] [a {:foreground_processes [{:name "bash"}]}] [a {}] [(assoc a :foreground_cwd "relative") local-info]]]
+    (doseq [[candidate info] [[nil nil] [(assoc a :foreground_cwd "relative") local-info]
+                              [(assoc a :foreground_cwd (str (fs/path dir "missing"))) local-info]]]
       (is (= "unavailable" (:availability (host/context first "instance" candidate info nil 500)))))))))
+
+(deftest a-shell-pane-is-a-source
+  (let [shell {:pane_id "shell" :terminal_id "term-shell" :tab_id tab :focused true
+               :foreground_cwd (str (fs/cwd))}
+        candidate (host/source (snapshot [(assoc a :focused false) shell task-pane]) tab "tasks" a)]
+    (is (= "shell" (:pane_id candidate)) "focus on a shell moves the source")
+    (is (= {:availability "local" :directory (str (fs/cwd))}
+           (host/source-context candidate {:foreground_processes [{:name "bash"}]})))
+    (is (= "remote" (:availability (host/source-context candidate {:foreground_processes [{:name "ssh"}]}))))))
+
+(deftest a-plugin-pane-retains-the-previous-source
+  (let [root "/plugins/quota"
+        quota {:pane_id "quota" :terminal_id "term-quota" :tab_id tab :focused true :foreground_cwd root}
+        panes [(assoc a :focused false) quota task-pane]]
+    (is (= "agent-a" (:pane_id (host/source (snapshot panes) tab "tasks" a #{root}))))
+    (is (nil? (host/source (snapshot panes) tab "tasks" nil #{root})) "no previous source: none")
+    (is (= "quota" (:pane_id (host/source (snapshot panes) tab "tasks" a #{})))
+        "control: an unregistered root is an ordinary pane")
+    (is (= "agent-a" (:pane_id (host/source (snapshot [(assoc a :foreground_cwd root)]) tab "tasks" nil #{root})))
+        "an agent pane is never plugin UI")))
+
+(deftest a-folder-change-in-the-same-pane-holds-before-it-publishes
+  (let [at (fn [pane dir] {:availability "local" :directory dir :sourcePane pane :sourceTerminal (str "t-" pane)})
+        old (at "p1" "/a")
+        step (fn [[_ pending] value] (host/settle old value pending))
+        samples (reductions step [old nil] (repeat host/hold-samples (at "p1" "/b")))]
+    (is (= ["/a" "/a" "/a" "/b"] (map (comp :directory first) samples))
+        "published only after hold-samples samples")
+    (is (= (at "p1" "/a") (first (host/settle old (at "p1" "/a") {:directory "/tmp" :seen 1})))
+        "a return to the published folder cancels the pending one")
+    (is (nil? (second (host/settle old (at "p1" "/a") {:directory "/tmp" :seen 1}))))
+    (is (= [(at "p1" "/a") {:directory "/tmp" :seen 1}] (host/settle old (at "p1" "/tmp") {:directory "/b" :seen 2}))
+        "a different folder restarts the count")
+    (is (= (at "p2" "/b") (first (host/settle old (at "p2" "/b") nil))) "a focus change publishes at once")
+    (is (= "remote" (:availability (first (host/settle old {:availability "remote" :directory nil :sourcePane "p1"} nil)))))
+    (is (= (at "p1" "/a") (first (host/settle nil (at "p1" "/a") nil))) "the first source publishes at once")))
 
 (deftest real-producer-is-accepted-by-consumer-and-expires
   (temporary
@@ -292,9 +330,16 @@
               (swap! state assoc :layouts [{:tab_id tab :focused_pane_id (str "tasks-" tab)}])
               (host/select!)
               (is (= (str "OT_SELECT_DIR=" project) (select-env)))))
-          (testing "a shell pane gives no project"
-            (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-a"}])
-            (with-redefs [host/process! (constantly {:foreground_processes [{:name "bash"}]})]
+          (testing "a shell pane gives its own folder"
+            (let [other (str (fs/create-dir (fs/path dir "other")))]
+              (swap! state update :panes conj {:pane_id "shell" :terminal_id "term-shell" :tab_id tab
+                                               :foreground_cwd other})
+              (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "shell"}])
+              (with-redefs [host/process! (constantly {:foreground_processes [{:name "bash"}]})]
+                (host/select!))
+              (is (= (str "OT_SELECT_DIR=" other) (select-env)))))
+          (testing "a remote pane gives no project"
+            (with-redefs [host/process! (constantly {:foreground_processes [{:name "ssh"}]})]
               (host/select!))
             (is (= "OT_SELECT_DIR=" (select-env))))))))))
 
