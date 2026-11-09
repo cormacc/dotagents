@@ -1,8 +1,8 @@
 # dotagents
 
-Agent skills, Pi extensions, Hermes Desktop plugins, prompts, custom subagents, and packaging metadata used by multiple coding harnesses. The repository is both an editable source tree and the source of the narrower **`@cormacc/agent-org-memory`** package.
+Agent skills, Pi extensions, prompts, custom subagents, and packaging metadata used by multiple coding harnesses. The repository is both an editable source tree and the source of the narrower **`@cormacc/agent-org-memory`** package.
 
-The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org-plan`, `org-jira`), its Pi implementations (`tasks`, `jira`, `emacsclient`), its native Hermes Desktop adapter, and Herdr orchestration (the `herdr-orch` skill and Pi extension). Everything else remains available through the source/submodule routes described below, not through that package slice.
+The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org-plan`, `org-jira`), its Pi implementations (`tasks`, `jira`, `emacsclient`), and Herdr orchestration (the `herdr-orch` skill and Pi extension). Everything else remains available through the source/submodule routes described below, not through that package slice.
 
 ## Repository layout
 
@@ -32,7 +32,6 @@ dotagents/
 ├── herdr/                    # Herdr config.toml and plugins/{org-tasks,herdr-orch}
 ├── herdr-app/                # Herdr desktop app settings, mods and layouts
 ├── emacs/                    # native org-mode protocol companion
-├── hermes/org-tasks/         # native Desktop renderer + authenticated backend
 ├── design/log/               # durable change-records
 ├── dirge/                    # Dirge config and prompt set
 └── pi/
@@ -68,11 +67,10 @@ npx skills add cormacc/dotagents --skill org-tasks --agent claude-code
 
 ### Pi package
 
-The `pi` manifest in the root `package.json` declares four Pi extensions and four skills, and its `files` allowlist also ships the Hermes adapter:
+The `pi` manifest in the root `package.json` declares four Pi extensions and four skills:
 
-- `pi/extensions/{tasks,jira,emacsclient,herdr-orch}` (Pi extensions)
-- `skills/{org-tasks,org-plan,org-jira,herdr-orch}` (Pi skills)
-- `hermes/org-tasks/{desktop,plugin}` (shipped files only; Pi does not load them)
+- `pi/extensions/{tasks,jira,emacsclient,herdr-orch}`
+- `skills/{org-tasks,org-plan,org-jira,herdr-orch}`
 
 Subscription reporting uses an owned Babashka collector for Anthropic and OpenAI Codex, with no npm collector dependency. It reads the selected harness's credentials and leaves refresh to that harness. The `herdr-orch` extension runs the `oh` launcher of the bundled skill when `~/.agents/skills/herdr-orch` does not exist. The generic skill route uses the same collector without Pi or a separate setup step. See [skills/herdr-orch/scripts/docs/contract.md#Usage](skills/herdr-orch/scripts/docs/contract.md#usage).
 
@@ -83,7 +81,7 @@ pi install git:github.com/cormacc/dotagents
 pi install /absolute/path/to/dotagents
 ```
 
-The npm name is reserved but not currently published. The package route does **not** activate the Hermes plugin, configure task roots, install custom agents, prompts, `pi/skills`, `pi/settings.json`, `pi/mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users must install `ot` separately (for example through `bbin`) and install/link the two Hermes artifacts as documented in [`hermes/org-tasks/README.org`](hermes/org-tasks/README.org).
+The npm name is reserved but not currently published. The package route does **not** configure task roots, install custom agents, prompts, `pi/skills`, `pi/settings.json`, `pi/mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users must install `ot` separately, for example through `bbin`.
 
 The npm `files` allowlist includes the selected source directories, with their co-located tests. Pi loads only manifest-declared entry points.
 
@@ -144,8 +142,6 @@ The command (`scripts/check.sh`) does these steps:
 3. Runs each `pi/extensions/*/test.sh`.
 4. Checks that section references resolve (`scripts/check-section-links.bb`).
 5. Validates skill frontmatter with skill-creator in a clean Python venv (`scripts/validate-skills.bb`), and packages one skill as a smoke test.
-
-The command does not run the Hermes org-tasks adapter tests. Run them as [hermes/org-tasks/README.org#Validation](hermes/org-tasks/README.org#validation) describes.
 
 `npm run check` requires Node/npm, `bb`, Python 3 with venv support, Emacs, pi on `PATH`, and network access for clean npm/Python dependency installs.
 

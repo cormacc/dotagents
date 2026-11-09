@@ -2,8 +2,8 @@
   "name": "@cormacc/agent-org-memory",
   "version": "0.1.0",
   "type": "module",
-  "description": "Org-memory task protocol skills, Herdr orchestration, and native Pi and Hermes Desktop adapters.",
-  "keywords": ["pi-package", "hermes-agent", "org-mode", "task-management", "agent-skills"],
+  "description": "Org-memory task protocol skills, Herdr orchestration, and native Pi adapters.",
+  "keywords": ["pi-package", "org-mode", "task-management", "agent-skills"],
   "license": "MIT",
   "author": "Cormac Cannon",
   "repository": {
@@ -53,14 +53,6 @@
     "skills/org-plan",
     "skills/org-jira",
     "skills/herdr-orch",
-    "hermes/org-tasks/desktop",
-    "hermes/org-tasks/plugin/plugin.yaml",
-    "hermes/org-tasks/plugin/__init__.py",
-    "hermes/org-tasks/plugin/dashboard/backend.py",
-    "hermes/org-tasks/plugin/dashboard/plugin_api.py",
-    "hermes/org-tasks/plugin/dashboard/manifest.json",
-    "hermes/org-tasks/plugin/dashboard/index.js",
-    "hermes/org-tasks/README.org",
     "README.md"
   ]
 }

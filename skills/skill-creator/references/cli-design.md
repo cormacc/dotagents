@@ -13,7 +13,7 @@ Read this guide when creating or reviewing a CLI that a skill uses. Read the [ve
 
 ## Local examples
 
-- `ot list --format json` returns compact rows and a count. `ot list --full --format json` supplies the full graph to the pi tasks and Hermes consumers. Its hints retain explicit protocol-path selectors.
+- `ot list --format json` returns compact rows and a count. `ot list --full --format json` supplies the full graph to the pi tasks consumer. Its hints retain explicit protocol-path selectors.
 - `oh task list` returns compact recorded entries and status counts without live probes. `--full` opts into detailed evidence. `oh task status <full-task-uuid>` remains a detail lookup.
 - Bare `oh` returns a bounded read-only dashboard, not an agent launch. Pending delegation may suggest collection; a final result does not.
 
