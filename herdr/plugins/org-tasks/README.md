@@ -23,7 +23,7 @@ The compact pane shows in every tab by default. The tracked [../../config.toml](
 | Key | Action | Effect |
 | --- | --- | --- |
 | `prefix+t` | `select` | Opens the task browser in a popup for the project that the compact pane shows. `s` selects without closing, so you can keep browsing; `Esc` closes it, and Herdr returns focus to the earlier pane. |
-| `prefix+shift+o` | `toggle` | Turns the compact pane off or on in every tab. The setting is global and persists across server restarts. |
+| `prefix+ctrl+o` | `toggle` | Turns the compact pane off or on in every tab. The setting is global and persists across server restarts. |
 
 ```sh
 herdr plugin action invoke cormacc.org-tasks.select

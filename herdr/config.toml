@@ -15,6 +15,12 @@ tab_bar_right = [
   { type = "command", command = "~/.agents/skills/herdr-orch/scripts/oh usage --format status", interval_seconds = 60, timeout_seconds = 75 },
 ]
 
+# Agents sidebar rows. `$tree` is the herdr-orch agent-tree mark that the
+# cormacc.herdr-orch plugin reports (plugins/herdr-orch/README.md). An open
+# client does not apply this stanza on `herdr server reload-config`.
+[ui.sidebar.agents]
+rows = [["state_icon", "machine", "workspace", "tab"], ["$tree", "agent"]]
+
 [ui.sound]
 enabled = false
 
@@ -29,6 +35,9 @@ type = "shell"
 command = "\"$HERDR_BIN_PATH\" plugin pane open --plugin cormacc.herdr-orch --entrypoint quota"
 description = "subscription quota"
 
+# Display toggles use `prefix+ctrl+<letter>`: `t` for the sidebar agent tree and
+# `o` for the org-tasks overlay. Avoid `prefix+ctrl+b` while the prefix is ctrl+b.
+#
 # org-tasks plugin controls. agents.nix registers the plugin; see
 # plugins/org-tasks/README.md. The plugin reads these bindings to show
 # key hints, so keep the command names.
@@ -39,7 +48,14 @@ command = "cormacc.org-tasks.select"
 description = "select a task"
 
 [[keys.command]]
-key = "prefix+shift+o"
+key = "prefix+ctrl+o"
 type = "plugin_action"
 command = "cormacc.org-tasks.toggle"
 description = "toggle org-tasks overlay"
+
+# herdr-orch sidebar agent tree: global, persistent display toggle.
+[[keys.command]]
+key = "prefix+ctrl+t"
+type = "plugin_action"
+command = "cormacc.herdr-orch.tree-toggle"
+description = "toggle the sidebar agent tree"

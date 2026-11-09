@@ -1,0 +1,64 @@
+Sun  8 Nov 2026 14:30:35 GMT
+ machines                │
+                         │
+ ▾ Local                 │
+   ● agents              │
+     main                │
+ ▾ xps15                ●│
+   · dotfiles            │
+     main                │
+   ○ agents              │
+     main                │
+   ○ playbooks           │
+     develop             │
+   ○ portal              │
+     allium-eval         │
+   ○ mbx-cd              │
+     crash-logging       │
+   ○ mbx-streamer        │
+     crash-logging       │
+   · mbx-lte             │
+     crash-logging       │
+   ○ nmd-dev             │
+     main                │
+   · mbx-streamer-bootl  │
+     netcore-bootloader  │
+   ○ nix-microchip       │
+     master              │
+   ○ cd                  │
+     stim-resilience     │
+                         │
+ new · Local         menu│
+─────────────────────────│
+ agents          filtered│
+                         │
+ ● Local · agents · 1    │
+   root                  │
+ ● Local · agents · scou…│
+   └ · scout-1-light     │
+ ○ xps15 · agents · 1    │
+   pi                    │
+ ○ xps15 · agents · 3    │
+   pi                    │
+ ○ xps15 · playbooks · 1 │
+   pi                    │
+ ○ xps15 · portal · 1    │
+   pi                    │
+ ○ xps15 · mbx-cd · 1    │
+   pi                    │
+ ○ xps15 · mbx-strea… · 1│
+   pi                    │
+ ○ xps15 · nmd-dev · 1   │
+   pi                    │
+ ○ xps15 · nix-micro… · 1│
+   pi                    │
+ ○ xps15 · cd · 1        │
+   pi                    │
+                         │
+                         │
+                         │
+                         │
+                        «│
+--- agent list
+{"name":"root","pane_id":"w1:p1","display_agent":null,"tokens":{"order":"0000"},"agent_status":"working","session":"3-f9573fe10ddb.jsonl"}
+{"name":"scout-b5dfa918","pane_id":"w1:p3","display_agent":"scout-1-light","tokens":{"order":"0001","tree":"└"},"agent_status":"done","session":"6-f857befcad1c.jsonl"}

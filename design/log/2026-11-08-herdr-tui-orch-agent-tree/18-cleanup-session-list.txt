@@ -1,0 +1,2 @@
+name                 status   directory                                        socket
+default              running  /Users/cormacc/.config/herdr                     /Users/cormacc/.config/herdr/herdr.sock

@@ -1,0 +1,5 @@
+2 plugins installed:
+- cormacc.herdr-orch (herdr-orch) enabled [local:/Users/cormacc/dotfiles/agents/herdr/plugins/herdr-orch]
+  config: /Users/cormacc/.config/herdr/plugins/config/cormacc.herdr-orch
+- cormacc.org-tasks (Org tasks) enabled [local:/Users/cormacc/dotfiles/agents/herdr/plugins/org-tasks]
+  config: /Users/cormacc/.config/herdr/plugins/config/cormacc.org-tasks

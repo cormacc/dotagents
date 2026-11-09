@@ -1,12 +1,12 @@
 # herdr-orch Herdr plugin
 
-Herdr plugin `cormacc.herdr-orch`. It is an adapter over the `herdr-orch` skill in the same checkout: every entrypoint runs `../../../skills/herdr-orch/scripts/oh`, resolved from `HERDR_PLUGIN_ROOT`. The plugin contains no orchestration logic.
+Herdr plugin `cormacc.herdr-orch`. It is an adapter over the `herdr-orch` skill in the same checkout: every entrypoint runs `../../../skills/herdr-orch/scripts/oh`, resolved from `HERDR_PLUGIN_ROOT`. The quota pane and status stanza contain no orchestration logic. The sidebar tree reads the `oh` ledgers, as described below.
 
 The separate [org-tasks plugin](../org-tasks/README.md) embeds the shared task TUI in a tab-local bottom split. It has its own registration and configuration.
 
 ## Prerequisites
 
-- Herdr 0.9.1 or later, on Linux or macOS.
+- Herdr 0.9.5 or later, on Linux or macOS.
 - Babashka (`bb`) and Bash on the `PATH` of the Herdr server.
 - For quota data: valid Anthropic or OpenAI Codex subscription credentials in Pi's file store (`PI_CODING_AGENT_DIR` or `~/.pi/agent`). The owned Babashka collector needs no npm package. It does not refresh, prompt or fall back to native credentials. Explicit native reporting and unsupported OS stores are described in [../../../skills/herdr-orch/scripts/docs/contract.md#Usage](../../../skills/herdr-orch/scripts/docs/contract.md#usage).
 
@@ -62,10 +62,52 @@ herdr server reload-config
 
 Herdr runs the command with the active pane's working directory, so a project's `.agents/subagents/config.edn` decides which providers appear. To show the tab row, and so the status line, as a footer, set `tab_bar_position = "bottom"` in the same `[ui]` table.
 
+## Sidebar agent tree
+
+The plugin decorates Herdr's native Agents sidebar with the `oh` agent tree. Under each space, every live `oh` child appears after its parent, named by the last segment of its ledger `label` (for example `scout-1-light`), with a `$tree` mark (`├`, `└`, `│`) in front. A root `oh` agent has no mark. A non-`oh` agent keeps Herdr's name and has no mark. `herdr agent list` output is unchanged, and next/previous agent navigation follows the displayed order.
+
+How it works:
+
+- Hierarchy comes from the ledgers `.tmp/herdr-orch/ledger/*.json` under the git root of each agent's working directory. A child is joined to its parent by session (`parent-session` and `child-session`), across every discovered root, so a child in a managed worktree sits under its parent. Liveness comes from `herdr agent list`: an agent whose parent is not listed is shown as a root, and ledger `closed-at` is not read.
+- The reconcile (`bb tree.bb reconcile`) reports `display_agent`, a `tree` token and an `order` token per pane with `herdr pane report-metadata`, and sets the session's agent view with `agent.view.set` (source `plugin:cormacc.herdr-orch`; sort by workspace, then `order`, then pane order).
+- It runs once from the startup hook and from the `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.agent_status_changed`, `tab.closed` and `workspace.closed` hooks. It is one-shot: no daemon and no polling. Concurrent runs serialise on a file lock under the plugin state directory.
+- It writes no ledger and sends no pane input.
+
+Add the rows stanza to `~/.config/herdr/config.toml` (the tracked [../../config.toml](../../config.toml) has it). The `$tree` token renders nothing until a pane reports it:
+
+```toml
+[ui.sidebar.agents]
+rows = [["state_icon", "machine", "workspace", "tab"], ["$tree", "agent"]]
+```
+
+`herdr server reload-config` does not apply `[ui.sidebar.agents]` to an open client. Use the `reload config` item of the UI menu, or restart the client.
+
+### Toggle
+
+`prefix+ctrl+t` runs the `tree-toggle` action. It turns the tree off (tokens, display names and the plugin view are cleared, and the hooks then do nothing) and on again (rows and view are rebuilt). The invoking session changes at once; other sessions follow at their next hook. The setting is global and persists across server restarts. Bind it in `config.toml`:
+
+```toml
+[[keys.command]]
+key = "prefix+ctrl+t"
+type = "plugin_action"
+command = "cormacc.herdr-orch.tree-toggle"
+description = "toggle the sidebar agent tree"
+```
+
+Display toggles use the `prefix+ctrl+<letter>` convention; the org-tasks overlay toggle is `prefix+ctrl+o`. Without a key binding, run `herdr plugin action invoke cormacc.herdr-orch.tree-toggle`.
+
+### Limits
+
+- Plugin v1 cannot add sidebar rows, so a tab without an agent has no tree row.
+- Local server only: remote (`--machine`) servers are not reconciled.
+- Herdr does not restore token metadata after a server restart. The startup hook reports it again.
+- `agent.view.set` replaces `ui.agent_panel_sort` for the session while the tree is on. The sort starts with `workspace_order`, so spaces stay grouped.
+
 ## Test
 
 ```sh
 bb scripts/test-herdr-plugin.bb
+bb scripts/test-herdr-orch-tree.bb
 ```
 
-The root `bb test` task also runs it.
+The root `bb test` task also runs both.

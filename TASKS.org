@@ -390,7 +390,52 @@ The linked record owns the decision and evidence. Existing task 4 owns implement
 :LOGBOOK:
 - Created [2026-11-07 Sat 20:47]
 :END:
-The terminal plugin and the herdr-app widget were checked live on macOS only (2026-11-07). On xps15: (1) terminal plugin: startup and tab.created display, global prefix+shift+o toggle, prefix+t popup selection with Esc and focus return, label title; (2) herdr-app widget: install via the parent HM switch, project follow, refresh, selection dialog, toggle, block fitting, and the keys.json spelling (cmd-shift-t / cmd-shift-o, else ctrl-shift-). On macOS after darwin-rebuild: confirm the herdr-app widget loads from the installed leaf and survives an app restart. Record: [[archive:82126d8e-eb54-45b8-abbe-9e76451b3963]].
+The terminal plugin and the herdr-app widget were checked live on macOS only (2026-11-07). On xps15: (1) terminal plugin: startup and tab.created display, global prefix+ctrl+o toggle (moved from prefix+shift+o by task 9777d1ec), prefix+t popup selection with Esc and focus return, label title; (2) herdr-app widget: install via the parent HM switch, project follow, refresh, selection dialog, toggle, block fitting, and the keys.json spelling (cmd-shift-t / cmd-shift-o, else ctrl-shift-). On macOS after darwin-rebuild: confirm the herdr-app widget loads from the installed leaf and survives an app restart. Record: [[archive:82126d8e-eb54-45b8-abbe-9e76451b3963]].
+
+** DONE Port the orch-spaces workspace tree view to the Herdr TUI
+CLOSED: [2026-11-09 Mon 10:47]
+:PROPERTIES:
+:CUSTOM_ID: 9777d1ec-52a2-45b0-881e-33981d159e84
+:CREATED: [2026-11-08 Sun 11:41]
+:STARTED: [2026-11-08 Sun 12:45]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 11:41]
+- State "STARTED" from "TODO" [2026-11-08 Sun 12:45]
+- State "DONE" from "STARTED" [2026-11-09 Mon 10:47]
+:END:
+#+IMPORT: [[plan:2026-11-08-herdr-tui-orch-agent-tree.org]]
+Port the herdr-app `orch-spaces` mod (`herdr-app/mods/orch-spaces/`, commits cea045e and e41e43e) to the Herdr TUI. The mod shows each space with its agent tree under it in one sidebar list: rows use the `oh.label` naming rule, a sub-agent with its own pane appears once under its parent, and tabs without an agent are listed. Find the Herdr TUI extension surface that can host an equivalent view (for example a plugin under `herdr/plugins/`), and share the tree model (`herdr-app/mods/orch-spaces/tree.js`) where practical. Related: task f7457cc5 (herdr-app mod for herdr-orch), task 9f667467 (herdr plugin wrapper).
+
+** TODO Validate the Herdr TUI sidebar agent tree on Linux
+:PROPERTIES:
+:CUSTOM_ID: cbbdb783-5947-4900-bb63-c67865a52098
+:CREATED: [2026-11-08 Sun 14:41]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 14:41]
+:END:
+The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tree.org]]) was checked live on macOS only (2026-11-08, plan task 076c6a03). On xps15, repeat that live check in a scratch session: marks and the U+2800 depth-2 indent, next/previous order, child close, `prefix+ctrl+t` toggle, and the startup hook after a scratch-session restart. Check the per-session state key (`HERDR_SESSION`) and the `server` identity in `tree-state.json`, which uses the socket file creation time (unverified on Linux).
+
+** TODO Cover the untested herdr-orch sidebar tree reconcile paths
+:PROPERTIES:
+:CUSTOM_ID: bfcb1bef-7282-4ae9-a65a-16db734a026c
+:CREATED: [2026-11-08 Sun 15:31]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 15:31]
+:END:
+Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeout reviews of task 9777d1ec found untested ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Risks): the retry of a failed `agent.view.clear` by the next off reconcile (mutants in `orch_tree.clj` `reconcile-once!` and `reset-once!` survived the runner), a view re-send caused only by a stale-pane clear, and the contended-branch dirty re-check in `reconcile!`. Also: nothing tests `server-id` (the re-report after a server restart; a constant body leaves the runner green), and the simplification review proposed replacing it by treating `HERDR_PLUGIN_EVENT` = `startup` as a fresh run, with a test; and the off path's `(or (seq (:panes old)) (:view old))` survives an `off-panes-only` mutant.
+
+** TODO Decide whether org-tasks ensure should open a Tasks pane in every existing tab
+:PROPERTIES:
+:CUSTOM_ID: 26a26a84-68a0-4d34-a78f-09994711e5c1
+:CREATED: [2026-11-09 Mon 10:46]
+:END:
+:LOGBOOK:
+- Created [2026-11-09 Mon 10:46]
+:END:
+The org-tasks `ensure` hook runs on startup and `tab.created`. The Herdr TUI spike for task 9777d1ec ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Gotchas) logged it adding a Tasks pane to every existing tab that had none, which produces `pane.created` bursts. Confirm that this is intended (it matches the README statement that display opens the compact pane in each tab with no live instance), or limit it to the new tab.
 
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:

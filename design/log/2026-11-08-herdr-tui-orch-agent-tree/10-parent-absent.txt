@@ -1,0 +1,65 @@
+Sun  8 Nov 2026 14:37:09 GMT
+ machines                │
+                         │
+ ▾ Local                 │
+   ● agents              │
+     main                │
+ ▾ xps15                ●│
+   · dotfiles            │
+     main                │
+   ○ agents              │
+     main                │
+   ○ playbooks           │
+     develop             │
+   ○ portal              │
+     allium-eval         │
+   ○ mbx-cd              │
+     crash-logging       │
+   ○ mbx-streamer        │
+     crash-logging       │
+   · mbx-lte             │
+     crash-logging       │
+   ○ nmd-dev             │
+     main                │
+   · mbx-streamer-bootl  │
+     netcore-bootloader  │
+   ○ nix-microchip       │
+     master              │
+   ○ cd                  │
+     stim-resilience     │
+                         │
+ new · Local         menu│
+─────────────────────────│
+ agents          filtered│
+                         │
+ ● Local · agents · plan…│
+   planner-1-heavy       │
+ ○ Local · agents · scou…│
+   reused                │
+ ○ Local · agents · plain│
+   plainpi               │
+ ○ xps15 · agents · 1    │
+   pi                    │
+ ○ xps15 · agents · 3    │
+   pi                    │
+ ○ xps15 · playbooks · 1 │
+   pi                    │
+ ○ xps15 · portal · 1    │
+   pi                    │
+ ○ xps15 · mbx-cd · 1    │
+   pi                    │
+ ○ xps15 · mbx-strea… · 1│
+   pi                    │
+ ○ xps15 · nmd-dev · 1   │
+   pi                    │
+ ○ xps15 · nix-micro… · 1│
+   pi                    │
+ ○ xps15 · cd · 1        │
+   pi                    │
+                         │
+                         │
+                        «│
+--- agent list
+{"name":"reused","pane_id":"w1:p3","display_agent":null,"tokens":null,"agent_status":"idle","session":"3-76bdf7bafef0.jsonl"}
+{"name":"planner-2fb0358a","pane_id":"w1:p5","display_agent":"planner-1-heavy","tokens":{"order":"0000"},"agent_status":"done","session":"8-5637b5bc4a4b.jsonl"}
+{"name":"plainpi","pane_id":"w1:pB","display_agent":null,"tokens":null,"agent_status":"idle","session":"5-1b67a1019067.jsonl"}

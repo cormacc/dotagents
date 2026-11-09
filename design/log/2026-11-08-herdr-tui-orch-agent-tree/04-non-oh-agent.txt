@@ -1,0 +1,67 @@
+Sun  8 Nov 2026 14:35:40 GMT
+ machines                │
+                         │
+ ▾ Local                 │
+   ● agents              │
+     main                │
+ ▾ xps15                ●│
+   · dotfiles            │
+     main                │
+   ○ agents              │
+     main                │
+   ○ playbooks           │
+     develop             │
+   ○ portal              │
+     allium-eval         │
+   ○ mbx-cd              │
+     crash-logging       │
+   ○ mbx-streamer        │
+     crash-logging       │
+   · mbx-lte             │
+     crash-logging       │
+   ○ nmd-dev             │
+     main                │
+   · mbx-streamer-bootl  │
+     netcore-bootloader  │
+   ○ nix-microchip       │
+     master              │
+   ○ cd                  │
+     stim-resilience     │
+                         │
+ new · Local         menu│
+─────────────────────────│
+ agents          filtered│
+                         │
+ ○ Local · agents · 1   ▕│
+   root                 ▕│
+ ● Local · agen… · scou…▕│
+   ├ · scout-1-light    ▕│
+ ● Local · agen… · plan…▕│
+   ├ · planner-1-heavy  ▕│
+ ● Local · agen… · plan…▕│
+   └ · planner-2-heavy  ▕│
+ ○ Local · agen… · plain▕│
+   plainpi              ▕│
+ ○ xps15 · agents · 1   ▕│
+   pi                   ▕│
+ ○ xps15 · agents · 3   ▕│
+   pi                   ▕│
+ ○ xps15 · playbooks · 1▕│
+   pi                   ▕│
+ ○ xps15 · portal · 1   ▕│
+   pi                   ▕│
+ ○ xps15 · mbx-cd · 1   ▕│
+   pi                   ▕│
+ ○ xps15 · mbx-stre… · 1▕│
+   pi                   ▕│
+ ○ xps15 · nmd-dev · 1  ▕│
+   pi                   ▕│
+ ○ xps15 · nix-micr… · 1▕│
+   pi                   ▕│
+                        «│
+--- agent list
+{"name":"root","pane_id":"w1:p1","display_agent":null,"tokens":{"order":"0000"},"agent_status":"idle","session":"3-f9573fe10ddb.jsonl"}
+{"name":"scout-b5dfa918","pane_id":"w1:p3","display_agent":"scout-1-light","tokens":{"order":"0001","tree":"├"},"agent_status":"done","session":"6-f857befcad1c.jsonl"}
+{"name":"planner-2fb0358a","pane_id":"w1:p5","display_agent":"planner-1-heavy","tokens":{"order":"0002","tree":"├"},"agent_status":"done","session":"8-5637b5bc4a4b.jsonl"}
+{"name":"planner-d0370b54","pane_id":"w1:p8","display_agent":"planner-2-heavy","tokens":{"order":"0003","tree":"└"},"agent_status":"done","session":"6-c7952bde2b1c.jsonl"}
+{"name":"plainpi","pane_id":"w1:pB","display_agent":null,"tokens":null,"agent_status":"idle","session":"5-1b67a1019067.jsonl"}

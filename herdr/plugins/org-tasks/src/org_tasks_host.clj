@@ -80,7 +80,7 @@
         :else (recur more table block result)))))
 
 (defn display-key
-  "`prefix+shift+o` with prefix `ctrl+b` renders as `ctrl+b O`."
+  "`prefix+ctrl+o` with prefix `ctrl+b` renders as `ctrl+b ctrl+o`."
   [prefix key]
   (let [k (str/replace key #"(^|\+)shift\+([a-z])$" (fn [[_ sep c]] (str sep (str/upper-case c))))]
     (if (str/starts-with? k "prefix+")

@@ -135,16 +135,16 @@
   (let [config (str "[keys]\nprefix = \"ctrl+a\" # comment\n\n"
                     "[[keys.command]]\nkey = \"prefix+t\"\ntype = \"plugin_action\"\n"
                     "command = \"cormacc.org-tasks.select\"\n\n"
-                    "[[keys.command]]\nkey = \"prefix+shift+o\"\ntype = \"plugin_action\"\n"
+                    "[[keys.command]]\nkey = \"prefix+ctrl+o\"\ntype = \"plugin_action\"\n"
                     "command = \"cormacc.org-tasks.toggle\"\n")]
     (is (= ["ctrl+a t: Select a task from the backlog"
-            "ctrl+a O: Disable/enable org-tasks overlay"]
+            "ctrl+a ctrl+o: Disable/enable org-tasks overlay"]
            (host/hints config)))
     (is (= ["ctrl+b t: Select a task from the backlog"
-            "ctrl+b O: Disable/enable org-tasks overlay"]
+            "ctrl+b ctrl+o: Disable/enable org-tasks overlay"]
            (host/hints (str/replace config "[keys]\nprefix = \"ctrl+a\" # comment\n" "")))
         "Herdr's default prefix applies when keys.prefix is absent")
-    (is (= ["ctrl+a O: Disable/enable org-tasks overlay"]
+    (is (= ["ctrl+a ctrl+o: Disable/enable org-tasks overlay"]
            (host/hints (str/replace config "cormacc.org-tasks.select" "other.plugin.select")))
         "an unbound action has no hint")
     (is (= ["ctrl+a f12: Select a task from the backlog"]
@@ -152,6 +152,8 @@
                             "[[keys.command]]\ncommand = \"cormacc.org-tasks.select\"\nkey = \"prefix+f12\"\n")))
         "the first of several prefixes; key and command in either order")
     (is (nil? (host/hints nil)))
+    (is (= "ctrl+b ctrl+o" (host/display-key "ctrl+b" "prefix+ctrl+o")))
+    (is (= "ctrl+b O" (host/display-key "ctrl+b" "prefix+shift+o")) "shift+letter renders as the capital")
     (is (= "alt+x" (host/display-key "ctrl+b" "alt+x")) "a binding without the prefix is shown as is")))
 
 (def tab2 "w1:t9")

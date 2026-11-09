@@ -1,0 +1,5 @@
+after prefix+j: ["planner-2fb0358a"]
+after prefix+j: ["reused"]
+after prefix+k: ["planner-2fb0358a"]
+after prefix+k: ["root"]
+displayed order: root, planner-1-heavy(planner-2fb0358a), reused, plainpi; agent list order: root, reused, planner-2fb0358a, plainpi

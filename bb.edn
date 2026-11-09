@@ -56,6 +56,7 @@
                     ["scripts/test-analyse-anthropic-cache-ttl.bb"]
                     ["scripts/test-check-section-links.bb"]
                     ["scripts/test-herdr-plugin.bb"]
+                    ["scripts/test-herdr-orch-tree.bb"]
                     ["scripts/test-herdr-org-tasks.bb"]
                     ["scripts/test-herdr-app.bb"]
                     ["scripts/test-check-record-identifiers.bb"]

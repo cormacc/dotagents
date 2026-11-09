@@ -1,0 +1,12 @@
+w1:p1 {"display_agent":null,"tokens":{"order":"0000"}}
+w1:p2 {"display_agent":null,"tokens":null}
+w1:p3 {"display_agent":null,"tokens":null}
+w1:p4 {"display_agent":null,"tokens":null}
+w1:p5 {"display_agent":"planner-1-heavy","tokens":{"order":"0001","tree":"└"}}
+w1:p6 {"display_agent":null,"tokens":null}
+w1:p9 {"display_agent":null,"tokens":null}
+w1:pG {"display_agent":null,"tokens":null}
+w1:pB {"display_agent":null,"tokens":null}
+w1:pC {"display_agent":null,"tokens":null}
+w1:pJ {"display_agent":null,"tokens":null}
+w1:pQ {"display_agent":null,"tokens":null}

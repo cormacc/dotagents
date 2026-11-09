@@ -206,6 +206,21 @@ case "${1:-}" in
       split) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane" ;;
       rename) printf '{"result":{"pane":{"pane_id":"%s","label":"%s"}}}\n' "${3:-}" "${4:-}" ;;
       close) echo '{"result":{}}' ;;
+      # The sidebar tree reconcile (herdr/plugins/herdr-orch/tree.bb) reports metadata per
+      # pane. FAKE_REPORT_LOG, when set, takes one line per call (argv joined by US, as in
+      # FAKE_HERDR_LOG); FAKE_REPORT_SLEEP holds the call open so runs can overlap.
+      report-metadata)
+        if [ -n "${FAKE_REPORT_LOG:-}" ]; then printf '%s\037' "$@" >>"$FAKE_REPORT_LOG"; printf '\n' >>"$FAKE_REPORT_LOG"; fi
+        [ -n "${FAKE_REPORT_SLEEP:-}" ] && sleep "$FAKE_REPORT_SLEEP"
+        # FAKE_REPORT_GONE names a pane Herdr no longer knows (the real error goes to stderr);
+        # FAKE_REPORT_FAIL names a pane whose report fails with a generic error.
+        if [ -n "${FAKE_REPORT_GONE:-}" ] && [ "${3:-}" = "$FAKE_REPORT_GONE" ]; then
+          printf '{"error":{"code":"pane_not_found","message":"pane %s not found"}}\n' "$3" >&2; exit 1
+        fi
+        if [ -n "${FAKE_REPORT_FAIL:-}" ] && [ "${3:-}" = "$FAKE_REPORT_FAIL" ]; then
+          printf '{"error":{"code":"internal_error","message":"fake report failure"}}\n' >&2; exit 1
+        fi
+        echo '{"result":{}}' ;;
     esac ;;
   tab)
     case "$2" in
@@ -237,6 +252,9 @@ case "${1:-}" in
       # status and pane id — the single call `collect --any` uses per poll tick. Absent
       # state (no spawn yet) keeps the historical empty list.
       list)
+        # FAKE_AGENT_LIST_FILE answers with that file verbatim, so a caller sees agents whose
+        # cwd, workspace and session a test chose (the sidebar tree reconcile reads them).
+        if [ -n "${FAKE_AGENT_LIST_FILE:-}" ]; then cat "$FAKE_AGENT_LIST_FILE"; exit 0; fi
         # FAKE_AGENT_LIST_NO_AGENTS_KEY returns a well-formed exit-0 envelope with no
         # `agents` key, so a caller can prove it degrades to polling instead of deciding
         # every child has vanished.

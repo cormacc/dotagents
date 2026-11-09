@@ -1,0 +1,228 @@
+#+TITLE: Port the orch-spaces workspace tree view to the Herdr TUI
+#+DATE: 2026-11-08 Sun
+#+PARENT: [[task:9777d1ec-52a2-45b0-881e-33981d159e84][Port the orch-spaces workspace tree view to the Herdr TUI]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:herdr/plugins/herdr-orch/README.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+
+* Intent
+Show the herdr-orch agent tree in terminal Herdr's native Agents sidebar: under each space, every live `oh` child appears once, in tree order after its parent, named by its `oh` label, so that an orchestrator sees who spawned whom and which child needs attention without leaving the TUI.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+The herdr-app `orch-spaces` mod (`herdr-app/mods/orch-spaces/`) draws spaces, git tails, machines and the agent tree itself, because herdr-core carries a native parent link and `oh.label`. Herdr TUI 0.9.5 has none of that in its API (`herdr api schema --json` has no parent field), but its native sidebar already draws machine groups, space rows with `branch` and `git_status`, and agent rows grouped by space. Plugin v1 cannot add rows to that sidebar; it can decorate agent rows with `pane.report_metadata` (`display_agent`, `$name` tokens) and order them with `agent.view.set`. This change therefore ports only the tree model: the `cormacc.herdr-orch` plugin reads the herdr-orch ledgers, joins them to `agent list` by session, and reports a `$tree` mark, an `order` token and the label as the display name for each oh child, from a one-shot reconcile that startup and pane lifecycle hooks run.
+
+** Scope
+*** In scope
+- Pure tree model `herdr-orch.tree` in `skills/herdr-orch/scripts/src/herdr_orch/tree.clj`, the port of `herdr-app/mods/orch-spaces/tree.js`, with unit tests in `skills/herdr-orch/scripts/test/`.
+- Plugin reconcile `herdr/plugins/herdr-orch/tree.bb` and `src/orch_tree.clj`: ledger discovery, metadata reports, `agent.view.set` over the socket, state file and lock under `HERDR_PLUGIN_STATE_DIR`, a global display toggle.
+- Manifest `herdr/plugins/herdr-orch/herdr-plugin.toml`: `min_herdr_version = "0.9.5"`, `[[startup]]`, `[[events]]` hooks, `tree-toggle` action.
+- Display-toggle key convention `prefix+ctrl+<letter>` in `herdr/config.toml`: `prefix+ctrl+t` for the tree, and the org-tasks overlay toggle moved from `prefix+shift+o` to `prefix+ctrl+o`, with the org-tasks README and key-hint docstring.
+- `herdr/config.toml`: `[ui.sidebar.agents]` rows stanza rendering `$tree`.
+- Test runner `scripts/test-herdr-orch-tree.bb` over the `fake-herdr` fixture, wired into root `bb test`.
+- `herdr/plugins/herdr-orch/README.md`: the tree feature, its config stanza and its limits.
+*** Out of scope
+- Rows for tabs without an agent, the collapsed-rail control and `terminal.peek`: plugin v1 has no sidebar rows and every TUI agent has a pane.
+- Git tails, worktree groups and machine grouping: the native sidebar draws them.
+- Changes to `herdr-app/mods/orch-spaces/`, the `oh` CLI, the ledger format, Windows, or remote (`--machine`) servers.
+
+** Acceptance
+*** Core functionality
+- [X] With `oh` children live, the Agents sidebar shows each child under its workspace in DFS order after its parent, with `├`/`└`/`│` marks in the `$tree` token; a root oh agent has no mark. Evidence: live 076c6a03: `03-depth2.txt` (U+2800 indent kept).
+- [X] A child's row name is the last segment of its ledger `label` (`scout-1-light`); a non-oh agent keeps Herdr's name and has no `$tree` token. Evidence: live: `01-child-under-parent.txt`, `04-non-oh-agent.txt`.
+- [X] An agent whose ledger parent is not in `agent list` is shown as a root; ledger `closed-at` is not consulted for liveness. Evidence: live: `10-parent-absent.txt`.
+- [X] A child in a managed worktree (cwd differs from the assignment root) is placed under its parent, because ledgers are joined by session across every discovered root. Evidence: fake-herdr runner case `worktree-child-in-a-second-git-root`; not live.
+- [X] Next/previous agent navigation follows the displayed order (`agent.view.set` active with source `plugin:cormacc.herdr-orch`), and `agent list` output is unchanged. Evidence: live: `15-next-prev-agent.txt` (with temporary `next_agent`/`previous_agent` keys).
+- [X] Opening, closing or detecting an agent pane updates the sidebar without a manual command, and `herdr plugin link` reports no unknown-event warning for the declared hooks. Evidence: live: `16-plugin-log-final.json`; link warning-free in 65277f97.
+- [X] After a server restart the startup hook restores the tokens, display names and view sort. Evidence: live, scratch session only: `13-plugin-log-after-restart.json`, `14-after-restart.txt`.
+- [X] `herdr plugin link herdr/plugins/herdr-orch` succeeds on Herdr 0.9.5 with `min_herdr_version = "0.9.5"`, and the tracked `herdr/config.toml` carries the `[ui.sidebar.agents]` rows stanza. Evidence: 65277f97 link output; scratch client rendered the tracked stanza.
+- [X] `prefix+ctrl+t` turns the tree off (tokens, display names and the plugin view cleared at once in the invoking session, and in every other session at its next hook; hooks then do nothing) and on again (rows and view rebuilt); the setting persists across server restarts. Evidence: live action invoke off/on (`08-toggle-off.txt`, `09-toggle-on.txt`); two user presses of `prefix+ctrl+t` in the default client ran the `tree-toggle` action twice (plugin log entries 60 and 61, exit 0; `display.json` back to enabled), on 2026-11-08 with no oh children in that session, so no sidebar change was visible.
+*** Edge cases
+- [X] A pane whose ledger entry exists but whose live agent session differs (pane reused by another program) has its tokens and display name cleared and no tree mark. Evidence: live: `05b-pane-reused-by-other-session.txt`.
+- [X] Two reconciles running at once leave one consistent final state: the reconcile serialises on an OS file lock under `HERDR_PLUGIN_STATE_DIR`. Evidence: fake-herdr runner case `concurrent-reconciles-converge-and-release-the-lock`; not live.
+- [X] A workspace with no ledger directory, or a non-git cwd, produces no plugin log error and no tokens. Evidence: live: `17-pane-tokens.txt` (`/private/tmp` agent).
+*** Anti-criteria
+- [X] Must not: poll, run a daemon, or leave a background process after a hook exits. Evidence: live: no `tree.bb` process after hooks, toggles and cleanup (076c6a03 report).
+- [X] Must not: write to any ledger or `.tmp/herdr-orch/`, send pane input, or change focus or layout. Evidence: closeout conformance validation and closeout correctness review (write scope), source.
+- [X] Must not: report metadata on a pane that is neither an oh child nor the live parent of one, except to clear tokens this plugin set earlier. A parent without its own ledger entry gets only the `order` token. Evidence: live: `17-pane-tokens.txt`.
+- [X] Must not: change `herdr-app/mods/orch-spaces/` or `oh` CLI behaviour. Evidence: closeout conformance validation, source and `git status`.
+
+** Decisions
+- Decorate the native sidebar (approach A) :: Plugin v1 offers `pane.report_metadata` tokens, `display_agent`, and `agent.view.set`; the native sidebar already draws machines, spaces and git tails. Smallest change, no duplicated git or machine code, native next/prev navigation.
+  Rejected:
+  - Own plugin pane re-implementing the sidebar as a Babashka TUI (org-tasks pattern): full fidelity including tab rows, but duplicates the native sidebar and costs layout space in every tab.
+  - Patching Herdr's Rust sidebar: outside this repository.
+- Hierarchy from the ledger, liveness from `agent list` :: The TUI API has no parent link. The ledger's `parent-session`/`child-session.value` pair is the only join (review 1 finding 1: Herdr reuses pane ids, so a `pane-id` fallback let stale entries decorate unrelated agents; `oh` records the child session at launch); `closed-at` is unreliable (many open entries have none), so a parent is live only when a listed agent carries its session.
+- A tree root is the live agent that a ledger `parent-session` names :: The orchestrator that starts the first `oh` children has no ledger entry of its own, but every child's entry names its session. The model treats that agent as a root node, and the plugin gives it an `order` token only (no display name, no `$tree` mark), so that its children sort directly after it. No `oh` or ledger change is needed. Decided with the user during execution of 3c0c5572.
+- Ledger discovery by agent cwd :: For each distinct agent `cwd`, `git rev-parse --show-toplevel` names a candidate assignment root; its `.tmp/herdr-orch/ledger/*.json` entries are joined across roots so a worktree child finds its parent. No configuration map.
+- Display name is the label's last segment :: Nested labels compose (`planner-2/scout-1-light`); the tree mark shows the parent, so the row carries `scout-1-light`. Non-oh agents are untouched.
+- One-shot reconcile from hooks, no daemon :: Herdr documents startup hooks as one-shot and requires plugins to stop background processes before a hook exits. A file lock plus a dirty marker coalesces concurrent hooks into one trailing reconcile; a state file avoids redundant `report-metadata` calls.
+- Global display toggle, persisted :: The tree shares the plugin with the quota pane, so disabling the plugin is too coarse to turn off only the tree. The toggle mirrors the org-tasks overlay toggle: one global flag file under `HERDR_PLUGIN_STATE_DIR`, not per session. While the flag is off, a reconcile clears whatever its session recorded and exits, so every session converges without a cross-session call. Turning it on re-syncs, so no separate `tree-reset` action is exposed. Decided with the user during execution; supersedes the re-sync-only decision in * Open questions.
+- Display toggles use `prefix+ctrl+<letter>` :: Herdr 0.9.5 has one prefix layer and no second-key table, so the grouping is a convention. The 0.9.5 default keymap binds no `prefix+ctrl+` key (`clear_pane = "prefix+ctrl+k"` is only an unbound example), `prefix+shift+` holds ten defaults including `rename_tab = "prefix+shift+t"`, and the defaults note that ctrl+letter is among the most reliable bindings, unlike Alt on macOS. Avoid `prefix+ctrl+b` while the prefix is `ctrl+b`. Chosen by the user.
+- No separate reset command :: Nothing called `tree.bb reset` (no manifest action), and toggling off and on gives the same re-sync. The simplification review removed the command, `reset-all!` and its runner case on 2026-11-09, with the owner's approval; `reset-once!` stays as the off path.
+- Home is the existing `cormacc.herdr-orch` plugin :: Same owner and checkout resolution (`lib.sh`); the reconcile is Babashka like `herdr/plugins/org-tasks/adapter.bb`.
+
+** Shipped
+- ADDED `skills/herdr-orch/scripts/src/herdr_orch/tree.clj`: pure `herdr-orch.tree/rows` (ledger entries + `agent list` rows -> pane id to order, mark, name), with `tree_test.clj`.
+- ADDED `herdr/plugins/herdr-orch/tree.bb`, `bb.edn`, `src/orch_tree.clj`, `test/orch_tree_test.clj`: `tree.bb reconcile|toggle`; per-session state and lock under `HERDR_PLUGIN_STATE_DIR/session-<key>/`, global `display.json` flag under `display.lock`.
+- MODIFIED `herdr/plugins/herdr-orch/herdr-plugin.toml`: `min_herdr_version = "0.9.5"`, one `[[startup]]` and six `[[events]]` hooks running `tree.bb reconcile`, action `tree-toggle`.
+- MODIFIED `herdr/config.toml`: `[ui.sidebar.agents]` rows with `$tree`; `prefix+ctrl+t` tree toggle; org-tasks toggle moved to `prefix+ctrl+o`.
+- MODIFIED `herdr/plugins/herdr-orch/README.md` (#+SPEC): sidebar agent tree section, toggle, limits, tests. `skills/herdr-orch/scripts/docs/contract.md` (#+SPEC) unchanged: the plugin only reads the ledger, and neither `oh` nor the ledger format changed.
+- MODIFIED org-tasks README key table, `display-key` docstring and `scripts/test-herdr-org-tasks.bb` for `prefix+ctrl+o`.
+- ADDED `scripts/test-herdr-orch-tree.bb` (in root `bb test`) and additive `fake-herdr` options (`FAKE_AGENT_LIST_FILE`, `FAKE_REPORT_LOG`, `FAKE_REPORT_SLEEP`, `FAKE_REPORT_GONE`, `FAKE_REPORT_FAIL`).
+
+** Gotchas
+From spike 5632e75a on Herdr 0.9.5:
+- Plugin event hooks fire for `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.agent_status_changed`, `tab.closed` and `workspace.closed`; `HERDR_PLUGIN_EVENT_JSON` is `{"event":"<snake_case>","data":{...}}`.
+- `pane.closed` fires only for an explicit pane close. Closing a tab or workspace emits only `tab.closed` or `workspace.closed`, with no per-pane event, so the reconcile must also run on those two events.
+- A manifest without top-level `platforms` gets the link warning `manifest does not declare platforms; platform support unknown`; declare `platforms = ["linux", "macos"]`.
+- `herdr pane report-metadata <pane> --source <id> --display-agent X --token tree=Y` replaces the `agent` row text with `X` and renders `$tree` as `Y` (shown `Y · X`); `--source` is required, and an unreported `$tree` renders nothing.
+- `report-metadata` re-emits `pane.agent_status_changed` with the same status and `display_agent` in the payload, so each report starts one more hook run; the state-file comparison must make that run a no-op.
+- `[ui.sidebar.agents]` rows come from the client's local config: `herdr server reload-config` does not apply them to an open client. Use the UI menu `reload config` or restart the client. `display_agent` reaches an open client without a reload.
+- The org-tasks `ensure` hook adds a Tasks pane to every tab, so `pane.created` arrives in bursts that include panes without an agent.
+- `HERDR_PLUGIN_STATE_DIR` (`~/.local/state/herdr/plugins/<id>`) is shared by every session, and plugins run for every session: key the state and lock files by session (`HERDR_SESSION`, absent for the default session, or `HERDR_SOCKET_PATH`).
+- Hooks get the `HERDR_SOCKET_PATH` of the server that fired them; `HERDR_PANE_ID` is absent for `workspace.closed`. Hook processes inherit the server's environment, including unrelated `HERDR_ORCH_*` variables: do not read those in hooks.
+- `pane.agent_detected` arrives about 5 s after `agent start` and names the kind (`pi`), not the `oh` label.
+- Startup hooks run after session restore or live handoff, not when a client attaches, config reloads or a plugin is linked (`plugins.mdx` 'Startup hooks'; 65277f97 observed no hook run in about 75 s after link and reload). The first live reconcile after a link is therefore the next pane or agent event.
+- On this host, `herdr agent list --json` printed only a usage line; the plain `herdr agent list` prints the JSON envelope. The reconcile uses the plain form (65277f97, 6969ed5b reports).
+
+From live check 076c6a03 (macOS, Herdr 0.9.5; evidence files named in ** Acceptance are in the same-stem folder `2026-11-08-herdr-tui-orch-agent-tree/`):
+- A row renders as `└ · scout-1-light`; a depth-2 mark `⠀ └` renders as indentation, because Herdr keeps U+2800.
+- A scratch client for live checks needs `env -i` plus `HERDR_CONFIG_PATH`, so that no `HERDR_*` or `HC_*` variable leaks; `HERDR_SOCKET_PATH=~/.config/herdr/sessions/<name>/herdr.sock` addresses its CLI.
+- An `oh` child started from a herdr-app pane runs in herdr-app. To get TUI children, prompt a pi agent in a TUI pane to run `oh`.
+- `next_agent` and `previous_agent` have no default binding, and the tracked config binds neither; the live check used a temporary `prefix+j`/`prefix+k`.
+- After `herdr session stop` and a fresh `herdr --session <name>`, pi agents resume with the same session path, so the ledger join holds and the `startup` hook (first plugin log entry) restores the marks.
+- `display.json` is global to the machine: a toggle in any session reaches every session.
+- Clearing a closed pane gets `pane_not_found` from Herdr; the reconcile treats that answer as success and logs nothing.
+
+** Risks
+- Hook storms: each status change starts a `bb` process (about 0.3 s). Accepted with the lock-and-coalesce design; the sidebar may lag one event.
+- `agent.view.set` replaces `ui.agent_panel_sort` for the whole session while active. The sort begins with `workspace_order`, so grouping by space is preserved. Toggling the tree off clears the view; disabling the plugin also removes it.
+- Untested paths: the contended-branch dirty re-check (needs a race), a view re-send caused only by a stale-pane clear, and the retry of a failed `agent.view.clear` by the next off reconcile.
+
+** Follow-ups
+- Linux live check: task:cbbdb783-5947-4900-bb63-c67865a52098.
+- Untested reconcile paths: task:bfcb1bef-7282-4ae9-a65a-16db734a026c.
+- org-tasks `ensure` opening a pane in every tab: task:26a26a84-68a0-4d34-a78f-09994711e5c1.
+
+* Plan
+** DONE Spike: confirm plugin hook coverage and display_agent rendering on Herdr 0.9.5
+CLOSED: [2026-11-08 Sun 12:49]
+:PROPERTIES:
+:CUSTOM_ID: 5632e75a-2b68-4aff-b365-0f1f1108c83d
+:CREATED: [2026-11-08 Sun 12:27]
+:STARTED: [2026-11-08 Sun 12:45]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 12:27]
+- State "STARTED" from "TODO" [2026-11-08 Sun 12:45]
+- State "DONE" from "STARTED" [2026-11-08 Sun 12:49]
+:END:
+Outcome: hook set, `display_agent` and `$tree` rendering confirmed on Herdr 0.9.5; findings in ** Gotchas.
+
+** DONE Port tree.js to the pure herdr-orch.tree namespace with unit tests
+CLOSED: [2026-11-08 Sun 14:10]
+:PROPERTIES:
+:CUSTOM_ID: 3c0c5572-a14f-47b0-a797-3ffada637de4
+:CREATED: [2026-11-08 Sun 12:27]
+:STARTED: [2026-11-08 Sun 12:45]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 12:27]
+- State "STARTED" from "TODO" [2026-11-08 Sun 12:45]
+- State "DONE" from "STARTED" [2026-11-08 Sun 13:35]
+- State "STARTED" from "DONE" [2026-11-08 Sun 13:50]
+- State "DONE" from "STARTED" [2026-11-08 Sun 14:10]
+:END:
+Outcome: `herdr-orch.tree/rows` with `tree_test.clj`; session-only liveness and U+2800 marks after review 1 (** Decisions, * Implementation).
+
+** DONE Add the sidebar reconcile to the herdr-orch plugin
+CLOSED: [2026-11-08 Sun 14:10]
+:PROPERTIES:
+:CUSTOM_ID: 6969ed5b-add0-4224-aaf6-5de30b7472ae
+:CREATED: [2026-11-08 Sun 12:27]
+:BLOCKED-BY: task:3c0c5572-a14f-47b0-a797-3ffada637de4
+:STARTED: [2026-11-08 Sun 13:35]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 12:27]
+- State "STARTED" from "TODO" [2026-11-08 Sun 13:35]
+- State "DONE" from "STARTED" [2026-11-08 Sun 13:41]
+- State "STARTED" from "DONE" [2026-11-08 Sun 13:50]
+- State "DONE" from "STARTED" [2026-11-08 Sun 14:10]
+:END:
+Outcome: `tree.bb reconcile` with per-session state, lock and pending re-run marker, metadata reports and `agent.view.set` (* Implementation). Its `reset` command was later removed (** Decisions 'No separate reset command').
+
+** DONE Add the global tree display toggle
+CLOSED: [2026-11-08 Sun 14:19]
+:PROPERTIES:
+:CUSTOM_ID: 897c9828-e6b6-4b1f-af2f-b6740322ea2f
+:CREATED: [2026-11-08 Sun 14:06]
+:BLOCKED-BY: task:6969ed5b-add0-4224-aaf6-5de30b7472ae
+:BLOCKED-BY+: task:a0c65e14-0e90-4700-a3a8-b14a3abf08d9
+:STARTED: [2026-11-08 Sun 14:10]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 14:06]
+- State "STARTED" from "TODO" [2026-11-08 Sun 14:10]
+- State "DONE" from "STARTED" [2026-11-08 Sun 14:19]
+:END:
+Outcome: `tree.bb toggle` over a global `display.json` under `display.lock`, applied by the normal reconcile (* Implementation).
+
+** DONE Declare hooks, config stanza and README for the sidebar tree
+CLOSED: [2026-11-08 Sun 14:28]
+:PROPERTIES:
+:CUSTOM_ID: 65277f97-689e-4bde-a9f6-955804225550
+:CREATED: [2026-11-08 Sun 12:27]
+:BLOCKED-BY: task:5632e75a-2b68-4aff-b365-0f1f1108c83d
+:BLOCKED-BY+: task:897c9828-e6b6-4b1f-af2f-b6740322ea2f
+:STARTED: [2026-11-08 Sun 14:19]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 12:27]
+- State "STARTED" from "TODO" [2026-11-08 Sun 14:19]
+- State "DONE" from "STARTED" [2026-11-08 Sun 14:28]
+:END:
+Outcome: manifest hooks and `tree-toggle` action, `[ui.sidebar.agents]` rows, `prefix+ctrl+t`/`prefix+ctrl+o` bindings, READMEs (** Shipped).
+
+** DONE Add the sidebar tree test runner over fake-herdr
+CLOSED: [2026-11-08 Sun 14:10]
+:PROPERTIES:
+:CUSTOM_ID: a0c65e14-0e90-4700-a3a8-b14a3abf08d9
+:CREATED: [2026-11-08 Sun 12:27]
+:BLOCKED-BY: task:6969ed5b-add0-4224-aaf6-5de30b7472ae
+:STARTED: [2026-11-08 Sun 13:41]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 12:27]
+- State "STARTED" from "TODO" [2026-11-08 Sun 13:41]
+- State "DONE" from "STARTED" [2026-11-08 Sun 14:10]
+:END:
+Outcome: `scripts/test-herdr-orch-tree.bb` over `fake-herdr`, in root `bb test`.
+
+** DONE Verify the sidebar tree live on macOS
+CLOSED: [2026-11-08 Sun 14:49]
+:PROPERTIES:
+:CUSTOM_ID: 076c6a03-46b4-4b4f-9f32-6b7b84566cc3
+:CREATED: [2026-11-08 Sun 12:27]
+:BLOCKED-BY: task:6969ed5b-add0-4224-aaf6-5de30b7472ae
+:BLOCKED-BY+: task:65277f97-689e-4bde-a9f6-955804225550
+:BLOCKED-BY+: task:a0c65e14-0e90-4700-a3a8-b14a3abf08d9
+:BLOCKED-BY+: task:897c9828-e6b6-4b1f-af2f-b6740322ea2f
+:STARTED: [2026-11-08 Sun 14:28]
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 12:27]
+- State "STARTED" from "TODO" [2026-11-08 Sun 14:28]
+- State "DONE" from "STARTED" [2026-11-08 Sun 14:49]
+:END:
+Outcome: live macOS check in a scratch session; evidence in the same-stem folder and ticks in ** Acceptance; Linux in task:cbbdb783-5947-4900-bb63-c67865a52098.
+
+* Implementation
+- Tree model: liveness is a session match only; the newest round on a pane describes it; parent cycles degrade to roots; marks have no trailing space, and a finished branch continues with U+2800.
+- Reconcile: an empty mark sends `--clear-token tree`; the view is set once a row exists and re-sent in any pass that reports; the state records the server socket identity, so a new server discards it and the startup hook re-reports everything; a failed report keeps the old state entry for retry; a clear answered `pane_not_found` is dropped silently; a `git` launch failure warns once.
+- Toggle: `tree.bb toggle` flips `display.json` under the global `display.lock`, then runs the normal reconcile, which reads the flag inside the session lock (off: reset what the session recorded; on: rebuild). A toggle that finds the session lock held leaves the dirty marker, so the holder applies the latest flag and no toggle is lost. A failed off reset run by the toggle itself exits 1.
+- Reviews: two code reviews before live activation and three closeout correctness validations found and fixed a stale-entry adoption through the pane-id fallback, whitespace-trimmed marks, a lost dirty marker on the contended path, toggle exit codes and toggle races.
+

@@ -1,10 +1,41 @@
 id = "cormacc.herdr-orch"
 name = "herdr-orch"
 version = "0.1.0"
-description = "herdr-orch helpers: subscription quota pane and tab-bar status stanza."
-# Single floor shared with the bundled `oh` preflight; see the wrapper change-record.
-min_herdr_version = "0.9.1"
+description = "herdr-orch helpers: subscription quota pane, tab-bar status stanza and sidebar agent tree."
+# The sidebar tree needs the 0.9.5 plugin hooks, `pane report-metadata` and
+# `agent.view.set`. The bundled `oh` preflight has its own, lower floor.
+min_herdr_version = "0.9.5"
 platforms = ["linux", "macos"]
+
+# Reconcile the sidebar tree. The command is idempotent and ignores the event
+# payload. Closing a tab or workspace emits no per-pane `pane.closed`, so those
+# two events are declared too.
+[[startup]]
+command = ["bb", "tree.bb", "reconcile"]
+
+[[events]]
+on = "pane.created"
+command = ["bb", "tree.bb", "reconcile"]
+
+[[events]]
+on = "pane.closed"
+command = ["bb", "tree.bb", "reconcile"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["bb", "tree.bb", "reconcile"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["bb", "tree.bb", "reconcile"]
+
+[[events]]
+on = "tab.closed"
+command = ["bb", "tree.bb", "reconcile"]
+
+[[events]]
+on = "workspace.closed"
+command = ["bb", "tree.bb", "reconcile"]
 
 [[panes]]
 id = "quota"
@@ -19,3 +50,9 @@ id = "quota-stanza"
 title = "Print the quota tab-bar stanza"
 description = "Print a [ui] tab_bar_right entry for `oh usage --format status`; does not edit Herdr config."
 command = ["bash", "quota-stanza.sh"]
+
+[[actions]]
+id = "tree-toggle"
+title = "Toggle the sidebar agent tree"
+description = "Turn the herdr-orch agent tree in the Agents sidebar off or on in every session; the setting persists."
+command = ["bb", "tree.bb", "toggle"]
