@@ -89,7 +89,7 @@ The consuming `agents.nix` links:
 
 - `skills/` → `~/.agents/skills` (including `skills/herdr-orch/subagents/` packaged persona defaults)
 - `skills/org-tasks/scripts/ot` → `~/.local/bin/ot`
-- `herdr/plugins/org-tasks/` → `~/.local/share/herdr-plugins/org-tasks` (guarded leaf; explicit Herdr registration remains a separate user step)
+- `herdr/plugins/{org-tasks,herdr-orch}/` → `~/.local/share/herdr-plugins/{org-tasks,herdr-orch}` (guarded leaves; activation registers each with `herdr plugin link`, and re-links a registration whose root is stale)
 - `home/AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, `pi/settings.json`, and `pi/mcp.json` → `~/.pi/agent/...`. The repo-root `AGENTS.md` is deliberately *not* projected: it is this repository's project file, picked up by ordinary cwd discovery when working here.
 - `home/CLAUDE.md` → `~/.claude/CLAUDE.md` (imports `home/AGENTS.md`, so claude and pi share one set of portable rules)
 

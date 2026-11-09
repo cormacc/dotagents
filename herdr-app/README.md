@@ -4,6 +4,24 @@ This layout combines the bundled workspace status with one sidebar list of space
 
 ## Install and select
 
+### Without Home Manager
+
+The mods need the dotagents skills at `~/.agents/skills`: the quota mod runs `~/.agents/skills/herdr-orch/scripts/oh` and the task widget runs `~/.agents/skills/org-tasks/scripts/ot`. Link the checkout's `skills/` directory there, or set the `ot` layout prop described in [#Task widget](#task-widget).
+
+1. From the repository root, link the mods and the layout into the app's folder (`~/.config/herdr-app`, or `$HERDR_APP_HOME`). Move any existing files at these paths aside first.
+
+   ```sh
+   app="${HERDR_APP_HOME:-$HOME/.config/herdr-app}"
+   mkdir -p "$app/mods" "$app/layouts"
+   for m in herdr-orch system org-tasks orch-spaces; do ln -s "$PWD/herdr-app/mods/$m" "$app/mods/$m"; done
+   ln -s "$PWD/herdr-app/layouts/herdr-orch.json" "$app/layouts/herdr-orch.json"
+   ```
+
+2. Optionally, add the bindings from [keys.darwin.json](keys.darwin.json) to your own `keys.json`.
+3. Restart Herdr app, then explicitly select the `herdr-orch` layout.
+
+### With the owner's Home Manager module
+
 1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks`, `mods/orch-spaces`, `layouts/herdr-orch.json` and, on macOS, `keys.darwin.json` as `keys.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
 2. In Herdr app, explicitly select the `herdr-orch` layout. The existing layout remains selected until you do this.
 
@@ -36,7 +54,7 @@ The `org-tasks` block below the tab area shows the selected task of the focused 
 
 The mod runs `~/.agents/skills/org-tasks/scripts/ot` by absolute path, not `ot` on `PATH`: an app started from the desktop session can have a `PATH` without the shell's additions, such as `~/.local/bin`. Layout props can name another executable: `{"mod": "org-tasks", "props": {"ot": "/path/to/ot"}}`.
 
-On macOS, [keys.darwin.json](keys.darwin.json) is linked as `keys.json` and binds `cmd-shift-t` to `org-tasks.select` and `cmd-shift-o` to `layout.toggle:org-tasks`, matching `prefix t` and `prefix O` in the terminal Herdr plugin. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation. Linux keeps its own unmanaged `keys.json` until a Linux variant is checked; add those two bindings there, with the `ctrl-shift-` forms if `cmd` is not available. The app's linked mod folder does not hot-reload edits to its source; restart the app, or remove and re-create the link, to load a change.
+On macOS, [keys.darwin.json](keys.darwin.json) is linked as `keys.json` and binds `cmd-shift-t` to `org-tasks.select` and `cmd-shift-o` to `layout.toggle:org-tasks`, matching `prefix+t` and `prefix+ctrl+o` in the terminal Herdr plugin. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation. Linux keeps its own unmanaged `keys.json` until a Linux variant is checked; add those two bindings there, with the `ctrl-shift-` forms if `cmd` is not available. The app's linked mod folder does not hot-reload edits to its source; restart the app, or remove and re-create the link, to load a change.
 
 ## Refresh and limits
 

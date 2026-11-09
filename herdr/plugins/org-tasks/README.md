@@ -12,7 +12,7 @@ Use Herdr 0.9.5 or later on Linux or macOS, with Babashka, Bash and `ps` on the 
    herdr plugin link "$PWD/herdr/plugins/org-tasks"
    ```
 
-2. The owner's Home Manager module supplies `~/.local/share/herdr-plugins/org-tasks` as a guarded out-of-store leaf. Foreign occupants are rejected before activation writes. After writing the leaf, activation runs `herdr plugin link` on it when `herdr plugin list` does not show `cormacc.org-tasks`. A failure warns and does not abort activation. Without that module, run `herdr plugin link "$HOME/.local/share/herdr-plugins/org-tasks"` yourself. Registration persists across server restarts; no live server restart is needed to link a plugin. This does not replace the Herdr directory, plugin registry or quota configuration.
+2. Registration persists across server restarts, and no live server restart is needed to link a plugin. Herdr records the resolved checkout path: if you move the checkout, run `herdr plugin unlink cormacc.org-tasks` and link it again, or its actions report "Plugin action not found". The owner's Home Manager module does this for you: it supplies `~/.local/share/herdr-plugins/org-tasks` as a guarded out-of-store leaf and links it when Herdr does not list the plugin or lists a different root. A failure warns and does not abort activation.
 
 3. Optionally copy [config.example.edn](config.example.edn) to `config.edn` under the directory printed by `herdr plugin config-dir cormacc.org-tasks`. `:compact-rows` accepts integers 3--20 and defaults to 5. Unknown keys and invalid values fail before pane creation. There is no workspace-root mode or directory map.
 
