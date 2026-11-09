@@ -95,7 +95,10 @@
                        "HERDR_SESSION" "tree-test"
                        "FAKE_HERDR_LOG" (str (fs/path dir "herdr.log"))
                        "FAKE_REPORT_LOG" (str (fs/path dir "report.log"))
-                       "FAKE_AGENT_LIST_FILE" (str (fs/path dir "agents.json"))}}]
+                       "FAKE_AGENT_LIST_FILE" (str (fs/path dir "agents.json"))
+                       "FAKE_WORKSPACE_LIST_FILE" (str (fs/path dir "workspaces.json"))}}]
+        (spit (str (fs/path dir "workspaces.json"))
+              (json/generate-string {:id "x" :result {:type "workspace_list" :workspaces [{:workspace_id "w1" :label "space1"}]}}))
         (try (f ctx) (finally (close))))
       (finally (fs/delete-tree dir) (fs/delete-tree sock-dir)))))
 
@@ -129,6 +132,11 @@
 
 (defn- report [pane & tail] (vec (drop 2 (apply set-argv pane tail))))
 
+(defn- root-report
+  "Report of a root named `who` in workspace w1 (label `space1`)."
+  [pane who & tail]
+  (apply report pane "--display-agent" (str "local:space1:" who) "--clear-token" "tree" tail))
+
 (defn clear [pane] (report pane "--clear-display-agent" "--clear-token" "tree" "--clear-token" "order"))
 
 (defn- same-calls?
@@ -146,9 +154,9 @@
   (set-agents! ctx [(agent-row "w1:p1" (:repo ctx) "sP") (agent-row "w1:p2" p2-dir "s1") (agent-row "w1:p3" (:repo ctx) "s2")]))
 
 (def two-children-reports
-  [(report "w1:p1" "--token" "order=0000")
-   (report "w1:p2" "--display-agent" "scout-1-light" "--token" "tree=├" "--token" "order=0001")
-   (report "w1:p3" "--display-agent" "worker-1" "--token" "tree=└" "--token" "order=0002")])
+  [(root-report "w1:p1" "pi" "--token" "order=0000")
+   (report "w1:p2" "--display-agent" "├ scout-1-light" "--clear-token" "tree" "--token" "order=0001")
+   (report "w1:p3" "--display-agent" "└ worker-1" "--clear-token" "tree" "--token" "order=0002")])
 
 ;; --- cases --------------------------------------------------------------------------------
 
@@ -181,28 +189,30 @@
       (set-agents! ctx [(agent-row "w1:p2" (:repo ctx) "s1")])
       (let [{:keys [exit err]} (tree! ctx "reconcile")]
         (is (zero? exit) err)
-        (is (= [(report "w1:p2" "--display-agent" "scout-1-light" "--clear-token" "tree" "--token" "order=0000")]
+        (is (= [(root-report "w1:p2" "scout-1-light" "--token" "order=0000")]
                (reports ctx)))
         (is (= [view-set] @(:requests ctx)))))))
 
-(deftest pane-reused-by-a-different-session-is-cleared
+(deftest pane-reused-by-a-different-session-leaves-plain-roots
   (with-env
     (fn [ctx]
       (write-ledger! (:repo ctx) "t1" "w1:p2" "s1" "scout-1-light" "2026-01-01T00:00:01Z")
       (set-agents! ctx [(agent-row "w1:p1" (:repo ctx) "sP") (agent-row "w1:p2" (:repo ctx) "s1")])
       (is (zero? (:exit (tree! ctx "reconcile"))))
-      (is (same-calls? [(report "w1:p1" "--token" "order=0000")
-                        (report "w1:p2" "--display-agent" "scout-1-light" "--token" "tree=└" "--token" "order=0001")]
+      (is (same-calls? [(root-report "w1:p1" "pi" "--token" "order=0000")
+                        (report "w1:p2" "--display-agent" "└ scout-1-light" "--clear-token" "tree" "--token" "order=0001")]
                        (reports ctx)))
       (let [[r q] (counts ctx)]
         ;; Another program now runs in p2: the entry is no longer live, so the parent has no
-        ;; live child either and both rows go.
+        ;; live child either: both become plain roots without tree tokens.
         (set-agents! ctx [(agent-row "w1:p1" (:repo ctx) "sP") (agent-row "w1:p2" (:repo ctx) "someone-else")])
         (let [{:keys [exit err]} (tree! ctx "reconcile")]
           (is (zero? exit) err)
-          (is (same-calls? [(clear "w1:p1") (clear "w1:p2")] (reports-after ctx r)) (pr-str (reports-after ctx r)))
+          (is (same-calls? [(root-report "w1:p1" "pi" "--clear-token" "order") (root-report "w1:p2" "pi" "--clear-token" "order")]
+                           (reports-after ctx r))
+              (pr-str (reports-after ctx r)))
           (is (empty? (requests-after ctx q)) "the view stays set; no further socket request")
-          (is (empty? (:panes (state ctx)))))))))
+          (is (= #{nil} (set (map :order (vals (:panes (state ctx))))))))))))
 
 (defn- child-closed!
   "Reconcile with p1-p3, then drop p3 from the agent list; the second reconcile runs with `more` env.
@@ -221,7 +231,7 @@
         (is (zero? exit) err)
         (is (= "" err) "pane_not_found on a clear is not worth a log line")
         (is (same-calls? [(clear "w1:p3")
-                          (report "w1:p2" "--display-agent" "scout-1-light" "--token" "tree=└" "--token" "order=0001")]
+                          (report "w1:p2" "--display-agent" "└ scout-1-light" "--clear-token" "tree" "--token" "order=0001")]
                          (reports-after ctx before))
             (pr-str (reports-after ctx before)))
         (is (= #{:w1:p1 :w1:p2} (set (keys (:panes (state ctx))))) "the closed pane is dropped from state")))))
@@ -420,7 +430,7 @@
         (is (zero? (:exit res-a)) (:err res-a))
         (is (zero? (:exit res-b)) (:err res-b))
         (is (same-calls? (into two-children-reports
-                               [(report "w1:p2" "--display-agent" "scout-1-light" "--token" "tree=└" "--token" "order=0001")
+                               [(report "w1:p2" "--display-agent" "└ scout-1-light" "--clear-token" "tree" "--token" "order=0001")
                                 (clear "w1:p3")])
                          (reports ctx))
             (pr-str (reports ctx)))
@@ -447,13 +457,13 @@
       (set-agents! ctx [(agent-row "w1:p1" (:repo ctx) "sP") (agent-row "w1:p2" (:repo ctx) "s1") (agent-row "w1:p3" (:repo ctx) "s3")])
       (let [{:keys [exit err]} (tree! ctx "reconcile")]
         (is (zero? exit) err)
-        (is (same-calls? [(report "w1:p1" "--token" "order=0000")
-                          (report "w1:p2" "--display-agent" "planner-1" "--token" "tree=└" "--token" "order=0001")
-                          (report "w1:p3" "--display-agent" "scout-1" "--token" "tree=⠀ └" "--token" "order=0002")]
+        (is (same-calls? [(root-report "w1:p1" "pi" "--token" "order=0000")
+                          (report "w1:p2" "--display-agent" "└ planner-1" "--clear-token" "tree" "--token" "order=0001")
+                          (report "w1:p3" "--display-agent" "⠀ └ scout-1" "--clear-token" "tree" "--token" "order=0002")]
                          (reports ctx))
             (pr-str (reports ctx)))))))
 
-(deftest entry-without-session-on-a-reused-pane-gets-no-report
+(deftest entry-without-session-on-a-reused-pane-is-a-plain-root
   (with-env
     (fn [ctx]
       (spit (str (fs/path (:repo ctx) ".tmp" "herdr-orch" "ledger" "old.json"))
@@ -463,8 +473,8 @@
       (set-agents! ctx [(agent-row "w1:p9" (:repo ctx) "sUserOwnPi")])
       (let [{:keys [exit err]} (tree! ctx "reconcile")]
         (is (zero? exit) err)
-        (is (empty? (reports ctx)))
-        (is (empty? @(:requests ctx)))))))
+        (is (= [(root-report "w1:p9" "pi")] (reports ctx)) "no tree tokens")
+        (is (empty? @(:requests ctx)) "no tree row, so no view")))))
 
 (deftest view-is-resent-with-a-later-report
   (with-env
@@ -492,6 +502,31 @@
         (let [{:keys [exit err]} (tree! ctx "reconcile" {"PATH" bin})]
           (is (zero? exit) err)
           (is (= 1 (count (re-seq #"cannot launch git" err))) err))))))
+
+(deftest workspace-rename-re-reports-only-roots
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:repo ctx))
+      (is (zero? (:exit (tree! ctx "reconcile"))))
+      (let [[r q :as before] (counts ctx)]
+        (is (= [3 1] before) "positive control: the first run reported and set the view")
+        (spit (str (fs/path (:dir ctx) "workspaces.json"))
+              (json/generate-string {:id "x" :result {:type "workspace_list" :workspaces [{:workspace_id "w1" :label "renamed"}]}}))
+        (let [{:keys [exit err]} (tree! ctx "reconcile")]
+          (is (zero? exit) err)
+          (is (= [(report "w1:p1" "--display-agent" "local:renamed:pi" "--clear-token" "tree" "--token" "order=0000")]
+                 (reports-after ctx r)))
+          (is (= [view-set] (requests-after ctx q))))))))
+
+(deftest workspace-list-failure-exits-1-and-reports-nothing
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:repo ctx))
+      (fs/delete (fs/path (:dir ctx) "workspaces.json"))
+      (let [{:keys [exit err]} (tree! ctx "reconcile")]
+        (is (= 1 exit) err)
+        (is (str/includes? err "workspace list") err)
+        (is (empty? (reports ctx)))))))
 
 (deftest plugin-unit-tests
   ;; the plugin's own namespace tests (herdr/plugins/herdr-orch/test), with the plugin as cwd

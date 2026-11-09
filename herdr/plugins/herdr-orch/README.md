@@ -64,20 +64,20 @@ Herdr runs the command with the active pane's working directory, so a project's 
 
 ## Sidebar agent tree
 
-The plugin decorates Herdr's native Agents sidebar with the `oh` agent tree. Under each space, every live `oh` child appears after its parent, named by the last segment of its ledger `label` (for example `scout-1-light`), with a `$tree` mark (`├`, `└`, `│`) in front. A root `oh` agent has no mark. A non-`oh` agent keeps Herdr's name and has no mark. `herdr agent list` output is unchanged, and next/previous agent navigation follows the displayed order.
+The plugin decorates Herdr's native Agents sidebar with the `oh` agent tree. Under each space, every live `oh` child appears after its parent, named by a tree mark (`├`, `└`, `│`) and the last segment of its ledger `label`, for example `└ scout-1-light`. The mark is part of the name, not a separate token, because Herdr draws a `·` separator between row tokens. Every other agent on the local server is a root: it has no mark, and its name is `local:<workspace label>:<agent>`, for example `local:agents:pi`. The agent part is the ledger label of a root `oh` agent, else the Herdr agent name, else the agent kind. A workspace without a label shows its id. `herdr agent list` output is unchanged, and next/previous agent navigation follows the displayed order.
 
 How it works:
 
 - Hierarchy comes from the ledgers `.tmp/herdr-orch/ledger/*.json` under the git root of each agent's working directory. A child is joined to its parent by session (`parent-session` and `child-session`), across every discovered root, so a child in a managed worktree sits under its parent. Liveness comes from `herdr agent list`: an agent whose parent is not listed is shown as a root, and ledger `closed-at` is not read.
-- The reconcile (`bb tree.bb reconcile`) reports `display_agent`, a `tree` token and an `order` token per pane with `herdr pane report-metadata`, and sets the session's agent view with `agent.view.set` (source `plugin:cormacc.herdr-orch`; sort by workspace, then `order`, then pane order).
-- It runs once from the startup hook and from the `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.agent_status_changed`, `tab.closed` and `workspace.closed` hooks. It is one-shot: no daemon and no polling. Concurrent runs serialise on a file lock under the plugin state directory.
+- The reconcile (`bb tree.bb reconcile`) reads workspace labels from `herdr workspace list`. It reports `display_agent` for every agent, and an `order` token for each agent in an `oh` tree, with `herdr pane report-metadata`, and sets the session's agent view with `agent.view.set` (source `plugin:cormacc.herdr-orch`; sort by workspace, then `order`, then pane order).
+- It runs once from the startup hook and from the `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.agent_status_changed`, `tab.closed`, `workspace.closed` and `workspace.renamed` hooks. It is one-shot: no daemon and no polling. Concurrent runs serialise on a file lock under the plugin state directory.
 - It writes no ledger and sends no pane input.
 
-Add the rows stanza to `~/.config/herdr/config.toml` (the tracked [../../config.toml](../../config.toml) has it). The `$tree` token renders nothing until a pane reports it:
+Add the rows stanza to `~/.config/herdr/config.toml` (the tracked [../../config.toml](../../config.toml) has it):
 
 ```toml
 [ui.sidebar.agents]
-rows = [["state_icon", "machine", "workspace", "tab"], ["$tree", "agent"]]
+rows = [["state_icon", "agent"]]
 ```
 
 `herdr server reload-config` does not apply `[ui.sidebar.agents]` to an open client. Use the `reload config` item of the UI menu, or restart the client.
@@ -99,7 +99,7 @@ Display toggles use the `prefix+ctrl+<letter>` convention; the org-tasks overlay
 ### Limits
 
 - Plugin v1 cannot add sidebar rows, so a tab without an agent has no tree row.
-- Local server only: remote (`--machine`) servers are not reconciled.
+- Local server only: remote (`--machine`) servers are not reconciled, so a remote agent keeps Herdr's name without the `<machine>:<workspace>:` prefix. The machine part is always `local`.
 - Herdr does not restore token metadata after a server restart. The startup hook reports it again.
 - `agent.view.set` replaces `ui.agent_panel_sort` for the session while the tree is on. The sort starts with `workspace_order`, so spaces stay grouped.
 

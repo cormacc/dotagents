@@ -399,5 +399,9 @@ case "${1:-}" in
         *) set_child_status "${3:-}" idle; printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
       esac ;;
     esac ;;
+  # FAKE_WORKSPACE_LIST_FILE answers `workspace list` with that file verbatim (the sidebar
+  # tree reconcile reads workspace labels from it).
+  workspace)
+    if [ "${2:-}" = list ] && [ -n "${FAKE_WORKSPACE_LIST_FILE:-}" ]; then cat "$FAKE_WORKSPACE_LIST_FILE"; fi ;;
   notification) [ "${FAKE_NOTIFY_FAIL:-}" = 1 ] && { echo '{"error":"notify"}' >&2; exit 1; }; echo '{"result":{}}' ;;
 esac

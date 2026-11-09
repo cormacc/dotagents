@@ -41,24 +41,43 @@
 
 ;; --- pure helpers -----------------------------------------------------------------------
 
+(def machine
+  "Machine part of a root's name. The plugin reconciles only the server it runs on."
+  "local")
+
+(defn root-name
+  "`<machine>:<workspace label>:<agent>` for a root. The agent part is the ledger name, else the
+  Herdr agent name, else the agent kind; a workspace without a label falls back to its id."
+  [{:keys [workspace_id agent] :as a} labels row-name]
+  (when-let [who (or row-name (not-empty (:name a)) agent)]
+    (str machine ":" (get labels workspace_id workspace_id) ":" who)))
+
 (defn desired
-  "Tree rows -> `{pane {:name str|nil :marks str :order \"0001\"}}`, the comparable form kept in the state file."
-  [rows]
-  (into {} (map (fn [[pane {:keys [order marks name]}]]
-                  [pane {:name name :marks (or marks "") :order (format "%04d" order)}]))
-        rows))
+  "Tree rows, agent rows and `{workspace-id label}` -> `{pane {:name str|nil :marks str :order
+  \"0001\"|nil}}`, the comparable form kept in the state file. Every listed agent gets an entry: a
+  child's name is its mark, a space and its ledger name; a root, with or without a tree row, gets
+  `root-name`. The mark is part of the name, not a token of its own, because Herdr draws a `·`
+  separator between row tokens. An agent outside the tree has no order, so the plugin view does
+  not move it."
+  [rows agents labels]
+  (into {} (map (fn [{pane :pane_id :as a}]
+                  (let [{:keys [order marks name] :as row} (get rows pane)
+                        order (some->> order (format "%04d"))]
+                    [pane (if (str/blank? marks)
+                            {:name (root-name a labels (when row name)) :marks "" :order order}
+                            {:name (some->> name (str marks " ")) :marks marks :order order})])))
+        agents))
 
 (defn set-args
   "Argv tail after `herdr` for reporting `want` on `pane`, given the `prev` state entry or nil.
-  A nil name (a root without a ledger entry) reports only the order token; an empty mark clears
-  the tree token so a stale one cannot linger."
-  [pane {:keys [name marks order]} prev]
+  A nil name reports no display name and a nil order clears the order token. The `tree` token is
+  always cleared, so one that an earlier plugin version reported cannot linger."
+  [pane {:keys [name order]} prev]
   (-> ["pane" "report-metadata" pane "--source" source]
       (into (if name ["--display-agent" name] (when (:name prev) ["--clear-display-agent"])))
-      (into (cond (not name)          (when (not-empty (:marks prev)) ["--clear-token" "tree"])
-                  (str/blank? marks)  ["--clear-token" "tree"]
-                  :else               ["--token" (str "tree=" marks)]))
-      (into ["--token" (str "order=" order)])))
+      (into ["--clear-token" "tree"])
+      (into (cond order        ["--token" (str "order=" order)]
+                  (:order prev) ["--clear-token" "order"]))))
 
 (defn clear-args [pane]
   ["pane" "report-metadata" pane "--source" source "--clear-display-agent" "--clear-token" "tree" "--clear-token" "order"])
@@ -68,6 +87,13 @@
         agents (if (map? parsed) (get-in parsed [:result :agents]) parsed)]
     (when-not (sequential? agents) (throw (ex-info "agent list: no result.agents array" {})))
     (vec agents)))
+
+(defn parse-workspace-labels
+  "`herdr workspace list` output -> `{workspace-id label}`; a workspace without a label is omitted."
+  [text]
+  (let [ws (get-in (json/parse-string text true) [:result :workspaces])]
+    (when-not (sequential? ws) (throw (ex-info "workspace list: no result.workspaces array" {})))
+    (into {} (keep (fn [{:keys [workspace_id label]}] (when (not-empty label) [workspace_id label]))) ws)))
 
 ;; --- herdr, git, ledgers ------------------------------------------------------------------
 
@@ -227,12 +253,13 @@
 (defn- reconcile-enabled!
   "One pass over the live agents and ledgers; see `reconcile-once!`."
   [dir]
-  (let [list-r (herdr "agent" "list")]
-    (if-not (:ok list-r)
+  (let [list-r (herdr "agent" "list")
+        ws-r   (when (:ok list-r) (herdr "workspace" "list"))]
+    (if-not (:ok ws-r)
       false
       (let [agents  (parse-agents (:out list-r))
             live    (set (map :pane_id agents))
-            want    (desired (tree/rows (ledger-entries agents) agents))
+            want    (desired (tree/rows (ledger-entries agents) agents) agents (parse-workspace-labels (:out ws-r)))
             sid     (server-id)
             old     (read-state dir)
             fresh?  (not= sid (:server old))
@@ -249,7 +276,7 @@
             ;; known-limit: the view is set only once rows exist, so a session with no oh agents keeps its own sort
             view?   (and (not fresh?) (:view old))
             ;; re-sent with any report: Herdr may have dropped the view while the state file still says set
-            send-view? (and (seq want) (or (not view?) (seq set-res) (seq stale)))
+            send-view? (and (some :order (vals want)) (or (not view?) (seq set-res) (seq stale)))
             view-ok (if send-view? (socket-ok? "agent.view.set" view-params) true)
             view    (boolean (if send-view? view-ok view?))]
         (write-state! dir {:server sid :view view :panes panes})

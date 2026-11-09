@@ -15,11 +15,12 @@ tab_bar_right = [
   { type = "command", command = "~/.agents/skills/herdr-orch/scripts/oh usage --format status", interval_seconds = 60, timeout_seconds = 75 },
 ]
 
-# Agents sidebar rows. `$tree` is the herdr-orch agent-tree mark that the
-# cormacc.herdr-orch plugin reports (plugins/herdr-orch/README.md). An open
-# client does not apply this stanza on `herdr server reload-config`.
+# Agents sidebar rows. The cormacc.herdr-orch plugin puts the agent-tree mark
+# and the `<machine>:<workspace>:` prefix in the `agent` name
+# (plugins/herdr-orch/README.md). An open client does not apply this stanza on
+# `herdr server reload-config`.
 [ui.sidebar.agents]
-rows = [["state_icon", "machine", "workspace", "tab"], ["$tree", "agent"]]
+rows = [["state_icon", "agent"]]
 
 [ui.sound]
 enabled = false

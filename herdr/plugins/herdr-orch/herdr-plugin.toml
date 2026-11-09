@@ -9,7 +9,8 @@ platforms = ["linux", "macos"]
 
 # Reconcile the sidebar tree. The command is idempotent and ignores the event
 # payload. Closing a tab or workspace emits no per-pane `pane.closed`, so those
-# two events are declared too.
+# two events are declared too. A root's name includes its workspace label, so a
+# rename reconciles as well.
 [[startup]]
 command = ["bb", "tree.bb", "reconcile"]
 
@@ -35,6 +36,10 @@ command = ["bb", "tree.bb", "reconcile"]
 
 [[events]]
 on = "workspace.closed"
+command = ["bb", "tree.bb", "reconcile"]
+
+[[events]]
+on = "workspace.renamed"
 command = ["bb", "tree.bb", "reconcile"]
 
 [[panes]]
