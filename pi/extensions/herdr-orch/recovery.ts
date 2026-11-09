@@ -34,7 +34,9 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
   let chainInventory: Set<string> | undefined;
   let request: { pair: Pair; reasoning: Level; generation: number } | undefined;
   let failure: { id: string; pair: Pair; reasoning: Level; generation: number } | undefined;
-  let staged: { model: Model<Api>; reasoning: Level; generation: number } | undefined;
+  // Until `committed`, Pi's own retry may consume the stage; agent_before_settle commits it
+  // to a continuation that hides `failedId`.
+  let staged: { model: Model<Api>; reasoning: Level; generation: number; failedId: string; committed?: boolean } | undefined;
   let ownModel: Model<Api> | undefined;
   let setting = false;
 
@@ -122,13 +124,14 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
   pi.on("session_tree", (_event, ctx) => restore(ctx));
   pi.on("session_shutdown", () => { active = false; invalidate(); });
   pi.on("input", (_event, ctx) => {
-    const pending = Boolean(staged || setting || failure);
+    const pending = Boolean(staged?.committed || setting || failure);
     invalidate();
     if (pending && !ctx.isIdle()) void ctx.abort();
   });
   pi.on("model_select", (event, ctx) => {
     if (event.model === ownModel) return;
-    const pending = Boolean(staged || setting || failure);
+    // An uncommitted stage needs no abort: dropping it leaves Pi's retry on the new selection.
+    const pending = Boolean(staged?.committed || setting || failure);
     invalidate();
     if (!pinned) retainTier();
     if (pending && !ctx.isIdle()) void ctx.abort();
@@ -155,7 +158,9 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
       failure = { ...request, id: event.messageEntryId };
     }
   });
-  pi.on("agent_before_settle", async (event, ctx) => {
+  // Routing happens at agent_end, which Pi awaits before its own automatic retry, so a
+  // retried refusal goes to the staged account: agent_start applies it before the request.
+  pi.on("agent_end", async (_event, ctx) => {
     const failed = failure; failure = undefined;
     if (pinned || setting || !failed || failed.generation !== generation) return;
     attempted.set(key(failed.pair), failed.pair);
@@ -165,12 +170,20 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
     const token = generation;
     try {
       const model = await route(ctx, tier ?? failed.pair.canonical, failed.pair, failed.reasoning, [...attempted.values()]);
-      if (!active || token !== generation || ctx.hasPendingMessages()) return;
+      if (!active || token !== generation) return;
       if (!model) { report(ctx, "Quota recovery exhausted: no eligible untried account/model in this selection.", "warning"); return; }
       attempted.set(key(pair(model)), pair(model));
-      staged = { model, reasoning: failed.reasoning, generation: token };
-      return { entries: [...event.entries, { type: "context_edit" as const, targetId: failed.id, replacement: null }], continue: true };
+      staged = { model, reasoning: failed.reasoning, generation: token, failedId: failed.id };
     } catch { if (token === generation) report(ctx, "Quota recovery stopped: routing unavailable.", "error"); }
+  });
+  // An uncommitted stage reaches this boundary only when Pi did not retry (non-retryable
+  // message or retry budget spent). Pi's retry omits the failed attempt itself.
+  pi.on("agent_before_settle", (event, ctx) => {
+    const next = staged;
+    if (pinned || setting || !next || next.committed || next.generation !== generation) return;
+    if (ctx.hasPendingMessages()) { staged = undefined; return; }
+    next.committed = true;
+    return { entries: [...event.entries, { type: "context_edit" as const, targetId: next.failedId, replacement: null }], continue: true };
   });
 
   return async (args, ctx) => {

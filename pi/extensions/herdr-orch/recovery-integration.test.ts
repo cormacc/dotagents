@@ -41,7 +41,8 @@ async function scenario(mode: string) {
   await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
   const origin = `http://127.0.0.1:${(server.address() as any).port}`;
   writeFileSync(join(agent, "auth.json"), JSON.stringify(Object.fromEntries([work, personal].map(account => [account, { type: "oauth", access: `sk-ant-oat01-${account === work && !process.env.RECOVERY_TEST_WRONG_ACCOUNT ? "work" : "personal"}`, refresh: "fixture", expires: 4102444800000 }]))));
-  writeFileSync(join(agent, "settings.json"), JSON.stringify({ retry: { enabled: false } }));
+  // "retry" keeps Pi's automatic retry, which classes a 429 as transient, so failover must precede it.
+  writeFileSync(join(agent, "settings.json"), JSON.stringify({ retry: mode === "retry" ? { enabled: true, maxRetries: 3, baseDelayMs: 10 } : { enabled: false } }));
   writeFileSync(join(agent, "models.json"), JSON.stringify({ providers: { [work]: { baseUrl: origin }, [personal]: { baseUrl: origin } } }));
   writeFileSync(join(cwd, "tool.txt"), "completed tool fixture");
   // Empty provider rows disable quota HTTP in this isolated shared-policy fixture.
@@ -110,6 +111,10 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
       else assert.equal((await command(h, { type: "get_state" })).data.model.provider, mode === "cross-tier" ? "lemonade" : personal);
       if (mode === "reasoning") assert.equal((await command(h, { type: "get_state" })).data.thinkingLevel, "high");
     }
+    if (mode === "retry") {
+      const retries = (h.events as any[]).filter(e => e.type === "auto_retry_start");
+      assert.equal(retries.length, 1, "Pi's first automatic retry already uses the recovery account");
+    }
     if (mode === "tools") {
       const executions = (h.events as any[]).filter(e => e.type === "tool_execution_end");
       assert.equal(executions.length, 1); assert.equal(executions[0].toolCallId, "preserved-call");
@@ -121,5 +126,5 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
     console.log(`ok - installed RPC recovery ${mode}: ${requests.map(r => r.account).join(' -> ')}`);
   } finally { await h.dispose(); server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); rmSync(cwd, { recursive: true, force: true }); }
 }
-async function main() { for (const mode of process.env.RECOVERY_TEST_CWD_ONLY ? ["tier", "tier-nongit"] : process.env.RECOVERY_TEST_DELAYED_ONLY ? ["delayed"] : process.env.RECOVERY_TEST_BOUNDARIES_ONLY ? ["boundaries"] : process.env.RECOVERY_TEST_SESSION_ONLY ? ["resume"] : ["discovery", "normal", "exhaustion", "auth", "permission", "server", "pinned", "tools", "tier", "tier-nongit", "cross-tier", "direct-escape", "reasoning", "delayed", "resume", "boundaries"]) await scenario(mode); console.log("SUMMARY: installed RPC recovery suite passed"); }
+async function main() { for (const mode of process.env.RECOVERY_TEST_CWD_ONLY ? ["tier", "tier-nongit"] : process.env.RECOVERY_TEST_DELAYED_ONLY ? ["delayed"] : process.env.RECOVERY_TEST_BOUNDARIES_ONLY ? ["boundaries"] : process.env.RECOVERY_TEST_SESSION_ONLY ? ["resume"] : ["discovery", "normal", "retry", "exhaustion", "auth", "permission", "server", "pinned", "tools", "tier", "tier-nongit", "cross-tier", "direct-escape", "reasoning", "delayed", "resume", "boundaries"]) await scenario(mode); console.log("SUMMARY: installed RPC recovery suite passed"); }
 main().catch(e => { console.error(e); process.exitCode = 1; });

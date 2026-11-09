@@ -41,12 +41,17 @@ function fixture(mode = "rpc", history: any[] = []) {
   };
   const tier = process.env.RECOVERY_TEST_NO_CONTROLLER ? undefined : registerRecovery(pi, execute);
   const emit = async (name: string, event: any = {}) => handlers.get(name)?.(event, ctx);
-  const fail = async (errorMessage = "429 quota exhausted", provider = selected.provider, id = "failed-entry", requestModel = selected.id) => {
+  // A refused run up to agent_end; Pi then either retries (agent_start) or settles.
+  const refuse = async (errorMessage = "429 quota exhausted", provider = selected.provider, id = "failed-entry", requestModel = selected.id) => {
     await emit("turn_start");
     await emit("turn_end", { message: { role: "assistant", provider, model: requestModel, stopReason: "error", errorMessage }, messageEntryId: id });
+    await emit("agent_end", { messages: [] });
+  };
+  const fail = async (...args: Parameters<typeof refuse>) => {
+    await refuse(...args);
     return emit("agent_before_settle", { entries: [{ type: "custom", customType: "other", data: {} }] });
   };
-  return { ctx, pi, emit, fail, commands, tier, notices, status, widgets, entries, requests, requestPaths, controller,
+  return { ctx, pi, emit, refuse, fail, commands, tier, notices, status, widgets, entries, requests, requestPaths, controller,
     get selected() { return selected; }, get aborts() { return aborts; }, get switches() { return switches; },
     gateSelection() { selectionGate = deferred(); return selectionGate; }, gateRoute() { routeGate = deferred(); return routeGate; },
     setResult(value: any) { routeResult = value; },
@@ -137,6 +142,19 @@ async function main() {
     assert.equal(f.requests.length, 4095);
     assert.match(f.notices.at(-1)!, /route attempt limit/);
     tests++;
+  }
+  {
+    // Pi's automatic retry: each refusal switches account before the retried request.
+    const f = fixture(); f.useInventory([a, b, c]);
+    await f.refuse(); assert.equal(f.switches, 0, "agent_end stages without a setter");
+    await f.emit("agent_start"); assert.equal(f.selected.provider, "google", "first retry uses the next account");
+    await f.refuse(); await f.emit("agent_start"); assert.equal(f.selected.provider, "mistral");
+    assert.deepEqual(f.requests.at(-1).attempted.map((p: any) => p.account), ["openai", "google"]);
+    await f.emit("turn_start");
+    await f.emit("turn_end", { message: { role: "assistant", provider: "mistral", model: "model-a", stopReason: "stop" }, messageEntryId: "ok" });
+    await f.emit("agent_end", { messages: [] });
+    assert.equal(await f.emit("agent_before_settle", { entries: [] }), undefined, "a recovered retry requests no continuation");
+    assert.equal(f.switches, 2); assert.equal(f.aborts, 0); tests++;
   }
   {
     const f = fixture(); f.useInventory([a, b]);
