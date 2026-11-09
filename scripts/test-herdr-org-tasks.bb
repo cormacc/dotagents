@@ -247,7 +247,7 @@
         (is (host/display-enabled?) "display defaults to enabled")
         (host/ensure-all! host/defaults)
         (host/ensure-all! host/defaults)
-        (is (= [(str "tasks-" tab2) (str "tasks-" tab)] (task-panes state)))
+        (is (= (sort [(str "tasks-" tab) (str "tasks-" tab2)]) (task-panes state)))
         (is (= 2 (count (opens calls))) "a live instance is reused")
         (is (every? #(and (some #{"--no-focus"} %) (some #{"down"} %)) (opens calls)))
         (is (not-any? #(some #{"send-text" "send-keys" "run" "focus"} %) @calls)))))))
