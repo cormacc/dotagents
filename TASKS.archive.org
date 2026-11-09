@@ -5083,3 +5083,34 @@ Acceptance criteria:
 - Run npm audit again. Make a separate task for each advisory that remains in a package that you keep.
 - Start Pi and confirm that the extensions load and the four MCP servers connect.
 - Do not replace an active extension or enable automatic provider routing as part of this work. Live provider calls need a separate approved scope.
+
+** DONE herdr-app mod for herdr-orch :herdr_orch:
+CLOSED: [2026-11-09 Mon 18:14]
+:PROPERTIES:
+:CUSTOM_ID: f7457cc5-64a5-4139-ba94-7da9eca8f6ed
+:CREATED: [2026-11-05 Thu 18:47]
+:STARTED: [2026-11-05 Thu 19:17]
+:ARCHIVED: [2026-11-09 Mon 18:14]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 18:47]
+- State "STARTED" from "TODO" [2026-11-05 Thu 19:17]
+- State "DONE" from "STARTED" [2026-11-09 Mon 18:14]
+:END:
+#+IMPORT: [[plan:2026-11-05-herdr-app-orch-mod.org]]
+Scaffold a herdr-app mod for herdr-orch. Its first feature is the subscription quota status-bar item and popup, ported from the Lakris2407/herdr-mods `quota` mod (https://github.com/Lakris2407/herdr-mods/tree/main/quota). The data source must be `oh usage` (herdr-orch CLI) instead of the upstream mod's own collection, so that the TUI plugin (`herdr-plugin/`, `quota-stanza.sh`, `quota-pane.sh`) and the app mod show the same metrics. Mod authoring interface: `~/.config/herdr-app/AGENTS.md` (written by herdr-app). Related: task 9f667467 (herdr plugin wrapper), [[plan:2026-11-04-herdr-orch-herdr-app-support.org]].
+
+** DONE Validate herdr-app herdr-orch mod on Linux :herdr_orch:
+CLOSED: [2026-11-09 Mon 18:31]
+:PROPERTIES:
+:CUSTOM_ID: a5cbd996-628f-4883-929a-e5d54338f9b8
+:CREATED: [2026-11-05 Thu 20:23]
+:ARCHIVED: [2026-11-09 Mon 18:31]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 20:23]
+- State "DONE" from "TODO" [2026-11-09 Mon 18:31]
+:END:
+Follow-up to task f7457cc5-64a5-4139-ba94-7da9eca8f6ed. The owner deferred native Linux validation to another machine. Use [[plan:2026-11-05-herdr-app-orch-mod.org]] as the requirements source, especially Summary/Acceptance and the native validation plan task a8cb3a32-0c02-4755-9634-02044fdfa9dc. Run native checks for both mods; demonstrate real Linux CPU/RAM and optional NVIDIA metrics, quota popup and keyboard access, narrow/light/dark readability, shared in-flight refresh, native timeout/process cleanup, real five-minute stale expiry/recovery, individual symlink discovery/source watching and app restart persistence. Preserve installed files, selected layout and user terminals; obtain consent for disruptive actions. Use fake quota commands for failure/lifecycle probes, never live credentials or endpoints in automated tests. Record exact app/core versions, commands, statuses and native screenshots in the linked record. macOS fixture or initial-check evidence is not Linux delivery evidence. Prerequisite: transfer the committed implementation and parent Nix wiring to the target machine before validation.

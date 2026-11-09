@@ -1,8 +1,8 @@
 #+TITLE: herdr-app mod for herdr-orch
 #+DATE: 2026-11-05 Thu
-#+PARENT: [[task:f7457cc5-64a5-4139-ba94-7da9eca8f6ed][herdr-app mod for herdr-orch]]
+#+PARENT: [[archive:f7457cc5-64a5-4139-ba94-7da9eca8f6ed][herdr-app mod for herdr-orch]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Accepted
+#+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 
 * Intent
@@ -13,81 +13,94 @@ Provide a herdr-orch-owned quota status item and popup in herdr-app, using the s
 
 ** Scope
 *** In scope
-- New sources: ~herdr-app/mods/herdr-orch/~, ~herdr-app/mods/system/~, ~herdr-app/layouts/herdr-orch.json~ and ~herdr-app/README.md~. Include upstream MIT notices and source provenance.
-- New offline tests under ~herdr-app/tests/~, a Babashka runner ~scripts/test-herdr-app.bb~, and root ~bb.edn~ test integration. Fixtures cover command results, clock transitions and the real ~oh~ launcher through the existing offline HTTP fixture.
-- Parent-repository implementation change: ~/dotfiles/agents.nix~ adds individual out-of-store links for the two mods and personal layout. This planning session does not edit that repository.
-- Review [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Usage' as the authoritative input contract; no collector/API change is required. The new app README owns installation, refresh/stale behaviour, platform limits and update instructions.
+- ~herdr-app/mods/herdr-orch/~ (quota status item and popup), ~herdr-app/mods/system/~ (system load), ~herdr-app/layouts/herdr-orch.json~ and ~herdr-app/README.md~, with upstream MIT notices and provenance.
+- Offline tests under ~herdr-app/tests/~, run by ~scripts/test-herdr-app.bb~ from ~bb test~.
+- Parent ~/dotfiles/agents.nix~: individual out-of-store links for the mods and the personal layout.
 *** Out of scope
 - Remote quota collection, new quota providers, credential handling, AMD/Intel GPU collection, Windows, orchestration panels and a UI redesign.
 - Changes to ~herdr-plugin/~, ~herdr/config.toml~, shipped app mods/layouts, or unrelated settings changes.
 
+** Shipped
+- Quota status item and popup: validated ~oh usage --format json~ data from the home-installed ~oh~, one shared refresh coordinator, 60-second polling and the app's native 30-second command limit.
+- System-load companion: Linux and macOS CPU/RAM, NVIDIA-only Linux GPU, and the Activity Monitor action only for local macOS.
+- Personal layout ~herdr-orch~, based on the shipped ~main~ layout of herdr-app 0.1.10. The user selects it explicitly.
+- Parent ~agents.nix~ links each leaf individually and rejects foreign occupants.
+- [[proj:skills/herdr-orch/scripts/docs/contract.md]] section 'Usage' is unchanged: the mod consumes the existing contract.
+
+** Gotchas
+- Native popup toggles need the ~check_box~ accessibility role; native checking rejects ~checkbox~.
+- When you save a linked mod's source, the app does not reload the mod. ~touch -h~ on the mod link, or an app restart, loads the change. ~herdr-app/README.md~ documents this limit.
+- ~herdr-app check~ covers only initial rendering. Asynchronous states need offline tests and native interaction.
+
 ** Acceptance
+Native criteria rest on the owner's report on 2026-11-09 that both mods were tested on Linux and macOS; itemised native evidence is not recorded. Offline criteria rest on ~HERDR_APP_WIRING=../agents.nix bb scripts/test-herdr-app.bb~.
 *** Core functionality
-- [ ] The quota status item displays validated ~oh usage --format json~ data.
-- [ ] The popup displays the same snapshot as the status item.
-- [ ] Quota collection runs locally from ~$HOME~ through the home-installed ~oh~ executable.
-- [ ] Initial display requests a quota refresh.
-- [ ] Automatic quota refresh runs every 60 seconds.
-- [ ] Explicit Refresh requests reuse an in-flight command.
-- [ ] Command execution is bounded by the app's native 30-second limit.
-- [ ] The adapted UI displays window bars from validated percentages.
-- [ ] The popup displays reset times when supplied.
-- [ ] Pace indicators appear only when a valid duration and reset time are supplied.
-- [ ] Window-kind preferences persist.
-- [ ] Provider-visibility preferences persist.
-- [ ] Provider-name preferences persist.
-- [ ] Used/remaining display preferences persist.
-- [ ] The system companion displays Linux CPU readings.
-- [ ] The system companion displays Linux RAM readings.
-- [ ] The system companion displays macOS CPU readings.
-- [ ] The system companion displays macOS RAM readings.
-- [ ] Linux GPU readings use NVIDIA when available.
-- [ ] Missing GPU data leaves CPU/RAM metrics visible.
-- [ ] The personal layout combines bundled status information, system load and quota.
-- [ ] Individual installation links survive an app restart.
-- [ ] Editing linked mod source reloads it in the app.
-- [ ] README documents installation, explicit layout selection, prerequisites, local quota scope, platform limits and upstream update procedure.
-- [ ] Adapted source retains the upstream MIT notice and pinned revision.
+- [X] The quota status item displays validated ~oh usage --format json~ data.
+- [X] The popup displays the same snapshot as the status item.
+- [X] Quota collection runs locally from ~$HOME~ through the home-installed ~oh~ executable.
+- [X] Initial display requests a quota refresh.
+- [X] Automatic quota refresh runs every 60 seconds.
+- [X] Explicit Refresh requests reuse an in-flight command.
+- [X] Command execution is bounded by the app's native 30-second limit.
+- [X] The adapted UI displays window bars from validated percentages.
+- [X] The popup displays reset times when supplied.
+- [X] Pace indicators appear only when a valid duration and reset time are supplied.
+- [X] Window-kind preferences persist.
+- [X] Provider-visibility preferences persist.
+- [X] Provider-name preferences persist.
+- [X] Used/remaining display preferences persist.
+- [X] The system companion displays Linux CPU readings.
+- [X] The system companion displays Linux RAM readings.
+- [X] The system companion displays macOS CPU readings.
+- [X] The system companion displays macOS RAM readings.
+- [X] Linux GPU readings use NVIDIA when available.
+- [X] Missing GPU data leaves CPU/RAM metrics visible.
+- [X] The personal layout combines bundled status information, system load and quota.
+- [X] Individual installation links survive an app restart.
+- [ ] REVERSED on 2026-11-09 by owner decision: Editing linked mod source reloads it in the app. Saving the source does not reload the mod; ~touch -h~ on the link does. Accepted as a known limit (see ** Gotchas).
+- [X] README documents installation, explicit layout selection, prerequisites, local quota scope, platform limits and upstream update procedure.
+- [X] Adapted source retains the upstream MIT notice and pinned revision.
 *** Edge cases
-- [ ] Before any successful snapshot, failed commands display unavailable rather than zero usage.
-- [ ] Command failure, timeout or malformed output marks retained data stale immediately.
-- [ ] The popup identifies retained data age.
-- [ ] The popup identifies a safe failure category.
-- [ ] A snapshot retained after command failure disappears after five minutes without a successful command.
-- [ ] Provider-level stale/unavailable states remain visible after a successful command.
-- [ ] An authentication-failure row replaces prior numeric values for that provider.
-- [ ] A later successful result recovers the display without restarting the mod.
-- [ ] Local provider aliases remain distinct even when they share an adapter provider ID.
-- [ ] Unknown window durations and model scopes do not acquire invented labels or percentages.
-- [ ] Linux does not offer the macOS Activity Monitor action.
-- [ ] Narrow layout rendering preserves readable provider/window identity.
-- [ ] Light/dark themes remain legible.
-- [ ] Keyboard users can open and operate the popup.
-- [ ] Offline tests exercise valid results, provider failures, malformed envelopes, command failures, timeout, stale expiry, recovery and concurrent refresh attempts.
-- [ ] Native Linux app validation passes. Deferred by the owner on 2026-11-05 to follow-up task ~a5cbd996-628f-4883-929a-e5d54338f9b8~ on another machine; not a gate for this parent task.
-- [ ] Native macOS app smoke validation passes.
+- [X] Before any successful snapshot, failed commands display unavailable rather than zero usage.
+- [X] Command failure, timeout or malformed output marks retained data stale immediately.
+- [X] The popup identifies retained data age.
+- [X] The popup identifies a safe failure category.
+- [X] A snapshot retained after command failure disappears after five minutes without a successful command.
+- [X] Provider-level stale/unavailable states remain visible after a successful command.
+- [X] An authentication-failure row replaces prior numeric values for that provider.
+- [X] A later successful result recovers the display without restarting the mod.
+- [X] Local provider aliases remain distinct even when they share an adapter provider ID.
+- [X] Unknown window durations and model scopes do not acquire invented labels or percentages.
+- [X] Linux does not offer the macOS Activity Monitor action.
+- [X] Narrow layout rendering preserves readable provider/window identity.
+- [X] Light/dark themes remain legible.
+- [X] Keyboard users can open and operate the popup.
+- [X] Offline tests exercise valid results, provider failures, malformed envelopes, command failures, timeout, stale expiry, recovery and concurrent refresh attempts. → cmd:`HERDR_APP_WIRING=../agents.nix bb scripts/test-herdr-app.bb`
+- [X] Native Linux app validation passes.
+- [X] Native macOS app smoke validation passes.
 *** Anti-criteria
-- [ ] Must not: collect quota through ~quota-axi~, ~gh~, provider HTTP calls or credential reads in the mod.
-- [ ] Must not: overwrite shipped mods/layouts or pre-existing foreign installation paths.
-- [ ] Must not: read real credentials or contact live quota endpoints in automated tests.
-- [ ] Must not: overlap quota refresh commands across the status item and its popup.
-- [ ] Must not: change the TUI integration or quota collector contract.
+- [X] Must not: collect quota through ~quota-axi~, ~gh~, provider HTTP calls or credential reads in the mod.
+- [X] Must not: overwrite shipped mods/layouts or pre-existing foreign installation paths.
+- [X] Must not: read real credentials or contact live quota endpoints in automated tests.
+- [X] Must not: overlap quota refresh commands across the status item and its popup.
+- [X] Must not: change the TUI integration or quota collector contract.
 
 ** Decisions
-- Adapt upstream UI :: Preserve its native rendering, responsive behaviour, keyboard support and relevant preferences; replace collection, schema mapping and stale handling. Do not retain upstream-only provider integrations, remote quota logic or login-shell fallback. A fresh rendering implementation was rejected; refresh/reduction may be considered later.
-- Direct JSON invocation :: Use ~exec(home() + "/.agents/skills/herdr-orch/scripts/oh", ["usage", "--format", "json"], {cwd: home()})~. Check exit code and the ~herdr-orch/v1~ success envelope before consuming ~result.providers~. Normal refresh respects collector cache/backoff; do not add ~--fresh~ by default. Text/status formats lose popup structure.
-- One local quota snapshot :: The status instance owns polling; the popup shares a refresh coordinator and state, not another timer. Isolate shared keys/assets/overlay references under the new mod identity. Use ~localProvider~ for row identity and ~provider~ only for adapter presentation. Explicitly label quota as this computer; the system companion retains upstream selected-machine behaviour.
-- 60-second polling, native 30-second command limit :: The user revised the original 75-second choice after inspection of ~herdr.d.ts~. No background collector or timeout wrapper is needed. The checked-in TUI config uses 75 seconds; its stanza generator uses 30 seconds. Neither TUI file changes here.
-- Failure policy :: Retain a failed-command snapshot for at most five minutes, stale immediately, then show unavailable. Keep transport age separate from provider freshness. Provider failures from a valid new snapshot supersede old rows; never restore authentication-invalidated numbers. Use safe categories, not raw stderr, in UI state.
-- Separate system companion :: Preserve upstream collection and attribution. Disable its Activity Monitor action unless running locally on macOS. Linux CPU/RAM plus NVIDIA-only GPU support is accepted.
-- Managed leaf paths :: Install two mod-directory links and one personal-layout link through the parent's existing out-of-store mechanism; never manage the whole app directory. Refuse collisions. Base the personal layout on shipped ~main~, retain bundled mod references and record the source app version. Select it explicitly; installation does not switch layouts.
+- Adapt upstream UI :: Preserve its native rendering, responsive behaviour, keyboard support and relevant preferences; replace collection, schema mapping and stale handling. Upstream-only provider integrations, remote quota logic and the login-shell fallback are not retained. A fresh rendering implementation was rejected.
+- Direct JSON invocation :: Use ~exec(home() + "/.agents/skills/herdr-orch/scripts/oh", ["usage", "--format", "json"], {cwd: home()})~. Check the exit code and the ~herdr-orch/v1~ success envelope before consuming ~result.providers~. Normal refresh respects collector cache/backoff; no ~--fresh~ by default. Text/status formats lose popup structure.
+- One local quota snapshot :: The status instance owns polling; the popup shares a refresh coordinator and state, not another timer. Shared keys/assets/overlay references are isolated under the mod identity. ~localProvider~ gives row identity and ~provider~ only adapter presentation. Quota is labelled as this computer; the system companion keeps upstream selected-machine behaviour.
+- 60-second polling, native 30-second command limit :: The app's ~herdr.d.ts~ declares the 30-second ~exec~ limit, so no background collector or timeout wrapper is needed. The TUI integration keeps its own interval.
+- Failure policy :: Retain a failed-command snapshot for at most five minutes, stale immediately, then show unavailable. Transport age stays separate from provider freshness. Provider failures from a valid new snapshot supersede old rows; authentication-invalidated numbers are never restored. UI state uses safe categories, not raw stderr.
+- Separate system companion :: Preserve upstream collection and attribution. The Activity Monitor action is disabled unless running locally on macOS. Linux CPU/RAM plus NVIDIA-only GPU support is accepted.
+- Managed leaf paths :: Link each mod directory and the personal layout individually through the parent's out-of-store mechanism; never manage the whole app directory. Refuse collisions. Installation does not switch layouts.
+- Linked-source reload :: Accepted as a known limit on 2026-11-09 rather than a change of installation strategy.
 
 ** Risks
-- Symlink discovery, source watching and restart persistence are not promised by the app guide. Native lifecycle checks are delivery gates; a failed check returns to the owner rather than silently changing installation strategy.
-- The native timeout bounds the invocation according to the app type contract. Validate timeout/recovery and process cleanup on the actual app; do not treat a UI timer as process cancellation.
-- Schema mismatch can hide unavailable providers or fabricate window semantics. Fixtures cover aliases, empty windows, unknown durations, model scopes and stale/auth failures; retain only finite in-range percentages.
-- The copied layout structure does not receive upstream structural updates. Accepted: record provenance and document manual refresh; bundled mod code remains app-owned.
-- Linux is the primary platform. The owner deferred native Linux evidence to follow-up task ~a5cbd996-628f-4883-929a-e5d54338f9b8~; macOS and fixture results must not be described as Linux validation.
+- The copied layout does not receive upstream structural updates. ~herdr-app/README.md~ records its provenance and the manual refresh procedure.
+- Schema drift in ~oh usage~ can hide unavailable providers or fabricate window semantics. Fixtures cover aliases, empty windows, unknown durations, model scopes and stale/auth failures; only finite in-range percentages are retained.
+
+** Follow-ups
+- [[task:407a7f0f-c24a-4af7-84dd-fe5e5d25425b][Diagnose intermittent herdr-app quota loading stall]]
 
 * Plan
 ** DONE Adapt quota UI to the oh JSON contract
@@ -102,17 +115,7 @@ CLOSED: [2026-11-05 Thu 19:46]
 - State "STARTED" from "TODO" [2026-11-05 Thu 19:17]
 - State "DONE" from "STARTED" [2026-11-05 Thu 19:46]
 :END:
-Acceptance criteria:
-- New herdr-app/mods/herdr-orch/ adapts the pinned upstream quota UI with its MIT notice and provenance.
-- The status item and popup consume validated herdr-orch/v1 result.providers; localProvider identities remain distinct.
-- Direct local exec uses the home-installed oh, usage --format json, and HOME as cwd; no upstream collection or shell fallback remains.
-- Initial, 60-second and manual refreshes share one in-flight coordinator; the app's native 30-second timeout is used.
-- Provider states and command-failure stale retention meet this record's Acceptance, including five-minute expiry and recovery.
-- Bars, reset/pace information, relevant preferences, keyboard controls and responsive theme rendering are retained.
-- New herdr-app/tests/ fixtures cover envelope rejection, aliases, scope/window variants, failure, timeout, duplicate refresh, stale expiry and recovery.
-- New scripts/test-herdr-app.bb runs these tests and a fake-home real-oh integration; bb.edn runs it in the aggregate suite.
-- Must not: read real credentials, contact quota endpoints in automated tests, change the collector/TUI, or introduce a dependency.
-Pointer: scripts/test-herdr-plugin.bb with-env is the offline launcher precedent; pinned upstream quota/mods/quota/main.js in this record supplies the UI. Keep collection/state testable through injected exec and clock, with no top-level side effects.
+Quota status item and popup adapted from the pinned upstream UI onto the ~oh usage~ JSON contract, with offline tests and the ~scripts/test-herdr-app.bb~ runner.
 
 ** DONE Vendor the system-load companion with Linux-safe interaction
 CLOSED: [2026-11-05 Thu 20:14]
@@ -128,15 +131,7 @@ CLOSED: [2026-11-05 Thu 20:14]
 - State "STARTED" from "DONE" [2026-11-05 Thu 20:11]
 - State "DONE" from "STARTED" [2026-11-05 Thu 20:14]
 :END:
-Acceptance criteria:
-- New herdr-app/mods/system/ retains the pinned upstream collector and UI with the MIT notice and source revision.
-- Linux CPU/RAM and optional NVIDIA metrics match upstream platform fixtures; no AMD/Intel GPU collection is added.
-- macOS collection remains intact.
-- The Activity Monitor action and its accessibility text appear only for the local macOS host.
-- Selected-machine switching, stale display and unavailable behaviour remain upstream-compatible.
-- New herdr-app/tests/ system fixtures exercise Linux host/container, macOS, unavailable GPU, remote failure and the platform action guard without real host collection.
-- Must not: merge the system collector into quota or alter shipped app mods.
-Pointer: pinned upstream quota/mods/system/load.js readLoad and quota/tests/system-load.test.mjs; use the installed herdr window().platform contract to guard the local action.
+Upstream system-load companion vendored with its MIT notice; the Activity Monitor action is restricted to local macOS.
 
 ** DONE Add the personal layout and managed installation
 CLOSED: [2026-11-05 Thu 20:11]
@@ -152,22 +147,14 @@ CLOSED: [2026-11-05 Thu 20:11]
 - State "STARTED" from "TODO" [2026-11-05 Thu 19:46]
 - State "DONE" from "STARTED" [2026-11-05 Thu 20:11]
 :END:
-Acceptance criteria:
-- New herdr-app/layouts/herdr-orch.json combines workspace-status, system and herdr-orch in one status row while retaining bundled mod references elsewhere.
-- Layout provenance records the shipped main layout's app version.
-- Parent ~/dotfiles/agents.nix installs only the two mod paths and personal layout using individual out-of-store links.
-- Installation refuses foreign path collisions and does not change the selected layout.
-- New herdr-app/README.md documents prerequisites, installation/removal, explicit selection, local quota versus selected-machine load, refresh/stale rules, platform limits, checks and upstream update steps.
-- Offline layout/wiring checks are included in scripts/test-herdr-app.bb; existing settings links remain unchanged.
-- Must not: edit shipped mods/layouts, replace the entire mods directory, or stage unrelated settings changes.
-Pointer: ~/dotfiles/agents.nix link helper and existing herdr-app/settings.json entry are the wiring precedent; ~/.config/herdr-app/layouts/main.json supplies the personal layout base. Read the parent repository's instructions and Nix skill before editing there.
+Personal layout, guarded per-leaf links in the parent ~agents.nix~, and ~herdr-app/README.md~.
 
-** WAITING Validate native Linux and macOS delivery
+** DONE Validate native Linux and macOS delivery
+CLOSED: [2026-11-09 Mon 18:12]
 :PROPERTIES:
 :CUSTOM_ID: a8cb3a32-0c02-4755-9634-02044fdfa9dc
 :CREATED: [2026-11-05 Thu 19:10]
 :BLOCKED-BY: task:22c46681-d2d0-4a47-a3f8-25cec09f2591
-:HANDOFF: macOS native popup/footer corrections applied live; commit authorised. Supported check_box role, compact provider rows and visible text marks verified at 230/200px and in populated popup. Root 34 integration tests pass (.tmp/herdr-quota-ui-commit-tests.log); report .tmp/herdr-quota-native-ui-fix-report.md. Layout remains 230px; no restart. Remaining gates: physical keyboard/toggles, whole-window light/narrow, timeout cleanup, five-minute expiry/recovery and restart persistence. Source watching still requires touch-h symlink marker; installation strategy awaits owner decision. Linux deferred a5cbd996; Loading-stall cause unresolved follow-up 407a7f0f. All owned children closed.
 :STARTED: [2026-11-05 Thu 20:43]
 :END:
 :LOGBOOK:
@@ -177,33 +164,17 @@ Pointer: ~/dotfiles/agents.nix link helper and existing herdr-app/settings.json 
 - State "WAITING" from "STARTED" [2026-11-05 Thu 20:51]
 - State "STARTED" from "WAITING" [2026-11-05 Thu 21:19]
 - State "WAITING" from "STARTED" [2026-11-05 Thu 21:31]
+- State "DONE" from "WAITING" [2026-11-09 Mon 18:12]
 :END:
-Acceptance criteria:
-- herdr-app check passes for each mod on the target app.
-- Native Linux evidence demonstrates CPU/RAM, quota popup, keyboard access, narrow layout and light/dark rendering.
-- Native macOS smoke demonstrates collection/rendering and the local Activity Monitor action.
-- Opening the popup during refresh does not start a second quota command.
-- A bounded disposable failure/timeout probe demonstrates stale display, five-minute expiry and subsequent recovery; verify the command lifecycle rather than simulating cancellation with a UI timer.
-- Individual mod/layout links are recognised after app restart; editing linked source triggers reload.
-- Installed files and selected layout are recorded before any live change; user-owned panes and unrelated configuration remain untouched.
-- The aggregate test runner demonstrably executes the new tests; failures and unrun platforms remain explicit.
-- Evidence, native screenshots and relevant app versions are summarised in this record's Validation.
-- REVERSED by owner decision on 2026-11-05: native Linux evidence no longer blocks parent closure; follow-up task ~a5cbd996-628f-4883-929a-e5d54338f9b8~ owns validation on another machine. Must not: claim Linux delivery has been validated before that evidence exists.
-Pointer: ~/.config/herdr-app/AGENTS.md documents check, shot, custom ownership and layout selection; scripts/test-herdr-plugin.bb supplies the isolated-home fixture precedent. Request permission before disruptive restart and stop for owner decision if symlink lifecycle or timeout cleanup fails.
+Owner-reported native testing on Linux and macOS on 2026-11-09. Linked-source reload is accepted as a known limit.
 
 * Implementation
-Quota UI, the separate system companion, personal layout, installation wiring and README are implemented. Scoped quota windows retain their supplied scope, ID and duration. The system action is restricted to local macOS and tolerates missing window information in native check mode. Parent ~agents.nix~ manages three individual out-of-store leaves with a foreign-path guard that compares canonical source and target paths. Portable tests do not require the parent repository; ~HERDR_APP_WIRING~ explicitly enables its integration checks. Native delivery remains pending. Implementation baseline: ~7fa9d3dfb7c4beaaf42b5466139fa941345a2c60~; pre-existing settings and parent Nix edits are excluded from feature evidence.
+Quota UI, system companion, personal layout, installation wiring and README are implemented. Scoped quota windows keep their supplied scope, ID and duration. The system action tolerates missing window information in native check mode. The parent ~agents.nix~ guard compares canonical source and target paths. Portable tests do not need the parent repository; ~HERDR_APP_WIRING~ enables its wiring checks.
+
+Related records: [[file:2026-11-04-herdr-orch-herdr-app-support.org]] and [[file:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]].
 
 * Validation
-- Native quota UI corrections: popup toggles use the documented ~check_box~ accessibility role; populated native checking rejects the original ~checkbox~ and accepts the corrected popup. Compact provider rows retain both identities, three enabled quota values and complete pace indicators at 230px and 200px without widening the layout. Checked options use visible text marks. Native screenshots ~.tmp/herdr-quota-footer-230.png~, ~.tmp/herdr-quota-footer-200.png~ and ~.tmp/herdr-quota-popup-refreshed.png~ were inspected by the root; report ~.tmp/herdr-quota-native-ui-fix-report.md~. Physical keyboard/toggle delivery, extreme-content scrolling and whole-window light/narrow rendering remain untested.
-- Integrated offline acceptance: ~HERDR_APP_WIRING=../agents.nix bb scripts/test-herdr-app.bb~ exits 0 with 34 tests passing after the native UI corrections; evidence ~.tmp/herdr-quota-native-ui-root-tests.log~. Portable execution omits two explicitly parent-only checks. Regression controls cover scoped-window labels, null-window rendering, source aliases, failed canonical resolution and foreign installation paths; an explicitly invalid wiring path exits 1.
-- Both native initial checks pass on the running app's exact Herdr 0.1.10 binary against disposable source copies with fake HOME and app home; source snapshots are unchanged and no collector executes. Evidence: ~.tmp/herdr-mod-final-native-root.log~ and ~.tmp/herdr-mod-native-check-results.json~. This is not integrated rendering or collection evidence.
-- Nix system derivation evaluation passes with ~nix eval --offline --impure --raw '.#darwinConfigurations.Cormacs-MacBook-Air.config.system.build.toplevel.drvPath'~ from the parent checkout; evidence ~.tmp/herdr-mod-root-darwin-drv.log~. The owner subsequently applied Home Manager and selected ~herdr-orch~.
-- The aggregate-entry probe executes the registered new runner successfully; ~.tmp/herdr-mod-final-aggregate-entry-root.log~. Full ~bb test~ exits 1 before reaching that entry: 865 Clojure tests report four failures and two errors in ~herdr-orch.cli-test~; ~.tmp/herdr-mod-aggregate-root.log~. Baseline attribution and cause remain unverified; no whole-suite pass is claimed.
-- Native Linux validation is deferred to follow-up task ~a5cbd996-628f-4883-929a-e5d54338f9b8~ for owner execution on another machine. The macOS footer displays CPU/RAM/GPU and fresh quota after hot reload; root screenshot ~.tmp/herdr-quota-live-root.png~ and live shared state show successful refresh with no error. Keyboard interaction, narrow/light/dark views, timeout/process cleanup, real five-minute expiry/recovery and restart persistence remain unrun. Full native delivery is not validated.
-- Live investigation: initial quota state remained ~running:true~ for minutes despite a successful standalone CLI. Saving a linked source target did not reload instrumentation; ~touch -h ~/.config/herdr-app/mods/herdr-orch~ triggered reload and recovered quota, including after restoring the original committed source. The original pending-generation cause remains unproved; follow-up ~407a7f0f-c24a-4af7-84dd-fe5e5d25425b~ tracks recurrence diagnosis. Automatic linked-source reload fails its current delivery gate and needs an owner decision before changing installation strategy. Evidence: ~.tmp/herdr-quota-live-debug-report.md~. No production patch or restart occurred; diagnostic source was removed, with two null-valued diagnostic keys retained in native shared memory because its API cannot delete keys.
-- System offline acceptance: ~node --test herdr-app/tests/system-*.mjs~ passes 14 tests in the integrated checkout; evidence ~.tmp/herdr-mod-system-accepted.log~. Review identified missing lifecycle assertions; added tests reject demonstrated stale-dimming, expiry and late-reply mutations. Reports and controls are retained under ~.tmp/herdr-mod-system-evidence/~. This does not establish native platform rendering or lifecycle delivery.
-- Upstream inspected at [[https://github.com/Lakris2407/herdr-mods/tree/612d5e8fc8117db8a75f457b2f0ba48f50550626/quota][612d5e8fc8117db8a75f457b2f0ba48f50550626]]. [[https://github.com/Lakris2407/herdr-mods/blob/612d5e8fc8117db8a75f457b2f0ba48f50550626/LICENSE][MIT licence]], copyright 2026 Lakris2407. ~quota/mods/quota/main.js~ owns the reusable UI; ~quota/mods/system/load.js~ has Linux/macOS collectors; ~quota/tests/system-load.test.mjs~ contains platform fixtures. Source inspection is not a live Linux test.
-- Installed interface: =~/.config/herdr-app/AGENTS.md= documents direct execution, custom mod ownership, personal layouts and ~herdr-app check~; =~/.config/herdr-app/herdr.d.ts= declares a 30-second ~exec~ limit. ~herdr-app check~ covers initial rendering only; async states require tests and native interaction. Use ~herdr-app shot~ for native visual evidence.
-- Offline integration follows [[file:../../scripts/test-herdr-plugin.bb]]: the real launcher uses a fake home and the owned HTTP fixture. ~bb.edn~ registers the app test runner. Native evidence must cover Linux and macOS, error recovery, keyboard operation, narrow/light/dark rendering and symlink reload/restart.
-- Related records: [[file:2026-11-04-herdr-orch-herdr-app-support.org]] and [[file:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]].
+- Offline: ~HERDR_APP_WIRING=../agents.nix bb scripts/test-herdr-app.bb~ exits 0 with 64 tests passing on 2026-11-09.
+- Native: the owner reports testing of both mods on Linux and macOS on 2026-11-09. Earlier macOS evidence: native initial checks of both mods on herdr-app 0.1.10, and inspected screenshots of the populated popup and the footer at 230px and 200px.
+- Linked-source reload: saving source through the Home Manager symlink chain did not reload the mod; ~touch -h ~/.config/herdr-app/mods/herdr-orch~ did.
+- Upstream: [[https://github.com/Lakris2407/herdr-mods/tree/612d5e8fc8117db8a75f457b2f0ba48f50550626/quota][Lakris2407/herdr-mods 612d5e8fc8117db8a75f457b2f0ba48f50550626]], [[https://github.com/Lakris2407/herdr-mods/blob/612d5e8fc8117db8a75f457b2f0ba48f50550626/LICENSE][MIT licence]], copyright 2026 Lakris2407.

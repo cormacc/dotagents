@@ -263,20 +263,6 @@ herdr-orch assumes that Pi and each native CLI log in to one subscription per pr
 :END:
 Deferred by the owner from the owned quota collector delivery. Support native Claude Code on macOS and Codex OS credential stores only when credentials can be read non-interactively, without refresh, credential writes, prompts or cross-harness fallback. Verify host-specific behaviour on macOS; Linux file fixtures do not establish Keychain support. Pi file-store subscription reporting does not depend on this work. Contract: skills/herdr-orch/scripts/docs/contract.md section Owned credential boundary. Origin: design/log/2026-11-05-owned-quota-collector.org.
 
-** STARTED herdr-app mod for herdr-orch :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: f7457cc5-64a5-4139-ba94-7da9eca8f6ed
-:CREATED: [2026-11-05 Thu 18:47]
-:STARTED: [2026-11-05 Thu 19:17]
-:HANDOFF: Native quota popup/footer fixed live; commit authorised. Renderer uses supported check_box role, visible option marks and compact provider rows. Root 34 integration tests pass (.tmp/herdr-quota-ui-commit-tests.log); native screenshots show populated popup and readable 230/200px footer. Report .tmp/herdr-quota-native-ui-fix-report.md; all owned children closed. Layout default unchanged, no restart. Native a8cb3a32 WAITING remaining physical interaction, whole-window light/narrow, timeout/stale/restart gates; source-watch touch-h workaround still needs owner decision. Linux deferred a5cbd996; initial Loading stall unresolved follow-up 407a7f0f. Preserve concurrent org-tasks UI changes, generated files and runtime settings; parent remains open.
-:END:
-:LOGBOOK:
-- Created [2026-11-05 Thu 18:47]
-- State "STARTED" from "TODO" [2026-11-05 Thu 19:17]
-:END:
-#+IMPORT: [[plan:2026-11-05-herdr-app-orch-mod.org]]
-Scaffold a herdr-app mod for herdr-orch. Its first feature is the subscription quota status-bar item and popup, ported from the Lakris2407/herdr-mods `quota` mod (https://github.com/Lakris2407/herdr-mods/tree/main/quota). The data source must be `oh usage` (herdr-orch CLI) instead of the upstream mod's own collection, so that the TUI plugin (`herdr-plugin/`, `quota-stanza.sh`, `quota-pane.sh`) and the app mod show the same metrics. Mod authoring interface: `~/.config/herdr-app/AGENTS.md` (written by herdr-app). Related: task 9f667467 (herdr plugin wrapper), [[plan:2026-11-04-herdr-orch-herdr-app-support.org]].
-
 ** TODO Add herdr-orch subagent fanout pane
 :PROPERTIES:
 :CUSTOM_ID: f51216ab-0bb7-41d9-a6d3-2d225b40a667
@@ -286,16 +272,6 @@ Scaffold a herdr-app mod for herdr-orch. Its first feature is the subscription q
 - Created [2026-11-05 Thu 19:46]
 :END:
 Add a pane that shows herdr-orch subagent fanout as a tree or hierarchy. Use [[https://github.com/mashhoodr/herdr-space-sidebar][herdr-space-sidebar]] as a tree/hierarchy design reference. Additional reference: [[https://github.com/yoshiori/herdr-configurable-picker][herdr-configurable-picker]].
-
-** TODO Validate herdr-app herdr-orch mod on Linux :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: a5cbd996-628f-4883-929a-e5d54338f9b8
-:CREATED: [2026-11-05 Thu 20:23]
-:END:
-:LOGBOOK:
-- Created [2026-11-05 Thu 20:23]
-:END:
-Follow-up to task f7457cc5-64a5-4139-ba94-7da9eca8f6ed. The owner deferred native Linux validation to another machine. Use [[plan:2026-11-05-herdr-app-orch-mod.org]] as the requirements source, especially Summary/Acceptance and the native validation plan task a8cb3a32-0c02-4755-9634-02044fdfa9dc. Run native checks for both mods; demonstrate real Linux CPU/RAM and optional NVIDIA metrics, quota popup and keyboard access, narrow/light/dark readability, shared in-flight refresh, native timeout/process cleanup, real five-minute stale expiry/recovery, individual symlink discovery/source watching and app restart persistence. Preserve installed files, selected layout and user terminals; obtain consent for disruptive actions. Use fake quota commands for failure/lifecycle probes, never live credentials or endpoints in automated tests. Record exact app/core versions, commands, statuses and native screenshots in the linked record. macOS fixture or initial-check evidence is not Linux delivery evidence. Prerequisite: transfer the committed implementation and parent Nix wiring to the target machine before validation.
 
 ** TODO Add workspace pinning to the Herdr org-tasks adapters
 :PROPERTIES:
@@ -446,7 +422,7 @@ The org-tasks `ensure` hook runs on startup and `tab.created`. The Herdr TUI spi
 :LOGBOOK:
 - Created [2026-11-05 Thu 20:50]
 :END:
-Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the existing native validation task a8cb3a32 owns that gate. Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
+Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the owner accepted this as a known limit on 2026-11-09 (herdr-app/README.md). Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
 
 ** TODO Route explicit model requests across subscription accounts :herdr_orch:
 :PROPERTIES:

@@ -33,7 +33,7 @@ Named Pi Anthropic subscriptions appear as separate `anthropic-<N>` rows (`anthr
 
 ## Spaces and agents
 
-The `orch-spaces` block replaces the bundled Spaces and Agents lists. It is the bundled `spaces` mod with each space's agents under it ([provenance](mods/orch-spaces/UPSTREAM.md)).
+The `orch-spaces` block replaces the bundled Spaces and Agents lists. It starts from the `spaces` mod bundled with herdr-app 0.1.10 and puts each space's agents under it ([provenance](mods/orch-spaces/UPSTREAM.md)).
 
 - Tree :: an agent is shown under the terminal that started it while that terminal is live, else under its space. A sub-agent that has its own pane is shown once, under its parent.
 - Tabs :: a tab that holds no agent is a row at the root of its space, beside the agents, in tab order. Its name is the tab name (its number when nobody named it). A tab that holds only a sub-agent shows through that sub-agent, under its parent.
@@ -54,7 +54,7 @@ The `org-tasks` block below the tab area shows the selected task of the focused 
 
 The mod runs `~/.agents/skills/org-tasks/scripts/ot` by absolute path, not `ot` on `PATH`: an app started from the desktop session can have a `PATH` without the shell's additions, such as `~/.local/bin`. Layout props can name another executable: `{"mod": "org-tasks", "props": {"ot": "/path/to/ot"}}`.
 
-On macOS, [keys.darwin.json](keys.darwin.json) is linked as `keys.json` and binds `cmd-shift-t` to `org-tasks.select` and `cmd-shift-o` to `layout.toggle:org-tasks`, matching `prefix+t` and `prefix+ctrl+o` in the terminal Herdr plugin. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation. Linux keeps its own unmanaged `keys.json` until a Linux variant is checked; add those two bindings there, with the `ctrl-shift-` forms if `cmd` is not available. The app's linked mod folder does not hot-reload edits to its source; restart the app, or remove and re-create the link, to load a change.
+On macOS, [keys.darwin.json](keys.darwin.json) is linked as `keys.json` and binds `cmd-shift-t` to `org-tasks.select` and `cmd-shift-o` to `layout.toggle:org-tasks`, matching `prefix+t` and `prefix+ctrl+o` in the terminal Herdr plugin. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation. Linux keeps its own unmanaged `keys.json` until a Linux variant is checked; add those two bindings there, with the `ctrl-shift-` forms if `cmd` is not available.
 
 ## Refresh and limits
 
@@ -62,12 +62,16 @@ Quota refresh starts on display, repeats every 60 seconds, and shares an in-flig
 
 The system companion supports CPU and RAM on Linux and macOS; Linux GPU data requires NVIDIA. Missing GPU data does not suppress CPU and RAM. System load follows the selected machine; Activity Monitor is available only for the local macOS machine. Windows, AMD and Intel GPU collection are outside scope.
 
+When you save a linked mod's source, the app does not reload the mod. To load a change, update the timestamp of the mod link itself, for example `touch -h ~/.config/herdr-app/mods/herdr-orch`, or restart the app. This is an accepted limit.
+
 ## Provenance and updates
 
 The personal layout is based on the shipped `main` layout from herdr-app 0.1.10. The running app executable and the `herdr-app` command both reported 0.1.10 when the layout was copied. The copy does not receive upstream layout changes automatically: compare it with the new shipped `main` after an app upgrade, retain the three-item status row, and validate the result in the app.
 
 The quota UI is adapted from [Lakris2407/herdr-mods quota](https://github.com/Lakris2407/herdr-mods/tree/612d5e8fc8117db8a75f457b2f0ba48f50550626/quota/mods/quota), and the system companion is vendored from [the system mod](https://github.com/Lakris2407/herdr-mods/tree/612d5e8fc8117db8a75f457b2f0ba48f50550626/quota/mods/system), both at revision `612d5e8fc8117db8a75f457b2f0ba48f50550626` under MIT. Their notices are in [quota LICENSE](mods/herdr-orch/LICENSE) and [system LICENSE](mods/system/LICENSE); [system provenance](mods/system/UPSTREAM.md) records its local change.
 
+The `orch-spaces` mod is derived from the `spaces` and `agents` mods bundled with herdr-app 0.1.10 (`herdr-desktop` 0.1.10), under the Apache License 2.0 in [its LICENSE](mods/orch-spaces/LICENSE). [orch-spaces provenance](mods/orch-spaces/UPSTREAM.md) records the SHA-256 of each bundled `main.js` that it starts from, and its local changes.
+
 Run the portable offline suite with `bb scripts/test-herdr-app.bb`. To include the parent wiring integration checks, set the explicit path: `HERDR_APP_WIRING=../agents.nix bb scripts/test-herdr-app.bb`. An invalid path fails the integration checks.
 
-When updating either upstream mod, compare the pinned revision with the new upstream source, preserve the local quota contract and local macOS action restriction, update provenance and licences as needed, and run `bb scripts/test-herdr-app.bb`. Offline tests do not replace native Linux and macOS validation, including restart and linked-source reload checks.
+When updating either Lakris2407 mod, compare the pinned revision with the new upstream source, preserve the local quota contract and local macOS action restriction, update provenance and licences as needed, and run `bb scripts/test-herdr-app.bb`. After an app upgrade, compare the SHA-256 of `~/.config/herdr-app/mods/spaces/main.js` and `~/.config/herdr-app/mods/agents/main.js` with the values in [orch-spaces provenance](mods/orch-spaces/UPSTREAM.md). If either changed, review the bundled changes, carry the relevant ones into `orch-spaces`, and record the new app version and hashes. This repository does not keep the 0.1.10 bundled source, so the hashes detect a change but do not supply a diff base. Offline tests do not replace native Linux and macOS validation, including the restart check.
