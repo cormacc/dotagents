@@ -135,7 +135,7 @@ test("without a selection it shows counts and the bound key hints", async () => 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a shell pane or remote space never shows the previous project's tasks", async () => {
+test("a shell pane shows its folder's tasks; a mod pane or remote space shows none", async () => {
   const dir = project(PARENT);
   try {
     let focus = { space: "s1", pane: "p1", cwd: dir };
@@ -144,10 +144,14 @@ test("a shell pane or remote space never shows the previous project's tasks", as
     await a.settle();
     assert.ok(words(a.render()).includes("Alpha [22222222]"), "control: the agent shows tasks");
     focus = { space: "s1", pane: "p2", cwd: dir };
-    a.tick(); a.tick();
+    a.tick(); a.tick(); await a.settle();
     let w = words(a.render());
+    assert.ok(w.includes("Alpha [22222222]"), "the shell pane shows its folder's tasks");
+    focus = { space: "s1", pane: null, terminal: null, cwd: dir };
+    a.tick(); a.tick();
+    w = words(a.render());
     assert.ok(!w.includes("Alpha [22222222]"));
-    assert.ok(w.some(x => /agent pane/.test(x)));
+    assert.ok(w.some(x => /Focus a terminal/.test(x)));
     focus = { space: "s2", pane: "p1", cwd: dir };
     a.tick(); a.tick();
     w = words(a.render());
@@ -201,7 +205,7 @@ test("select without a project explains instead of opening", async () => {
   await a.view.select();
   assert.equal(a.overlays.length, 0);
   assert.equal(a.hcCalls.length, 0);
-  assert.match(a.notes[0].body, /agent pane/);
+  assert.match(a.notes[0].body, /folder unknown/);
 });
 
 test("a pane in a subdirectory watches the project root that ot resolved", async () => {

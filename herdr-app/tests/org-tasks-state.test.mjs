@@ -6,12 +6,17 @@ const agentPane = { pane: "p1", status: "idle", cwd: "/work/a" };
 const shellPane = { pane: "p2", status: null, cwd: "/work/b" };
 const local = { id: "s1", machine: null };
 
-test("project follows a focused local agent and refuses everything else", () => {
+test("project follows the focused local terminal and refuses everything else", () => {
   assert.deepEqual(project({ space: "s1", pane: "p1", cwd: "/x" }, [agentPane], [local]), { dir: "/work/a" });
-  assert.match(project({ space: "s1", pane: "p2" }, [shellPane], [local]).reason, /agent pane/);
-  assert.match(project({ space: "s1", pane: null }, [agentPane], [local]).reason, /agent pane/);
-  assert.match(project(null, [agentPane], [local]).reason, /agent pane/);
+  assert.deepEqual(project({ space: "s1", pane: "p2" }, [shellPane], [local]), { dir: "/work/b" }, "a shell pane");
+  assert.deepEqual(project({ space: "s1", pane: null, terminal: "t1", cwd: "/work/c" }, [], [local]), { dir: "/work/c" },
+                   "a layout terminal block");
+  assert.match(project({ space: "s1", pane: null, terminal: null, cwd: "/x" }, [agentPane], [local]).reason, /Focus a terminal/,
+               "a mod pane");
+  assert.match(project({ space: "s1", pane: "gone" }, [agentPane], [local]).reason, /Focus a terminal/);
+  assert.match(project(null, [agentPane], [local]).reason, /Focus a terminal/);
   assert.match(project({ space: "s9", pane: "p1" }, [agentPane], [{ id: "s9", machine: "vps" }]).reason, /Remote space \(vps\)/);
+  assert.match(project({ space: "s9", pane: "p2" }, [shellPane], [{ id: "s9", machine: "vps" }]).reason, /Remote space \(vps\)/);
   assert.equal(project({ space: "s1", pane: "p1", cwd: "/fallback" }, [{ ...agentPane, cwd: null }], [local]).dir, "/fallback");
   assert.match(project({ space: "s1", pane: "p1", cwd: null }, [{ ...agentPane, cwd: null }], [local]).reason, /unknown/);
 });
@@ -26,8 +31,8 @@ test("a project switch waits until the new folder holds", () => {
   assert.equal(settle(memo, { dir: "/b" }, 2), false);
   assert.equal(settle(memo, { dir: "/b" }, 2), true, "held for two polls");
   memo.dir = "/b";
-  assert.equal(settle(memo, { reason: "Focus an agent pane" }, 2), false);
-  assert.equal(settle(memo, { reason: "Focus an agent pane" }, 2), true);
+  assert.equal(settle(memo, { reason: "Focus a terminal" }, 2), false);
+  assert.equal(settle(memo, { reason: "Focus a terminal" }, 2), true);
 });
 
 test("block height covers the rows at zoom 1 with padding", () => {

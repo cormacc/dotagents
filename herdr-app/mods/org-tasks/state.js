@@ -2,17 +2,20 @@
 // Task logic (which rows, order, emphasis, progress, counts) belongs to
 // `ot compact`; this file only picks the project and maps data to presentation.
 
-// The project follows the focused pane when it runs a local agent. Any other
-// pane, or a space on another machine, gives a reason instead of a folder, so
-// the widget never shows a different project's tasks.
+// The project follows the focused terminal's folder, an agent's or a shell's,
+// so a tab without an agent still shows its tasks. A mod pane, or a space on
+// another machine, gives a reason instead of a folder, so the widget never
+// shows a different project's tasks.
 export function project(focus, panes, spaces) {
-  if (!focus?.pane) return { reason: "Focus an agent pane to show its tasks" };
-  const pane = panes.find(p => p.pane === focus.pane);
-  if (!pane || pane.status == null) return { reason: "Focus an agent pane to show its tasks" };
+  const none = { reason: "Focus a terminal to show its tasks" };
+  if (!focus) return none;
   const space = spaces.find(s => s.id === focus.space);
   if (space?.machine) return { reason: `Remote space (${space.machine}): tasks unavailable` };
-  const dir = pane.cwd ?? focus.cwd;
-  return dir ? { dir } : { reason: "Agent folder unknown" };
+  // A focused layout terminal block has no pane; its `cwd` describes it.
+  const pane = focus.pane ? panes.find(p => p.pane === focus.pane) : null;
+  if (focus.pane ? !pane : !focus.terminal) return none;
+  const dir = pane?.cwd ?? focus.cwd;
+  return dir ? { dir } : { reason: "Terminal folder unknown" };
 }
 
 // Should the widget switch to project `p`? `memo` keeps the shown project
