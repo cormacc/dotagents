@@ -2,7 +2,7 @@
 #+DATE: 2026-11-10 Tue
 #+PARENT: [[task:cf3550d1-9f06-4e9a-85ce-b6c6c490130b][Show one org-tasks compact pane that follows focus]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Active
+#+STATUS: Complete
 #+SPEC: [[proj:herdr/plugins/org-tasks/README.md]]
 #+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
 
@@ -12,12 +12,12 @@ The Herdr TUI org-tasks plugin runs one compact pane, one supervisor and one emb
 * Summary
 *Level:* production · *Tests:* thorough · *Docs:* README
 
-One compact pane per session. Its supervisor subscribes to Herdr events on =HERDR_SOCKET_PATH=, moves its own pane into the focused tab with =herdr pane move=, and samples the focused tab's source pane on focus and title events, with a slow fallback poll for folder changes. Startup and =tab.focused= hooks open the pane when no live instance exists. Tabs that the user never focuses, such as subagent tabs, get no pane.
+One compact pane per session. Its supervisor subscribes to Herdr events on =HERDR_SOCKET_PATH=, moves its own pane into the focused tab with =herdr pane move=, and samples the focused tab's source pane on focus, close and title events, with a 5 s fallback for silent folder changes. The startup hook and the =tab.focused=, =pane.closed=, =tab.closed= and =workspace.closed= hooks open the pane when no live instance exists. Tabs that the user never focuses, such as subagent tabs, get no pane. With 20 idle tabs, process-tree CPU fell from about 150 % to about 4 % of one core.
 
 ** Scope
 *** In scope
 - =herdr/plugins/org-tasks/src/org_tasks_host.clj=: session-level instance record, lease and lock; event client; follow-focus supervisor; =ensure=, =toggle= and =select= on the single instance.
-- =herdr/plugins/org-tasks/herdr-plugin.toml=: =startup= and =tab.focused= hooks; no =tab.created= hook.
+- =herdr/plugins/org-tasks/herdr-plugin.toml=: =startup=, =tab.focused=, =pane.closed=, =tab.closed= and =workspace.closed= hooks; no =tab.created= hook.
 - =scripts/test-herdr-org-tasks.bb=: fake event stream and single-instance cases; existing per-tab cases replaced.
 - Relevant contract: =herdr/plugins/org-tasks/README.md= describes the pane lifecycle and must change.
 - Relevant contract: =skills/org-tasks/scripts/docs/contract.md= section 'Embedded TUI context contract' binds the producer; this change must keep it.
@@ -28,60 +28,65 @@ One compact pane per session. Its supervisor subscribes to Herdr events on =HERD
 - More than one client: the pane follows the server's focus only.
 
 ** Acceptance
+Native evidence is in =validation/= (=functional.txt=, =requests.txt=, =cpu.txt=); tests are in =scripts/test-herdr-org-tasks.bb=.
 *** Core functionality
-- [ ] With display on and three or more tabs, the session has exactly one compact pane.
-- [ ] The session has exactly one supervisor process.
-- [ ] Focusing another tab moves the compact pane into that tab within 1 s.
-- [ ] The moved pane keeps its =terminal_id=, so =ot tui= is not restarted.
-- [ ] Focusing a tab in another workspace moves the compact pane into that tab within 1 s.
-- [ ] After a focus change, the pane shows the newly focused pane's project within 1 s.
-- [ ] After a =cd= in the focused source pane, without a title change, the pane shows the new project within 7 s. (Amended from 5 s during implementation: the 5 s fallback sample finds the folder, and the 1 s folder hold publishes it.)
-- [ ] While no event arrives, the supervisor makes at most two Herdr requests per 5 s. (Amended from one during implementation: a fallback sample needs the snapshot and the source pane's =process-info=, which detects an =ssh= that starts without a folder or title change.)
-- [ ] After a move, the compact pane has the configured =:compact-rows=, unless Herdr's minimum pane size clamps it.
-- [ ] When every other pane in the pane's tab closes, that tab closes.
-- [ ] After such a tab closes, the compact pane opens in the tab that Herdr focuses next.
-- [ ] =toggle= off closes the single pane.
-- [ ] =toggle= on opens the single pane in the focused tab.
-- [ ] After the supervisor dies, the next tab focus opens a new compact pane.
+- [X] With display on and three or more tabs, the session has exactly one compact pane. → test:=scripts/test-herdr-org-tasks.bb= =ensure-opens-one-pane-in-the-focused-tab-without-focus-or-input=; =functional.txt= "one compact pane"
+- [X] The session has exactly one supervisor process. The supervisor is the compact pane's =serve= command, so one pane is one supervisor; =cpu.txt= counts one compact pane with 20 tabs.
+- [X] Focusing another tab moves the compact pane into that tab within 1 s. =functional.txt=: 233 ms.
+- [X] The moved pane keeps its =terminal_id=, so =ot tui= is not restarted. =functional.txt= "same terminal after the move".
+- [X] Focusing a tab in another workspace moves the compact pane into that tab within 1 s. =functional.txt=: 293 ms.
+- [X] After a focus change, the pane shows the newly focused pane's project within 1 s. =functional.txt=: 490--548 ms.
+- [X] After a =cd= in the focused source pane, without a title change, the pane shows the new project within 7 s. =functional.txt=: 5.0 s. (Amended from 5 s during implementation: the 5 s fallback sample finds the folder, and the 1 s folder hold publishes it.)
+- [X] While no event arrives, the supervisor makes at most two Herdr requests per 5 s. =requests.txt=: 8 in 20 s. (Amended from one during implementation: a fallback sample needs the snapshot and the source pane's =process-info=, which detects an =ssh= that starts without a folder or title change.)
+- [X] After a move, the compact pane has the configured =:compact-rows=, unless Herdr's minimum pane size clamps it. =functional.txt=: 5 rows after each move.
+- [X] When every other pane in the pane's tab closes, that tab closes. → test:=scripts/test-herdr-org-tasks.bb= =supervisor-closes-its-pane-when-alone-in-the-tab=; =functional.txt= "a tab left with only the compact pane closes"
+- [X] After such a tab closes, the compact pane opens in the tab that Herdr focuses next. =functional.txt=: 62 ms after the close.
+- [X] =toggle= off closes the single pane. → test:=scripts/test-herdr-org-tasks.bb= =toggle-is-global-and-persists=; =functional.txt= "toggle off closes the pane"
+- [X] =toggle= on opens the single pane in the focused tab. → test:=scripts/test-herdr-org-tasks.bb= =toggle-is-global-and-persists=; =functional.txt= "toggle on opens one pane in the focused tab"
+- [X] After the supervisor dies, the next tab focus opens a new compact pane. → test:=scripts/test-herdr-org-tasks.bb= =process-exit-reopen-uses-new-instance=; =functional.txt=: a new instance after each of the three closes.
 *** Edge cases
-- [ ] Focusing the tab that already holds the pane does not move it.
-- [ ] Ten tab switches within 2 s leave one pane, in the last focused tab.
-- [ ] When the event connection closes, the supervisor exits.
-- [ ] Focusing the compact pane or another plugin pane keeps the previous source.
-- [ ] A remote (ssh) or unavailable source shows the existing remote or unavailable state.
+- [X] Focusing the tab that already holds the pane does not move it. → test:=scripts/test-herdr-org-tasks.bb= =supervisor-follows-the-focused-agent-and-publishes-hints= "the focused tab already holds the pane"
+- [X] Ten tab switches within 2 s leave one pane, in the last focused tab. → test:=scripts/test-herdr-org-tasks.bb= =supervisor-groups-rapid-tab-switches-into-one-move=
+- [X] When the event connection closes, the supervisor exits. → test:=scripts/test-herdr-org-tasks.bb= =supervisor-exits-when-the-event-stream-ends=
+- [X] Focusing the compact pane or another plugin pane keeps the previous source. → test:=scripts/test-herdr-org-tasks.bb= =a-plugin-pane-retains-the-previous-source=
+- [X] A remote (ssh) or unavailable source shows the existing remote or unavailable state. → test:=scripts/test-herdr-org-tasks.bb= =source-is-tab-local-and-preserved-only-on-task-focus=
 *** Anti-criteria
-- [ ] Must not: take focus when the pane opens or moves.
-- [ ] Must not: open a compact pane in a tab that has not had focus.
-- [ ] Must not: poll Herdr at 500 ms.
-- [ ] Must not: change the embedded context contract. → spec:[[proj:skills/org-tasks/scripts/docs/contract.md]]
+- [X] Must not: take focus when the pane opens or moves. =functional.txt= "takes no focus" after each move; the tests assert =--no-focus=.
+- [X] Must not: open a compact pane in a tab that has not had focus. =functional.txt=: one compact pane after three tabs.
+- [X] Must not: poll Herdr at 500 ms. =requests.txt=; the per-tab baseline made 160 requests in 20 s with two tabs.
+- [X] Must not: change the embedded context contract. → spec:[[proj:skills/org-tasks/scripts/docs/contract.md]] =git diff 6ce718b HEAD= of the contract is empty.
 
 ** Decisions
-- Chose one pane per session that moves with focus :: removes the per-tab processes, the per-tab polling and the per-tab stuck-tab risk at once. On this computer, 28 supervisors used about 2.0 GiB RSS and 27 embedded =ot tui= processes about 2.5 GiB (summed RSS, which counts shared pages more than once).
+- Chose one pane per session that moves with focus :: removes the per-tab processes, the per-tab polling and the per-tab stuck-tab risk at once. Before the change, 28 supervisors used about 2.0 GiB RSS and 27 embedded =ot tui= processes about 2.5 GiB on this computer (summed RSS, which counts shared pages more than once).
   Rejected:
   - Keep per-tab panes, poll slowly in hidden tabs: still one supervisor and one =ot tui= per tab.
   - Open a new pane on focus and close it on blur: a =bb= and =ot= cold start (about 0.4 s or more) and an empty pane on each switch.
   - Per-tab event subscribers: removes polling but not the per-tab processes.
   - =[ui] tab_bar_right= status line: one line only, interval refresh, and the user must paste config.
-- Move the pane with =herdr pane move=, not close and reopen :: the process, its =terminal_id= and the loaded graph survive the move.
-- A subscription for live changes, hooks for recovery :: the supervisor subscribes with =events.subscribe= on =HERDR_SOCKET_PATH=; the =startup= and =tab.focused= hooks run the idempotent =ensure=, so a dead supervisor comes back at the next tab switch. A workspace switch also emits =tab_focused=, so no =workspace.focused= hook is needed.
+- Move the pane with =herdr pane move=, not close and reopen :: the process, its =terminal_id= and the loaded graph survive the move. Each move resizes the panes of two tabs once; the user checked this in a real client and accepted it.
+- A subscription for live changes, hooks for recovery :: the supervisor subscribes with =events.subscribe= on =HERDR_SOCKET_PATH=. The =startup=, =tab.focused=, =pane.closed=, =tab.closed= and =workspace.closed= hooks run the idempotent =ensure=, so a dead supervisor comes back at the next focus change or close. A workspace switch also emits =tab_focused=, so no =workspace.focused= hook is needed.
 - Slow fallback poll of the own tab only :: a =cd= without a title change emits no event (see Gotchas), so the supervisor also samples every 5 s.
 - The same-pane folder hold is 1 s of time, not a sample count :: with event-driven sampling, three samples could take 15 s. A pending folder schedules one more sample at the end of its hold.
 
+** Shipped
+- MODIFIED :: =herdr/plugins/org-tasks/README.md= -- one compact pane per session that follows focus, its hooks, the multi-client limit and the event-driven producer.
+- Unchanged :: =skills/org-tasks/scripts/docs/contract.md= -- the producer still publishes the same context file, lease and fields.
+
 ** Gotchas
 - =pane_updated= fires on a terminal-title change only. A =cd=, a foreground command and =pane rename= emitted none in the spike; the title event carried the current =foreground_cwd=.
+- Closing the focused tab's last pane, the focused tab or the focused workspace moves focus without =tab_focused=. Each emits only =pane_closed=, =tab_closed= or =workspace_closed= (=spike-2/close-events.bb=).
 - Subscriptions take no filter: the supervisor receives every subscribed event in the session and must drop events for other tabs. Busy agents can change titles often.
 - =pane move --split down --ratio R= gives the existing target pane the share R. A compact pane needs R near =1 - rows/height=, or =resize!= after the move.
 - A move to another workspace gives the pane a new ID (=w1:p3= → =w2:p2=). The process keeps its old =HERDR_PANE_ID=; =herdr pane current --current= inside it returns the new ID, and =plugin pane close= works on the new ID.
 - Hooks receive =HERDR_PLUGIN_EVENT_JSON= (the event, with =tab_id=) and =HERDR_PLUGIN_CONTEXT_JSON= (the focused pane and its folder).
 - =source= merges a pane with its entry in the snapshot's =:agents= list, so a test fixture that changes an agent pane's folder must change both lists.
+- Babashka's =slurp= fails on =/proc/<pid>/stat= with "Invalid argument"; =Files/readAllBytes= reads it.
 
 ** Risks
-- Each tab switch reflows panes in two tabs, and each resized pane redraws once: accepted by the user after a check in a real client (see Open questions).
-- The event protocol is undocumented outside =herdr api schema=: pin =min_herdr_version=, and end the supervisor on an unknown envelope so that the hook reopens it.
-- Several clients on one server: only the server's focused tab gets the pane; accepted.
+- The event protocol is documented only by =herdr api schema=: =min_herdr_version= is 0.9.5, and the supervisor ends on an unknown envelope, so a hook reopens it.
 
 ** Follow-ups
-- At closure, close or rescope these tasks, which this change supersedes: [[task:26a26a84-68a0-4d34-a78f-09994711e5c1]] (=ensure= in every existing tab), [[task:106afb3b-53c8-459e-be30-6c06c5093986]] (restore lost panes), [[task:41f78617-5c16-444f-896d-da062a65a8ee]] (per-tab polling load).
+- Closed as superseded: [[task:26a26a84-68a0-4d34-a78f-09994711e5c1]] (cancelled), [[task:106afb3b-53c8-459e-be30-6c06c5093986]] and [[task:41f78617-5c16-444f-896d-da062a65a8ee]] (done).
 
 * Plan
 ** DONE Check the reflow of a moved compact pane in a real client
@@ -94,11 +99,7 @@ CLOSED: [2026-11-10 Tue 18:40]
 - Created [2026-11-10 Tue 18:14]
 - State "DONE" from "TODO" [2026-11-10 Tue 18:40]
 :END:
-Acceptance criteria:
-- The user has watched at least five tab switches in a real Herdr client, with a pane moved by =herdr pane move <pane> --tab <tab> --split down --ratio <r> --no-focus= each time.
-- The user has decided whether the reflow is acceptable; the decision is in =* Open questions=.
-
-Run =bb design/log/2026-11-10-org-tasks-follow-focus-pane/reflow/reflow-check.bb= and attach with the command it prints: a disposable session where a stand-in compact pane follows tab focus. Do not move panes in the user's working session.
+Result: the user accepted the positioning and the one redraw per resized pane (=reflow/=).
 
 ** DONE Add a Herdr event subscription client to the org-tasks host
 CLOSED: [2026-11-10 Tue 19:10]
@@ -113,14 +114,7 @@ CLOSED: [2026-11-10 Tue 19:10]
 - State "STARTED" from "TODO" [2026-11-10 Tue 19:07]
 - State "DONE" from "STARTED" [2026-11-10 Tue 19:10]
 :END:
-Acceptance criteria:
-- A subscribe call on a Unix socket sends one =events.subscribe= JSON line and returns after =subscription_started=.
-- Each later line reaches a callback as a parsed =event= / =data= map.
-- A closed connection, an error reply or an unparsable line ends the client with a distinct result.
-- A test drives the client against a fake socket server in the test process.
-- Must not: start a =herdr= process per event.
-
-Pattern: =subscribe!= in =design/log/2026-11-10-org-tasks-follow-focus-pane/spike-1/focus-spike.bb=.
+Result: =subscribe!= and =events!=; see Implementation.
 
 ** DONE Run one compact pane per session that follows focus
 CLOSED: [2026-11-10 Tue 22:44]
@@ -135,13 +129,7 @@ CLOSED: [2026-11-10 Tue 22:44]
 - State "STARTED" from "TODO" [2026-11-10 Tue 22:23]
 - State "DONE" from "STARTED" [2026-11-10 Tue 22:44]
 :END:
-Acceptance criteria:
-- Every core-functionality and edge-case criterion in =** Acceptance= has a case in =scripts/test-herdr-org-tasks.bb= against the fake Herdr, except the 1 s and 5 s timings, which the validation task measures.
-- The manifest has =startup= and =tab.focused= hooks and no =tab.created= hook.
-- =herdr/plugins/org-tasks/README.md= describes one pane that follows focus, its hooks and the multi-client limit.
-- Must not: change =skills/org-tasks/scripts/docs/contract.md=.
-
-One task because =ensure=, =toggle=, =select= and =supervise!= share the instance record that this change moves from per tab to per session.
+Result: single instance, follow-focus supervisor, manifest hooks and README; see Implementation.
 
 ** DONE Validate the follow-focus pane in an isolated Herdr server
 CLOSED: [2026-11-10 Tue 23:17]
@@ -156,30 +144,39 @@ CLOSED: [2026-11-10 Tue 23:17]
 - State "STARTED" from "TODO" [2026-11-10 Tue 23:01]
 - State "DONE" from "STARTED" [2026-11-10 Tue 23:17]
 :END:
-Acceptance criteria:
-- A script in this record's folder runs an isolated Herdr server with the linked plugin and asserts the 1 s move, the 1 s project change, the 5 s =cd= change and the one-request-per-5-s idle bound.
-- With 20 tabs, it records the supervisor's and the Herdr server's CPU over 60 s for this change and for the per-tab baseline, in ABAB rounds with each round's median.
-- Must not: touch the user's Herdr session or =~/.config/herdr/plugins.json=.
+Result: =validation/validate.bb= and its logs; see Validation.
 
-Pattern: =tab-retain/tab-retain-probe.bb= in this record's folder.
+** DONE Reopen the compact pane after a close that moves focus silently
+CLOSED: [2026-11-10 Tue 23:40]
+:PROPERTIES:
+:CUSTOM_ID: 6aedcf4b-f74f-4923-8368-b386e14bfbf2
+:CREATED: [2026-11-10 Tue 23:38]
+:STARTED: [2026-11-10 Tue 23:38]
+:END:
+:LOGBOOK:
+- Created [2026-11-10 Tue 23:38]
+- State "STARTED" from "TODO" [2026-11-10 Tue 23:38]
+- State "DONE" from "STARTED" [2026-11-10 Tue 23:40]
+:END:
+Result: =pane.closed=, =tab.closed= and =workspace.closed= hooks run =ensure=; found by the closure run of =validation/validate.bb=.
 
 * Implementation
-- Event client :: =subscribe!= and =events!= in =herdr/plugins/org-tasks/src/org_tasks_host.clj=. =subscribe!= returns only after =subscription_started= and throws ex-info with =:subscription= =:closed=, =:error=, =:unparsable=, =:unexpected= or =:timeout= (=*subscribe-timeout-ms*=, default 2000 ms). =events!= blocks, returns ={:end :closed}=, ={:end :error ...}= or ={:end :unparsable ...}=, and always closes the connection. Against an isolated Herdr 0.9.5 server it delivered both =tab_focused= events in order, and =server stop= ended it with ={:end :closed}=.
+- Event client :: =subscribe!= and =events!= in =herdr/plugins/org-tasks/src/org_tasks_host.clj=. =subscribe!= returns only after =subscription_started= and throws ex-info with =:subscription= =:closed=, =:error=, =:unparsable=, =:unexpected= or =:timeout= (=*subscribe-timeout-ms*=, default 2000 ms). =events!= blocks, returns ={:end :closed}=, ={:end :error ...}= or ={:end :unparsable ...}=, and always closes the connection.
 - Single instance :: a per-session =instance.json= index and =instance.lock= replace the per-tab =<tab>.json= and =<tab>.lock=. =open-session!= opens the pane below the focused pane of the focused tab; =close-legacy!= closes live panes of the per-tab version and removes their index files. After a move, the supervisor rewrites =owner.json= and the index, under the lock, with its new pane and tab.
 - Supervisor loop :: events go to a queue, and the loop takes every queued event at once, so a burst becomes one sample. A sample is due on =sample-reason=, at the end of a folder hold, or after =*fallback-ms*= (5 s); =*min-sample-ms*= (250 ms) spaces samples. One sample moves the pane (=follow!=, ratio from =move-ratio=, then =resize!=), closes it when alone, or publishes. The heartbeat rewrites the context and owner files every 500 ms without a Herdr request.
-- Not covered by the fake-Herdr tests :: the compact height after a move (the fake has no split geometry) and every timing criterion; =validation/validate.bb= covers them against a real server.
+- Test split :: =scripts/test-herdr-org-tasks.bb= drives the supervisor against a fake Herdr and a scripted event stream; the compact height and the timings need a real server, so =validation/validate.bb= covers them.
 
 * Validation
-Spike evidence, 2026-11-10, Herdr 0.9.5, isolated sessions with isolated XDG directories; the user's session and =plugins.json= were untouched.
+Evidence from 2026-11-10, Herdr 0.9.5, isolated sessions with isolated XDG directories; the user's session and =plugins.json= were untouched.
 - =tab-retain/= :: before =0d91b84=, a compact pane kept a tab open after its only other pane closed (=before-fix.txt=); after it, the tab closes (=after-fix.txt=). The control without the plugin closed in both runs.
 - =spike-1/= :: subscription protocol, =tab_focused= payload, focus hooks and their environment, plugin-pane moves within and across workspaces, =--current= after a move.
-- =spike-2/= :: =pane_updated= on a title change only; =--ratio= direction.
-- =reflow/= :: the user watched a stand-in compact pane follow focus across tabs and workspaces in a real client. Positioning and the one redraw per resized pane on each switch are acceptable. Stand-in panes must redraw only on =SIGWINCH=: a first run whose panes cleared and redrew every second showed flicker in every pane that was not caused by the moves.
-- =validation/= :: =validate.bb= at =ab60814=, Herdr 0.9.5, isolated sessions; the real =plugins.json= was unchanged in each mode.
-  - =functional.txt= :: moves within the workspace, across workspaces and back took 230--250 ms with the same =terminal_id=; the new tab's project was published 489--559 ms after focus; the compact pane had 5 rows after each move; a silent =cd= was published after 5.0 s; one compact pane after visiting three tabs.
+- =spike-2/= :: =pane_updated= on a title change only; =--ratio= direction; =close-events.bb= shows the single event that each close of the focused tab emits.
+- =reflow/= :: the user watched a stand-in compact pane follow focus across tabs and workspaces in a real client. Stand-in panes must redraw only on =SIGWINCH=: a first run whose panes cleared and redrew every second showed flicker that the moves did not cause.
+- =validation/= :: =validate.bb= in three modes.
+  - =functional.txt= :: moves within the workspace, across workspaces and back took 233--293 ms with the same =terminal_id= and no focus change; the new tab's project was published 490--548 ms after focus; the compact pane had 5 rows after each move; a silent =cd= was published after 5.0 s; toggle off and on; after a =tab close=, a =workspace close= and a tab left with only the compact pane, a new pane opened in the newly focused tab within 62--67 ms.
   - =requests.txt= :: 8 Herdr CLI starts in 20 idle s (bound 10), counted with =strace -f= under the server; a tab switch, as the positive control, gave 15.
-  - =functional-baseline.txt=, =requests-baseline.txt= :: the same checks against the per-tab plugin at =a572f4e= fail: no session instance, more than one compact pane, and 160 idle requests in 20 s with two tabs. This shows that the checks discriminate.
-  - =cpu.txt= :: 20 idle tabs, process-tree CPU of the server and its descendants over 60 s per round, sampled every 5 s, ABAB. Round medians, in % of one core: per-tab baseline 158.2 and 145.6 (20 compact panes); follow-focus 4.2 and 4.0 (one pane). The host had other load (load average about 4 on 20 cores) in every round. A positive control checks that the probe reads non-zero ticks: a first run read =/proc/<pid>/stat= with =slurp=, which fails with "Invalid argument", and reported 0.0 for both arms.
+  - =functional-baseline.txt=, =requests-baseline.txt= :: the same checks against the per-tab plugin at =a572f4e= fail (no session instance, more than one compact pane, 160 idle requests in 20 s with two tabs), so the checks discriminate.
+  - =cpu.txt= :: 20 idle tabs, process-tree CPU of the server and its descendants over 60 s per round, sampled every 5 s, ABAB. Round medians, in % of one core: per-tab baseline 158.2 and 145.6 (20 compact panes); follow-focus 4.2 and 4.0 (one pane). The host had other load (load average about 4 on 20 cores) in every round. A positive control checks that the probe reads non-zero ticks.
 
 * Open questions
 ** DECIDED Is the reflow on each tab switch acceptable?

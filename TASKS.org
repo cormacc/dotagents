@@ -315,15 +315,19 @@ The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tr
 :END:
 Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeout reviews of task 9777d1ec found untested ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Risks): the retry of a failed `agent.view.clear` by the next off reconcile (mutants in `orch_tree.clj` `reconcile-once!` and `reset-once!` survived the runner), a view re-send caused only by a stale-pane clear, and the contended-branch dirty re-check in `reconcile!`. Also: nothing tests `server-id` (the re-report after a server restart; a constant body leaves the runner green), and the simplification review proposed replacing it by treating `HERDR_PLUGIN_EVENT` = `startup` as a fresh run, with a test; and the off path's `(or (seq (:panes old)) (:view old))` survives an `off-panes-only` mutant.
 
-** TODO Decide whether org-tasks ensure should open a Tasks pane in every existing tab
+** CANCELLED Decide whether org-tasks ensure should open a Tasks pane in every existing tab
+CLOSED: [2026-11-10 Tue 23:41]
 :PROPERTIES:
 :CUSTOM_ID: 26a26a84-68a0-4d34-a78f-09994711e5c1
 :CREATED: [2026-11-09 Mon 10:46]
 :END:
 :LOGBOOK:
 - Created [2026-11-09 Mon 10:46]
+- State "CANCELLED" from "TODO" [2026-11-10 Tue 23:41]
 :END:
 The org-tasks `ensure` hook runs on startup and `tab.created`. The Herdr TUI spike for task 9777d1ec ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Gotchas) logged it adding a Tasks pane to every existing tab that had none, which produces `pane.created` bursts. Confirm that this is intended (it matches the README statement that display opens the compact pane in each tab with no live instance), or limit it to the new tab.
+
+Cancelled: superseded by [[task:cf3550d1-9f06-4e9a-85ce-b6c6c490130b]]. One compact pane per session follows focus, and `ensure` opens it only in the focused tab, so the question no longer applies.
 
 ** DONE Show the herdr-app org-tasks key hints as one footer line :skill:org_tasks:
 CLOSED: [2026-11-10 Tue 13:06]
@@ -354,7 +358,8 @@ Origin:
 - timestamp: [2026-11-10 Tue 12:42]
 - sender: agent (session retro, approved by the user)
 
-** STARTED [#B] Show one org-tasks compact pane that follows focus :skill:org_tasks:
+** DONE [#B] Show one org-tasks compact pane that follows focus :skill:org_tasks:
+CLOSED: [2026-11-10 Tue 23:41]
 :PROPERTIES:
 :CUSTOM_ID: cf3550d1-9f06-4e9a-85ce-b6c6c490130b
 :CREATED: [2026-11-10 Tue 18:11]
@@ -363,6 +368,7 @@ Origin:
 :LOGBOOK:
 - Created [2026-11-10 Tue 18:11]
 - State "STARTED" from "TODO" [2026-11-10 Tue 18:41]
+- State "DONE" from "STARTED" [2026-11-10 Tue 23:41]
 :END:
 #+IMPORT: [[plan:2026-11-10-org-tasks-follow-focus-pane.org]]
 Replace the per-tab compact panes of the Herdr TUI org-tasks plugin with one pane per session that moves to the focused tab and reacts to Herdr events instead of polling.
@@ -499,13 +505,15 @@ Acceptance criteria:
 - A configuration change replaces the old ranked aliases instead of appending another list.
 - Maintainer instructions use the supported regeneration path without manual result edits.
 
-** TODO herdr-orch TUI plugin housekeeping :skill:org_tasks:
+** STARTED herdr-orch TUI plugin housekeeping :skill:org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: a7cc7fa0-0fa0-4e92-9833-25e62fddb87f
 :CREATED: [2026-11-10 Tue 12:42]
+:STARTED: [2026-11-10 Tue 23:41]
 :END:
 :LOGBOOK:
 - Created [2026-11-10 Tue 12:42]
+- State "STARTED" from "TODO" [2026-11-10 Tue 23:41]
 :END:
 Housekeeping for the org-tasks Herdr TUI plugin (`herdr/plugins/org-tasks`), from a diagnosis of compact task panes that disappeared and did not come back.
 
@@ -532,15 +540,19 @@ Origin:
 
 Evidence:
 - On 2026-11-09 at 19:25 UTC, `herdr-server.log` shows 22 plugin panes exiting with code 1 within 21 s. The exception could not be identified; a request timeout is the probable cause.
-*** TODO Restore lost org-tasks compact panes without a manual toggle
+*** DONE Restore lost org-tasks compact panes without a manual toggle
+CLOSED: [2026-11-10 Tue 23:41]
 :PROPERTIES:
 :CUSTOM_ID: 106afb3b-53c8-459e-be30-6c06c5093986
 :CREATED: [2026-11-10 Tue 12:43]
 :END:
 :LOGBOOK:
 - Created [2026-11-10 Tue 12:43]
+- State "DONE" from "TODO" [2026-11-10 Tue 23:41]
 :END:
 `ensure` runs only on the `[[startup]]` hook and the `tab.created` event, so a compact pane that dies stays closed until the user toggles the overlay off and on. Run the idempotent `ensure` again on a cheap trigger, such as tab focus, so a lost pane comes back by itself. The policy question in [[task:26a26a84-68a0-4d34-a78f-09994711e5c1]] (whether `ensure` opens panes in existing tabs) applies to this trigger too.
+
+Done by [[task:cf3550d1-9f06-4e9a-85ce-b6c6c490130b]]: the `tab.focused`, `pane.closed`, `tab.closed` and `workspace.closed` hooks run `ensure`, so a lost pane reopens in the focused tab.
 
 Origin:
 - cwd: /home/cormacc/dotfiles/agents
@@ -550,15 +562,19 @@ Origin:
 
 Evidence:
 - After the panes died on 2026-11-09, none reopened: the Herdr server had run since 2026-11-06, so the startup hook did not run again.
-*** TODO Measure and reduce org-tasks supervisor polling load
+*** DONE Measure and reduce org-tasks supervisor polling load
+CLOSED: [2026-11-10 Tue 23:41]
 :PROPERTIES:
 :CUSTOM_ID: 41f78617-5c16-444f-896d-da062a65a8ee
 :CREATED: [2026-11-10 Tue 12:43]
 :END:
 :LOGBOOK:
 - Created [2026-11-10 Tue 12:43]
+- State "DONE" from "TODO" [2026-11-10 Tue 23:41]
 :END:
 Each tab's supervisor calls `herdr api snapshot` and `pane process-info` every 500 ms, with a 200 ms request timeout (`*request-timeout-ms*`). The load grows with the number of tabs. Measure the server load from this polling, then reduce it (for example, with one shared poller) or make the timeout longer. The supervisor retries a timed-out request, so a timeout no longer ends the pane, but it still delays updates.
+
+Done by [[task:cf3550d1-9f06-4e9a-85ce-b6c6c490130b]]: with 20 idle tabs, process-tree CPU fell from about 150 % to about 4 % of one core, and the idle supervisor makes two Herdr requests per 5 s ([[plan:2026-11-10-org-tasks-follow-focus-pane.org]] * Validation).
 
 Origin:
 - cwd: /home/cormacc/dotfiles/agents
