@@ -98,14 +98,18 @@ Acceptance criteria:
 
 Run =bb design/log/2026-11-10-org-tasks-follow-focus-pane/reflow/reflow-check.bb= and attach with the command it prints: a disposable session where a stand-in compact pane follows tab focus. Do not move panes in the user's working session.
 
-** TODO Add a Herdr event subscription client to the org-tasks host
+** DONE Add a Herdr event subscription client to the org-tasks host
+CLOSED: [2026-11-10 Tue 19:10]
 :PROPERTIES:
 :CUSTOM_ID: 8e1f8846-c416-4cc3-a44c-cd5ba3497fcf
 :CREATED: [2026-11-10 Tue 18:14]
 :BLOCKED-BY: task:fe753777-ebdf-499d-ad66-a674fb371dc5
+:STARTED: [2026-11-10 Tue 19:07]
 :END:
 :LOGBOOK:
 - Created [2026-11-10 Tue 18:14]
+- State "STARTED" from "TODO" [2026-11-10 Tue 19:07]
+- State "DONE" from "STARTED" [2026-11-10 Tue 19:10]
 :END:
 Acceptance criteria:
 - A subscribe call on a Unix socket sends one =events.subscribe= JSON line and returns after =subscription_started=.
@@ -150,6 +154,7 @@ Acceptance criteria:
 Pattern: =tab-retain/tab-retain-probe.bb= in this record's folder.
 
 * Implementation
+- Event client :: =subscribe!= and =events!= in =herdr/plugins/org-tasks/src/org_tasks_host.clj=. =subscribe!= returns only after =subscription_started= and throws ex-info with =:subscription= =:closed=, =:error=, =:unparsable=, =:unexpected= or =:timeout= (=*subscribe-timeout-ms*=, default 2000 ms). =events!= blocks, returns ={:end :closed}=, ={:end :error ...}= or ={:end :unparsable ...}=, and always closes the connection. Against an isolated Herdr 0.9.5 server it delivered both =tab_focused= events in order, and =server stop= ended it with ={:end :closed}=.
 
 * Validation
 Spike evidence, 2026-11-10, Herdr 0.9.5, isolated sessions with isolated XDG directories; the user's session and =plugins.json= were untouched.

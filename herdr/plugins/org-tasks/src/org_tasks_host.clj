@@ -4,7 +4,9 @@
             [cheshire.core :as json]
             [clojure.edn :as edn]
             [clojure.string :as str])
-  (:import [java.nio.channels FileChannel]
+  (:import [java.io BufferedReader InputStreamReader]
+           [java.net StandardProtocolFamily UnixDomainSocketAddress]
+           [java.nio.channels Channels FileChannel SocketChannel]
            [java.nio.file StandardOpenOption]))
 
 (def plugin-id "cormacc.org-tasks")
@@ -44,6 +46,68 @@
   "A timed-out request is transient: the server can stall briefly under load."
   [e]
   (true? (:timeout (ex-data e))))
+
+;; ── Event subscription ────────────────────────────────────────────
+;; One long-lived connection replaces a `herdr` process per request. The wire
+;; format is one JSON object per line, as `herdr api schema` describes:
+;; a request `{id, method, params}`, then `{id, result: {type:
+;; "subscription_started"}}`, then one `{event, data}` envelope per event.
+
+(def ^:dynamic *subscribe-timeout-ms* 2000)
+
+(defn- read-json-line [^BufferedReader reader]
+  (when-let [line (.readLine reader)]
+    (try {:value (json/parse-string line true)}
+         (catch Exception _ {:unparsable line}))))
+
+(defn subscribe!
+  "Open `socket` and subscribe to the event `types`, such as \"tab.focused\".
+  Returns a connection for `events!` once Herdr confirms the subscription.
+  Throws ex-info with `:subscription` `:closed`, `:error`, `:unparsable`,
+  `:unexpected` or `:timeout` otherwise; the connection is then closed."
+  [socket types]
+  (let [channel (SocketChannel/open StandardProtocolFamily/UNIX)]
+    (try
+      (.connect channel (UnixDomainSocketAddress/of (str socket)))
+      (let [reader (BufferedReader. (InputStreamReader. (Channels/newInputStream channel) "UTF-8"))
+            writer (Channels/newOutputStream channel)
+            request {:id (str "org-tasks-" (uuid)) :method "events.subscribe"
+                     :params {:subscriptions (mapv (fn [t] {:type t}) types)}}]
+        (.write writer (.getBytes (str (json/generate-string request) "\n") "UTF-8"))
+        (.flush writer)
+        ;; The read blocks; closing the channel on timeout releases it.
+        (let [reply (deref (future (read-json-line reader)) *subscribe-timeout-ms* ::timeout)
+              fail (fn [kind data] (throw (ex-info (str "Herdr event subscription failed: " (name kind))
+                                                   (assoc data :subscription kind))))]
+          (cond
+            (= ::timeout reply) (fail :timeout {})
+            (nil? reply) (fail :closed {})
+            (:unparsable reply) (fail :unparsable {:line (:unparsable reply)})
+            (:error (:value reply)) (fail :error {:error (:error (:value reply))})
+            (not= "subscription_started" (get-in (:value reply) [:result :type]))
+            (fail :unexpected {:reply (:value reply)})
+            :else {:channel channel :reader reader})))
+      (catch Throwable e (.close channel) (throw e)))))
+
+(defn events!
+  "Call `(on-event envelope)` for each `{:event :data}` envelope on
+  `connection` until it ends, then close it and return why: `{:end :closed}`,
+  `{:end :error :error ...}` for an error reply, or `{:end :unparsable :line
+  ...}`. An exception from `on-event` closes the connection and propagates."
+  [{:keys [^SocketChannel channel reader]} on-event]
+  (try
+    (loop []
+      (let [line (try (read-json-line reader)
+                      ;; A channel closed from another thread ends the stream.
+                      (catch java.io.IOException _ nil))
+            value (:value line)]
+        (cond
+          (nil? line) {:end :closed}
+          (:unparsable line) {:end :unparsable :line (:unparsable line)}
+          (:error value) {:end :error :error (:error value)}
+          (and (string? (:event value)) (map? (:data value))) (do (on-event value) (recur))
+          :else {:end :unparsable :line (json/generate-string value)})))
+    (finally (.close channel))))
 
 (defn snapshot! [] (:snapshot (call! "api" "snapshot")))
 (defn pane [snapshot id] (some #(when (= id (:pane_id %)) %) (:panes snapshot)))

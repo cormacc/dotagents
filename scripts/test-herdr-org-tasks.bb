@@ -5,6 +5,7 @@
          '[org-tasks.tui.embedding :as embed]
          '[babashka.fs :as fs]
          '[babashka.process :as p]
+         '[cheshire.core :as json]
          '[clojure.string :as str]
          '[clojure.test :refer [deftest is run-tests testing]])
 
@@ -26,6 +27,82 @@
                         :focused_tab_id tab})
 ;; NixOS has no /bin/sleep.
 (def sleep-bin (str (fs/which "sleep")))
+
+
+;; ── Event subscription ──────────────────────────────────────────
+
+(defn fake-herdr
+  "Run `f` with the path of a one-connection fake Herdr socket and an atom of
+  the request lines it read. `respond` gets a line writer; the connection
+  closes when `respond` returns."
+  [respond f]
+  (let [dir (fs/create-temp-dir {:prefix "ot-sock-"}) ; short: the Unix socket path limit
+        path (str dir "/h.sock")
+        server (doto (java.nio.channels.ServerSocketChannel/open java.net.StandardProtocolFamily/UNIX)
+                 (.bind (java.net.UnixDomainSocketAddress/of path)))
+        requests (atom [])
+        worker (future
+                 (with-open [ch (.accept server)]
+                   (let [r (java.io.BufferedReader. (java.io.InputStreamReader. (java.nio.channels.Channels/newInputStream ch) "UTF-8"))
+                         w (java.nio.channels.Channels/newOutputStream ch)]
+                     (swap! requests conj (.readLine r))
+                     (respond (fn [line] (.write w (.getBytes (str line "\n") "UTF-8")) (.flush w))))))]
+    (try (f path requests)
+         (finally (.close server) (future-cancel worker) (fs/delete-tree dir)))))
+
+(def started "{\"id\":\"x\",\"result\":{\"type\":\"subscription_started\"}}")
+(def focused-event "{\"event\":\"tab_focused\",\"data\":{\"type\":\"tab_focused\",\"tab_id\":\"w1:t2\",\"workspace_id\":\"w1\"}}")
+(def closed-event "{\"event\":\"pane_closed\",\"data\":{\"type\":\"pane_closed\",\"pane_id\":\"w1:p2\",\"workspace_id\":\"w1\"}}")
+(def error-reply "{\"id\":\"x\",\"error\":{\"code\":\"invalid_request\",\"message\":\"bad\"}}")
+
+(defn subscription-outcome [respond]
+  (fake-herdr respond
+    (fn [path requests]
+      (let [seen (atom [])
+            result (try (let [conn (host/subscribe! path ["tab.focused" "pane.closed"])]
+                          (host/events! conn #(swap! seen conj %)))
+                        (catch clojure.lang.ExceptionInfo e {:thrown (:subscription (ex-data e))}))]
+        {:result result :events @seen :requests @requests}))))
+
+(deftest subscription-sends-one-request-and-delivers-each-event
+  (let [{:keys [result events requests]}
+        (with-redefs [p/process (fn [& _] (throw (ex-info "no herdr process per event" {})))]
+          (subscription-outcome (fn [w] (w started) (w focused-event) (w closed-event))))
+        request (json/parse-string (first requests) true)]
+    (is (= 1 (count requests)) "one request line")
+    (is (= "events.subscribe" (:method request)))
+    (is (= [{:type "tab.focused"} {:type "pane.closed"}] (get-in request [:params :subscriptions])))
+    (is (string? (:id request)))
+    (is (= [["tab_focused" "w1:t2"] ["pane_closed" "w1:p2"]]
+           (mapv (juxt :event #(or (get-in % [:data :tab_id]) (get-in % [:data :pane_id]))) events))
+        "each event reaches the callback, parsed, in order")
+    (is (= {:end :closed} result) "a closed connection ends the stream")))
+
+(deftest subscription-ends-with-a-distinct-result-for-each-failure
+  (testing "during the handshake"
+    (is (= :closed (:thrown (:result (subscription-outcome (fn [_] nil))))))
+    (is (= :error (:thrown (:result (subscription-outcome (fn [w] (w error-reply)))))))
+    (is (= :unparsable (:thrown (:result (subscription-outcome (fn [w] (w "not json")))))))
+    (is (= :unexpected (:thrown (:result (subscription-outcome (fn [w] (w focused-event)))))))
+    (binding [host/*subscribe-timeout-ms* 200]
+      (is (= :timeout (:thrown (:result (subscription-outcome (fn [_] (Thread/sleep 2000)))))))))
+  (testing "after the subscription started"
+    (let [{:keys [result events]} (subscription-outcome (fn [w] (w started) (w focused-event) (w error-reply)))]
+      (is (= 1 (count events)) "control: the event before the error arrived")
+      (is (= :error (:end result)))
+      (is (= "invalid_request" (get-in result [:error :code]))))
+    (let [{:keys [result]} (subscription-outcome (fn [w] (w started) (w "{oops")))]
+      (is (= {:end :unparsable :line "{oops"} result)))
+    (let [{:keys [result]} (subscription-outcome (fn [w] (w started) (w "{\"event\":\"tab_focused\"}")))]
+      (is (= :unparsable (:end result)) "an envelope without data"))))
+
+(deftest a-failing-callback-closes-the-connection
+  (fake-herdr (fn [w] (w started) (w focused-event) (Thread/sleep 2000))
+    (fn [path _]
+      (let [conn (host/subscribe! path ["tab.focused"])]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"callback"
+                              (host/events! conn (fn [_] (throw (ex-info "callback" {}))))))
+        (is (not (.isOpen ^java.nio.channels.SocketChannel (:channel conn))))))))
 
 (deftest source-is-tab-local-and-preserved-only-on-task-focus
   (is (= "agent-a" (:pane_id (host/source (snapshot [a task-pane]) tab "tasks" nil))))
