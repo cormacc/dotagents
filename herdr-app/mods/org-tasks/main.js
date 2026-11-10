@@ -4,12 +4,13 @@
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { exec, hc, home, focused, panes, spaces, theme, keys, props, settings, run, openOverlay, nextCommand, watchFolder, notify, readTextFile } from "herdr";
-import { project, settle, statusColor, countParts, hint, touches, parse, fitHeight, notInstalled } from "./state.js";
+import { project, settle, statusColor, countParts, hint, touches, parse, fitHeight, notInstalled, remoteOt, missingRemote } from "./state.js";
 
-// Layout props may name the `ot` executable and the block that holds this
+// Layout props may name the local `ot` executable and the block that holds this
 // widget (default: `org-tasks`), which it sizes to its rows. The default `ot` is
 // the home-installed skill script by absolute path, like the quota mod's `oh`:
 // a desktop-started app's PATH can omit the user's shell PATH additions.
+// Another machine always runs its own home-installed `ot` (`remoteOt`).
 const ot = () => props()?.ot ?? home() + "/.agents/skills/org-tasks/scripts/ot";
 const block = () => props()?.block ?? "org-tasks";
 // Vertical padding around the rows, px at zoom 1.
@@ -18,21 +19,49 @@ const PAD_Y = 6;
 const FOCUS_MS = 1000;
 // A fallback for edits a watch misses, such as a replaced folder.
 const REFRESH_MS = 30000;
+// watchFolder sees only this computer, so a project on another machine is
+// polled instead. A run still in flight skips the poll, so a slow link never
+// stacks runs up to exec's 30 s limit.
+const REMOTE_MS = 5000;
 // A pane's live folder is its foreground process's, so an agent's tool commands
 // move it for a moment. Switch only once a new project holds for this many polls.
 const STABLE_POLLS = 2;
 
+const COMPACT = ["compact", "--format", "json"];
+
+// A start failure is reported as not installed only when the file is absent;
+// a failed check is not proof of absence.
+async function runLocal(dir) {
+  const path = ot();
+  return exec(path, COMPACT, { cwd: dir })
+    .catch(async e => await readTextFile(path).then(text => text === null, () => false)
+      ? { missing: path }
+      : { code: 127, stdout: "", stderr: String(e?.message ?? e) });
+}
+
+// A rejection here means the machine or its folder could not be reached.
+async function runRemote(dir, machine) {
+  const [command, args] = remoteOt(COMPACT);
+  const result = await exec(command, args, { cwd: dir, on: machine })
+    .catch(e => ({ code: 127, stdout: "", stderr: `${machine}: ${String(e?.message ?? e)}` }));
+  const missing = missingRemote(result);
+  return missing ? { missing: `${machine}:${missing}` } : result;
+}
+
 export default class OrgTasks extends View {
   init(_props, cx) {
     this.dir = null;
+    this.machine = null;
     this.reason = null;
     this.model = null;
     this.generation = 0;
     this.request = 0;
+    this.busy = null;
     this.watched = null;
     this.follow(cx);
     cx.timer.every(FOCUS_MS, cx => this.follow(cx));
-    cx.timer.every(REFRESH_MS, cx => this.dir && this.load(cx));
+    cx.timer.every(REFRESH_MS, cx => this.dir && !this.machine && this.load(cx));
+    cx.timer.every(REMOTE_MS, cx => this.dir && this.machine && this.busy === null && this.load(cx));
     cx.spawn(async cx => {
       for (;;) {
         const c = await nextCommand();
@@ -48,6 +77,7 @@ export default class OrgTasks extends View {
     const next = settle(this, p, STABLE_POLLS);
     if (!next) return;
     this.dir = p.dir ?? null;
+    this.machine = p.machine ?? null;
     this.reason = p.reason ?? null;
     this.model = null;
     this.watched = null;
@@ -57,27 +87,27 @@ export default class OrgTasks extends View {
   }
 
   load(cx) {
-    const dir = this.dir, generation = this.generation, request = ++this.request;
+    const dir = this.dir, machine = this.machine, generation = this.generation, request = ++this.request;
+    this.busy = request;
     cx.spawn(async cx => {
-      const path = ot();
-      // A start failure is reported as not installed only when the file is absent;
-      // a failed check is not proof of absence.
-      const result = await exec(path, ["compact", "--format", "json"], { cwd: dir })
-        .catch(async e => await readTextFile(path).then(text => text === null, () => false)
-          ? { missing: true }
-          : { code: 127, stdout: "", stderr: String(e?.message ?? e) });
-      // A later run, or a focus change, supersedes this result.
-      if (request !== this.request) return;
-      const parsed = result.missing ? { reason: notInstalled(path) } : parse(result);
-      this.model = parsed.model ?? null;
-      this.reason = parsed.reason ?? null;
-      // ot resolves the project root upwards from the pane's folder, so watch that root.
-      const root = this.model?.root;
-      if (root && root !== this.watched) {
-        this.watched = root;
-        this.watch(cx, root, generation);
+      try {
+        const result = machine ? await runRemote(dir, machine) : await runLocal(dir);
+        // A later run, or a focus change, supersedes this result.
+        if (request !== this.request) return;
+        const parsed = result.missing ? { reason: notInstalled(result.missing) } : parse(result);
+        this.model = parsed.model ?? null;
+        this.reason = parsed.reason ?? null;
+        // ot resolves the project root upwards from the pane's folder, so watch
+        // that root. A remote root is polled instead.
+        const root = this.model?.root;
+        if (!machine && root && root !== this.watched) {
+          this.watched = root;
+          this.watch(cx, root, generation);
+        }
+        cx.notify();
+      } finally {
+        if (this.busy === request) this.busy = null;
       }
-      cx.notify();
     });
   }
 
@@ -100,7 +130,9 @@ export default class OrgTasks extends View {
       return;
     }
     // A detached terminal ends with `ot`, and the overlay closes when it ends.
-    const r = await hc(["run", "--json", "--bg", "--no-parent", "--rm", "--cwd", this.dir, "--", ot(), "tui"]);
+    const argv = this.machine ? remoteOt(["tui"]).flat() : [ot(), "tui"];
+    const on = this.machine ? ["--on", this.machine] : [];
+    const r = await hc(["run", "--json", "--bg", "--no-parent", "--rm", ...on, "--cwd", this.dir, "--", ...argv]);
     let address = null;
     try { address = JSON.parse(r.stdout)?.address; } catch { /* reported below */ }
     if (r.code !== 0 || !address) {
@@ -124,7 +156,8 @@ export default class OrgTasks extends View {
 
   lines(t) {
     const m = this.model;
-    if (this.reason || !m) return [div().text_color(t.muted).child(this.reason ?? `Loading tasks in ${this.dir}…`)];
+    const where = this.machine ? `${this.machine}:${this.dir}` : this.dir;
+    if (this.reason || !m) return [div().text_color(t.muted).child(this.reason ?? `Loading tasks in ${where}…`)];
     if (!m.memory) return [div().text_color(t.muted).child(`No TASKS.org in ${m.folder}`)];
     if (m.selection === "selected")
       return m.rows.map(r => r.role === "parent"

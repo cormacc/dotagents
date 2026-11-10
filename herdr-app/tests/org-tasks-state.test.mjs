@@ -1,12 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { project, settle, statusColor, hint, touches, parse, fitHeight } from "../mods/org-tasks/state.js";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { project, settle, statusColor, hint, touches, parse, fitHeight, remoteOt, missingRemote } from "../mods/org-tasks/state.js";
 
 const agentPane = { pane: "p1", status: "idle", cwd: "/work/a" };
 const shellPane = { pane: "p2", status: null, cwd: "/work/b" };
 const local = { id: "s1", machine: null };
 
-test("project follows the focused local terminal and refuses everything else", () => {
+test("project follows the focused terminal, with its machine, and refuses everything else", () => {
   assert.deepEqual(project({ space: "s1", pane: "p1", cwd: "/x" }, [agentPane], [local]), { dir: "/work/a" });
   assert.deepEqual(project({ space: "s1", pane: "p2" }, [shellPane], [local]), { dir: "/work/b" }, "a shell pane");
   assert.deepEqual(project({ space: "s1", pane: null, terminal: "t1", cwd: "/work/c" }, [], [local]), { dir: "/work/c" },
@@ -15,8 +19,9 @@ test("project follows the focused local terminal and refuses everything else", (
                "a mod pane");
   assert.match(project({ space: "s1", pane: "gone" }, [agentPane], [local]).reason, /Focus a terminal/);
   assert.match(project(null, [agentPane], [local]).reason, /Focus a terminal/);
-  assert.match(project({ space: "s9", pane: "p1" }, [agentPane], [{ id: "s9", machine: "vps" }]).reason, /Remote space \(vps\)/);
-  assert.match(project({ space: "s9", pane: "p2" }, [shellPane], [{ id: "s9", machine: "vps" }]).reason, /Remote space \(vps\)/);
+  assert.deepEqual(project({ space: "vps/s9", pane: "p1" }, [agentPane], [{ id: "vps/s9", machine: "vps" }]), { dir: "/work/a", machine: "vps" });
+  assert.deepEqual(project({ space: "vps/s9", pane: "p2" }, [shellPane], [{ id: "vps/s9", machine: "vps" }]), { dir: "/work/b", machine: "vps" });
+  assert.match(project({ space: "vps/s9", pane: "p1", cwd: null }, [{ ...agentPane, cwd: null }], [{ id: "vps/s9", machine: "vps" }]).reason, /unknown/);
   assert.equal(project({ space: "s1", pane: "p1", cwd: "/fallback" }, [{ ...agentPane, cwd: null }], [local]).dir, "/fallback");
   assert.match(project({ space: "s1", pane: "p1", cwd: null }, [{ ...agentPane, cwd: null }], [local]).reason, /unknown/);
 });
@@ -33,6 +38,39 @@ test("a project switch waits until the new folder holds", () => {
   memo.dir = "/b";
   assert.equal(settle(memo, { reason: "Focus a terminal" }, 2), false);
   assert.equal(settle(memo, { reason: "Focus a terminal" }, 2), true);
+});
+
+test("the same folder on another machine is another project", () => {
+  const memo = { dir: "/a", machine: null, reason: null };
+  assert.equal(settle(memo, { dir: "/a" }, 1), false, "control: the shown project");
+  assert.equal(settle(memo, { dir: "/a", machine: "vps" }, 1), true);
+  memo.machine = "vps";
+  assert.equal(settle(memo, { dir: "/a", machine: "vps" }, 1), false);
+  assert.equal(settle(memo, { dir: "/a" }, 1), true, "back to this computer");
+});
+
+test("remoteOt runs the home-installed ot and reports only a missing file as missing", () => {
+  const home = mkdtempSync(join(tmpdir(), "org-tasks-remote-"));
+  try {
+    const run = env => {
+      const [cmd, args] = remoteOt(["compact", "--x"]);
+      const r = spawnSync(cmd, args, { encoding: "utf8", env: { PATH: process.env.PATH, ...env } });
+      return { code: r.status, stdout: r.stdout, stderr: r.stderr };
+    };
+    const path = join(home, ".agents/skills/org-tasks/scripts/ot");
+    const absent = run({ HOME: home });
+    assert.equal(absent.code, 127);
+    assert.equal(missingRemote(absent), path);
+    mkdirSync(join(home, ".agents/skills/org-tasks/scripts"), { recursive: true });
+    writeFileSync(path, "#!/bin/sh\nprintf '%s|' \"$@\"\n", { mode: 0o755 });
+    const present = run({ HOME: home });
+    assert.deepEqual([present.code, present.stdout], [0, "compact|--x|"], "control: arguments pass through");
+    assert.equal(missingRemote(present), null);
+    writeFileSync(path, "#!/bin/sh\necho 'bb: not found' >&2\nexit 127\n", { mode: 0o755 });
+    const failing = run({ HOME: home });
+    assert.equal(failing.code, 127, "control: ot itself exits 127");
+    assert.equal(missingRemote(failing), null, "a failure inside ot is not a missing ot");
+  } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
 test("block height covers the rows at zoom 1 with padding", () => {

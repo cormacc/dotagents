@@ -61,7 +61,7 @@ async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindi
     "gpui-kit": { View: class {}, div: element },
     "gpui-base": { h_flex: element, v_flex: element },
     herdr: {
-      exec: (cmd, args, opts) => { execCalls.push([cmd, args, opts]); let p; try { p = Promise.resolve(runOt(opts.cwd)); } catch (e) { p = Promise.reject(e); } pendingExec.push(p.catch(() => {})); return p; },
+      exec: (cmd, args, opts) => { execCalls.push([cmd, args, opts]); let p; try { p = Promise.resolve(runOt(opts.cwd, cmd, args, opts)); } catch (e) { p = Promise.reject(e); } pendingExec.push(p.catch(() => {})); return p; },
       readTextFile: readText,
       hc: async args => { hcCalls.push(args); return { code: 0, stdout: JSON.stringify({ address: "t42" }), stderr: "" }; },
       home: () => "/home/fixture", focused: () => focus(), panes: () => panes(), spaces: () => spaces,
@@ -92,7 +92,9 @@ async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindi
   const settle = async () => { await Promise.all(pendingExec); pendingExec = []; await new Promise(r => setImmediate(r)); };
   const render = () => { elements.length = 0; view.render(cx); return elements.flatMap(e => e.operations); };
   const tick = () => timers.find(x => x.ms === 1000).cb(cx);
-  return { view, render, settle, tick, cx, overlays, notes, hcCalls, execCalls, runs, watched };
+  const poll = () => timers.find(x => x.ms === 5000).cb(cx);
+  const refresh = () => timers.find(x => x.ms === 30000).cb(cx);
+  return { view, render, settle, tick, poll, refresh, cx, overlays, notes, hcCalls, execCalls, runs, watched };
 }
 
 const words = ops => ops.filter(o => o[0] === "child" && typeof o[1] === "string").map(o => o[1]);
@@ -185,7 +187,7 @@ test("no key-hint line shows when neither action is bound", async () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a shell pane shows its folder's tasks; a mod pane or remote space shows none", async () => {
+test("a shell pane shows its folder's tasks; a mod pane shows none", async () => {
   const dir = project(PARENT);
   try {
     let focus = { space: "s1", pane: "p1", cwd: dir };
@@ -202,12 +204,77 @@ test("a shell pane shows its folder's tasks; a mod pane or remote space shows no
     w = words(a.render());
     assert.ok(!w.includes("Alpha [22222222]"));
     assert.ok(w.some(x => /Focus a terminal/.test(x)));
-    focus = { space: "s2", pane: "p1", cwd: dir };
-    a.tick(); a.tick();
-    w = words(a.render());
-    assert.ok(!w.includes("Alpha [22222222]"));
-    assert.ok(w.some(x => /Remote space \(vps\)/.test(x)));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// The fixture runs the real ot locally on the folder; the call records where it would run.
+const remoteSpaces = [{ id: "s1", machine: null }, { id: "vps/s2", machine: "vps" }];
+
+test("a remote space runs its own ot on that machine and polls instead of watching", async () => {
+  const dir = project(PARENT);
+  try {
+    let focus = { space: "s1", pane: "p1", cwd: dir };
+    const panes = [{ pane: "p1", status: "idle", cwd: dir }, { pane: "vps/p2", status: "idle", cwd: dir }];
+    const a = await app({ focus: () => focus, panes: () => panes, spaces: remoteSpaces });
+    await a.settle();
+    assert.deepEqual(a.watched, [dir], "control: a local project is watched");
+    a.poll(); await a.settle();
+    assert.equal(a.execCalls.length, 1, "control: the remote poll ignores a local project");
+    focus = { space: "vps/s2", pane: "vps/p2", cwd: dir };
+    a.tick(); a.tick(); await a.settle();
+    assert.ok(words(a.render()).includes("Alpha [22222222]"), "the remote project's tasks show");
+    const [cmd, args, opts] = a.execCalls.at(-1);
+    assert.equal(cmd, "sh");
+    assert.equal(JSON.stringify(args.slice(2)), JSON.stringify(["ot", "compact", "--format", "json"]));
+    assert.match(args[1], /\$HOME\/\.agents\/skills\/org-tasks\/scripts\/ot/, "that machine's home-installed ot");
+    assert.equal(JSON.stringify(opts), JSON.stringify({ cwd: dir, on: "vps" }));
+    assert.deepEqual(a.watched, [dir], "no watch on this computer for a remote root");
+    const runs = a.execCalls.length;
+    a.refresh(); await a.settle();
+    assert.equal(a.execCalls.length, runs, "the 30 s local fallback skips a remote project");
+    a.poll(); await a.settle();
+    assert.equal(a.execCalls.length, runs + 1, "the 5 s poll reloads a remote project");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the remote poll skips while a run is in flight", async () => {
+  const resolvers = [];
+  const a = await app({ focus: () => ({ space: "vps/s2", pane: "vps/p1", cwd: "/fixture" }),
+                        panes: () => [{ pane: "vps/p1", status: "idle", cwd: "/fixture" }], spaces: remoteSpaces,
+                        run: () => new Promise(r => resolvers.push(r)) });
+  assert.equal(resolvers.length, 1, "control: the first run is in flight");
+  a.poll(); a.poll();
+  assert.equal(resolvers.length, 1, "no second run while the first is in flight");
+  resolvers[0]({ code: 0, stdout: JSON.stringify({ ok: true, result: { title: "t", files: [] } }), stderr: "" });
+  await new Promise(r => setImmediate(r));
+  a.poll();
+  assert.equal(resolvers.length, 2, "the next poll runs once the first has ended");
+});
+
+test("a remote ot reported missing shows as not installed on that machine; another failure does not", async () => {
+  for (const [result, expected] of [
+    [{ code: 127, stdout: "", stderr: "org-tasks: ot not installed at /home/u/.agents/skills/org-tasks/scripts/ot\n" },
+     `ot not installed at vps:/home/u/.agents/skills/org-tasks/scripts/ot. See https://github.com/cormacc/dotagents/blob/main/skills/herdr-orch/references/install-surfaces.md`],
+    [{ code: 127, stdout: "", stderr: "/home/u/.agents/skills/org-tasks/scripts/ot: line 3: exec: bb: not found\n" },
+     "ot failed: /home/u/.agents/skills/org-tasks/scripts/ot: line 3: exec: bb: not found"]]) {
+    const a = await app({ focus: () => ({ space: "vps/s2", pane: "vps/p1", cwd: "/work" }),
+                          panes: () => [{ pane: "vps/p1", status: "idle", cwd: "/work" }], spaces: remoteSpaces,
+                          run: () => result });
+    await a.settle();
+    assert.ok(words(a.render()).includes(expected), JSON.stringify(words(a.render())));
+  }
+});
+
+test("select on a remote space opens that machine's ot tui", async () => {
+  const a = await app({ focus: () => ({ space: "vps/s2", pane: "vps/p1", cwd: "/work" }),
+                        panes: () => [{ pane: "vps/p1", status: "idle", cwd: "/work" }], spaces: remoteSpaces,
+                        run: () => new Promise(() => {}) });
+  await a.view.select();
+  const call = a.hcCalls[0];
+  assert.equal(JSON.stringify(call.slice(0, 9)), JSON.stringify(["run", "--json", "--bg", "--no-parent", "--rm", "--on", "vps", "--cwd", "/work"]));
+  assert.equal(JSON.stringify([...call.slice(9, 12), ...call.slice(13)]), JSON.stringify(["--", "sh", "-c", "ot", "tui"]));
+  assert.match(call[12], /\$HOME\/\.agents\/skills\/org-tasks\/scripts\/ot/);
+  assert.equal(a.overlays.length, 1);
 });
 
 test("a project without task memory and a failing ot give explicit lines", async () => {
