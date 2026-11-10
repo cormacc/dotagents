@@ -172,18 +172,19 @@
 (deftest a-folder-change-in-the-same-pane-holds-before-it-publishes
   (let [at (fn [pane dir] {:availability "local" :directory dir :sourcePane pane :sourceTerminal (str "t-" pane)})
         old (at "p1" "/a")
-        step (fn [[_ pending] value] (host/settle old value pending))
-        samples (reductions step [old nil] (repeat host/hold-samples (at "p1" "/b")))]
-    (is (= ["/a" "/a" "/a" "/b"] (map (comp :directory first) samples))
-        "published only after hold-samples samples")
-    (is (= (at "p1" "/a") (first (host/settle old (at "p1" "/a") {:directory "/tmp" :seen 1})))
+        step (fn [[_ pending] time] (host/settle old (at "p1" "/b") pending time))
+        samples (reductions step [old nil] [0 500 999 1000])]
+    (is (= ["/a" "/a" "/a" "/a" "/b"] (map (comp :directory first) samples))
+        "published only by a sample hold-ms after the first saw it")
+    (is (= {:directory "/b" :since 0} (second (nth samples 3))) "the hold runs from the first sample")
+    (is (= (at "p1" "/a") (first (host/settle old (at "p1" "/a") {:directory "/tmp" :since 0} 500)))
         "a return to the published folder cancels the pending one")
-    (is (nil? (second (host/settle old (at "p1" "/a") {:directory "/tmp" :seen 1}))))
-    (is (= [(at "p1" "/a") {:directory "/tmp" :seen 1}] (host/settle old (at "p1" "/tmp") {:directory "/b" :seen 2}))
-        "a different folder restarts the count")
-    (is (= (at "p2" "/b") (first (host/settle old (at "p2" "/b") nil))) "a focus change publishes at once")
-    (is (= "remote" (:availability (first (host/settle old {:availability "remote" :directory nil :sourcePane "p1"} nil)))))
-    (is (= (at "p1" "/a") (first (host/settle nil (at "p1" "/a") nil))) "the first source publishes at once")))
+    (is (nil? (second (host/settle old (at "p1" "/a") {:directory "/tmp" :since 0} 500))))
+    (is (= [(at "p1" "/a") {:directory "/tmp" :since 2000}] (host/settle old (at "p1" "/tmp") {:directory "/b" :since 0} 2000))
+        "a different folder restarts the hold")
+    (is (= (at "p2" "/b") (first (host/settle old (at "p2" "/b") nil 0))) "a focus change publishes at once")
+    (is (= "remote" (:availability (first (host/settle old {:availability "remote" :directory nil :sourcePane "p1"} nil 0)))))
+    (is (= (at "p1" "/a") (first (host/settle nil (at "p1" "/a") nil 0))) "the first source publishes at once")))
 
 (deftest real-producer-is-accepted-by-consumer-and-expires
   (temporary
@@ -271,15 +272,17 @@
     (is (= "alt+x" (host/display-key "ctrl+b" "alt+x")) "a binding without the prefix is shown as is")))
 
 (def tab2 "w1:t9")
-(def c (assoc a :pane_id "agent-c" :terminal_id "term-c" :tab_id tab2))
+(def c (assoc a :pane_id "agent-c" :terminal_id "term-c" :tab_id tab2 :focused false))
 
 (defn fake-host
-  "Two tabs with one agent each. Plugin pane opens create `tasks-<tab>` panes
-  whose supervisor is live while `live` holds."
+  "Two tabs with one agent each; `tab` has focus. A plugin pane open creates a
+  `tasks-<tab>` pane in the target pane's tab, whose supervisor is live while
+  `live` holds."
   [dir f]
   (let [s (atom (assoc (snapshot [a c]) :tabs [{:tab_id tab} {:tab_id tab2}]))
         calls (atom []) live (atom true) timestamp (atom 10000)
         display (str (fs/path dir "plugin-state"))
+        arg-after (fn [args flag] (second (drop-while #(not= flag %) args)))
         dispatch
         (fn [& args]
           (swap! calls conj (vec args))
@@ -295,7 +298,7 @@
               "open" (let [values (into {} (map #(str/split % #"=" 2))
                                         (filter #(and (string? %) (re-find #"^[A-Z_]+=" %)) args))]
                        (if-let [instance (get values "OT_HOST_INSTANCE")]
-                         (let [owner-tab (get values "OT_HOST_TAB")
+                         (let [owner-tab (:tab_id (host/pane @s (arg-after args "--target-pane")))
                                task {:pane_id (str "tasks-" owner-tab) :terminal_id (str "term-tasks-" owner-tab)
                                      :tab_id owner-tab :focused false}
                                owner {:pane (:pane_id task) :terminal (:terminal_id task) :tab owner-tab :pid 22
@@ -313,77 +316,110 @@
       (f {:state s :calls calls :live live :time timestamp}))))
 
 (defn- opens [calls] (filter #(= ["plugin" "pane" "open"] (take 3 %)) @calls))
+(defn- closes [calls] (filter #(= ["plugin" "pane" "close"] (take 3 %)) @calls))
 (defn- task-panes [state] (sort (keep #(when (str/starts-with? (:pane_id %) "tasks") (:pane_id %)) (:panes @state))))
 
-(deftest ensure-opens-every-tab-once-without-focus-or-input
+(deftest ensure-opens-one-pane-in-the-focused-tab-without-focus-or-input
   (temporary
    (fn [dir]
      (fake-host dir
       (fn [{:keys [calls state]}]
         (is (host/display-enabled?) "display defaults to enabled")
-        (host/ensure-all! host/defaults)
-        (host/ensure-all! host/defaults)
-        (is (= (sort [(str "tasks-" tab) (str "tasks-" tab2)]) (task-panes state)))
-        (is (= 2 (count (opens calls))) "a live instance is reused")
+        (swap! state #(-> % (update :tabs conj {:tab_id "w1:t5"})
+                          (update :panes conj (assoc c :pane_id "agent-e" :terminal_id "term-e" :tab_id "w1:t5"))))
+        (is (= 3 (count (:tabs @state))) "control: the session has three tabs")
+        (host/ensure! host/defaults)
+        (host/ensure! host/defaults)
+        (is (= [(str "tasks-" tab)] (task-panes state)) "one pane, in the focused tab only")
+        (is (= 1 (count (opens calls))) "a live instance is reused")
+        (is (some #{"agent-a"} (first (opens calls))) "below the focused pane")
         (is (every? #(and (some #{"--no-focus"} %) (some #{"down"} %)) (opens calls)))
-        (is (not-any? #(some #{"send-text" "send-keys" "run" "focus"} %) @calls)))))))
+        (is (not-any? #(some #{"send-text" "send-keys" "run" "focus"} %) @calls))
+        (is (= (str "tasks-" tab) (:pane (host/read-json (host/index-path dir)))) "the session index names it"))))))
 
 (deftest toggle-is-global-and-persists
   (temporary
    (fn [dir]
      (fake-host dir
       (fn [{:keys [calls state]}]
-        (host/ensure-all! host/defaults)
+        (host/ensure! host/defaults)
         (host/toggle! host/defaults)
         (is (false? (host/display-enabled?)))
-        (is (empty? (task-panes state)) "disabling closes the pane in every tab")
+        (is (empty? (task-panes state)) "disabling closes the single pane")
         (reset! calls [])
-        (host/ensure-all! host/defaults)
-        (is (empty? (opens calls)) "startup and tab.created stay closed while disabled")
+        (host/ensure! host/defaults)
+        (is (empty? (opens calls)) "startup and tab.focused stay closed while disabled")
         (host/toggle! host/defaults)
         (is (host/display-enabled?))
-        (is (= 2 (count (task-panes state))) "enabling reopens every tab"))))))
+        (is (= [(str "tasks-" tab)] (task-panes state)) "enabling reopens it in the focused tab"))))))
 
 (deftest stale-process-and-foreign-pane-are-not-controlled
   (temporary
    (fn [dir]
      (fake-host dir
       (fn [{:keys [calls live state]}]
-        (host/ensure-all! host/defaults)
-        (reset! calls [])
-        (reset! live false)
-        (host/close-tab! dir tab)
-        (is (not-any? #(= ["plugin" "pane" "close"] (take 3 %)) @calls))
-        (reset! live true)
-        (swap! state update :panes #(mapv (fn [p] (if (= (str "tasks-" tab) (:pane_id p)) (assoc p :terminal_id "foreign") p)) %))
-        (reset! calls [])
-        (host/close-tab! dir tab)
-        (is (not-any? #(= ["plugin" "pane" "close"] (take 3 %)) @calls))
-        (host/close-tab! dir tab2)
-        (is (some #{["plugin" "pane" "close" (str "tasks-" tab2)]} @calls) "positive control"))))))
+        (host/ensure! host/defaults)
+        (let [task (str "tasks-" tab)
+              set-terminal! (fn [t] (swap! state update :panes #(mapv (fn [p] (if (= task (:pane_id p)) (assoc p :terminal_id t) p)) %)))]
+          (reset! calls [])
+          (reset! live false)
+          (host/close-session! dir)
+          (is (empty? (closes calls)) "a dead supervisor's pane is not closed")
+          (reset! live true)
+          (set-terminal! "foreign")
+          (host/close-session! dir)
+          (is (empty? (closes calls)) "a foreign terminal in the pane is not closed")
+          (set-terminal! (str "term-" task))
+          (host/close-session! dir)
+          (is (= [["plugin" "pane" "close" task]] (closes calls)) "positive control")))))))
 
 (deftest process-exit-reopen-uses-new-instance
   (temporary
    (fn [dir]
      (fake-host dir
       (fn [{:keys [state]}]
-        (host/open-tab! dir tab host/defaults)
-        (let [old (:instance (host/read-json (fs/path dir (str tab ".json"))))]
+        (host/open-session! dir host/defaults)
+        (let [old (:instance (host/read-json (host/index-path dir)))]
+          (is (some? old) "control: the first open has an instance")
           (swap! state update :panes #(remove (fn [p] (str/starts-with? (:pane_id p) "tasks")) %))
-          (host/open-tab! dir tab host/defaults)
-          (is (not= old (:instance (host/read-json (fs/path dir (str tab ".json"))))))))))))
+          (host/open-session! dir host/defaults)
+          (is (not= old (:instance (host/read-json (host/index-path dir)))))))))))
 
 (deftest pending-open-reservation-is-not-replaced
   (temporary
    (fn [dir]
      (fake-host dir
-      (fn [{:keys [calls]}]
-        (host/atomic! (fs/path dir (str tab ".json"))
-                      {:instance (host/uuid) :tab tab :pending true :updatedAt 10000})
-        (host/open-tab! dir tab host/defaults)
-        (is (empty? (opens calls)))
-        (host/open-tab! dir tab2 host/defaults)
-        (is (= 1 (count (opens calls))) "positive control: another tab opens"))))))
+      (fn [{:keys [calls time]}]
+        (host/atomic! (host/index-path dir) {:instance (host/uuid) :pending true :updatedAt 10000})
+        (host/open-session! dir host/defaults)
+        (is (empty? (opens calls)) "a fresh reservation holds")
+        (reset! time 15001)
+        (host/open-session! dir host/defaults)
+        (is (= 1 (count (opens calls))) "positive control: an expired reservation is replaced"))))))
+
+(deftest ensure-closes-compact-panes-of-the-per-tab-design
+  ;; After an upgrade, supervisors of the per-tab design can still run in
+  ;; every tab. Their panes close, and their per-tab index files go.
+  (temporary
+   (fn [dir]
+     (fake-host dir
+      (fn [{:keys [calls state]}]
+        (let [legacy (fn [pane-tab pane-id]
+                       (let [instance (host/uuid)
+                             record {:pane pane-id :terminal (str "term-" pane-id) :tab pane-tab :pid 22
+                                     :identity "start command" :instance instance :updatedAt 10000}]
+                         (fs/create-dirs (fs/path dir instance))
+                         (host/atomic! (fs/path dir instance "owner.json") record)
+                         (host/atomic! (fs/path dir (str pane-tab ".json")) record)
+                         record))]
+          (legacy tab2 "tasks-old")
+          (swap! state update :panes conj {:pane_id "tasks-old" :terminal_id "term-tasks-old" :tab_id tab2})
+          (legacy "w1:t7" "tasks-gone")
+          (host/ensure! host/defaults)
+          (is (= [["plugin" "pane" "close" "tasks-old"]] (closes calls)) "only the live legacy pane is closed")
+          (is (not (fs/exists? (fs/path dir (str tab2 ".json")))))
+          (is (not (fs/exists? (fs/path dir "w1:t7.json"))) "a dead legacy index is removed too")
+          (is (= [(str "tasks-" tab)] (task-panes state)) "the single pane opens")))))))
 
 (deftest select-opens-a-popup-for-the-compact-pane-project
   (temporary
@@ -395,13 +431,13 @@
                                 (last (filter (fn [call] (some #{"select"} call)) @calls)))]
           (swap! state update :panes #(mapv (fn [p] (if (= "agent-a" (:pane_id p)) (assoc p :foreground_cwd project) p)) %))
           (swap! state assoc :agents (filter :agent (:panes @state)))
-          (host/open-tab! dir tab host/defaults)
+          (host/open-session! dir host/defaults)
           (host/select!)
           (is (= (str "OT_SELECT_DIR=" project) (select-env)))
           (is (not-any? #(some #{"--placement"} %) (filter #(some #{"select"} %) @calls))
               "the manifest supplies the popup placement")
           (testing "with the task pane focused, the retained source still names the project"
-            (let [record (host/read-json (fs/path dir (str tab ".json")))]
+            (let [record (host/read-json (host/index-path dir))]
               (host/atomic! (fs/path dir (:instance record) "context.json") {:sourcePane "agent-a"})
               (swap! state assoc :layouts [{:tab_id tab :focused_pane_id (str "tasks-" tab)}])
               (host/select!)
@@ -418,6 +454,17 @@
             (with-redefs [host/process! (constantly {:foreground_processes [{:name "ssh"}]})]
               (host/select!))
             (is (= "OT_SELECT_DIR=" (select-env))))))))))
+
+(deftest sample-reasons-and-move-ratio
+  (is (host/sample-reason tab {:event "tab_focused" :data {:tab_id tab2}}))
+  (is (host/sample-reason tab {:event "pane_focused" :data {:pane_id "p"}}))
+  (is (host/sample-reason tab {:event "pane_closed" :data {:pane_id "p"}}))
+  (is (host/sample-reason tab {:event "pane_updated" :data {:pane {:tab_id tab}}}) "a title change in the own tab")
+  (is (not (host/sample-reason tab {:event "pane_updated" :data {:pane {:tab_id tab2}}})) "another tab's title change")
+  (is (not (host/sample-reason tab {:event "layout_updated" :data {}})))
+  (is (= 0.875 (host/move-ratio 40 5)))
+  (is (= 0.5 (host/move-ratio 8 5)) "a short target keeps half")
+  (is (= 0.95 (host/move-ratio 400 5))))
 
 (deftest concurrent-ensure-actions-reuse-one-host-pane
   (temporary
@@ -504,58 +551,101 @@
 
 (def probe-script (str (fs/absolutize *file*)))
 
+(defn- env-long [k] (some-> (System/getenv k) not-empty parse-long))
+
 (defn supervisor-probe
-  "Child process: run the real supervisor loop against a fake Herdr while the
-  focused agent moves from A to B, and report every published context."
+  "Child process: run the real supervisor loop against a fake Herdr and a
+  scripted event stream, and report what it published and asked Herdr to do."
   [root]
-  (let [instance (System/getenv "OT_HOST_INSTANCE")
-        a (assoc a :foreground_cwd (str root "/a")) b (assoc b :foreground_cwd (str root "/b"))
-        state (atom (assoc (snapshot [a b (assoc task-pane :terminal_title "Tasks :: ~/a")])
-                           :layouts [{:tab_id tab :focused_pane_id "agent-a"}]))
+  (let [a (assoc a :foreground_cwd (str root "/a")) b (assoc b :foreground_cwd (str root "/b"))
+        c (assoc c :foreground_cwd (str root "/c"))
+        state (atom (assoc (snapshot [a b c (assoc task-pane :terminal_title "Tasks :: ~/a")])
+                           :tabs [{:tab_id tab} {:tab_id tab2}]
+                           :layouts [{:tab_id tab :focused_pane_id "agent-a"}
+                                     {:tab_id tab2 :focused_pane_id "agent-c"}]))
+        focus-pane! (fn [pane-id] (swap! state update :layouts
+                                         (fn [ls] (mapv #(if (= tab (:tab_id %)) (assoc % :focused_pane_id pane-id) %) ls))))
         ;; PROBE_TIMEOUTS lists snapshot calls that time out; focus moves to B
         ;; on the first successful call after them.
         timeouts (set (map parse-long (remove str/blank? (str/split (or (System/getenv "PROBE_TIMEOUTS") "") #","))))
-        switch-at (inc (reduce max 2 timeouts))
+        switch-at (when-not (System/getenv "PROBE_NO_SWITCH") (inc (reduce max 2 timeouts)))
         ;; PROBE_ALONE_AT: from that snapshot call on, the agents' panes are
         ;; gone and the task pane is alone in its tab.
-        alone-at (some-> (System/getenv "PROBE_ALONE_AT") not-empty parse-long)
+        alone-at (env-long "PROBE_ALONE_AT")
+        ;; PROBE_FOCUS_TAB_AT: from that snapshot call on, the other tab has focus.
+        focus-tab-at (env-long "PROBE_FOCUS_TAB_AT")
+        ;; PROBE_CD_AT: at that snapshot call, agent A's folder becomes B's.
+        cd-at (env-long "PROBE_CD_AT")
+        ;; PROBE_MOVE_ID: the pane's ID after a move, as across workspaces.
+        move-id (System/getenv "PROBE_MOVE_ID")
         ;; PROBE_INFO_FAILS: the first n process-info calls for an agent pane
         ;; fail, as for a pane that closed after the snapshot.
-        info-fails (or (some-> (System/getenv "PROBE_INFO_FAILS") not-empty parse-long) 0)
-        failed-infos (atom 0)
-        snapshots (atom 0) contexts (atom []) renames (atom []) closes (atom []) real-atomic host/atomic!]
+        info-fails (or (env-long "PROBE_INFO_FAILS") 0)
+        ;; PROBE_EVENTS: EDN events, each applied to the fake state when it is
+        ;; delivered: {:after ms :event name :focus pane-id :focus-tab tab-id}.
+        script (some-> (System/getenv "PROBE_EVENTS") not-empty read-string)
+        events-end? (some? (System/getenv "PROBE_EVENTS_END"))
+        failed-infos (atom 0) own-id (atom "tasks")
+        snapshots (atom 0) contexts (atom []) renames (atom []) closes (atom []) moves (atom [])
+        error (atom nil) real-atomic host/atomic!]
     (with-redefs [host/call! (fn [& args]
                                (case (vec (take 2 args))
                                  ["api" "snapshot"]
                                  (let [n (swap! snapshots inc)]
                                    (when (timeouts n)
                                      (throw (ex-info "Herdr request timed out" {:args args :timeout true})))
-                                   (when (= switch-at n)
-                                     (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-b"}]))
+                                   (when (= switch-at n) (focus-pane! "agent-b"))
                                    (when (= alone-at n)
-                                     (swap! state update :panes (fn [ps] (filterv #(= "tasks" (:pane_id %)) ps))))
+                                     (swap! state update :panes (fn [ps] (filterv #(= @own-id (:pane_id %)) ps))))
+                                   (when (= focus-tab-at n) (swap! state assoc :focused_tab_id tab2))
+                                   (when (= cd-at n)
+                                     (let [cd (fn [ps] (mapv #(if (= "agent-a" (:pane_id %)) (assoc % :foreground_cwd (str root "/b")) %) ps))]
+                                       ;; `source` merges the agent entry, so both lists change.
+                                       (swap! state #(-> % (update :panes cd) (update :agents cd)))))
                                    {:snapshot @state})
-                                 ["pane" "process-info"] (if (= "tasks" (last args))
+                                 ["pane" "process-info"] (if (= @own-id (last args))
                                                             {:process_info {:shell_pid (.pid (java.lang.ProcessHandle/current))}}
                                                             (if (< @failed-infos info-fails)
                                                               (do (swap! failed-infos inc)
                                                                   (throw (ex-info "Herdr request failed: pane not found" {:args args})))
                                                               {:process_info local-info}))
                                  ["pane" "rename"] (do (swap! renames conj (vec (drop 2 args))) {})
+                                 ["pane" "layout"] {:layout {:panes [] :splits []}}
+                                 ["pane" "move"] (let [to (second (drop-while #(not= "--tab" %) args))
+                                                       old @own-id new (or move-id old)]
+                                                   (swap! moves conj (vec (drop 2 args)))
+                                                   (reset! own-id new)
+                                                   (swap! state update :panes
+                                                          (fn [ps] (mapv #(if (= old (:pane_id %)) (assoc % :pane_id new :tab_id to) %) ps)))
+                                                   {:move_result {:pane (host/pane @state new)}})
                                  ["plugin" "pane"] (do (swap! closes conj (vec (drop 2 args))) {})))
+                  host/subscribe! (fn [_ _] {:channel (java.nio.channels.SocketChannel/open java.net.StandardProtocolFamily/UNIX)})
+                  host/events! (fn [_ on-event]
+                                 (doseq [{:keys [after focus focus-tab] :as e} script]
+                                   (Thread/sleep (or after 0))
+                                   (when focus (focus-pane! focus))
+                                   (when focus-tab (swap! state assoc :focused_tab_id focus-tab))
+                                   (on-event {:event (:event e) :data (or (:data e) {})}))
+                                 (if events-end? {:end :closed} @(promise)))
                   host/herdr-config-text (constantly "[[keys.command]]\nkey = \"prefix+t\"\ncommand = \"cormacc.org-tasks.select\"\n")
                   host/state-root! (constantly root) host/identity! (constantly "fixture")
                   host/atomic! (fn [file value]
                                  (when (= "context.json" (str (fs/file-name file)))
                                    (swap! contexts conj value))
                                  (real-atomic file value))]
-      (host/supervise! (str root "/sleeper")))
+      (binding [host/*fallback-ms* (or (env-long "PROBE_FALLBACK_MS") 300)]
+        (try (host/supervise! (str root "/sleeper") host/defaults)
+             (catch Exception e (reset! error (ex-message e))))))
     (println (pr-str {:sources (mapv :sourcePane @contexts)
                       :directories (vec (distinct (keep :directory @contexts)))
                       :modes (set (map :mode @contexts))
                       :hints (set (map :hints @contexts))
                       :renames @renames
                       :closes @closes
+                      :moves @moves
+                      :snapshots @snapshots
+                      :index (host/read-json (host/index-path root))
+                      :error @error
                       :failed-infos @failed-infos}))))
 
 (when-let [root (System/getenv "SUPERVISOR_PROBE_ROOT")]
@@ -563,21 +653,21 @@
   (System/exit 0))
 
 (defn run-supervisor-probe
-  "Run the probe with an `ot` child that lives `seconds`; return its report."
-  [dir seconds timeouts & [alone-at info-fails]]
+  "Run the probe with an `ot` child that lives `seconds` and the probe `env`;
+  return its report."
+  [dir seconds env]
   (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
-    (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
+    (doseq [d ["a" "b" "c"]] (fs/create-dir (str dir "/" d)))
     (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " " seconds "\n"))
     (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
-    (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
+    (host/atomic! (host/index-path dir) {:instance instance :pending true :updatedAt (host/now)})
     (let [proc (p/process ["bb" probe-script]
-                          {:extra-env {"SUPERVISOR_PROBE_ROOT" dir "OT_HOST_DIR" private
-                                       "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
-                                       "HERDR_PANE_ID" "tasks" "PROBE_TIMEOUTS" timeouts
-                                       "PROBE_ALONE_AT" (str (or alone-at ""))
-                                       "PROBE_INFO_FAILS" (str (or info-fails ""))}
+                          {:extra-env (merge {"SUPERVISOR_PROBE_ROOT" dir "OT_HOST_DIR" private
+                                              "OT_HOST_INSTANCE" instance "HERDR_PANE_ID" "tasks"
+                                              "HERDR_SOCKET_PATH" "fake"}
+                                             env)
                            :out :string :err :string})
-          result (deref proc 15000 nil)]
+          result (deref proc 20000 nil)]
       (when-not result (p/destroy-tree proc))
       (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
       (when (and result (zero? (:exit result)))
@@ -588,25 +678,27 @@
   ;; still follows the next focus change.
   (temporary
    (fn [dir]
-     (let [out (run-supervisor-probe dir 3 "3,4")]
+     (let [out (run-supervisor-probe dir 3 {"PROBE_TIMEOUTS" "3,4"})]
        (is (= [(str dir "/a") (str dir "/b")] (:directories out)))))))
 
 (deftest supervisor-follows-the-focused-agent-and-publishes-hints
   (temporary
    (fn [dir]
-     (let [out (run-supervisor-probe dir 2 "")]
+     (let [out (run-supervisor-probe dir 2 {})]
        (is (= [(str dir "/a") (str dir "/b")] (:directories out)) "A first, then B after the focus change")
        (is (= #{"compact"} (:modes out)))
        (is (= #{["ctrl+b t: select"]} (:hints out)))
        (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")
-       (is (= [] (:closes out)) "control: with other panes in the tab, the pane stays open")))))
+       (is (= [] (:closes out)) "control: with other panes in the tab, the pane stays open")
+       (is (= [] (:moves out)) "the focused tab already holds the pane")
+       (is (nil? (:error out)))))))
 
 (deftest supervisor-survives-a-source-pane-that-closes-mid-sample
   ;; A pane can close between the snapshot and its process-info request.
   ;; That sample is skipped; the supervisor keeps running.
   (temporary
    (fn [dir]
-     (let [out (run-supervisor-probe dir 3 "" nil 2)]
+     (let [out (run-supervisor-probe dir 3 {"PROBE_INFO_FAILS" "2"})]
        (is (= 2 (:failed-infos out)) "control: two process-info requests failed")
        ;; The failed samples are the first two, while A has focus; focus
        ;; moves to B at the third snapshot.
@@ -618,10 +710,85 @@
   (temporary
    (fn [dir]
      (let [started (System/currentTimeMillis)
-           out (run-supervisor-probe dir 10 "" 3)]
+           out (run-supervisor-probe dir 10 {"PROBE_ALONE_AT" "3"})]
        (is (= [["close" "tasks"]] (:closes out)) "the supervisor closes its own pane")
        (is (< (- (System/currentTimeMillis) started) 8000) "and ends before its ot child would")
        (is (= [(str dir "/a")] (:directories out)) "control: the pane worked before it was alone")))))
+
+(deftest supervisor-moves-its-pane-to-the-focused-tab
+  (temporary
+   (fn [dir]
+     (let [out (run-supervisor-probe dir 3 {"PROBE_FOCUS_TAB_AT" "5"})
+           [move] (:moves out)]
+       (is (= 1 (count (:moves out))) "one move")
+       (is (= ["tasks" "--tab" tab2 "--split" "down" "--target-pane" "agent-c"] (take 7 move))
+           "below the focused pane of the focused tab")
+       (is (some #{"--no-focus"} move))
+       (is (= (str dir "/c") (last (:directories out))) "then it shows the new tab's project")
+       (is (= ["tasks" tab2] ((juxt :pane :tab) (:index out))) "the session index follows the pane")
+       ;; The supervisor ends when its pane's terminal changes, so no error means
+       ;; the moved pane kept its terminal.
+       (is (nil? (:error out)))))))
+
+(deftest supervisor-follows-a-new-pane-id-after-a-move-across-workspaces
+  (temporary
+   (fn [dir]
+     (let [out (run-supervisor-probe dir 3 {"PROBE_FOCUS_TAB_AT" "5" "PROBE_MOVE_ID" "w2:tasks"})]
+       (is (= 1 (count (:moves out))) "control: it moved")
+       (is (= "w2:tasks" (:pane (:index out))))
+       (is (= (str dir "/c") (last (:directories out))) "later samples find the pane by its new ID")
+       (is (nil? (:error out)))))))
+
+(deftest supervisor-samples-on-events-not-on-a-short-poll
+  ;; With the fallback poll far away, only events cause samples.
+  (temporary
+   (fn [dir]
+     (let [out (run-supervisor-probe dir 3 {"PROBE_NO_SWITCH" "1" "PROBE_FALLBACK_MS" "60000"
+                                            "PROBE_EVENTS" (pr-str [{:after 800 :event "pane_focused" :focus "agent-b"}])})]
+       (is (= [(str dir "/a") (str dir "/b")] (:directories out)) "the focus event publishes B")
+       (is (<= (:snapshots out) 3) (str "few snapshots in 3 s: " (:snapshots out)))))))
+
+(deftest supervisor-publishes-a-silent-folder-change-after-the-hold
+  ;; A `cd` without a title change emits no event. The fallback sample finds
+  ;; it, and the next sample, at the end of the hold, publishes it.
+  (temporary
+   (fn [dir]
+     (let [out (run-supervisor-probe dir 3.5 {"PROBE_NO_SWITCH" "1" "PROBE_FALLBACK_MS" "2000" "PROBE_CD_AT" "3"})]
+       (is (= [(str dir "/a") (str dir "/b")] (:directories out)) "the new folder publishes")
+       ;; Startup and the first sample at 0 s, the fallback sample that finds
+       ;; the folder at 2 s, and one hold sample at 3 s that publishes it. The
+       ;; next fallback sample, at 5 s, is after the run ends.
+       (is (<= (:snapshots out) 5) (str "one hold sample, not one per 250 ms: " (:snapshots out)))))))
+
+(deftest supervisor-ignores-title-changes-in-other-tabs
+  (temporary
+   (fn [dir]
+     (let [noise (vec (repeat 20 {:after 50 :event "pane_updated" :data {:pane {:tab_id tab2}}}))
+           out (run-supervisor-probe dir 3 {"PROBE_NO_SWITCH" "1" "PROBE_FALLBACK_MS" "60000"
+                                            "PROBE_EVENTS" (pr-str noise)})]
+       ;; One snapshot at startup finds the own pane; the second is the first sample.
+       (is (= 2 (:snapshots out)) "no sample after the first")))))
+
+(deftest supervisor-groups-rapid-tab-switches-into-one-move
+  (temporary
+   (fn [dir]
+     (let [switches (vec (for [i (range 10)]
+                           {:after (if (zero? i) 600 0) :event "tab_focused"
+                            :focus-tab (if (even? i) tab2 tab)}))
+           ;; The tenth switch returns to the own tab; an eleventh ends in tab2.
+           out (run-supervisor-probe dir 3 {"PROBE_NO_SWITCH" "1" "PROBE_FALLBACK_MS" "60000"
+                                            "PROBE_EVENTS" (pr-str (conj switches {:after 0 :event "tab_focused" :focus-tab tab2}))})]
+       (is (= 1 (count (:moves out))) (str "one move for eleven switches: " (:moves out)))
+       (is (= tab2 (:tab (:index out))) "in the last focused tab")))))
+
+(deftest supervisor-exits-when-the-event-stream-ends
+  (temporary
+   (fn [dir]
+     (let [started (System/currentTimeMillis)
+           out (run-supervisor-probe dir 10 {"PROBE_EVENTS" (pr-str [{:after 300 :event "pane_focused"}])
+                                             "PROBE_EVENTS_END" "1"})]
+       (is (= "Herdr event stream ended" (:error out)))
+       (is (< (- (System/currentTimeMillis) started) 8000) "before its ot child would end")))))
 
 (deftest ot-resolution-prefers-the-home-skill
   (temporary

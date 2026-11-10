@@ -235,23 +235,23 @@
 (defn context [old instance candidate info hint-lines time]
   (publish old instance (context-value candidate info) hint-lines time))
 
-;; About one second at the supervisor's 500 ms poll.
-(def hold-samples 3)
+(def hold-ms 1000)
 
 (defn settle
-  "The context value to publish, and the next pending state. A source pane's
-  folder moves while its foreground command runs elsewhere, such as an agent's
-  tool call or a shell `cd`, so a new folder in the same pane publishes only
-  after `hold-samples` samples. A source change publishes at once."
-  [old value pending]
+  "The context value to publish at `time`, and the next pending state. A
+  source pane's folder moves while its foreground command runs elsewhere, such
+  as an agent's tool call or a shell `cd`, so a new folder in the same pane
+  publishes only once a sample sees it `hold-ms` after the first did. A source
+  change publishes at once."
+  [old value pending time]
   (if-not (and (= (:sourcePane old) (:sourcePane value))
                (= "local" (:availability old) (:availability value))
                (not= (:directory old) (:directory value)))
     [value nil]
-    (let [seen (if (= (:directory pending) (:directory value)) (inc (:seen pending)) 1)]
-      (if (>= seen hold-samples)
+    (let [since (if (= (:directory pending) (:directory value)) (:since pending) time)]
+      (if (>= (- time since) hold-ms)
         [value nil]
-        [(select-keys old (keys value)) {:directory (:directory value) :seen seen}]))))
+        [(select-keys old (keys value)) {:directory (:directory value) :since since}]))))
 
 (defn sample!
   "Sample the tab's live source and publish it with a heartbeat, or nil to
@@ -265,7 +265,7 @@
                     (catch clojure.lang.ExceptionInfo _ ::failed))
                nil)]
     (when-not (= ::failed info)
-      (let [[value pending] (settle last-context (context-value candidate info) pending)]
+      (let [[value pending] (settle last-context (context-value candidate info) pending (now))]
         {:candidate candidate :pending pending
          :context (publish last-context (:instance record) value hint-lines (now))}))))
 
@@ -331,11 +331,14 @@
           (call! "pane" "resize" "--pane" (:pane record) "--direction" (if (pos? delta) "up" "down")
                  "--amount" (str (double (abs delta)))))))))
 
-(defn instance-record [root index]
+(defn instance-record
+  "The owner record that `index` points to, or nil. A pending index is a
+  reservation; otherwise the index must equal the record."
+  [root index]
   (when-let [instance (:instance index)]
     (when (= instance (str (java.util.UUID/fromString instance)))
       (let [record (read-json (fs/path root instance "owner.json"))]
-        (when (and (= instance (:instance record)) (= (:tab index) (:tab record))
+        (when (and (= instance (:instance record))
                    (or (:pending index)
                        (= (dissoc index :updatedAt) (dissoc record :updatedAt))))
           record)))))
@@ -346,37 +349,44 @@
             (catch Exception _ false))))
 
 ;; ── Actions ───────────────────────────────────────────────────────
+;; One compact pane per session. It moves to the focused tab, so its index and
+;; lock are per session, and its record names the pane and tab it is in now.
 
-(defn- tab-lock [root tab f]
-  (with-lock (fs/path root (str tab ".lock")) f))
+(def index-name "instance.json")
+(defn index-path [root] (fs/path root index-name))
+(defn- session-lock [root f] (with-lock (fs/path root "instance.lock") f))
 
-(defn tab-record
-  "The verified live instance for `tab`, or nil."
-  [root tab snapshot]
-  (let [record (instance-record root (read-json (fs/path root (str tab ".json"))))]
+(defn session-record
+  "The verified live instance, or nil."
+  [root snapshot]
+  (let [record (instance-record root (read-json (index-path root)))]
     (when (record-owned? record snapshot) record)))
 
-(defn open-tab!
-  "Open this tab's compact pane unless a live instance or a fresh reservation
-  exists. The pane never takes focus."
-  [root tab config]
-  (tab-lock root tab
+(defn focused-tab [snapshot]
+  (or (:focused_tab_id snapshot)
+      (some #(when (:focused %) (:tab_id %)) (:panes snapshot))))
+
+(defn open-session!
+  "Open the compact pane below the focused pane of the focused tab, unless a
+  live instance or a fresh reservation exists. The pane never takes focus."
+  [root config]
+  (session-lock root
     (fn []
-      (let [index (fs/path root (str tab ".json"))
+      (let [index (index-path root)
             pointer (read-json index)
             snapshot (snapshot!)]
         (cond
-          (tab-record root tab snapshot) nil
+          (session-record root snapshot) nil
           (and (:pending pointer) (< (- (now) (:updatedAt pointer)) 5000)) nil
           :else
-          (when-let [target (tab-focused-pane snapshot tab)]
+          (when-let [target (some->> (focused-tab snapshot) (tab-focused-pane snapshot))]
             (let [instance (uuid)
                   dir (private-dir! (fs/path root instance))
-                  _ (atomic! index {:instance instance :tab tab :pending true :updatedAt (now)})
+                  _ (atomic! index {:instance instance :pending true :updatedAt (now)})
                   result (call! "plugin" "pane" "open" "--plugin" plugin-id "--entrypoint" "tasks"
                                 "--placement" "split" "--direction" "down" "--target-pane" (:pane_id target)
                                 "--no-focus" "--env" (str "OT_HOST_INSTANCE=" instance)
-                                "--env" (str "OT_HOST_DIR=" dir) "--env" (str "OT_HOST_TAB=" tab))
+                                "--env" (str "OT_HOST_DIR=" dir))
                   pane (get-in result [:plugin_pane :pane])
                   record (loop [remaining 40]
                            (let [record (read-json (fs/path dir "owner.json"))]
@@ -386,39 +396,49 @@
               (atomic! index record)
               (resize! record config))))))))
 
-(defn close-tab! [root tab]
-  (tab-lock root tab
-    (fn [] (when-let [record (tab-record root tab (snapshot!))]
+(defn close-session! [root]
+  (session-lock root
+    (fn [] (when-let [record (session-record root (snapshot!))]
              (call! "plugin" "pane" "close" (:pane record))))))
 
-(defn- each-tab! [f]
-  ;; One tab's failure must not stop the others; report them together.
-  (let [failures (keep (fn [tab] (try (f (:tab_id tab)) nil
-                                      (catch Exception e (str (:tab_id tab) ": " (ex-message e)))))
-                       (:tabs (snapshot!)))]
-    (when (seq failures)
-      (throw (ex-info (str/join "\n" failures) {})))))
+(defn close-legacy!
+  "Close compact panes of the earlier one-pane-per-tab design, whose
+  supervisors can still run after an upgrade, and remove their index files."
+  [root]
+  (let [indexes (remove #(= index-name (str (fs/file-name %))) (fs/glob root "*.json"))]
+    (when (seq indexes)
+      (let [snapshot (snapshot!)]
+        (doseq [index indexes]
+          (when-let [record (instance-record root (read-json index))]
+            (when (record-owned? record snapshot)
+              (try (call! "plugin" "pane" "close" (:pane record)) (catch Exception _ nil))))
+          (fs/delete-if-exists index))))))
 
-(defn ensure-all!
-  "Open the compact pane in every tab while display is enabled."
+(defn ensure!
+  "Open the compact pane while display is enabled. The startup and tab.focused
+  hooks run this, so a lost supervisor comes back at the next tab switch."
   [config]
   (when (display-enabled?)
-    (let [root (state-root!)] (each-tab! #(open-tab! root % config)))))
+    (let [root (state-root!)]
+      (close-legacy! root)
+      (open-session! root config))))
 
 (defn toggle!
-  "Flip the global display preference and apply it to every tab."
+  "Flip the global display preference and apply it."
   [config]
   (let [enabled (not (display-enabled?))]
     (atomic! (display-file) {:enabled enabled})
     (if enabled
-      (ensure-all! config)
-      (let [root (state-root!)] (each-tab! #(close-tab! root %))))))
+      (ensure! config)
+      (let [root (state-root!)] (close-legacy! root) (close-session! root)))))
 
 (defn selection-directory
-  "The project the tab's compact pane shows, from the live source pane."
+  "The project of `tab`'s focused pane. While the compact pane is in `tab`, its
+  last source stands in for a focused task pane."
   [root tab snapshot]
-  (let [record (tab-record root tab snapshot)
-        last-context (when record (read-json (fs/path root (:instance record) "context.json")))
+  (let [record (session-record root snapshot)
+        last-context (when (and record (= tab (:tab record)))
+                       (read-json (fs/path root (:instance record) "context.json")))
         candidate (source snapshot tab (:pane record) (pane snapshot (:sourcePane last-context))
                           (plugin-roots!))
         result (source-context candidate (when candidate (process! (:pane_id candidate))))]
@@ -461,68 +481,140 @@
   [snapshot tab id]
   (= [id] (map :pane_id (filter #(= tab (:tab_id %)) (:panes snapshot)))))
 
-(defn supervise! [ot]
+(def subscriptions ["tab.focused" "pane.focused" "pane.updated" "pane.closed" "pane.moved"])
+;; A folder change without a title change emits no event, so the supervisor
+;; also samples at this interval.
+(def ^:dynamic *fallback-ms* 5000)
+;; Groups bursts, such as an agent's title updates, into one sample.
+(def ^:dynamic *min-sample-ms* 250)
+;; The context lease is 5 s and the contract asks for a renewal each second.
+(def heartbeat-ms 500)
+
+(defn sample-reason
+  "Whether an event in the session needs a new sample of `tab`: a focus change
+  anywhere, a closed or moved pane, or a title change in `tab`."
+  [tab {:keys [event data]}]
+  (case event
+    ("tab_focused" "pane_focused" "pane_closed" "pane_moved") true
+    "pane_updated" (= tab (get-in data [:pane :tab_id]))
+    false))
+
+(defn move-ratio
+  "The share of a `height`-row target pane that leaves `rows` rows below it."
+  [height rows]
+  (max 0.5 (min 0.95 (/ (- height rows) (double height)))))
+
+(defn follow!
+  "Move pane `id` below the focused pane of `tab`, without focus. Returns the
+  moved pane, whose ID changes when the tab is in another workspace."
+  [id tab snapshot config]
+  (when-let [target (tab-focused-pane snapshot tab)]
+    (let [height (or (some #(when (= (:pane_id target) (:pane_id %)) (get-in % [:rect :height]))
+                           (:panes (:layout (call! "pane" "layout" "--pane" (:pane_id target)))))
+                     40)
+          result (call! "pane" "move" id "--tab" tab "--split" "down" "--target-pane" (:pane_id target)
+                        "--ratio" (format "%.3f" (move-ratio height (:compact-rows config))) "--no-focus")]
+      (get-in result [:move_result :pane]))))
+
+(defn- take-events!
+  "Every queued event, waiting up to `ms` for the first."
+  [^java.util.concurrent.LinkedBlockingQueue queue ms]
+  (let [first-event (.poll queue ms java.util.concurrent.TimeUnit/MILLISECONDS)
+        more (java.util.ArrayList.)]
+    (.drainTo queue more)
+    (cond-> (vec more) first-event (->> (cons first-event) vec))))
+
+(defn supervise! [ot config]
   (let [dir (System/getenv "OT_HOST_DIR") instance (System/getenv "OT_HOST_INSTANCE")
-        tab (System/getenv "OT_HOST_TAB") id (System/getenv "HERDR_PANE_ID")
+        initial (System/getenv "HERDR_PANE_ID") socket (System/getenv "HERDR_SOCKET_PATH")
         pid (.pid (java.lang.ProcessHandle/current))
-        current (pane (snapshot!) id)
-        owner {:pane id :terminal (:terminal_id current) :tab tab :pid pid
-               :identity (identity! pid) :instance instance}
+        start (pane (snapshot!) initial)
+        owner {:terminal (:terminal_id start) :pid pid :identity (identity! pid) :instance instance}
+        root (when dir (fs/parent dir))
         file (fs/path dir "context.json")
         owner-file (fs/path dir "owner.json")
-        index (fs/path (fs/parent dir) (str tab ".json"))
+        index (index-path root)
         hint-lines (hints (herdr-config-text))
-        roots (plugin-roots!)]
-    (when-not (and dir instance tab id (= tab (:tab_id current)) (fs/directory? dir)
+        roots (plugin-roots!)
+        record-of (fn [{:keys [id tab]}] (assoc owner :pane id :tab tab))
+        heartbeat! (fn [st]
+                     (when (:context st) (atomic! file (assoc (:context st) :updatedAt (now))))
+                     (atomic! owner-file (assoc (record-of st) :updatedAt (now))))]
+    (when-not (and dir instance initial socket start (fs/directory? dir)
                    (= instance (str (fs/file-name dir))))
       (throw (ex-info "Invalid task supervisor instance" {})))
     (private-dir! dir)
     (when-not (= instance (:instance (read-json index)))
       (throw (ex-info "Task open reservation expired" {})))
     (atomic! file (context nil instance nil nil hint-lines (now)))
-    (atomic! owner-file (assoc owner :updatedAt (now)))
-    (let [child (p/process [ot "tui" "--context-file" (str file) "--instance" instance]
-                           {:in :inherit :out :inherit :err :inherit :shutdown p/destroy-tree})]
+    (atomic! owner-file (assoc (record-of {:id initial :tab (:tab_id start)}) :updatedAt (now)))
+    (let [queue (java.util.concurrent.LinkedBlockingQueue.)
+          connection (subscribe! socket subscriptions)
+          stream (future (try (events! connection #(.put queue %))
+                              (finally (.put queue ::ended))))
+          child (p/process [ot "tui" "--context-file" (str file) "--instance" instance]
+                           {:in :inherit :out :inherit :err :inherit :shutdown p/destroy-tree})
+          ;; One sample: move to the focused tab, close when alone, or publish.
+          ;; nil skips it after a timed-out request or a source pane that closed
+          ;; mid-sample; every other failure ends the pane.
+          step (fn [st]
+                 (try
+                   (let [snapshot (snapshot!)
+                         current (pane snapshot (:id st))
+                         focus (focused-tab snapshot)]
+                     (when-not (and (= (:terminal owner) (:terminal_id current))
+                                    (= instance (:instance (read-json index))))
+                       (throw (ex-info "Task pane moved or disappeared" {})))
+                     (cond
+                       (and focus (not= focus (:tab_id current)))
+                       (when-let [moved (binding [*request-timeout-ms* 2000]
+                                          (follow! (:id st) focus snapshot config))]
+                         (let [st (assoc st :id (:pane_id moved) :tab (:tab_id moved) :previous nil :due true)]
+                           (session-lock root #(do (atomic! owner-file (assoc (record-of st) :updatedAt (now)))
+                                                   (atomic! index (record-of st))))
+                           (binding [*request-timeout-ms* 2000] (resize! (record-of st) config))
+                           st))
+
+                       (sole-pane? snapshot (:tab_id current) (:id st))
+                       (do (call! "plugin" "pane" "close" (:id st)) ::closed)
+
+                       :else
+                       (do (sync-label! current)
+                           (when-let [sampled (sample! snapshot (record-of (assoc st :tab (:tab_id current)))
+                                                       (:previous st) (:context st) (:pending st) roots hint-lines)]
+                             (atomic! file (:context sampled))
+                             (assoc st :tab (:tab_id current) :previous (:candidate sampled)
+                                    :context (:context sampled) :pending (:pending sampled) :due false
+                                    ;; A pending folder publishes at the first sample after its hold.
+                                    :resample-at (some-> (:pending sampled) :since (+ hold-ms)))))))
+                   (catch clojure.lang.ExceptionInfo e
+                     (when-not (timeout? e) (throw e)))))]
       (try
         (binding [*request-timeout-ms* 200]
-          (loop [previous nil last-context nil pending nil]
+          (loop [st {:id initial :tab (:tab_id start) :due true :sampled-at 0}]
             (when (nil? (deref child 0 nil))
-              (let [started (now)
-                    ;; nil after a timed-out request or a skipped sample: keep
-                    ;; the previous state and retry at the next poll. Every
-                    ;; other failure ends the pane.
-                    sampled (try
-                              (let [snapshot (snapshot!)
-                                    current (pane snapshot id)]
-                                (when-not (and (= (:terminal owner) (:terminal_id current)) (= tab (:tab_id current))
-                                               (= instance (:instance (read-json index))))
-                                  (throw (ex-info "Task pane moved or disappeared" {})))
-                                (if (sole-pane? snapshot tab id)
-                                  ::alone
-                                  (do (sync-label! current)
-                                      (sample! snapshot owner previous last-context pending roots hint-lines))))
-                              (catch clojure.lang.ExceptionInfo e
-                                (when-not (timeout? e) (throw e))))
-                    ;; Alone in its tab: close the pane so Herdr closes the
-                    ;; tab. A timed-out close is retried at the next poll; a
-                    ;; closed pane ends the loop, and `finally` cleans up.
-                    closed (when (= ::alone sampled)
-                             (try (call! "plugin" "pane" "close" id) true
-                                  (catch clojure.lang.ExceptionInfo e
-                                    (when-not (timeout? e) (throw e)))))]
-                (when-not closed
-                  (when (map? sampled) (atomic! file (:context sampled)))
-                  ;; The supervisor is alive during a retry, so its lease stays
-                  ;; fresh and `ensure` does not open a second pane.
-                  (atomic! owner-file (assoc owner :updatedAt (now)))
-                  (Thread/sleep (max 1 (- 500 (- (now) started))))
-                  (if (map? sampled)
-                    (recur (:candidate sampled) (:context sampled) (:pending sampled))
-                    (recur previous last-context pending)))))))
+              (let [events (take-events! queue (if (:due st) 0 heartbeat-ms))
+                    _ (when (some #{::ended} events)
+                        (throw (ex-info "Herdr event stream ended" {})))
+                    due (or (:due st)
+                            (some #(sample-reason (:tab st) %) events)
+                            (some-> (:resample-at st) (<= (now)))
+                            (>= (- (now) (:sampled-at st)) *fallback-ms*))
+                    wait (- *min-sample-ms* (- (now) (:sampled-at st)))
+                    _ (when (and due (pos? wait)) (Thread/sleep wait))
+                    next-st (if due
+                              (or (step st) (assoc st :due true :sampled-at (now)))
+                              st)]
+                (when-not (= ::closed next-st)
+                  (let [next-st (cond-> next-st due (assoc :sampled-at (now)))]
+                    (heartbeat! next-st)
+                    (recur next-st)))))))
         (finally
           ;; known-limit: retain private instance metadata for ownership diagnosis;
           ;; add bounded pruning if repeated reopening causes material state growth.
           (fs/delete-if-exists file)
+          (.close ^java.nio.channels.SocketChannel (:channel connection))
+          (future-cancel stream)
           (p/destroy-tree child))))))
 
 (defn resolve-ot
@@ -542,12 +634,12 @@
           ot #(resolve-ot (or (System/getenv "HOME") (System/getProperty "user.home")) root)
           config #(config! (System/getenv "HERDR_PLUGIN_CONFIG_DIR"))]
       (case operation
-        "serve" (supervise! (ot))
+        "serve" (supervise! (ot) (config))
         "select-pane" (select-pane! (ot))
         "select" (select!)
         "toggle" (toggle! (config))
-        ;; Startup and tab.created hooks: idempotent, so neither needs the
+        ;; Startup and tab.focused hooks: idempotent, so neither needs the
         ;; event payload.
-        "ensure" (ensure-all! (config))
+        "ensure" (ensure! (config))
         (throw (ex-info "Expected toggle, select, ensure, serve or select-pane" {}))))
     (catch Exception e (binding [*out* *err*] (println (ex-message e))) (System/exit 1))))

@@ -5,13 +5,16 @@ min_herdr_version = "0.9.5"
 description = "Tab-local shared org-tasks terminal interface"
 platforms = ["linux", "macos"]
 
-# Show the compact pane in every tab while display is enabled. Both hooks are
-# idempotent, so neither reads the event payload.
+# One compact pane per session follows the focused tab while display is
+# enabled. Its supervisor moves it on Herdr events; these hooks only reopen it
+# when no live instance exists, so a lost pane returns at the next tab switch.
+# A workspace switch also emits tab.focused. Both hooks are idempotent, so
+# neither reads the event payload.
 [[startup]]
 command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
 
 [[events]]
-on = "tab.created"
+on = "tab.focused"
 command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
 
 [[panes]]

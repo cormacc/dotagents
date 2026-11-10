@@ -35,8 +35,8 @@ One compact pane per session. Its supervisor subscribes to Herdr events on =HERD
 - [ ] The moved pane keeps its =terminal_id=, so =ot tui= is not restarted.
 - [ ] Focusing a tab in another workspace moves the compact pane into that tab within 1 s.
 - [ ] After a focus change, the pane shows the newly focused pane's project within 1 s.
-- [ ] After a =cd= in the focused source pane, without a title change, the pane shows the new project within 5 s.
-- [ ] While no event arrives, the supervisor makes at most one Herdr request per 5 s.
+- [ ] After a =cd= in the focused source pane, without a title change, the pane shows the new project within 7 s. (Amended from 5 s during implementation: the 5 s fallback sample finds the folder, and the 1 s folder hold publishes it.)
+- [ ] While no event arrives, the supervisor makes at most two Herdr requests per 5 s. (Amended from one during implementation: a fallback sample needs the snapshot and the source pane's =process-info=, which detects an =ssh= that starts without a folder or title change.)
 - [ ] After a move, the compact pane has the configured =:compact-rows=, unless Herdr's minimum pane size clamps it.
 - [ ] When every other pane in the pane's tab closes, that tab closes.
 - [ ] After such a tab closes, the compact pane opens in the tab that Herdr focuses next.
@@ -64,7 +64,8 @@ One compact pane per session. Its supervisor subscribes to Herdr events on =HERD
   - =[ui] tab_bar_right= status line: one line only, interval refresh, and the user must paste config.
 - Move the pane with =herdr pane move=, not close and reopen :: the process, its =terminal_id= and the loaded graph survive the move.
 - A subscription for live changes, hooks for recovery :: the supervisor subscribes with =events.subscribe= on =HERDR_SOCKET_PATH=; the =startup= and =tab.focused= hooks run the idempotent =ensure=, so a dead supervisor comes back at the next tab switch. A workspace switch also emits =tab_focused=, so no =workspace.focused= hook is needed.
-- Slow fallback poll of the own tab only :: a =cd= without a title change emits no event (see Gotchas), so the supervisor also takes one snapshot every 5 s.
+- Slow fallback poll of the own tab only :: a =cd= without a title change emits no event (see Gotchas), so the supervisor also samples every 5 s.
+- The same-pane folder hold is 1 s of time, not a sample count :: with event-driven sampling, three samples could take 15 s. A pending folder schedules one more sample at the end of its hold.
 
 ** Gotchas
 - =pane_updated= fires on a terminal-title change only. A =cd=, a foreground command and =pane rename= emitted none in the spike; the title event carried the current =foreground_cwd=.
@@ -72,6 +73,7 @@ One compact pane per session. Its supervisor subscribes to Herdr events on =HERD
 - =pane move --split down --ratio R= gives the existing target pane the share R. A compact pane needs R near =1 - rows/height=, or =resize!= after the move.
 - A move to another workspace gives the pane a new ID (=w1:p3= → =w2:p2=). The process keeps its old =HERDR_PANE_ID=; =herdr pane current --current= inside it returns the new ID, and =plugin pane close= works on the new ID.
 - Hooks receive =HERDR_PLUGIN_EVENT_JSON= (the event, with =tab_id=) and =HERDR_PLUGIN_CONTEXT_JSON= (the focused pane and its folder).
+- =source= merges a pane with its entry in the snapshot's =:agents= list, so a test fixture that changes an agent pane's folder must change both lists.
 
 ** Risks
 - Each tab switch reflows panes in two tabs, and each resized pane redraws once: accepted by the user after a check in a real client (see Open questions).
@@ -120,14 +122,18 @@ Acceptance criteria:
 
 Pattern: =subscribe!= in =design/log/2026-11-10-org-tasks-follow-focus-pane/spike-1/focus-spike.bb=.
 
-** TODO Run one compact pane per session that follows focus
+** DONE Run one compact pane per session that follows focus
+CLOSED: [2026-11-10 Tue 22:44]
 :PROPERTIES:
 :CUSTOM_ID: 73fb8f30-a47b-4f2d-a3a9-7037a8e61900
 :CREATED: [2026-11-10 Tue 18:14]
 :BLOCKED-BY: task:8e1f8846-c416-4cc3-a44c-cd5ba3497fcf
+:STARTED: [2026-11-10 Tue 22:23]
 :END:
 :LOGBOOK:
 - Created [2026-11-10 Tue 18:14]
+- State "STARTED" from "TODO" [2026-11-10 Tue 22:23]
+- State "DONE" from "STARTED" [2026-11-10 Tue 22:44]
 :END:
 Acceptance criteria:
 - Every core-functionality and edge-case criterion in =** Acceptance= has a case in =scripts/test-herdr-org-tasks.bb= against the fake Herdr, except the 1 s and 5 s timings, which the validation task measures.
@@ -155,6 +161,9 @@ Pattern: =tab-retain/tab-retain-probe.bb= in this record's folder.
 
 * Implementation
 - Event client :: =subscribe!= and =events!= in =herdr/plugins/org-tasks/src/org_tasks_host.clj=. =subscribe!= returns only after =subscription_started= and throws ex-info with =:subscription= =:closed=, =:error=, =:unparsable=, =:unexpected= or =:timeout= (=*subscribe-timeout-ms*=, default 2000 ms). =events!= blocks, returns ={:end :closed}=, ={:end :error ...}= or ={:end :unparsable ...}=, and always closes the connection. Against an isolated Herdr 0.9.5 server it delivered both =tab_focused= events in order, and =server stop= ended it with ={:end :closed}=.
+- Single instance :: a per-session =instance.json= index and =instance.lock= replace the per-tab =<tab>.json= and =<tab>.lock=. =open-session!= opens the pane below the focused pane of the focused tab; =close-legacy!= closes live panes of the per-tab version and removes their index files. After a move, the supervisor rewrites =owner.json= and the index, under the lock, with its new pane and tab.
+- Supervisor loop :: events go to a queue, and the loop takes every queued event at once, so a burst becomes one sample. A sample is due on =sample-reason=, at the end of a folder hold, or after =*fallback-ms*= (5 s); =*min-sample-ms*= (250 ms) spaces samples. One sample moves the pane (=follow!=, ratio from =move-ratio=, then =resize!=), closes it when alone, or publishes. The heartbeat rewrites the context and owner files every 500 ms without a Herdr request.
+- Not covered by the fake-Herdr tests :: the compact height after a move (the fake has no split geometry) and every timing criterion; plan task "Validate the follow-focus pane in an isolated Herdr server" covers them.
 
 * Validation
 Spike evidence, 2026-11-10, Herdr 0.9.5, isolated sessions with isolated XDG directories; the user's session and =plugins.json= were untouched.
