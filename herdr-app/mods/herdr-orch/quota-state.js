@@ -1,5 +1,7 @@
 // Adapted UI source: Lakris2407/herdr-mods 612d5e8fc8117db8a75f457b2f0ba48f50550626 (MIT).
 export const EVERY = 60000, EXPIRE = 300000;
+export const INSTALL_URL = "https://github.com/cormacc/dotagents/blob/main/skills/herdr-orch/references/install-surfaces.md";
+export const ohPath = home => home + "/.agents/skills/herdr-orch/scripts/oh";
 const number = n => Number.isFinite(n) && n >= 0 && n <= 100;
 const text = s => typeof s === "string" && s.length > 0;
 const date = s => typeof s === "string"
@@ -43,12 +45,15 @@ export function parseQuota(stdout) {
 export function snapshot(state, now) {
   const expired = state?.at == null || now - state.at >= EXPIRE;
   return { providers: expired ? [] : state.providers, at: state?.at,
-    stale: Boolean(state?.error) || expired, error: state?.error ?? null, running: Boolean(state?.running) };
+    stale: Boolean(state?.error) || expired, error: state?.error ?? null, missing: state?.missing ?? null,
+    running: Boolean(state?.running) };
 }
 
 // Shared storage is the cross-copy lock: popup and status cannot start competing commands.
 // The native exec limit is 30 seconds; no UI timer pretends to cancel a process.
-export function coordinator({ exec, home, read, write, clock = Date.now }) {
+// `readTextFile` tells a missing `oh` apart from other start failures; without it,
+// every start failure is reported alike.
+export function coordinator({ exec, home, read, write, readTextFile, clock = Date.now }) {
   let pending;
   return {
     refresh() {
@@ -58,14 +63,17 @@ export function coordinator({ exec, home, read, write, clock = Date.now }) {
       write({ ...previous, running: true, startedAt: clock() });
       pending = Promise.resolve().then(async () => {
         try {
-          const r = await exec(home() + "/.agents/skills/herdr-orch/scripts/oh", ["usage", "--format", "json"], { cwd: home() });
-          if (r.code !== 0) { write({ ...read(), error: "Command failed", running: false }); return; }
+          const r = await exec(ohPath(home()), ["usage", "--format", "json"], { cwd: home() });
+          if (r.code !== 0) { write({ ...read(), error: "Command failed", missing: null, running: false }); return; }
           let providers;
           try { providers = parseQuota(r.stdout); }
-          catch (_) { write({ ...read(), error: "Invalid quota output", running: false }); return; }
-          write({ providers, at: clock(), error: null, running: false });
+          catch (_) { write({ ...read(), error: "Invalid quota output", missing: null, running: false }); return; }
+          write({ providers, at: clock(), error: null, missing: null, running: false });
         } catch (_) {
-          write({ ...read(), error: "Command unavailable or timed out", running: false });
+          const path = ohPath(home());
+          const absent = readTextFile ? await readTextFile(path).then(text => text === null, () => false) : false;
+          write({ ...read(), running: false, missing: absent ? path : null,
+            error: absent ? `oh not installed at ${path}. See ${INSTALL_URL}` : "Command unavailable or timed out" });
         } finally { pending = null; }
       });
       return pending;

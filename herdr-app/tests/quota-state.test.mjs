@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { parseQuota, coordinator, elapsed, snapshot, visibleWindows, EVERY, EXPIRE } from "../mods/herdr-orch/quota-state.js";
+import { parseQuota, coordinator, elapsed, snapshot, visibleWindows, EVERY, EXPIRE, INSTALL_URL } from "../mods/herdr-orch/quota-state.js";
 import { window, modelWindows, namedAccounts, row, envelope, response } from "./quota-fixtures.mjs";
 
 const parse = x => parseQuota(JSON.stringify(x));
@@ -140,6 +140,26 @@ test("valid provider failures supersede old values, including authentication inv
   assert.deepEqual(h.quota.snapshot().providers[0].windows, []);
   h.advance(100); fail = true; await h.other.refresh();
   assert.deepEqual(h.other.snapshot().providers[0].windows, []);
+});
+
+test("a start failure names a missing home oh, and only a missing one", async () => {
+  for (const [text, missing] of [[null, true], ["#!/usr/bin/env bash\n", false]]) {
+    let state;
+    const q = coordinator({ exec: async () => { throw Error("cannot start"); }, home: () => "/h",
+      readTextFile: async () => text, read: () => state, write: x => { state = x; }, clock: () => 0 });
+    await q.refresh();
+    const s = q.snapshot();
+    assert.equal(s.missing, missing ? "/h/.agents/skills/herdr-orch/scripts/oh" : null);
+    if (missing) {
+      assert.ok(s.error.startsWith("oh not installed at /h/.agents/skills/herdr-orch/scripts/oh."), s.error);
+      assert.ok(s.error.includes(INSTALL_URL), s.error);
+    } else assert.equal(s.error, "Command unavailable or timed out");
+  }
+  let state;
+  const q = coordinator({ exec: async () => { throw Error("cannot start"); }, home: () => "/h",
+    readTextFile: async () => { throw Error("unreachable"); }, read: () => state, write: x => { state = x; }, clock: () => 0 });
+  await q.refresh();
+  assert.equal(q.snapshot().missing, null, "a failed check is not proof of absence");
 });
 
 test("a synchronous exec rejection does not wedge future refreshes", async () => {

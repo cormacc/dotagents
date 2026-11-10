@@ -71,6 +71,9 @@ export function touches(changed, files) {
 }
 
 // The model, or a reason, from an `ot compact --format json` run.
+export const INSTALL_URL = "https://github.com/cormacc/dotagents/blob/main/skills/herdr-orch/references/install-surfaces.md";
+export const notInstalled = path => `ot not installed at ${path}. See ${INSTALL_URL}`;
+
 export function parse(result) {
   if (result.code !== 0) {
     let message = null;

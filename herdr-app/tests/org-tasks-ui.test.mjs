@@ -39,7 +39,7 @@ function otCompact(cwd) {
   return { code: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
-async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindings = [], zoom = 1, run: runOt = otCompact }) {
+async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindings = [], zoom = 1, run: runOt = otCompact, readText = async () => "#!/usr/bin/env bash\n" }) {
   const elements = [], timers = [], overlays = [], notes = [], hcCalls = [], execCalls = [], runs = [], watched = [];
   const cx = { notify() {}, spawn: f => { f(cx); }, timer: { every: (ms, cb) => timers.push({ ms, cb }) } };
   function element() {
@@ -61,7 +61,8 @@ async function app({ focus, panes, spaces = [{ id: "s1", machine: null }], bindi
     "gpui-kit": { View: class {}, div: element },
     "gpui-base": { h_flex: element, v_flex: element },
     herdr: {
-      exec: (cmd, args, opts) => { execCalls.push([cmd, args, opts]); const p = Promise.resolve(runOt(opts.cwd)); pendingExec.push(p); return p; },
+      exec: (cmd, args, opts) => { execCalls.push([cmd, args, opts]); let p; try { p = Promise.resolve(runOt(opts.cwd)); } catch (e) { p = Promise.reject(e); } pendingExec.push(p.catch(() => {})); return p; },
+      readTextFile: readText,
       hc: async args => { hcCalls.push(args); return { code: 0, stdout: JSON.stringify({ address: "t42" }), stderr: "" }; },
       home: () => "/home/fixture", focused: () => focus(), panes: () => panes(), spaces: () => spaces,
       theme: () => t, keys: () => bindings, props: () => ({}), settings: () => ({ zoom }),
@@ -120,6 +121,18 @@ test("selected task renders every STARTED child, then the next one", async () =>
     assert.equal(colourOf(ops, "STARTED"), "#0055ff");
     assert.equal(JSON.stringify(a.execCalls.map(c => [c[0], c[1], c[2].cwd])), JSON.stringify([["/home/fixture/.agents/skills/org-tasks/scripts/ot", ["compact", "--format", "json"], dir]]));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a missing ot shows as not installed, with its path; a present one that fails to start does not", async () => {
+  const fail = () => { throw Error("cannot start"); };
+  for (const [readText, expected] of [
+    [async () => null, "ot not installed at /home/fixture/.agents/skills/org-tasks/scripts/ot. See https://github.com/cormacc/dotagents/blob/main/skills/herdr-orch/references/install-surfaces.md"],
+    [async () => "#!/usr/bin/env bash\n", "ot failed: cannot start"]]) {
+    const a = await app({ focus: () => ({ space: "s1", pane: "p1", cwd: "/work" }),
+                          panes: () => [{ pane: "p1", status: "idle", cwd: "/work" }], run: fail, readText });
+    await a.settle(); await new Promise(r => setImmediate(r));
+    assert.ok(words(a.render()).includes(expected), JSON.stringify(words(a.render())));
+  }
 });
 
 test("without a selection it shows counts and the bound key hints", async () => {

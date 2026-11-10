@@ -5,7 +5,7 @@ import { coordinator, elapsed, EVERY, EXPIRE, visibleWindows } from "./quota-sta
 import { roles, level, readable } from "./colors.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand, home, run } from "herdr";
+import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand, home, run, readTextFile } from "herdr";
 
 const DEFAULTS = { kinds: { session: true, weekly: true, monthly: true, model: false, unknown: true }, hidden: [], signedOut: false, names: false, remaining: false };
 const ICONS = { claude: "claude", codex: "codex" };
@@ -65,7 +65,7 @@ export default class Quota extends View {
   init(_props, cx) {
     // The app's program table knows each agent's icon and whether it is a one-color glyph.
     this.programs = {};
-    this.quota = coordinator({ exec, home, read: () => shared(stateKey()), write: value => setShared(stateKey(), value) });
+    this.quota = coordinator({ exec, home, readTextFile, read: () => shared(stateKey()), write: value => setShared(stateKey(), value) });
     cx.spawn(async cx => {
       const list = await knownAgents().catch(() => []);
       for (const a of list) this.programs[a.key] = a;
@@ -173,7 +173,7 @@ export default class Quota extends View {
       .when(stale, el => el.opacity(0.6))
       .on_click(() => this.openMenu())
       .on_mouse_down("right", () => this.openMenu())
-      .when(parts.length === 0, el => el.child(div().text_color(r.hint).child(error || (data.at != null && data.stale) ? "Quota unavailable" : data.at != null ? "No quota to show" : "Loading quota…")))
+      .when(parts.length === 0, el => el.child(div().text_color(r.hint).child(data.missing ? "oh not installed" : error || (data.at != null && data.stale) ? "Quota unavailable" : data.at != null ? "No quota to show" : "Loading quota…")))
       .children(parts);
   }
 

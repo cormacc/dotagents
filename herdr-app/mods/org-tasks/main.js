@@ -3,8 +3,8 @@
 // chooses the project, watches its task files and presents the rows.
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { exec, hc, home, focused, panes, spaces, theme, keys, props, settings, run, openOverlay, nextCommand, watchFolder, notify } from "herdr";
-import { project, settle, statusColor, countParts, hints, touches, parse, fitHeight } from "./state.js";
+import { exec, hc, home, focused, panes, spaces, theme, keys, props, settings, run, openOverlay, nextCommand, watchFolder, notify, readTextFile } from "herdr";
+import { project, settle, statusColor, countParts, hints, touches, parse, fitHeight, notInstalled } from "./state.js";
 
 // Layout props may name the `ot` executable and the block that holds this
 // widget (default: `org-tasks`), which it sizes to its rows. The default `ot` is
@@ -59,11 +59,16 @@ export default class OrgTasks extends View {
   load(cx) {
     const dir = this.dir, generation = this.generation, request = ++this.request;
     cx.spawn(async cx => {
-      const result = await exec(ot(), ["compact", "--format", "json"], { cwd: dir })
-        .catch(e => ({ code: 127, stdout: "", stderr: String(e?.message ?? e) }));
+      const path = ot();
+      // A start failure is reported as not installed only when the file is absent;
+      // a failed check is not proof of absence.
+      const result = await exec(path, ["compact", "--format", "json"], { cwd: dir })
+        .catch(async e => await readTextFile(path).then(text => text === null, () => false)
+          ? { missing: true }
+          : { code: 127, stdout: "", stderr: String(e?.message ?? e) });
       // A later run, or a focus change, supersedes this result.
       if (request !== this.request) return;
-      const parsed = parse(result);
+      const parsed = result.missing ? { reason: notInstalled(path) } : parse(result);
       this.model = parsed.model ?? null;
       this.reason = parsed.reason ?? null;
       // ot resolves the project root upwards from the pane's folder, so watch that root.

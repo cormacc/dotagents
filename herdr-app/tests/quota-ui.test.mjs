@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { response, row, window, modelWindows, namedAccounts } from "./quota-fixtures.mjs";
 
-async function app() {
+async function app({ missing = false } = {}) {
   let currentProps = {}, now = Date.parse("2030-01-01T02:30:00Z"), calls = 0, finish;
   const shared = new Map(), elements = [], timers = [], overlays = [];
   const handle = { focus() {}, is_focused: () => false };
@@ -35,7 +35,8 @@ async function app() {
     "gpui-kit": { View: class {}, div: element, svg: element, image: element },
     "gpui-base": { h_flex: element, v_flex: element },
     herdr: {
-      exec: () => { calls++; return new Promise(resolve => { finish = resolve; }); },
+      exec: () => { calls++; return missing ? Promise.reject(Error("not installed")) : new Promise(resolve => { finish = resolve; }); },
+      readTextFile: async () => missing ? null : "#!/usr/bin/env bash\n",
       theme: () => theme, settings: () => ({ zoom: 1 }), shared: key => shared.get(key), setShared: (key, value) => shared.set(key, value),
       props: () => currentProps, home: () => "/fake", openOverlay: o => overlays.push(o), knownAgents: async () => [],
       nextCommand: () => new Promise(() => {}), run() {},
@@ -101,6 +102,15 @@ test("status owns initial/60s polling; popup shares data and refresh, with no se
   assert.ok(!statusText.some(s => s.startsWith("model:extra")));
   assert.equal(a.timers.filter(t => t.every).length, 1);
   assert.ok(a.timers.some(t => !t.every && t.ms === 300000));
+});
+
+test("a missing home oh shows as not installed in the status and its path in the popup", async () => {
+  const a = await app({ missing: true }), status = a.make();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(words(a.render(status)).includes("oh not installed"));
+  const popup = a.make({ menu: true });
+  const text = words(a.render(popup, { menu: true }));
+  assert.ok(text.some(s => s.startsWith("oh not installed at /fake/.agents/skills/herdr-orch/scripts/oh.") && s.includes("install-surfaces.md")), JSON.stringify(text));
 });
 
 test("sibling accounts render separately and visibility changes do not hide their sibling", async () => {
