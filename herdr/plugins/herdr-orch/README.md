@@ -1,6 +1,6 @@
 # herdr-orch Herdr plugin
 
-Herdr plugin `cormacc.herdr-orch` provides quota display and a sidebar agent tree. Quota commands use `~/.agents/skills/herdr-orch/scripts/oh` when it is executable, so that they use the same `oh` as the herdr-app quota mod; otherwise they use `../../../skills/herdr-orch/scripts/oh` in the same checkout, resolved from `HERDR_PLUGIN_ROOT`. When neither is executable, the error names both paths. The sidebar tree reads the ledgers directly, as described below.
+Herdr plugin `cormacc.herdr-orch` provides quota display, a sidebar agent tree and a doctor. Quota commands use `~/.agents/skills/herdr-orch/scripts/oh` when it is executable, so that they use the same `oh` as the herdr-app quota mod; otherwise they use `../../../skills/herdr-orch/scripts/oh` in the same checkout, resolved from `HERDR_PLUGIN_ROOT`. When neither is executable, the error names both paths. The sidebar tree reads the ledgers directly, as described below.
 
 The separate [org-tasks plugin](../org-tasks/README.md) embeds the shared task TUI in a tab-local bottom split. It has its own registration and configuration.
 
@@ -25,6 +25,22 @@ herdr plugin install cormacc/dotagents/herdr/plugins/herdr-orch
 ```
 
 Herdr records the resolved checkout path of a linked plugin. If you move the checkout, run `herdr plugin unlink cormacc.herdr-orch` and link it again. The owner's Home Manager module links `~/.local/share/herdr-plugins/herdr-orch` and re-links a stale registration on activation.
+
+## Doctor
+
+```sh
+herdr plugin action invoke cormacc.herdr-orch.doctor
+```
+
+The action opens a popup that reports each check as `PASS`, `WARN` or `FAIL`. Press any key to close it. The doctor is Bash only, so it runs without Babashka, and it writes nothing.
+
+- `herdr` :: the CLI version is 0.9.5 or later.
+- `babashka` :: `bb` is on the `PATH`. A failure gives an install hint.
+- `oh` :: the `oh` that the quota commands run, and whether it comes from the home skill or this checkout.
+- `home-skill` :: `~/.agents/skills/herdr-orch` exists, for the herdr-app mods and the agents. It warns when that skill has a different real path from this checkout's skill, because the two surfaces then run different revisions.
+- `pi-traits` :: the Pi traits extension exists when a Pi agent directory exists.
+
+A `FAIL` makes the doctor exit with status 1; a `WARN` does not.
 
 ## Quota pane
 

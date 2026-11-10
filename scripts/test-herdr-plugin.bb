@@ -106,6 +106,75 @@
           (is (str/includes? err (str (get env "HOME") "/.agents/skills/herdr-orch/scripts/oh")) err)
           (is (str/includes? err (str (fs/canonicalize (fs/path (get env "HOME") "clone")) "/skills/herdr-orch/scripts/oh")) err))))))
 
+(defn- doctor!
+  "Run doctor once with a stub `herdr` that reports `version`; `bb?` keeps or
+  drops Babashka from a PATH that otherwise holds only the tools doctor and the
+  stub use."
+  [env {:keys [version bb?] :or {version "0.9.5" bb? true}}]
+  (let [home (get env "HOME")
+        bin (fs/path home "doctor-bin")
+        herdr (fs/path bin "herdr")]
+    (fs/delete-tree bin)
+    (executable! herdr (str "#!/usr/bin/env bash\necho 'herdr " version "'\n"))
+    (doseq [tool ["awk" "bash" "dirname" "env"]] (fs/create-sym-link (fs/path bin tool) (fs/which tool)))
+    (when bb? (fs/create-sym-link (fs/path bin "bb") (fs/which "bb")))
+    (let [result (run! (assoc env "PATH" (str bin) "HERDR_BIN_PATH" (str herdr) "DOCTOR_ONCE" "1")
+                       (str (fs/which "bash")) "doctor.sh")]
+      (assoc result :lines (into {} (keep #(when-let [[_ v c d] (re-matches #"(PASS|WARN|FAIL)\s+(\S+)\s+(.*)" %)] [c [v d]])
+                                          (str/split-lines (:out result))))))))
+
+(defn- tree [dir] (sort (map str (fs/glob dir "**" {:hidden true}))))
+
+(deftest doctor-passes-a-complete-install-and-writes-nothing
+  (with-env
+    (fn [env]
+      (let [home (get env "HOME")]
+        (fs/create-dirs (fs/path home ".agents" "skills"))
+        (fs/create-sym-link (fs/path home ".agents" "skills" "herdr-orch") (fs/path root "skills" "herdr-orch"))
+        (fs/create-dirs (fs/path home ".pi" "agent" "extensions" "traits"))
+        (doctor! env {})
+        (let [before (tree home)
+              {:keys [exit lines out err]} (doctor! env {})]
+          (is (zero? exit) (str out err))
+          (is (= #{"herdr" "babashka" "oh" "home-skill" "pi-traits"} (set (keys lines))) out)
+          (is (every? #(= "PASS" (first %)) (vals lines)) out)
+          (is (str/ends-with? (second (lines "oh")) "(home)") out)
+          (is (= before (tree home)) "doctor writes nothing"))))))
+
+(deftest doctor-reports-each-failure-and-completes-without-bb
+  (with-env
+    (fn [env]
+      (fs/create-dirs (fs/path (get env "HOME") ".pi" "agent"))
+      (let [{:keys [exit lines out]} (doctor! env {:version "0.9.4" :bb? false})]
+        (is (= 1 exit) out)
+        (is (= ["FAIL" "0.9.4 is older than 0.9.5"] (lines "herdr")) out)
+        (is (= "FAIL" (first (lines "babashka"))) out)
+        (is (str/includes? (second (lines "babashka")) "https://github.com/babashka/babashka#installation") out)
+        (is (= "PASS" (first (lines "oh"))) "the checkout oh still resolves")
+        (is (str/ends-with? (second (lines "oh")) "(checkout)") out)
+        (is (= "WARN" (first (lines "home-skill"))) out)
+        (is (str/includes? (second (lines "home-skill")) "install-surfaces.md") out)
+        (is (= "WARN" (first (lines "pi-traits"))) out))
+      (testing "a newer minor version passes the floor"
+        (is (= "PASS" (first ((:lines (doctor! env {:version "0.10.0"})) "herdr"))))))))
+
+(deftest doctor-warns-of-version-skew-and-fails-without-oh
+  (with-env
+    (fn [env]
+      (let [home (get env "HOME")]
+        (executable! (fs/path home ".agents" "skills" "herdr-orch" "scripts" "oh") "#!/usr/bin/env bash\n")
+        (let [{:keys [exit lines out]} (doctor! env {})]
+          (is (zero? exit) "a warning does not fail")
+          (is (= "WARN" (first (lines "home-skill"))) out)
+          (is (str/includes? (second (lines "home-skill")) "version skew") out))
+        (fs/delete-tree (fs/path home ".agents"))
+        (let [fake-root (fs/path home "clone" "herdr" "plugins" "herdr-orch")
+              _ (fs/create-dirs fake-root)
+              {:keys [exit lines out]} (doctor! (assoc env "HERDR_PLUGIN_ROOT" (str fake-root)) {})]
+          (is (= 1 exit) out)
+          (is (= "FAIL" (first (lines "oh"))) out)
+          (is (str/includes? (second (lines "oh")) "oh not found at") out))))))
+
 (deftest plugin-files-hold-no-checkout-path
   (let [files (map str (filter fs/regular-file? (fs/list-dir plugin)))]
     (is (seq files) "positive control: the plugin directory has files")

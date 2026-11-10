@@ -1,7 +1,7 @@
 id = "cormacc.herdr-orch"
 name = "herdr-orch"
 version = "0.1.0"
-description = "herdr-orch helpers: subscription quota pane, tab-bar status stanza and sidebar agent tree."
+description = "herdr-orch helpers: subscription quota pane, tab-bar status stanza, sidebar agent tree and doctor."
 # The sidebar tree needs the 0.9.5 plugin hooks, `pane report-metadata` and
 # `agent.view.set`. The bundled `oh` preflight has its own, lower floor.
 min_herdr_version = "0.9.5"
@@ -49,6 +49,20 @@ placement = "popup"
 width = "80%"
 height = "70%"
 command = ["bash", "quota-pane.sh"]
+
+[[panes]]
+id = "doctor"
+title = "herdr-orch doctor"
+placement = "popup"
+width = "80%"
+height = "50%"
+command = ["bash", "doctor.sh"]
+
+[[actions]]
+id = "doctor"
+title = "Check the herdr-orch install"
+description = "Open the read-only doctor popup: Herdr version, Babashka, the resolved oh, the home skill and the Pi traits extension."
+command = ["bash", "open-pane.sh", "doctor"]
 
 [[actions]]
 id = "quota-stanza"
