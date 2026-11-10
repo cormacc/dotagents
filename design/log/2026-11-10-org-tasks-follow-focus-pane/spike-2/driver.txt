@@ -1,0 +1,10 @@
+SOCKETS ["/tmp/fs-a6fb90a1/config/herdr/sessions/fsa6fb90a1/herdr.sock" "/tmp/fs-a6fb90a1/config/herdr/sessions/fsa6fb90a1/herdr-client.sock"] using /tmp/fs-a6fb90a1/config/herdr/sessions/fsa6fb90a1/herdr.sock
+SUBSCRIBE first lines ["{\"id\":\"sub-1\",\"result\":{\"type\":\"subscription_started\"}}"]
+MARK cd
+CWD after cd /tmp/fs-a6fb90a1/work/b
+MARK foreground command
+MARK title
+TITLE spike-title
+MARK rename (control)
+SPLIT ratio 0.85 ({:pane_id "w1:p1", :rect {:height 34, :width 120, :x 0, :y 0}} {:pane_id "w1:p2", :rect {:height 6, :width 120, :x 0, :y 34}})
+CLEANUP session delete exit 0

@@ -354,6 +354,19 @@ Origin:
 - timestamp: [2026-11-10 Tue 12:42]
 - sender: agent (session retro, approved by the user)
 
+** STARTED [#B] Show one org-tasks compact pane that follows focus :skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: cf3550d1-9f06-4e9a-85ce-b6c6c490130b
+:CREATED: [2026-11-10 Tue 18:11]
+:STARTED: [2026-11-10 Tue 18:41]
+:END:
+:LOGBOOK:
+- Created [2026-11-10 Tue 18:11]
+- State "STARTED" from "TODO" [2026-11-10 Tue 18:41]
+:END:
+#+IMPORT: [[plan:2026-11-10-org-tasks-follow-focus-pane.org]]
+Replace the per-tab compact panes of the Herdr TUI org-tasks plugin with one pane per session that moves to the focused tab and reacts to Herdr events instead of polling.
+
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:
@@ -501,7 +514,6 @@ Origin:
 - git: git@github.com:cormacc/dotagents.git @ main
 - timestamp: [2026-11-10 Tue 12:42]
 - sender: agent (session retro, approved by the user)
-
 *** TODO Record the org-tasks supervisor exit reason
 :PROPERTIES:
 :CUSTOM_ID: c145c3a8-1dae-4923-9f46-4e30180ae2c6
@@ -520,7 +532,6 @@ Origin:
 
 Evidence:
 - On 2026-11-09 at 19:25 UTC, `herdr-server.log` shows 22 plugin panes exiting with code 1 within 21 s. The exception could not be identified; a request timeout is the probable cause.
-
 *** TODO Restore lost org-tasks compact panes without a manual toggle
 :PROPERTIES:
 :CUSTOM_ID: 106afb3b-53c8-459e-be30-6c06c5093986
@@ -539,7 +550,6 @@ Origin:
 
 Evidence:
 - After the panes died on 2026-11-09, none reopened: the Herdr server had run since 2026-11-06, so the startup hook did not run again.
-
 *** TODO Measure and reduce org-tasks supervisor polling load
 :PROPERTIES:
 :CUSTOM_ID: 41f78617-5c16-444f-896d-da062a65a8ee

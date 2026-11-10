@@ -1,0 +1,21 @@
+SOCKETS ["/tmp/fs-58a96e57/config/herdr/sessions/fs58a96e57/herdr.sock" "/tmp/fs-58a96e57/config/herdr/sessions/fs58a96e57/herdr-client.sock"] using /tmp/fs-58a96e57/config/herdr/sessions/fs58a96e57/herdr.sock
+SUBSCRIBE first lines ["{\"id\":\"sub-1\",\"result\":{\"type\":\"subscription_started\"}}"]
+IDS w1 w1:t1 w1:p1 w1:t2 w1:p2
+MARK focus t1
+MARK focus t2
+MARK cd in p2
+P2 foreground_cwd /tmp/fs-58a96e57/work/a
+PLUGIN PANE opened w1:p3 {:plugin_id "spike.focus", :entrypoint "probe"}
+PROCESS before move 3260680
+MARK move to t2
+MOVE t2 result {:previous_pane_id "w1:p3", :pane {:workspace_id "w1", :pane_id "w1:p3", :revision 0, :cwd "/tmp/fs-58a96e57/plugin", :focused false, :scroll {:max_offset_from_bottom 0, :offset_from_bottom 0, :viewport_rows 18}, :label "probe", :terminal_id "term_65fefca3142423", :foreground_cwd "/tmp/fs-58a96e57/plugin", :tab_id "w1:t2", :agent_status "unknown"}}
+PROCESS after move 3260680
+LAYOUT t2 ({:pane_id "w1:p2", :rect {:height 8, :width 120, :x 0, :y 0}} {:pane_id "w1:p3", :rect {:height 32, :width 120, :x 0, :y 8}})
+PLUGIN PANES {:error "CLI failed", :data {:args ("plugin" "pane" "focus" "nonexistent"), :result {:proc #object[java.lang.ProcessImpl 0x4c3eb9f8 "Process[pid=3262672, exitValue=1]"], :exit 1, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x557553f7 "java.lang.ProcessImpl$ProcessPipeOutputStream@557553f7"], :out "", :err "{\"error\":{\"code\":\"plugin_pane_not_found\",\"message\":\"plugin pane not found\"},\"id\":\"cli:plugin\"}\n", :prev nil, :cmd ["/home/cormacc/.nix-profile/bin/herdr" "--session" "fs58a96e57" "plugin" "pane" "focus" "nonexistent"]}}}
+MARK move to workspace w2
+MOVE w2 result {:previous_pane_id "w1:p3", :pane {:workspace_id "w2", :pane_id "w2:p2", :revision 0, :cwd "/tmp/fs-58a96e57/plugin", :focused false, :scroll {:max_offset_from_bottom 0, :offset_from_bottom 0, :viewport_rows 18}, :label "probe", :terminal_id "term_65fefca3142423", :foreground_cwd "/tmp/fs-58a96e57/plugin", :tab_id "w2:t1", :agent_status "unknown"}}
+PROCESS after ws move 3260680
+MARK focus workspace w2
+CLOSE plugin pane {:ok {:pane_id "w2:p2", :type "plugin_pane_closed"}}
+SUB channel open true
+CLEANUP session delete exit 0
