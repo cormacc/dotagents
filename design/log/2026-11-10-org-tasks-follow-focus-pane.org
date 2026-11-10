@@ -143,14 +143,18 @@ Acceptance criteria:
 
 One task because =ensure=, =toggle=, =select= and =supervise!= share the instance record that this change moves from per tab to per session.
 
-** TODO Validate the follow-focus pane in an isolated Herdr server
+** DONE Validate the follow-focus pane in an isolated Herdr server
+CLOSED: [2026-11-10 Tue 23:17]
 :PROPERTIES:
 :CUSTOM_ID: 50bb9678-1cbb-41a2-bf48-75f431660334
 :CREATED: [2026-11-10 Tue 18:14]
 :BLOCKED-BY: task:73fb8f30-a47b-4f2d-a3a9-7037a8e61900
+:STARTED: [2026-11-10 Tue 23:01]
 :END:
 :LOGBOOK:
 - Created [2026-11-10 Tue 18:14]
+- State "STARTED" from "TODO" [2026-11-10 Tue 23:01]
+- State "DONE" from "STARTED" [2026-11-10 Tue 23:17]
 :END:
 Acceptance criteria:
 - A script in this record's folder runs an isolated Herdr server with the linked plugin and asserts the 1 s move, the 1 s project change, the 5 s =cd= change and the one-request-per-5-s idle bound.
@@ -163,7 +167,7 @@ Pattern: =tab-retain/tab-retain-probe.bb= in this record's folder.
 - Event client :: =subscribe!= and =events!= in =herdr/plugins/org-tasks/src/org_tasks_host.clj=. =subscribe!= returns only after =subscription_started= and throws ex-info with =:subscription= =:closed=, =:error=, =:unparsable=, =:unexpected= or =:timeout= (=*subscribe-timeout-ms*=, default 2000 ms). =events!= blocks, returns ={:end :closed}=, ={:end :error ...}= or ={:end :unparsable ...}=, and always closes the connection. Against an isolated Herdr 0.9.5 server it delivered both =tab_focused= events in order, and =server stop= ended it with ={:end :closed}=.
 - Single instance :: a per-session =instance.json= index and =instance.lock= replace the per-tab =<tab>.json= and =<tab>.lock=. =open-session!= opens the pane below the focused pane of the focused tab; =close-legacy!= closes live panes of the per-tab version and removes their index files. After a move, the supervisor rewrites =owner.json= and the index, under the lock, with its new pane and tab.
 - Supervisor loop :: events go to a queue, and the loop takes every queued event at once, so a burst becomes one sample. A sample is due on =sample-reason=, at the end of a folder hold, or after =*fallback-ms*= (5 s); =*min-sample-ms*= (250 ms) spaces samples. One sample moves the pane (=follow!=, ratio from =move-ratio=, then =resize!=), closes it when alone, or publishes. The heartbeat rewrites the context and owner files every 500 ms without a Herdr request.
-- Not covered by the fake-Herdr tests :: the compact height after a move (the fake has no split geometry) and every timing criterion; plan task "Validate the follow-focus pane in an isolated Herdr server" covers them.
+- Not covered by the fake-Herdr tests :: the compact height after a move (the fake has no split geometry) and every timing criterion; =validation/validate.bb= covers them against a real server.
 
 * Validation
 Spike evidence, 2026-11-10, Herdr 0.9.5, isolated sessions with isolated XDG directories; the user's session and =plugins.json= were untouched.
@@ -171,6 +175,11 @@ Spike evidence, 2026-11-10, Herdr 0.9.5, isolated sessions with isolated XDG dir
 - =spike-1/= :: subscription protocol, =tab_focused= payload, focus hooks and their environment, plugin-pane moves within and across workspaces, =--current= after a move.
 - =spike-2/= :: =pane_updated= on a title change only; =--ratio= direction.
 - =reflow/= :: the user watched a stand-in compact pane follow focus across tabs and workspaces in a real client. Positioning and the one redraw per resized pane on each switch are acceptable. Stand-in panes must redraw only on =SIGWINCH=: a first run whose panes cleared and redrew every second showed flicker in every pane that was not caused by the moves.
+- =validation/= :: =validate.bb= at =ab60814=, Herdr 0.9.5, isolated sessions; the real =plugins.json= was unchanged in each mode.
+  - =functional.txt= :: moves within the workspace, across workspaces and back took 230--250 ms with the same =terminal_id=; the new tab's project was published 489--559 ms after focus; the compact pane had 5 rows after each move; a silent =cd= was published after 5.0 s; one compact pane after visiting three tabs.
+  - =requests.txt= :: 8 Herdr CLI starts in 20 idle s (bound 10), counted with =strace -f= under the server; a tab switch, as the positive control, gave 15.
+  - =functional-baseline.txt=, =requests-baseline.txt= :: the same checks against the per-tab plugin at =a572f4e= fail: no session instance, more than one compact pane, and 160 idle requests in 20 s with two tabs. This shows that the checks discriminate.
+  - =cpu.txt= :: 20 idle tabs, process-tree CPU of the server and its descendants over 60 s per round, sampled every 5 s, ABAB. Round medians, in % of one core: per-tab baseline 158.2 and 145.6 (20 compact panes); follow-focus 4.2 and 4.0 (one pane). The host had other load (load average about 4 on 20 cores) in every round. A positive control checks that the probe reads non-zero ticks: a first run read =/proc/<pid>/stat= with =slurp=, which fails with "Invalid argument", and reported 0.0 for both arms.
 
 * Open questions
 ** DECIDED Is the reflow on each tab switch acceptable?

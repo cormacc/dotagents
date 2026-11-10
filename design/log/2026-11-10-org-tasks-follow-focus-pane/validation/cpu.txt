@@ -1,0 +1,8 @@
+PASS control: the CPU probe reads this process {:ticks 6}
+ROUND :baseline compact panes 20 median %CPU 158.2 samples [148.0 144.0 148.0 148.0 150.4 163.4 159.4 158.2 159.8 158.8 153.6 170.6]
+ROUND :follow-focus compact panes 1 median %CPU 4.2 samples [12.6 7.0 4.2 4.4 4.0 4.2 4.2 3.6 4.2 4.2 3.8 4.2]
+ROUND :baseline compact panes 20 median %CPU 145.6 samples [169.2 108.8 98.2 100.6 99.6 101.6 101.2 145.6 163.0 158.4 156.6 152.4]
+ROUND :follow-focus compact panes 1 median %CPU 4.0 samples [11.6 7.0 4.0 3.8 4.0 4.4 4.0 3.8 3.4 4.0 3.2 4.6]
+RESULTS [{:arm :baseline, :panes 20, :median 158.2} {:arm :follow-focus, :panes 1, :median 4.2} {:arm :baseline, :panes 20, :median 145.6} {:arm :follow-focus, :panes 1, :median 4.0}]
+PASS real plugins.json unchanged {}
+{:mode "cpu", :failures []}

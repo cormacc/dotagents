@@ -1,0 +1,37 @@
+FAIL pane opens in the focused tab and publishes its project {:ms 20017}
+FAIL one compact pane [["w1:p1" "/tmp/vv-52e846bf/work/p1" nil] ["w1:p3" "/tmp/dotagents-baseline-a572f4e/herdr/plugins/org-tasks" "Tasks :: /tmp/vv-52e846bf/work/p1"] ["w1:p2" "/tmp/vv-52e846bf/work/p2" nil] ["w1:p4" "/tmp/dotagents-baseline-a572f4e/herdr/plugins/org-tasks" "Tasks :: /tmp/vv-52e846bf/work/p2"] ["w2:p1" "/tmp/vv-52e846bf/work/p3" nil] ["w2:p2" "/tmp/dotagents-baseline-a572f4e/herdr/plugins/org-tasks" "Tasks :: /tmp/vv-52e846bf/work/p3"]]
+PASS real plugins.json unchanged {}
+----- Error --------------------------------------------------------------------
+Type:     clojure.lang.ExceptionInfo
+Message:  CLI failed: {"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane:layout"}
+
+Data:     {:args ("pane" "layout" "--pane" nil)}
+Location: /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:39:38
+
+----- Context ------------------------------------------------------------------
+35: (defn run! [{:keys [env session]} & args]
+36:   (let [proc (p/process (into [binary "--session" session] args) {:env env :out :string :err :string})
+37:         result (deref proc 15000 nil)]
+38:     (when-not result (p/destroy-tree proc) (throw (ex-info "timeout" {:args args})))
+39:     (when-not (zero? (:exit result)) (throw (ex-info (str "CLI failed: " (:err result)) {:args args})))
+                                         ^--- CLI failed: {"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane:layout"}
+
+40:     (:result (j/parse-string (:out result) true))))
+41: (defn snap [ctx] (:snapshot (run! ctx "api" "snapshot")))
+42: (defn wait-for [ms f]
+43:   (let [deadline (+ (System/currentTimeMillis) ms)]
+44:     (loop [] (or (try (f) (catch Exception _ nil))
+
+----- Stack trace --------------------------------------------------------------
+user/run!         - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:39:38
+user/run!         - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:35:1
+user              - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:107:45
+clojure.core/some - clojure/core.clj:2713:1
+user/functional   - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:106:22
+... (run with --debug to see elided elements)
+user/functional   - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:89:7
+user/functional   - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:86:1
+user              - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:194:20
+user              - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:193:5
+user              - /home/cormacc/dotfiles/agents/design/log/2026-11-10-org-tasks-follow-focus-pane/validation/validate.bb:190:1
+

@@ -1,0 +1,4 @@
+FAIL idle Herdr requests at most two per 5 s {:requests 160, :window-ms 20000, :bound 10}
+PASS control: the trace counts the CLI starts of a tab switch {:requests 16}
+PASS real plugins.json unchanged {}
+{:mode "requests", :failures ["idle Herdr requests at most two per 5 s"]}
