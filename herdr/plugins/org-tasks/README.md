@@ -33,7 +33,7 @@ herdr plugin log list --plugin cormacc.org-tasks
 
 While display is on, the startup hook and a `tab.created` event hook open the compact pane in each tab that has no live instance. Both run the idempotent `ensure` command. The compact pane never takes focus. `Esc` in a compact pane exits that instance; toggle off and on to reopen it. Do not invoke the manifest panes directly: `ensure` supplies the private instance and tab identity, and `select` supplies the project directory.
 
-With no selected task, the compact pane shows a status-count line, such as `12 tasks: 7 TODO / 2 STARTED / 3 DONE`, and then a hint for each bound action, such as `ctrl+b t: Select a task from the backlog`. The supervisor reads `keys.prefix` (default `ctrl+b`) and the `cormacc.org-tasks.*` bindings from Herdr's `config.toml` (`HERDR_CONFIG_PATH` overrides the path) when the pane starts. An unbound action has no hint.
+The compact pane shows the selected task or, with no selected task, a status-count line such as `12 tasks: 7 TODO / 2 STARTED / 3 DONE`. Its last line always shows the bound actions, centred and muted, such as `ctrl+b t: select / ctrl+b ctrl+o: show/hide`. The supervisor reads `keys.prefix` (default `ctrl+b`) and the `cormacc.org-tasks.*` bindings from Herdr's `config.toml` (`HERDR_CONFIG_PATH` overrides the path) when the pane starts. An unbound action has no hint.
 
 Herdr draws the manual pane label on the pane border; the manifest title `Org tasks` seeds it. The supervisor copies the TUI's terminal title, `Tasks :: <project folder> :: <plan file>`, into that label with `herdr pane rename`.
 

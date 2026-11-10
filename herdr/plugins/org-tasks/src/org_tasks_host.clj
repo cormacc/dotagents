@@ -88,14 +88,15 @@
       k)))
 
 (defn hints
-  "Selection-empty hints for the bound select and toggle actions."
+  "One hint line for the bound select and toggle actions, so the hints cost a
+  single row of the compact pane; nil when neither is bound."
   [config-text]
-  (let [{:keys [prefix actions]} (key-bindings config-text)]
-    (seq (keep (fn [[action text]]
-                 (when-let [k (get actions (str plugin-id "." action))]
-                   (str (display-key prefix k) ": " text)))
-               [["select" "Select a task from the backlog"]
-                ["toggle" "Disable/enable org-tasks overlay"]]))))
+  (let [{:keys [prefix actions]} (key-bindings config-text)
+        parts (keep (fn [[action text]]
+                      (when-let [k (get actions (str plugin-id "." action))]
+                        (str (display-key prefix k) ": " text)))
+                    [["select" "select"] ["toggle" "show/hide"]])]
+    (when (seq parts) [(str/join " / " parts)])))
 
 (defn herdr-config-text []
   (let [path (or (System/getenv "HERDR_CONFIG_PATH")

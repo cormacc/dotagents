@@ -353,9 +353,10 @@
   (:title (compact/model state)))
 
 (defn compact-lines
-  "Height-bounded rendering of `org-tasks.compact/model`: rows in model order,
-  right-justified tokens, and without a selection the status counts followed
-  by any host-supplied key hints."
+  "Height-bounded rendering of `org-tasks.compact/model`: rows in model order
+  with right-justified tokens, or without a selection the status counts. Any
+  host-supplied key hints take the last rows, centred and muted, whatever the
+  selection; content that does not fit above them is dropped."
   [state]
   (let [m (compact/model state)
         width (max 1 (:width state 100))
@@ -370,12 +371,20 @@
         lines (case (:selection m)
                 "selected" (map line (:rows m))
                 "stale" [(str "Stale selection: " (:selectedId m))]
-                ;; Host-supplied key hints explain how to select in that host.
-                (cons (compact/status-summary m #(styled state % :fg (status-colors %)))
-                      (:hints state)))
+                [(compact/status-summary m #(styled state % :fg (status-colors %)))])
         lines (if-let [notice (context-notice state)]
-                (cons notice lines) lines)]
-    (take (max 1 (:height state 30)) lines)))
+                (cons notice lines) lines)
+        height (max 1 (:height state 30))
+        ;; Host key hints keep the foot of the pane so that the controls stay
+        ;; visible when a selection fills it.
+        footer (map #(str (apply str (repeat (quot (max 0 (- width (text-width %))) 2) " "))
+                          (muted %))
+                    (:hints state))]
+    (if (seq footer)
+      (let [footer (take-last height footer)
+            body (take (- height (count footer)) lines)]
+        (concat body (blank-lines (- height (count footer) (count body))) footer))
+      (take height lines))))
 
 (defn- details-geometry
   "Details pane `[width body-height]` for the expanded view."

@@ -175,17 +175,16 @@
                     "command = \"cormacc.org-tasks.select\"\n\n"
                     "[[keys.command]]\nkey = \"prefix+ctrl+o\"\ntype = \"plugin_action\"\n"
                     "command = \"cormacc.org-tasks.toggle\"\n")]
-    (is (= ["ctrl+a t: Select a task from the backlog"
-            "ctrl+a ctrl+o: Disable/enable org-tasks overlay"]
-           (host/hints config)))
-    (is (= ["ctrl+b t: Select a task from the backlog"
-            "ctrl+b ctrl+o: Disable/enable org-tasks overlay"]
+    (is (= ["ctrl+a t: select / ctrl+a ctrl+o: show/hide"]
+           (host/hints config))
+        "both bound actions share one line")
+    (is (= ["ctrl+b t: select / ctrl+b ctrl+o: show/hide"]
            (host/hints (str/replace config "[keys]\nprefix = \"ctrl+a\" # comment\n" "")))
         "Herdr's default prefix applies when keys.prefix is absent")
-    (is (= ["ctrl+a ctrl+o: Disable/enable org-tasks overlay"]
+    (is (= ["ctrl+a ctrl+o: show/hide"]
            (host/hints (str/replace config "cormacc.org-tasks.select" "other.plugin.select")))
         "an unbound action has no hint")
-    (is (= ["ctrl+a f12: Select a task from the backlog"]
+    (is (= ["ctrl+a f12: select"]
            (host/hints (str "[keys]\nprefix = [\"ctrl+a\", \"f12\"]\n"
                             "[[keys.command]]\ncommand = \"cormacc.org-tasks.select\"\nkey = \"prefix+f12\"\n")))
         "the first of several prefixes; key and command in either order")
@@ -480,7 +479,7 @@
          (let [out (read-string (last (str/split-lines (:out result))))]
            (is (= [(str dir "/a") (str dir "/b")] (:directories out)) "A first, then B after the focus change")
            (is (= #{"compact"} (:modes out)))
-           (is (= #{["ctrl+b t: Select a task from the backlog"]} (:hints out)))
+           (is (= #{["ctrl+b t: select"]} (:hints out)))
            (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")))))))
 
 (deftest ot-resolution-prefers-the-home-skill

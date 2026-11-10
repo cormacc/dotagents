@@ -318,21 +318,29 @@
                                (tui/run! opts))))
         (is (identical? original System/out))))))
 
-(deftest compact-host-hints-replace-the-empty-selection-notice
+(deftest compact-host-hints-close-the-view
   (with-roots
     (fn [{:keys [opts a]}]
       (spit (str (fs/path a "TASKS.local.org")) "#+SELECTED:\n")
-      (let [hints ["ctrl+b t: Select a task from the backlog"
-                   "ctrl+b O: Disable/enable org-tasks overlay"]]
+      ;; 43 columns centred in 51 leave 4 columns of padding.
+      (let [hints ["ctrl+b t: select / ctrl+b ctrl+o: show/hide"]
+            footer (str "    " (first hints))
+            view #(tui/view (assoc (initial opts) :width 51 :height 4))]
         (produce! opts a {:hints hints :mode "compact"})
         (is (= :ready (:status (embedding/read-context opts))) "hints are a valid additive field")
-        (is (= (str/join "\n" (cons "3 tasks: 3 TODO" hints)) (tui/view (initial opts))))
+        (is (= (str/join "\n" ["3 tasks: 3 TODO" "" "" footer]) (view)))
         (produce! opts a {:mode "compact"})
-        (is (= "3 tasks: 3 TODO" (tui/view (initial opts))) "without hints only the count line shows")
+        (is (= "3 tasks: 3 TODO" (view)) "without hints only the count line shows")
         (spit (str (fs/path a "TASKS.local.org")) (str "#+SELECTED: " parent-id "\n"))
-        (produce! opts a {:hints hints :mode "compact"})
-        (is (not (str/includes? (tui/view (initial opts)) "Select a task"))
-            "a selection replaces the hints")))))
+        (produce! opts a {:mode "compact"})
+        (let [selection (str/split-lines (view))]
+          (is (str/includes? (first selection) "Alpha"))
+          (produce! opts a {:hints hints :mode "compact"})
+          (let [lines (str/split-lines (view))]
+            (is (= 4 (count lines)))
+            (is (= footer (last lines)) "a selection keeps the hints on the last row")
+            (is (= (take 3 (concat selection (repeat ""))) (butlast lines))
+                "the selection, then blank rows, fill the rows above")))))))
 
 (deftest compact-empty-stale-and-small-geometry
   (let [empty (assoc (tasks/initial-state {:rows []}) :mode "compact" :color? false)]

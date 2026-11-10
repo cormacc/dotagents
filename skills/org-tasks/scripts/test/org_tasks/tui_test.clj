@@ -144,9 +144,15 @@
   (let [rows [{:id "a" :status "TODO"} {:id "b" :status "TODO"} {:id "c" :status "STARTED"}
               {:id "d" :status "DONE"} {:id "e" :status "WAITING"} {:id "f" :status "CANCELLED"}]
         state (assoc (tasks/initial-state {:rows rows}) :mode "compact" :width 80 :height 5
-                     :hints ["ctrl+b t: Select a task from the backlog"])]
-    (is (= ["6 tasks: 2 TODO / 1 STARTED / 1 WAITING / 1 DONE / 1 CANCELLED" "ctrl+b t: Select a task from the backlog"]
-           (str/split-lines (tui/view (assoc state :color? false)))))
+                     :hints ["ctrl+b t: select"])]
+    (is (= ["6 tasks: 2 TODO / 1 STARTED / 1 WAITING / 1 DONE / 1 CANCELLED" "" "" ""
+            (str (apply str (repeat 32 " ")) "ctrl+b t: select")]
+           (str/split-lines (tui/view (assoc state :color? false))))
+        "the hint is centred on the last row")
+    (is (str/ends-with? (tui/view state) "\u001b[90mctrl+b t: select\u001b[0m")
+        "the hint is muted")
+    (is (= ["ctrl+b t: select"] (str/split-lines (tui/view (assoc state :color? false :width 16 :height 1))))
+        "the hint keeps the only row")
     (is (str/includes? (tui/view state) (str "38;5;" (get styling/palette-256 :blue) "mSTARTED"))
         "each status keeps its palette colour")))
 
