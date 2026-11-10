@@ -5135,3 +5135,68 @@ Make the Herdr TUI plugins and the herdr-app mods depend on one shared install o
 Rescoped [2026-11-09 Mon]: the consented setup action is cancelled. The change-record `** Decisions` gives the reasons (Herdr plugin update and uninstall semantics, no herdr-app install mechanism, both surfaces run side by side).
 
 Follow-up: [[task:a04ef53b-4251-4b65-976f-2db4d67875e7]] (Claude Code and Codex trait adapters).
+
+** DONE herdr-orch multiple subscription support
+CLOSED: [2026-11-10 Tue 11:47]
+:PROPERTIES:
+:CUSTOM_ID: 56d4713a-bb0c-4ba8-87e8-7b49023b36fa
+:CREATED: [2026-11-06 Fri 12:22]
+:STARTED: [2026-11-06 Fri 13:21]
+:ARCHIVED: [2026-11-10 Tue 11:47]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 12:22]
+- State "STARTED" from "TODO" [2026-11-06 Fri 13:21]
+- State "DONE" from "STARTED" [2026-11-10 Tue 11:47]
+:END:
+#+IMPORT: [[plan:2026-multiple-subscriptions.org]]
+Allow multiple subscriptions to a single provider, and extend usage-aware subagent model routing to account for and select between those subscriptions. The accounts must also be usable and selectable from the primary/orchestrator session, not only from subagent sessions. Initial support targets Anthropic/Claude. Keep the design generalisable to other providers, with minor provider-dependent adaptation where needed.
+
+User-supplied prior art for planning:
+- https://pi.dev/packages/pi-multi-account?name=multi+claude
+- https://pi.dev/packages/@ravshansbox/pi-multi-claude?name=multi+claude
+*** DONE Rename account namespace to <provider>-<N>
+CLOSED: [2026-11-06 Fri 20:29]
+:PROPERTIES:
+:CUSTOM_ID: 61ab7581-3fee-4ca7-af53-69c6d037ea3f
+:CREATED: [2026-11-06 Fri 20:08]
+:STARTED: [2026-11-06 Fri 20:09]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 20:08]
+- State "STARTED" from "TODO" [2026-11-06 Fri 20:09]
+- State "DONE" from "STARTED" [2026-11-06 Fri 20:29]
+:END:
+Acceptance criteria:
+- Named account keys are `<provider>-<N>` with N a positive integer without leading zeros (for example `anthropic-1`, `anthropic-2`); the old `anthropic-account-<name>` namespace is no longer discovered, registered or routed.
+- `/oh-account add` accepts the next free number or an explicit number and refuses any other name shape.
+- Discovery, routing validation, quota credential lookup, launch inventory and the Herdr quota consumers agree on the new namespace with no remaining old-prefix literal in source, fixtures or tests.
+- The display name is the full key.
+- Operator documentation describes the new convention and states that an existing old-namespace credential needs a one-off key rename in `auth.json` or a fresh login.
+- Existing negative controls (wrong account, absent registration, ambient key fallback) remain and pass.
+
+Pointers: `pi/extensions/herdr-orch/accounts.ts` (`ACCOUNT_PREFIX`, `accountId`, `isAccountId`), `skills/herdr-orch/scripts/src/herdr_orch/routing.clj` (`validate!`, `candidates`), `skills/herdr-orch/scripts/src/herdr_orch/quota_credentials.clj` account discovery. The namespace must stay provider-generalisable: the base provider is the text before the last `-<N>`.
+*** DONE Open alternate-account OAuth login in a private browser window
+CLOSED: [2026-11-10 Tue 11:46]
+:PROPERTIES:
+:CUSTOM_ID: afc8a48f-775a-4f88-80af-d7ccde249d0e
+:CREATED: [2026-11-06 Fri 20:09]
+:BLOCKED-BY: task:61ab7581-3fee-4ca7-af53-69c6d037ea3f
+:STARTED: [2026-11-06 Fri 20:29]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 20:09]
+- State "STARTED" from "TODO" [2026-11-06 Fri 20:29]
+- State "WAITING" from "STARTED" [2026-11-06 Fri 21:04]
+- State "DONE" from "WAITING" [2026-11-10 Tue 11:46]
+:END:
+Acceptance criteria:
+- The account provider wraps native OAuth `login(interaction)` so named-account `interaction.notify` events of type `auth_url` open their URL in a private browser window while preserving the native login flow.
+- Linux uses `chromium --incognito <url>`; other platforms use Chrome in incognito mode; the command is verified against the installed browser documentation, not guessed.
+- When the browser command is absent or fails, the URL is still shown through the native callback and login continues without the private window.
+- The default `anthropic` credential login is unchanged.
+- Installed-Pi tests prove the private-window command receives the exact URL and that the fallback path still completes a synthetic login; no real provider login in tests.
+- Operator documentation explains why a private window avoids logging out the primary SSO session and names the browser commands.
+
+Pointer: `pi/extensions/herdr-orch/accounts.ts` `accountProvider` retains native `auth.oauth`; wrap `login(interaction)` and decorate `interaction.notify` for `auth_url`. The installed native implementation is `@earendil-works/pi-ai/dist/auth/oauth/anthropic.js`; distinguish this native interface from the legacy extension `onAuth` adapter. Preserve prompt, cancellation, refresh and native callback semantics, and avoid also opening the default browser.
