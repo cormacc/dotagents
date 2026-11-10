@@ -26,6 +26,8 @@ herdr plugin install cormacc/dotagents/herdr/plugins/herdr-orch
 
 Herdr records the resolved checkout path of a linked plugin. If you move the checkout, run `herdr plugin unlink cormacc.herdr-orch` and link it again. The owner's Home Manager module links `~/.local/share/herdr-plugins/herdr-orch` and re-links a stale registration on activation.
 
+This plugin does not install the herdr-orch skill, the herdr-app mods or any other surface. [The install-surfaces reference](../../../skills/herdr-orch/references/install-surfaces.md) gives the install order and links.
+
 ## Doctor
 
 ```sh
