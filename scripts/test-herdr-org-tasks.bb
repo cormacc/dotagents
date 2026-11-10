@@ -455,6 +455,19 @@
               (host/select!))
             (is (= "OT_SELECT_DIR=" (select-env))))))))))
 
+(deftest manifest-hooks-reopen-the-pane-after-every-silent-focus-change
+  ;; Herdr moves focus without tab.focused when the focused tab's last pane,
+  ;; the focused tab or the focused workspace closes; each emits only its own
+  ;; close event, which ends the compact pane with that tab.
+  (let [manifest (slurp "herdr/plugins/org-tasks/herdr-plugin.toml")
+        hooks (set (map second (re-seq #"(?m)^on = \"([a-z.]+)\"" manifest)))]
+    (is (str/includes? manifest "[[startup]]") "control: the startup hook")
+    (is (= #{"tab.focused" "pane.closed" "tab.closed" "workspace.closed"} hooks))
+    (is (= 4 (count (re-seq #"(?m)^\[\[events\]\]" manifest))) "one block per hook")
+    (let [blocks (re-seq #"(?m)^on = .*\ncommand = .*$" manifest)]
+      (is (= 4 (count blocks)) "control: four hook blocks parsed")
+      (is (every? #(str/includes? % "\"ensure\"") blocks) "every hook runs ensure"))))
+
 (deftest sample-reasons-and-move-ratio
   (is (host/sample-reason tab {:event "tab_focused" :data {:tab_id tab2}}))
   (is (host/sample-reason tab {:event "pane_focused" :data {:pane_id "p"}}))

@@ -1,18 +1,30 @@
-PASS pane opens in the focused tab and publishes its project {:ms 120}
-PASS one compact pane [["w1:p1" "/tmp/vv-def9b3b0/work/p1" nil] ["w1:p3" "/home/cormacc/dotfiles/agents/herdr/plugins/org-tasks" "Org tasks"] ["w1:p2" "/tmp/vv-def9b3b0/work/p2" nil] ["w2:p1" "/tmp/vv-def9b3b0/work/p3" nil]]
-PASS move to tab in the same workspace within 1 s {:ms 230}
+PASS pane opens in the focused tab and publishes its project {:ms 213}
+PASS one compact pane [["w1:p1" "/tmp/vv-492f9774/work/p1" nil] ["w1:p3" "/home/cormacc/dotfiles/agents/herdr/plugins/org-tasks" "Org tasks"] ["w1:p2" "/tmp/vv-492f9774/work/p2" nil] ["w2:p1" "/tmp/vv-492f9774/work/p3" nil]]
+PASS move to tab in the same workspace within 1 s {:ms 233}
 PASS same terminal after the move to tab in the same workspace {}
-PASS project of tab in the same workspace within 1 s of focus {:ms 489}
+PASS the move to tab in the same workspace takes no focus {:focused "w1:p2"}
+PASS project of tab in the same workspace within 1 s of focus {:ms 490}
 PASS compact height after the move to tab in the same workspace {:rows 5}
-PASS move to tab in another workspace within 1 s {:ms 246}
+PASS move to tab in another workspace within 1 s {:ms 293}
 PASS same terminal after the move to tab in another workspace {}
-PASS project of tab in another workspace within 1 s of focus {:ms 559}
+PASS the move to tab in another workspace takes no focus {:focused "w2:p1"}
+PASS project of tab in another workspace within 1 s of focus {:ms 548}
 PASS compact height after the move to tab in another workspace {:rows 5}
-PASS move to back to the first tab within 1 s {:ms 250}
+PASS move to back to the first tab within 1 s {:ms 233}
 PASS same terminal after the move to back to the first tab {}
-PASS project of back to the first tab within 1 s of focus {:ms 509}
+PASS the move to back to the first tab takes no focus {:focused "w1:p1"}
+PASS project of back to the first tab within 1 s of focus {:ms 490}
 PASS compact height after the move to back to the first tab {:rows 5}
-PASS silent cd published within 7 s {:ms 5044, :pane "w1:p1"}
+PASS silent cd published within 7 s {:ms 5037, :pane "w1:p1"}
 PASS still one compact pane, after visiting three tabs {}
+PASS toggle off closes the pane {:ms 125}
+PASS toggle on opens one pane in the focused tab {:ms 71}
+PASS control: the pane followed focus before tab close {}
+PASS a new compact pane opens in the tab focused after tab close {:ms 67}
+PASS control: the pane followed focus before workspace close {}
+PASS a new compact pane opens in the tab focused after workspace close {:ms 67}
+PASS control: the pane followed focus into the new tab {}
+PASS a tab left with only the compact pane closes {:ms 291}
+PASS a new compact pane opens in the tab focused next {:ms 62}
 PASS real plugins.json unchanged {}
 {:mode "functional", :failures []}

@@ -2,19 +2,33 @@ id = "cormacc.org-tasks"
 name = "Org tasks"
 version = "0.2.0"
 min_herdr_version = "0.9.5"
-description = "Tab-local shared org-tasks terminal interface"
+description = "One org-tasks compact pane that follows the focused tab"
 platforms = ["linux", "macos"]
 
 # One compact pane per session follows the focused tab while display is
 # enabled. Its supervisor moves it on Herdr events; these hooks only reopen it
-# when no live instance exists, so a lost pane returns at the next tab switch.
-# A workspace switch also emits tab.focused. Both hooks are idempotent, so
-# neither reads the event payload.
+# when no live instance exists. A workspace switch also emits tab.focused.
+# Closing the focused tab's last pane, the focused tab or the focused workspace
+# moves focus with no tab.focused and ends the compact pane with that tab; each
+# emits only pane.closed, tab.closed or workspace.closed, so those reopen it
+# too. Every hook is idempotent, so none reads the event payload.
 [[startup]]
 command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
 
 [[events]]
 on = "tab.focused"
+command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
+
+[[events]]
+on = "pane.closed"
+command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
+
+[[events]]
+on = "tab.closed"
+command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
+
+[[events]]
+on = "workspace.closed"
 command = ["bb", "--config", "bb.edn", "adapter.bb", "ensure"]
 
 [[panes]]

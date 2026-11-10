@@ -107,6 +107,8 @@
                            (:panes (:layout (run! ctx "pane" "layout" "--pane" (:pane_id moved)))))]
             (check! (str "move to " label " within 1 s") (and moved (<= move-ms 1000)) {:ms move-ms})
             (check! (str "same terminal after the move to " label) (= before (:terminal_id moved)) {})
+            (check! (str "the move to " label " takes no focus") (not= (:pane_id moved) (:focused_pane_id (snap ctx)))
+                    {:focused (:focused_pane_id (snap ctx))})
             (check! (str "project of " label " within 1 s of focus") (<= dir-ms 1000) {:ms (+ move-ms dir-ms)})
             (check! (str "compact height after the move to " label) (and rows (<= 5 rows 7)) {:rows rows})))
         (let [focused (some #(when (and (= t1 (:tab_id %)) (not= plugin (:cwd %))) (:pane_id %)) (:panes (snap ctx)))
@@ -114,7 +116,52 @@
               _ (run! ctx "pane" "run" focused (str "cd " p4))
               [published cd-ms] (timed 10000 #(= p4 (published-dir ctx)))]
           (check! "silent cd published within 7 s" (and published (<= cd-ms 7000)) {:ms cd-ms :pane focused}))
-        (check! "still one compact pane, after visiting three tabs" (= 1 (count (compact-panes (snap ctx) plugin))) {}))
+        (check! "still one compact pane, after visiting three tabs" (= 1 (count (compact-panes (snap ctx) plugin))) {})
+        ;; Toggle off, then on: the single pane closes, then opens in the focused tab.
+        (run! ctx "plugin" "action" "invoke" "cormacc.org-tasks.toggle")
+        (let [[off off-ms] (timed 10000 #(empty? (compact-panes (snap ctx) plugin)))]
+          (check! "toggle off closes the pane" off {:ms off-ms}))
+        (run! ctx "plugin" "action" "invoke" "cormacc.org-tasks.toggle")
+        (let [[on on-ms] (timed 15000 #(let [s (snap ctx) [c :as cs] (compact-panes s plugin)]
+                                          (when (and (= 1 (count cs)) (= (:focused_tab_id s) (:tab_id c))) c)))]
+          (check! "toggle on opens one pane in the focused tab" (some? on) {:ms on-ms}))
+        ;; Closing the focused tab or workspace moves focus with no tab.focused
+        ;; and ends the pane with the tab; the close hooks reopen it.
+        (doseq [[label tab close!] [["tab close" t2 #(run! ctx "tab" "close" t2)]
+                                    ["workspace close" t3 #(run! ctx "workspace" "close" (get-in w2 [:workspace :workspace_id]))]]]
+          (run! ctx "tab" "focus" tab)
+          (let [[arrived _] (timed 5000 #(= tab (:tab_id (compact-pane ctx (snap ctx)))))
+                old-instance (:instance (instance ctx))]
+            (check! (str "control: the pane followed focus before " label) arrived {})
+            (close!)
+            (let [[back back-ms] (timed 15000 #(let [s (snap ctx) [c :as cs] (compact-panes s plugin)]
+                                                 (when (and (= 1 (count cs)) (= (:focused_tab_id s) (:tab_id c))
+                                                            (not= old-instance (:instance (instance ctx))))
+                                                   c)))]
+              (check! (str "a new compact pane opens in the tab focused after " label) (some? back) {:ms back-ms}))))
+        ;; Left alone, the pane closes its tab; the pane.closed hook reopens it in
+        ;; the tab that Herdr focuses next.
+        (let [p5 (project! ctx "p5")
+              t4r (run! ctx "tab" "create" "--cwd" p5 "--label" "lonely" "--focus")
+              t4 (get-in t4r [:tab :tab_id]) shell (get-in t4r [:root_pane :pane_id])
+              [arrived _] (timed 5000 #(= t4 (:tab_id (compact-pane ctx (snap ctx)))))
+              old-instance (:instance (instance ctx))]
+          (check! "control: the pane followed focus into the new tab" arrived {})
+          (run! ctx "pane" "close" shell)
+          (let [[gone gone-ms] (timed 5000 #(not-any? (fn [t] (= t4 (:tab_id t))) (:tabs (snap ctx))))
+                [back back-ms] (timed 15000 #(let [s (snap ctx) [c :as cs] (compact-panes s plugin)]
+                                               (when (and (= 1 (count cs)) (= (:focused_tab_id s) (:tab_id c))
+                                                          (not= old-instance (:instance (instance ctx))))
+                                                 c)))]
+            (check! "a tab left with only the compact pane closes" gone {:ms gone-ms})
+            (check! "a new compact pane opens in the tab focused next" (some? back) {:ms back-ms})
+            (when-not back
+              (let [s (snap ctx)]
+                (println "DIAG focused tab" (:focused_tab_id s) "compact panes" (mapv (juxt :pane_id :tab_id) (compact-panes s plugin)))
+                (println "DIAG instance" (pr-str (instance ctx)))
+                (println "DIAG plugin log" (some->> (p/shell {:env (:env ctx) :out :string :err :string :continue true}
+                                                          binary "--session" (:session ctx) "plugin" "log" "list"
+                                                          "--plugin" "cormacc.org-tasks" "--limit" "20") :out (#(j/parse-string % true)) :result :logs (mapv #(select-keys % [:event :command :started_unix_ms :exit_code :stdout :stderr])) (map pr-str) (str/join "\n"))))))))
       (finally (stop! ctx)))))
 
 ;; ── requests ──
