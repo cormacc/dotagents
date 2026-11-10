@@ -95,7 +95,8 @@ Acceptance criteria:
 
 * Improvements
 
-** STARTED [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
+** DONE [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
+CLOSED: [2026-11-09 Mon 21:32]
 :PROPERTIES:
 :CUSTOM_ID: 9f667467-a23c-497b-afe8-54afab3b0e5b
 :CREATED: [2026-08-16 Sun 11:02]
@@ -104,33 +105,24 @@ Acceptance criteria:
 :LOGBOOK:
 - Created [2026-08-16 Sun 11:02]
 - State "STARTED" from "TODO" [2026-11-04 Wed 00:27]
+- State "DONE" from "STARTED" [2026-11-09 Mon 21:32]
 :END:
 #+IMPORT: [[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]
-Package herdr-orch as a Herdr plugin wrapper without replacing the existing skill as the orchestration core.
+Make the Herdr TUI plugins and the herdr-app mods depend on one shared install of the herdr-orch and org-tasks skills at `~/.agents/skills`, and diagnose a missing or mismatched install from each surface. Neither surface installs the skills; Home Manager owns the install on the owner's machines, and other users follow the surface READMEs through a redirect in the skill.
 
-Initial scope:
-- Package the herdr-orch skill, its scripts and traits, and the Pi interactive trait-expansion extension.
-- Preserve the current local development flow. `~/.agents/skills/herdr-orch` and `~/.pi/agent/extensions` continue to resolve through the live dotagents checkout. `herdr plugin link` must use that working tree without replacing those links.
-- Separate GitHub-install build work from harness setup. Herdr runs manifest build commands only during GitHub installation. `plugin link` does not run them. Build commands receive no plugin runtime context and must not install or replace global harness configuration.
-- Define a safe activation and diagnostic surface because Herdr does not automatically register packaged skills or Pi extensions.
+Rescoped [2026-11-09 Mon]: the consented setup action is cancelled. The change-record `** Decisions` gives the reasons (Herdr plugin update and uninstall semantics, no herdr-app install mechanism, both surfaces run side by side).
 
-Likely later scope:
-- Add a Herdr plugin pane that renders a hierarchical tree of orchestration sessions.
-- Derive hierarchy primarily from the herdr-orch ledger and contract. Link `:parent-session` to `:child-session`, group continued rounds with `:continues`, and treat pane labels as display metadata or a diagnostic fallback only.
-- Join ledger nodes to live Herdr pane and agent state for navigation and status.
-- Add Claude Code and Codex `UserPromptSubmit` adapters for interactive trait context injection. Preserve project-trust boundaries when resolving project traits.
+Follow-up: [[task:a04ef53b-4251-4b65-976f-2db4d67875e7]] (Claude Code and Codex trait adapters).
 
-Known constraints and candidate direction:
-- The current Pi adapter resolves the interpolator through `~/.agents/skills/herdr-orch/scripts/traits`; packaged resolution must retain that live path and add an explicit or package-relative fallback.
-- herdr-orch currently requires Herdr 0.9.1 or later and Babashka. Its Bash launchers currently imply Linux and macOS support.
-- A single source repository can expose separate native package interfaces for Herdr, Pi, and Agent Skills. The Herdr plugin should remain an adapter and distribution surface rather than becoming the canonical implementation.
-- Herdr plugin v1 supports terminal panes, actions, event hooks, runtime context, and socket access. It does not provide arbitrary native non-terminal plugin UI. A session tree therefore belongs in a plugin terminal pane.
-
-Refresh the change-record before execution. Found stale [2026-10-20 Tue] at e67e868:
-- The installed Herdr is 0.9.5; the record's floor history stops at 0.9.1.
-- The record packages only the traits extension. It does not mention the herdr-orch proxy extension `pi/extensions/herdr-orch` (since 2ee159a, extended with the `/oh` listing in bf3c620); decide whether the plugin packages it.
-- `resolveTraitsBinary` in `pi/extensions/traits/index.ts` returns only the home path; the planned env-override and extension-relative fallbacks are still to do.
-- Related: 41ca2ed9 (shared babashka bootstrap helper), which stays a separate skill-level task.
+** TODO [#C] Claude Code and Codex UserPromptSubmit trait adapters :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: a04ef53b-4251-4b65-976f-2db4d67875e7
+:CREATED: [2026-11-09 Mon 21:32]
+:END:
+:LOGBOOK:
+- Created [2026-11-09 Mon 21:32]
+:END:
+Add Claude Code and Codex `UserPromptSubmit` adapters for interactive trait context injection, as the Pi traits extension does for Pi. Preserve project-trust boundaries when resolving project traits. Moved from the closed task 9f667467 (herdr plugin wrapper for herdr-orch).
 
 ** TODO [#B] Shared babashka bootstrap helper for bb-dependent skills :herdr_orch:org_tasks:
 :PROPERTIES:

@@ -2,138 +2,148 @@
 #+DATE: 2026-08-16 Sun
 #+PARENT: [[task:9f667467-a23c-497b-afe8-54afab3b0e5b][herdr plugin wrapper for herdr-orch]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Accepted
+#+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:herdr/plugins/herdr-orch/README.md]]
+#+SPEC: [[proj:herdr/plugins/org-tasks/README.md]]
+#+SPEC: [[proj:herdr-app/README.md]]
 
 * Intent
 
-Package herdr-orch as a Herdr plugin so `herdr plugin install cormacc/dotagents/herdr-plugin` gives a new machine a working orchestration surface, while the skill under `skills/herdr-orch` stays the canonical implementation and the live dotagents development flow (out-of-store symlinks, `herdr plugin link`) continues unchanged. The plugin is an adapter and distribution surface only.
+Make the Herdr TUI plugins and the herdr-app mods depend on one shared install of the herdr-orch and org-tasks skills at `~/.agents/skills`, and make a missing or mismatched install easy to diagnose from each surface. Neither surface installs the skills or the other surface. The skill under `skills/herdr-orch` stays the canonical implementation, and the live dotagents development flow (out-of-store symlinks, `herdr plugin link`) continues unchanged.
 
 * Summary
 
 *Level:* MVP · *Tests:* smoke · *Docs:* README
 
+The TUI and desktop surfaces run side by side on the same machines, and both must resolve the same `oh` and `ot`.
+
 ** Scope
 
 *** In scope
 
-- Extend the existing `herdr-plugin/` subdir with `doctor.sh`, `setup.sh` and `open-pane.sh`. [[file:2026-11-05-herdr-orch-quota-widget.org][herdr-orch: quota widget for the Herdr tab bar]] created `herdr-plugin.toml` (id `cormacc.herdr-orch`, `min_herdr_version = "0.9.1"`, `platforms = ["linux", "macos"]`), `lib.sh` (`plugin_oh`), `README.md`, the `quota` popup pane and the `quota-stanza` action; keep them.
-- `doctor` and `setup` as `popup` panes plus mirror actions that open them through `HERDR_BIN_PATH`.
-- Consent-gated `setup` that creates or repairs plugin-owned links and refuses foreign-owned paths.
-- Traits-binary fallback resolution in `pi/extensions/traits/index.ts` with tests.
-- Preflight version-gate bump in the `oh` CLI, tests, fixtures, and `contract.md`. Delivered [2026-08-26 Wed] at `>= 0.8.2` rather than `>= 0.8.0` by task [[task:cf561004-25e4-46ee-aa4a-5e09b8eecff6][Simplify herdr-orch skill based on upstream changes]]. This record's own gate task was removed rather than kept as a closed node: left live it would have lowered the floor back to 0.8.0 and re-exposed the readiness bugs.
-- Fake-home bash test for `lib.sh` classification and the doctor/setup refusal paths.
+- Skill-first resolution in the TUI plugins: `~/.agents/skills/...` first, then the checkout-relative path, for `oh` (herdr-orch plugin) and `ot` (org-tasks plugin).
+- A read-only `doctor` popup pane and mirror action in the herdr-orch plugin, beside the existing `quota` pane, `quota-stanza` and `tree-toggle` actions, startup hook and event hooks.
+- A not-installed state, with the missing path, in the herdr-app quota and org-tasks mods.
+- `skills/herdr-orch/references/install-surfaces.md`: a redirect to the existing install instructions of each surface.
+- Traits-binary fallback resolution in `pi/extensions/traits/index.ts` (delivered).
+- Preflight version gate in the `oh` CLI (delivered by task [[task:cf561004-25e4-46ee-aa4a-5e09b8eecff6][Simplify herdr-orch skill based on upstream changes]]; later raised to 0.9.1 by [[file:2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]]).
 
 *** Out of scope
 
-- Session-tree plugin pane over the ledger (parked follow-up in the parent task body).
-- Claude Code and Codex `UserPromptSubmit` trait adapters (parked follow-up).
-- Any `[[build]]`, `[[startup]]`, or `[[events]]` manifest entries.
+- Any plugin, mod or skill code that installs, links or repairs the skills, the plugins or the mods. Home Manager owns this on the owner's machines; other users follow the READMEs.
+- Any `[[build]]` manifest entry.
+- The Pi orchestration proxy extension `pi/extensions/herdr-orch`.
+- Claude Code and Codex `UserPromptSubmit` trait adapters (see Follow-ups).
 - Windows support.
 - Moving orchestration logic out of `skills/herdr-orch`.
 - Marketplace listing (see Open questions).
-- Babashka bootstrapping; this change ships an install hint only (see Follow-ups).
+- Babashka bootstrapping (see Follow-ups).
 
 ** Acceptance
 
 *** Core functionality
 
-- [ ] `herdr plugin link <checkout>/herdr-plugin` registers the plugin on Herdr 0.9.1 with no change to `~/.agents` or `~/.pi` links.
-- [ ] Manifest declares id `cormacc.herdr-orch`, `min_herdr_version = "0.9.1"`, `platforms = ["linux", "macos"]`, popup panes `doctor`, `setup` and `quota`, the `doctor` and `setup` mirror actions plus `quota-stanza`, and no build, startup, or event entries.
-- [ ] Doctor reports each check as pass or fail: Herdr version, `bb` presence, clone layout (`../skills/herdr-orch/scripts/oh` and `scripts/traits` executable), canonical-path classification, and Pi extension wiring state.
-- [ ] Doctor runs to a full report when `bb` is absent.
-- [ ] Doctor's `bb` failure includes an actionable install hint (official installer command, or the detected package manager).
-- [ ] Setup prints a plan with each link's old and new state, applies only after one explicit confirmation, and re-prints the classification afterwards.
-- [ ] Setup re-run in a healthy state reports nothing to do and changes nothing.
-- [ ] Setup repairs a plugin-owned dangling or stale link after printing its prior target.
-- [ ] Setup refuses a foreign link and a foreign-parent path, naming the resolved target.
-- [ ] With this machine's nix-managed links in place: doctor classifies both canonical paths healthy (externally managed) and setup no-ops → test:`herdr-plugin` manual linked-flow check.
+- [X] The herdr-orch plugin runs `~/.agents/skills/herdr-orch/scripts/oh` when it is executable, else the checkout-relative `oh` → test:`scripts/test-herdr-plugin.bb` `home-skill-oh-comes-before-the-checkout`.
+- [X] The org-tasks plugin runs `~/.agents/skills/org-tasks/scripts/ot` when it is executable, else the checkout-relative `ot` → test:`scripts/test-herdr-org-tasks.bb` `ot-resolution-prefers-the-home-skill`.
+- [X] When no `oh` or `ot` candidate is executable, the plugin error names each path tried → test:`scripts/test-herdr-plugin.bb` `missing-oh-names-both-paths-tried`, `scripts/test-herdr-org-tasks.bb` `ot-resolution-prefers-the-home-skill`.
+- [X] Manifest declares a popup pane `doctor` and an action `doctor` beside the existing entries, with `min_herdr_version = "0.9.5"`.
+- [X] Doctor reports pass or fail for: Herdr version, `bb` on `PATH`, the resolved `oh` and its source (home or checkout), and the Pi traits extension at `~/.pi/agent/extensions/traits` → test:`scripts/test-herdr-plugin.bb` `doctor-passes-a-complete-install-and-writes-nothing`, `doctor-reports-each-failure-and-completes-without-bb`.
+- [X] Doctor reports a home skill whose real path differs from the plugin checkout as a version-skew warning → test:`scripts/test-herdr-plugin.bb` `doctor-warns-of-version-skew-and-fails-without-oh`.
+- [X] Doctor runs to a full report when `bb` is absent → test:`scripts/test-herdr-plugin.bb` `doctor-reports-each-failure-and-completes-without-bb`.
+- [X] Doctor's `bb` failure includes an install hint → test:`scripts/test-herdr-plugin.bb` `doctor-reports-each-failure-and-completes-without-bb`.
+- [X] The herdr-app quota mod shows a missing `oh` as not installed, with its path → test:`herdr-app/tests/quota-state.test.mjs` `a start failure names a missing home oh`, `herdr-app/tests/quota-ui.test.mjs` `a missing home oh shows as not installed`.
+- [X] The herdr-app org-tasks widget shows a missing `ot` as not installed, with its path → test:`herdr-app/tests/org-tasks-ui.test.mjs` `a missing ot shows as not installed`.
+- [X] `skills/herdr-orch/references/install-surfaces.md` links the install instructions of the herdr-orch plugin, the org-tasks plugin and herdr-app by GitHub URL.
+- [X] With this machine's Home Manager links, doctor reports every check as pass → see `* Validation`.
 - [X] `resolveTraitsBinary` resolution order is env override `HERDR_ORCH_TRAITS_BIN`, then `~/.agents/skills/herdr-orch/scripts/traits`, then extension-file-relative; first existing wins → test:`pi/extensions/traits/index.test.ts`.
 - [X] When no traits candidate exists the extension error names all three paths tried → test:`pi/extensions/traits/index.test.ts`.
-- [X] `oh` preflight requires Herdr >= 0.8.2 → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj`. Delivered [2026-08-26 Wed] by task cf561004 at 0.8.2, above this record's original 0.8.0 target.
+- [X] `oh` preflight requires Herdr >= 0.8.2 → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj`. Delivered [2026-08-26 Wed] by task cf561004 at 0.8.2; the contract floor is now 0.9.1.
 - [X] `grep -rn '0\.7\.5' skills/herdr-orch` returns only design-history mentions.
-- [ ] `herdr-plugin/README.md` documents prerequisites, install vs linked-dev flow, and the doctor and setup actions beside the existing quota sections.
 
 *** Edge cases
 
-- [ ] Every script path derives from `HERDR_PLUGIN_ROOT`; no hardcoded checkout path appears in `herdr-plugin/`.
-- [ ] Setup offers the Pi extension link only when `~/.pi/agent/extensions` is a real directory; otherwise it reports and skips.
-- [ ] `~/.agents/skills` is created only when absent or already a real directory.
+- [X] Every plugin script path derives from `HERDR_PLUGIN_ROOT` or `HOME`; no hardcoded checkout path appears in `herdr/plugins/` → test:`scripts/test-herdr-plugin.bb` `plugin-files-hold-no-checkout-path`.
+- [X] A GitHub-installed plugin with no home skill runs its checkout-relative `oh` and `ot` → test:`scripts/test-herdr-plugin.bb` `stanza-names-the-checkout-oh-and-bounded-timing`, `scripts/test-herdr-org-tasks.bb` `ot-resolution-prefers-the-home-skill`.
 
 *** Anti-criteria
 
-- [ ] Must not: overwrite or rewrite any `~/.agents/*` or `~/.pi/agent/*` link the plugin did not create.
-- [ ] Must not: mutate global state at install, link, enable, or startup time; only the consented `setup` action writes.
-- [ ] Must not: move orchestration logic out of `skills/herdr-orch`.
-- [ ] Must not: include the session-tree pane or Claude/Codex adapters.
+- [X] Must not: create, change or remove any path under `~/.agents`, `~/.pi` or `~/.config/herdr-app` from plugin, mod or skill code.
+- [X] Must not: add an installer script.
+- [X] Must not: move orchestration logic out of `skills/herdr-orch`.
 
 ** Decisions
 
-- Chose a `herdr-plugin/` subdir adapter with thin bash entrypoints :: separate native package surface per the parent task's constraint; doctor must run without `bb`, so bash is forced there and setup is only symlink management. Rejected:
-  - Repo-root manifest: conflates the whole repository with the plugin surface.
-  - `bb.edn` tasks with degraded bash shims: the degraded path reimplements half of doctor for no user-visible gain.
-  - Single dispatcher script: separate scripts read better in the install preview users audit.
-- Minimum Herdr version 0.9.1 everywhere (manifest and `oh` preflight) :: eliminates legacy-support and API-drift considerations; unlocks `popup` placement. User decision 2026-08-16 set this at 0.8.0; raised to 0.8.2 by the later user decision of 2026-08-26, when task cf561004 gated `oh` on 0.8.2 to delete the readiness workarounds; raised again to 0.9.1 (client and server) by [[file:2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]]. The floor is single-valued on purpose: a manifest that loads on a Herdr the bundled `oh` refuses is the incoherence this bullet exists to prevent.
-- Link classification by realpath equality against the clone root :: one rule serves linked-dev and GitHub-install modes. Measured on this machine: both canonical paths realpath into the live checkout, so linked-dev classifies healthy and setup no-ops. States: healthy, foreign, foreign-parent, plugin-stale, absent.
-- No `[[build]]` entries :: nothing needs building; the install-time no-global-mutation constraint is honoured structurally. Babashka is a documented prerequisite that doctor checks.
+- Chose diagnostics over a shared, externally owned install :: the TUI plugins and the herdr-app mods run side by side, and the mods already run `oh` and `ot` from `~/.agents/skills` by absolute path. If neither surface writes that path, no ownership rule between them is necessary. Rejected:
+  - Consented `setup` action in the TUI plugin (the accepted plan until [2026-11-09 Mon]): `plugin update` and reinstall make a new install directory and keep the old one, so a link into the managed checkout silently points at old files after each update; `plugin uninstall` has no hook, so the link outlives the plugin (Herdr 0.9.5 `plugins.mdx`).
+  - Self-install from a herdr-app mod: herdr-app 0.1.10 has no package, install hook or update channel; a shared mod is a folder that a person or agent copies into `mods/`, so the skill cannot come with it, and a mod that clones the repository is a second installer for the same path.
+  - Installer scripts in the herdr-orch skill: `herdr plugin link` needs a full dotagents checkout, because the plugin is outside `skills/`; the desktop layout also needs the `orch-spaces`, `org-tasks` and `system` mods, which herdr-orch does not own; a script would duplicate the occupant rules of `checkHerdrAppLeaves` in the parent `agents.nix`; no user installs without Home Manager today.
+- Skill-first resolution in the TUI plugins :: both surfaces run the same `oh` and `ot` when the home skill exists; the checkout-relative fallback keeps a GitHub-only install working. Same order as `resolveTraitsBinary`, without an environment override until one is needed.
+- Install instructions stay in the surface READMEs :: the skill reference is a redirect, so the procedures have one home each. Herdr-app's own `AGENTS.md` already tells an agent how to add a mod folder from GitHub.
+- Minimum Herdr version :: the plugin manifest requires 0.9.5 for the sidebar tree hooks; the bundled `oh` preflight keeps its own 0.9.1 floor in `contract.md`. Doctor checks the manifest floor.
+- No `[[build]]` entries :: nothing needs building, and build commands get no plugin runtime context. Babashka is a documented prerequisite that doctor checks.
 - Traits fallback keeps the live path's priority :: env override, then the canonical home path, then extension-file-relative, per the parent task constraint.
 
 ** Shipped
 
+- ADDED :: `skills/herdr-orch/references/install-surfaces.md` -- which skills each surface needs, where it looks for them, and links to each surface's install instructions; linked from `skills/herdr-orch/SKILL.md`.
+- MODIFIED :: `herdr/plugins/herdr-orch/README.md` -- home-first `oh` resolution, the doctor action and its checks, and the statement that the plugin installs nothing.
+- MODIFIED :: `herdr/plugins/org-tasks/README.md` -- home-first `ot` resolution.
+- MODIFIED :: `herdr-app/README.md` -- the not-installed states of the quota mod and the task widget.
+- `skills/herdr-orch/scripts/docs/contract.md` stays unchanged: it is relevant because the plugins and mods run `oh`, but the `oh` CLI contract did not change.
 - MODIFIED :: `pi/extensions/traits/README.md` -- launcher resolution uses the environment override, canonical home path, then extension-relative path; packaged traits derive from the launcher's real path, including symlink overrides.
 
 ** Risks
 
-- Whole-repository clone retention for subdir installs is measured behaviour on Herdr 0.8.0 (one probe against `ogulcancelik/herdr-plugin-examples`), not documented contract. Accepted: doctor's clone-layout check makes a future break immediately diagnosable.
-- The managed clone directory embeds a hash suffix that matches neither commit nor an obvious ref, so its stability across reinstalls is unknown. Designed for: the `plugin-stale` repair path covers both outcomes.
-- Popup interactive `read` is documented but unverified. Mitigation: manual linked-flow verification; fallback is `split` placement for setup.
+- The checkout-relative fallback of a GitHub-installed plugin depends on Herdr keeping the whole-repository clone for a subdir install. The Herdr 0.9.5 docs do not state this; it was measured once, on Herdr 0.8.0. Accepted: the error names each path tried, and doctor reports the resolved `oh`.
+- A home skill and a plugin checkout at different revisions run different code in the two surfaces. Accepted: doctor reports it as a version-skew warning.
 
 ** Follow-ups
 
-- Session-tree plugin pane and Claude/Codex trait adapters remain in the parent task body as later scope.
+- Session-tree pane delivered as the sidebar agent tree (`herdr/plugins/herdr-orch/tree.bb`).
+- Claude Code and Codex trait adapters: [[task:a04ef53b-4251-4b65-976f-2db4d67875e7]].
 - Shared babashka bootstrap helper for bb-dependent skills: [[task:41ca2ed9-9eff-47e0-b0ca-294e20f6c334]].
+- Installer scripts for the surfaces: reconsider only when someone installs without Home Manager. See the rejected alternatives in `** Decisions`.
 
 * Plan
 
-** TODO [#B] Plugin scaffold and doctor
+** DONE [#B] Read-only doctor in the herdr-orch plugin
+CLOSED: [2026-11-09 Mon 19:36]
 :PROPERTIES:
 :CUSTOM_ID: 29d623ad-e53c-425a-a3e7-b9ee135aa528
 :CREATED: [2026-08-16 Sun 11:59]
+:BLOCKED-BY: task:4476f29b-2502-4f1a-96b9-741af4f4431a
+:STARTED: [2026-11-09 Mon 19:34]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-09 Mon 19:34]
+- State "DONE" from "STARTED" [2026-11-09 Mon 19:36]
 :END:
 Acceptance criteria:
-- `herdr plugin link <checkout>/herdr-plugin` registers on Herdr 0.9.1 without touching `~/.agents` or `~/.pi` links.
-- Manifest declares id `cormacc.herdr-orch`, `min_herdr_version = "0.9.1"`, `platforms = ["linux", "macos"]`, popup panes `doctor` and `setup` beside the existing `quota` pane, mirror actions via `open-pane.sh` beside the existing `quota-stanza` action, and no build, startup, or event entries.
-- Doctor reports pass or fail for: Herdr version, `bb` presence, clone layout (`../skills/herdr-orch/scripts/oh` and `scripts/traits` executable), canonical-path classification for `~/.agents/skills/herdr-orch` and `~/.pi/agent/extensions/traits`, and Pi wiring state.
-- Doctor completes its full report when `bb` is absent, and the `bb` failure line carries an actionable install hint.
-- `lib.sh` classifies healthy, foreign, foreign-parent, plugin-stale, and absent by realpath equality against the clone root derived from `HERDR_PLUGIN_ROOT`.
-- Fake-home bash test drives the classification and doctor against known-good and known-bad fixtures (missing `bb` via PATH stub, dangling link, foreign link) and asserts each verdict, including at least one deliberate failure per check.
-- No hardcoded checkout path appears in `herdr-plugin/`.
-- `README.md` documents prerequisites, install vs linked-dev flow, and the doctor and setup actions; extend `lib.sh` rather than replace it.
+- `herdr/plugins/herdr-orch/herdr-plugin.toml` declares a popup pane `doctor` and an action `doctor` that opens it, beside the existing entries; `min_herdr_version` stays `"0.9.5"`.
+- Doctor reports pass or fail for: Herdr version >= 0.9.5, `bb` on `PATH`, the `oh` path that `plugin_oh` resolves and its source (home or checkout), and the Pi traits extension at `~/.pi/agent/extensions/traits`.
+- Doctor reports a `~/.agents/skills/herdr-orch` whose real path differs from the plugin checkout's as a version-skew warning.
+- Doctor completes its full report when `bb` is absent.
+- The `bb` failure line carries an install hint.
+- A fake-home test asserts a pass and a deliberate failure for each check: missing `bb` through a `PATH` stub, missing home skill, and a home skill with a different real path.
+- `herdr/plugins/herdr-orch/README.md` documents doctor and links `skills/herdr-orch/references/install-surfaces.md`.
 
 Anti-criteria:
-- Must not: write outside the checkout and the test's fake home.
+- Must not: write outside the plugin state directory and the test's fake home.
 
-Pointer: the setup entrypoint ships in the follow-on task; the manifest may declare it, with `setup.sh` landing there. Classification states and the consent flow are specified in this record's `** Decisions`.
+Pointer: `plugin_oh` in `herdr/plugins/herdr-orch/lib.sh`.
 
-** TODO [#B] Setup action
+** CANCELLED [#B] Setup action
+CLOSED: [2026-11-09 Mon 19:18]
 :PROPERTIES:
 :CUSTOM_ID: 8d27ea0c-a2b6-40ff-baba-a6d80b127aaa
 :CREATED: [2026-08-16 Sun 11:59]
 :BLOCKED-BY: task:29d623ad-e53c-425a-a3e7-b9ee135aa528
 :END:
-Acceptance criteria:
-- Setup prints a plan with each link's old and new state and applies only after one explicit confirmation.
-- Setup re-run in a healthy state reports nothing to do and changes nothing.
-- Setup repairs a plugin-owned dangling or stale link after printing its prior target.
-- Setup refuses a foreign link and a foreign-parent path, naming the resolved target.
-- Setup offers the Pi extension link only when `~/.pi/agent/extensions` is a real directory; otherwise it reports and skips.
-- `~/.agents/skills` is created only when absent or already a real directory.
-- Fake-home test covers the no-op, create, repair, and both refusal paths.
-- README setup section matches shipped behaviour.
-
-Anti-criteria:
-- Must not: overwrite or rewrite any link the plugin did not create.
-- Must not: download or install binaries.
+:LOGBOOK:
+- State "CANCELLED" from "TODO" [2026-11-09 Mon 19:18]
+:END:
+A consented action that created and repaired the `~/.agents` and `~/.pi` links. Cancelled [2026-11-09 Mon]: see the rejected setup alternative in `** Decisions`.
 
 ** DONE [#B] Traits-binary fallback resolution in the Pi extension
 CLOSED: [2026-11-04 Wed 00:45]
@@ -154,29 +164,114 @@ Acceptance criteria:
 
 Pointer: `resolveTraitsBinary` and `expandTraits` in `pi/extensions/traits/index.ts`.
 
-** TODO [#B] Manual linked-flow verification
+** DONE [#B] Skill-first oh and ot resolution in the TUI plugins
+CLOSED: [2026-11-09 Mon 19:25]
+:PROPERTIES:
+:CUSTOM_ID: 4476f29b-2502-4f1a-96b9-741af4f4431a
+:CREATED: [2026-11-09 Mon 19:18]
+:STARTED: [2026-11-09 Mon 19:24]
+:END:
+:LOGBOOK:
+- Created [2026-11-09 Mon 19:18]
+- State "STARTED" from "TODO" [2026-11-09 Mon 19:24]
+- State "DONE" from "STARTED" [2026-11-09 Mon 19:25]
+:END:
+Acceptance criteria:
+- `plugin_oh` in `herdr/plugins/herdr-orch/lib.sh` returns `~/.agents/skills/herdr-orch/scripts/oh` when it is executable, else the checkout-relative `oh`.
+- The org-tasks plugin uses `~/.agents/skills/org-tasks/scripts/ot` when it is executable, else the checkout-relative `ot`.
+- When neither candidate is executable, the error names both paths tried.
+- Fake-home tests cover the home branch, the checkout branch and the error path for each plugin.
+
+Pointer: `-main` in `herdr/plugins/org-tasks/src/org_tasks_host.clj`; follow the order of `resolveTraitsBinary` in `pi/extensions/traits/index.ts`, without its environment override.
+
+** DONE [#B] Name the missing dependency in the herdr-app mods
+CLOSED: [2026-11-09 Mon 19:34]
+:PROPERTIES:
+:CUSTOM_ID: 10aa6922-ace0-44d4-b63c-886b6983128f
+:CREATED: [2026-11-09 Mon 19:18]
+:BLOCKED-BY: task:3716799f-5b7c-415d-a070-83755baeaa93
+:STARTED: [2026-11-09 Mon 19:32]
+:END:
+:LOGBOOK:
+- Created [2026-11-09 Mon 19:18]
+- State "STARTED" from "TODO" [2026-11-09 Mon 19:32]
+- State "DONE" from "STARTED" [2026-11-09 Mon 19:34]
+:END:
+Acceptance criteria:
+- When `~/.agents/skills/herdr-orch/scripts/oh` is not executable, the quota mod shows that path as not installed, not `Command unavailable or timed out`.
+- When the resolved `ot` is not executable, the org-tasks widget shows that path as not installed.
+- Each not-installed message gives the GitHub URL of `skills/herdr-orch/references/install-surfaces.md`.
+- `bb scripts/test-herdr-app.bb` covers both not-installed states.
+
+Pointer: `coordinator` in `herdr-app/mods/herdr-orch/quota-state.js`.
+
+** DONE [#B] Install-surfaces reference in the herdr-orch skill
+CLOSED: [2026-11-09 Mon 19:32]
+:PROPERTIES:
+:CUSTOM_ID: 3716799f-5b7c-415d-a070-83755baeaa93
+:CREATED: [2026-11-09 Mon 19:18]
+:STARTED: [2026-11-09 Mon 19:25]
+:END:
+:LOGBOOK:
+- Created [2026-11-09 Mon 19:18]
+- State "STARTED" from "TODO" [2026-11-09 Mon 19:25]
+- State "DONE" from "STARTED" [2026-11-09 Mon 19:32]
+:END:
+Acceptance criteria:
+- `skills/herdr-orch/references/install-surfaces.md` states that the Herdr TUI plugins and the herdr-app mods need the skills at `~/.agents/skills`.
+- The reference links the herdr-orch plugin README, the org-tasks plugin README and `herdr-app/README.md` by GitHub URL.
+- `skills/herdr-orch/SKILL.md` links the reference in one sentence.
+- `scripts/check.sh` passes.
+
+Anti-criteria:
+- Must not: copy install procedures from the READMEs.
+- Must not: add an installer script.
+
+** DONE [#B] Manual linked-flow verification
+CLOSED: [2026-11-09 Mon 21:32]
 :PROPERTIES:
 :CUSTOM_ID: cec0974e-23bc-45ff-b2b8-55d51dbc8626
 :CREATED: [2026-08-16 Sun 11:59]
 :BLOCKED-BY: task:29d623ad-e53c-425a-a3e7-b9ee135aa528
-:BLOCKED-BY+: task:8d27ea0c-a2b6-40ff-baba-a6d80b127aaa
+:BLOCKED-BY+: task:4476f29b-2502-4f1a-96b9-741af4f4431a
+:STARTED: [2026-11-09 Mon 19:36]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-09 Mon 19:36]
+- State "DONE" from "STARTED" [2026-11-09 Mon 21:32]
 :END:
 Acceptance criteria:
-- `herdr plugin link` on this checkout registers, and `herdr plugin list` shows the plugin enabled.
-- Doctor popup opens, accepts interactive input (`read` works under popup placement), and classifies both canonical paths healthy (externally managed).
-- Setup popup no-ops against this machine's nix-managed links.
-- Both mirror actions open their panes via `plugin action invoke`.
-- Evidence recorded in this record's `* Validation`; if popup input fails, setup falls back to `split` placement per `** Risks` and the record is updated.
+- `herdr plugin list` shows `cormacc.herdr-orch` and `cormacc.org-tasks` enabled from this checkout.
+- `herdr plugin action invoke cormacc.herdr-orch.doctor` opens the doctor popup.
+- Doctor reports every check as pass against this machine's Home Manager links.
+- The quota pane and the org-tasks pane still render, through the home-resolved `oh` and `ot`.
+- Evidence recorded in this record's `* Validation`.
 
 * Implementation
 
-Traits fallback is delivered independently of the plugin scaffold. Isolated launcher fixtures cover precedence and missing paths; real and symlink launcher expansion plus installed-Pi RPC cases pass with a clean home. Plugin packaging and linked-flow verification remain open.
+- Traits :: isolated launcher fixtures cover precedence and missing paths; real and symlink launcher expansion and installed-Pi RPC cases pass with a clean home.
+- Plugins :: `plugin_oh` in `herdr/plugins/herdr-orch/lib.sh` and `resolve-ot` in `herdr/plugins/org-tasks/src/org_tasks_host.clj` try the home skill, then the checkout. The org-tasks host resolves `ot` only for `serve` and `select-pane`, so `toggle` and `ensure` still work without `ot`.
+- Doctor :: `herdr/plugins/herdr-orch/doctor.sh` (Bash and awk, no `sort -V`), opened by the `doctor` action through `open-pane.sh`. A missing home skill or Pi traits extension is a `WARN`, because the plugin itself still works.
+- Mods :: when `exec` cannot start the executable, the mod reads the file with `readTextFile`; only a `null` result (absent file) gives the not-installed state. A present but non-executable file, or a failed read, keeps the generic failure message. This is narrower than the plan task's "not executable" wording: a present file that cannot run is reported as a failure, not as an absent install.
+
+* Validation
+
+[2026-11-09 Mon] on this machine (Herdr 0.9.5, Home Manager links):
+- `herdr plugin action list --plugin cormacc.herdr-orch` lists `doctor` from the linked checkout without a re-link.
+- `DOCTOR_ONCE=1 bash doctor.sh`, run in the plugin directory with `HERDR_PLUGIN_ROOT` set, reported `PASS` for all five checks and exit status 0; `oh` resolved to `~/.agents/skills/herdr-orch/scripts/oh (home)`.
+- `resolve-ot` resolved `~/.agents/skills/org-tasks/scripts/ot`.
+- `herdr-app check` passed for `herdr-app/mods/herdr-orch` and `herdr-app/mods/org-tasks`.
+- The owner confirmed [2026-11-09 Mon 21:32] that `herdr plugin action invoke cormacc.herdr-orch.doctor` opens the popup with five `PASS` lines and closes on a key press, and that the quota and org-tasks panes still render.
+- Each new test failed against a deliberately broken implementation (old `lib.sh`, wrong home path in `resolve-ot`, the mods' missing-file branch disabled, a raised doctor floor) and passed against the shipped one. `scripts/check.sh` passed.
 
 * Open questions
 
-** OPEN Should the plugin package the Pi orchestration proxy extension as well as traits?
+** DECIDED Should the plugin package the Pi orchestration proxy extension as well as traits?
+:PROPERTIES:
+:DECIDED: [2026-11-09 Mon 19:19]
+:END:
 
-`pi/extensions/herdr-orch/README.md` describes a separate orchestration tool and command surface added after this record. The accepted scope wires only traits; decide whether the proxy belongs in the plugin before extending doctor or setup to manage it.
+No. The plugin packages no Pi extension; doctor reports only whether the traits extension is present. `pi/extensions/herdr-orch` stays out of scope.
 
 ** OPEN Add the `herdr-plugin` GitHub topic to cormacc/dotagents for marketplace listing?
 
