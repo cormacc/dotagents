@@ -190,13 +190,20 @@
         [(select-keys old (keys value)) {:directory (:directory value) :seen seen}]))))
 
 (defn sample!
-  "Sample the tab's live source and publish it with a heartbeat."
+  "Sample the tab's live source and publish it with a heartbeat, or nil to
+  skip this sample. The source pane can close between the snapshot and its
+  process-info request, which then fails; the next snapshot no longer lists
+  it, so the next sample picks the new source."
   [snapshot record previous last-context pending plugin-roots hint-lines]
   (let [candidate (source snapshot (:tab record) (:pane record) previous plugin-roots)
-        info (when candidate (process! (:pane_id candidate)))
-        [value pending] (settle last-context (context-value candidate info) pending)]
-    {:candidate candidate :pending pending
-     :context (publish last-context (:instance record) value hint-lines (now))}))
+        info (if candidate
+               (try (process! (:pane_id candidate))
+                    (catch clojure.lang.ExceptionInfo _ ::failed))
+               nil)]
+    (when-not (= ::failed info)
+      (let [[value pending] (settle last-context (context-value candidate info) pending)]
+        {:candidate candidate :pending pending
+         :context (publish last-context (:instance record) value hint-lines (now))}))))
 
 ;; ── Ownership ─────────────────────────────────────────────────────
 
@@ -417,9 +424,9 @@
           (loop [previous nil last-context nil pending nil]
             (when (nil? (deref child 0 nil))
               (let [started (now)
-                    ;; nil after a timed-out request: keep the previous state
-                    ;; and retry at the next poll. Every other failure ends
-                    ;; the pane.
+                    ;; nil after a timed-out request or a skipped sample: keep
+                    ;; the previous state and retry at the next poll. Every
+                    ;; other failure ends the pane.
                     sampled (try
                               (let [snapshot (snapshot!)
                                     current (pane snapshot id)]

@@ -442,6 +442,10 @@
         ;; PROBE_ALONE_AT: from that snapshot call on, the agents' panes are
         ;; gone and the task pane is alone in its tab.
         alone-at (some-> (System/getenv "PROBE_ALONE_AT") not-empty parse-long)
+        ;; PROBE_INFO_FAILS: the first n process-info calls for an agent pane
+        ;; fail, as for a pane that closed after the snapshot.
+        info-fails (or (some-> (System/getenv "PROBE_INFO_FAILS") not-empty parse-long) 0)
+        failed-infos (atom 0)
         snapshots (atom 0) contexts (atom []) renames (atom []) closes (atom []) real-atomic host/atomic!]
     (with-redefs [host/call! (fn [& args]
                                (case (vec (take 2 args))
@@ -454,9 +458,12 @@
                                    (when (= alone-at n)
                                      (swap! state update :panes (fn [ps] (filterv #(= "tasks" (:pane_id %)) ps))))
                                    {:snapshot @state})
-                                 ["pane" "process-info"] {:process_info (if (= "tasks" (last args))
-                                                                           {:shell_pid (.pid (java.lang.ProcessHandle/current))}
-                                                                           local-info)}
+                                 ["pane" "process-info"] (if (= "tasks" (last args))
+                                                            {:process_info {:shell_pid (.pid (java.lang.ProcessHandle/current))}}
+                                                            (if (< @failed-infos info-fails)
+                                                              (do (swap! failed-infos inc)
+                                                                  (throw (ex-info "Herdr request failed: pane not found" {:args args})))
+                                                              {:process_info local-info}))
                                  ["pane" "rename"] (do (swap! renames conj (vec (drop 2 args))) {})
                                  ["plugin" "pane"] (do (swap! closes conj (vec (drop 2 args))) {})))
                   host/herdr-config-text (constantly "[[keys.command]]\nkey = \"prefix+t\"\ncommand = \"cormacc.org-tasks.select\"\n")
@@ -471,7 +478,8 @@
                       :modes (set (map :mode @contexts))
                       :hints (set (map :hints @contexts))
                       :renames @renames
-                      :closes @closes}))))
+                      :closes @closes
+                      :failed-infos @failed-infos}))))
 
 (when-let [root (System/getenv "SUPERVISOR_PROBE_ROOT")]
   (supervisor-probe root)
@@ -479,7 +487,7 @@
 
 (defn run-supervisor-probe
   "Run the probe with an `ot` child that lives `seconds`; return its report."
-  [dir seconds timeouts & [alone-at]]
+  [dir seconds timeouts & [alone-at info-fails]]
   (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
     (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
     (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " " seconds "\n"))
@@ -489,7 +497,8 @@
                           {:extra-env {"SUPERVISOR_PROBE_ROOT" dir "OT_HOST_DIR" private
                                        "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
                                        "HERDR_PANE_ID" "tasks" "PROBE_TIMEOUTS" timeouts
-                                       "PROBE_ALONE_AT" (str (or alone-at ""))}
+                                       "PROBE_ALONE_AT" (str (or alone-at ""))
+                                       "PROBE_INFO_FAILS" (str (or info-fails ""))}
                            :out :string :err :string})
           result (deref proc 15000 nil)]
       (when-not result (p/destroy-tree proc))
@@ -514,6 +523,17 @@
        (is (= #{["ctrl+b t: select"]} (:hints out)))
        (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")
        (is (= [] (:closes out)) "control: with other panes in the tab, the pane stays open")))))
+
+(deftest supervisor-survives-a-source-pane-that-closes-mid-sample
+  ;; A pane can close between the snapshot and its process-info request.
+  ;; That sample is skipped; the supervisor keeps running.
+  (temporary
+   (fn [dir]
+     (let [out (run-supervisor-probe dir 3 "" nil 2)]
+       (is (= 2 (:failed-infos out)) "control: two process-info requests failed")
+       ;; The failed samples are the first two, while A has focus; focus
+       ;; moves to B at the third snapshot.
+       (is (= [(str dir "/b")] (:directories out)) "the next sample publishes")))))
 
 (deftest supervisor-closes-its-pane-when-alone-in-the-tab
   ;; Herdr closes a tab with its last pane. A compact pane left alone, after
