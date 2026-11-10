@@ -33,12 +33,17 @@
   (let [proc (p/process (into [(or (System/getenv "HERDR_BIN_PATH") "herdr")] args)
                         {:out :string :err :string})
         result (deref proc *request-timeout-ms* nil)]
-    (when-not result (p/destroy-tree proc) (throw (ex-info "Herdr request timed out" {:args args})))
+    (when-not result (p/destroy-tree proc) (throw (ex-info "Herdr request timed out" {:args args :timeout true})))
     (let [data (try (json/parse-string (:out result) true) (catch Exception _ nil))]
       (when (or (not= 0 (:exit result)) (:error data) (nil? (:result data)))
         (throw (ex-info (str "Herdr request failed: " (pr-str args) " " (:err result) " " (:out result))
                         {:args args :response result})))
       (:result data))))
+
+(defn timeout?
+  "A timed-out request is transient: the server can stall briefly under load."
+  [e]
+  (true? (:timeout (ex-data e))))
 
 (defn snapshot! [] (:snapshot (call! "api" "snapshot")))
 (defn pane [snapshot id] (some #(when (= id (:pane_id %)) %) (:panes snapshot)))
@@ -405,18 +410,27 @@
           (loop [previous nil last-context nil pending nil]
             (when (nil? (deref child 0 nil))
               (let [started (now)
-                    snapshot (snapshot!)
-                    current (pane snapshot id)]
-                (when-not (and (= (:terminal owner) (:terminal_id current)) (= tab (:tab_id current))
-                               (= instance (:instance (read-json index))))
-                  (throw (ex-info "Task pane moved or disappeared" {})))
-                (sync-label! current)
-                (let [{:keys [candidate context pending]}
-                      (sample! snapshot owner previous last-context pending roots hint-lines)]
-                  (atomic! file context)
-                  (atomic! owner-file (assoc owner :updatedAt (now)))
-                  (Thread/sleep (max 1 (- 500 (- (now) started))))
-                  (recur candidate context pending))))))
+                    ;; nil after a timed-out request: keep the previous state
+                    ;; and retry at the next poll. Every other failure ends
+                    ;; the pane.
+                    sampled (try
+                              (let [snapshot (snapshot!)
+                                    current (pane snapshot id)]
+                                (when-not (and (= (:terminal owner) (:terminal_id current)) (= tab (:tab_id current))
+                                               (= instance (:instance (read-json index))))
+                                  (throw (ex-info "Task pane moved or disappeared" {})))
+                                (sync-label! current)
+                                (sample! snapshot owner previous last-context pending roots hint-lines))
+                              (catch clojure.lang.ExceptionInfo e
+                                (when-not (timeout? e) (throw e))))]
+                (when sampled (atomic! file (:context sampled)))
+                ;; The supervisor is alive during a retry, so its lease stays
+                ;; fresh and `ensure` does not open a second pane.
+                (atomic! owner-file (assoc owner :updatedAt (now)))
+                (Thread/sleep (max 1 (- 500 (- (now) started))))
+                (if sampled
+                  (recur (:candidate sampled) (:context sampled) (:pending sampled))
+                  (recur previous last-context pending))))))
         (finally
           ;; known-limit: retain private instance metadata for ownership diagnosis;
           ;; add bounded pruning if repeated reopening causes material state growth.

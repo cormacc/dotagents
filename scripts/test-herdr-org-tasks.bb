@@ -380,11 +380,14 @@
                    {:exit 0 :out "{\"error\":{\"code\":\"unavailable\"}}" :err ""}
                    {:exit 0 :out "not-json" :err ""}]]
     (with-redefs [p/process (fn [& _] (delay response))]
-      (is (thrown? Exception (host/call! "api" "snapshot")))))
+      (let [e (try (host/call! "api" "snapshot") nil (catch Exception e e))]
+        (is (some? e))
+        (is (not (host/timeout? e)) "only a timeout is transient"))))
   (let [killed (atom false)]
     (binding [host/*request-timeout-ms* 1]
       (with-redefs [p/process (fn [& _] (promise)) p/destroy-tree (fn [_] (reset! killed true))]
-        (is (thrown? Exception (host/call! "api" "snapshot")))
+        (let [e (try (host/call! "api" "snapshot") nil (catch Exception e e))]
+          (is (host/timeout? e)))
         (is @killed)))))
 
 (deftest process-death-releases-open-lock
@@ -432,13 +435,20 @@
         a (assoc a :foreground_cwd (str root "/a")) b (assoc b :foreground_cwd (str root "/b"))
         state (atom (assoc (snapshot [a b (assoc task-pane :terminal_title "Tasks :: ~/a")])
                            :layouts [{:tab_id tab :focused_pane_id "agent-a"}]))
+        ;; PROBE_TIMEOUTS lists snapshot calls that time out; focus moves to B
+        ;; on the first successful call after them.
+        timeouts (set (map parse-long (remove str/blank? (str/split (or (System/getenv "PROBE_TIMEOUTS") "") #","))))
+        switch-at (inc (reduce max 2 timeouts))
         snapshots (atom 0) contexts (atom []) renames (atom []) real-atomic host/atomic!]
     (with-redefs [host/call! (fn [& args]
                                (case (vec (take 2 args))
                                  ["api" "snapshot"]
-                                 (do (when (= 3 (swap! snapshots inc))
-                                       (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-b"}]))
-                                     {:snapshot @state})
+                                 (let [n (swap! snapshots inc)]
+                                   (when (timeouts n)
+                                     (throw (ex-info "Herdr request timed out" {:args args :timeout true})))
+                                   (when (= switch-at n)
+                                     (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-b"}]))
+                                   {:snapshot @state})
                                  ["pane" "process-info"] {:process_info (if (= "tasks" (last args))
                                                                            {:shell_pid (.pid (java.lang.ProcessHandle/current))}
                                                                            local-info)}
@@ -460,27 +470,41 @@
   (supervisor-probe root)
   (System/exit 0))
 
+(defn run-supervisor-probe
+  "Run the probe with an `ot` child that lives `seconds`; return its report."
+  [dir seconds timeouts]
+  (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
+    (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
+    (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " " seconds "\n"))
+    (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
+    (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
+    (let [proc (p/process ["bb" probe-script]
+                          {:extra-env {"SUPERVISOR_PROBE_ROOT" dir "OT_HOST_DIR" private
+                                       "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
+                                       "HERDR_PANE_ID" "tasks" "PROBE_TIMEOUTS" timeouts}
+                           :out :string :err :string})
+          result (deref proc 15000 nil)]
+      (when-not result (p/destroy-tree proc))
+      (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
+      (when (and result (zero? (:exit result)))
+        (read-string (last (str/split-lines (:out result))))))))
+
+(deftest supervisor-survives-host-request-timeouts
+  ;; A short Herdr stall must not end the pane: the supervisor retries and
+  ;; still follows the next focus change.
+  (temporary
+   (fn [dir]
+     (let [out (run-supervisor-probe dir 3 "3,4")]
+       (is (= [(str dir "/a") (str dir "/b")] (:directories out)))))))
+
 (deftest supervisor-follows-the-focused-agent-and-publishes-hints
   (temporary
    (fn [dir]
-     (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
-       (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
-       (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " 2\n"))
-       (fs/set-posix-file-permissions (str dir "/sleeper") "rwx------")
-       (host/atomic! (fs/path dir (str tab ".json")) {:instance instance :tab tab :pending true :updatedAt (host/now)})
-       (let [proc (p/process ["bb" probe-script]
-                             {:extra-env {"SUPERVISOR_PROBE_ROOT" dir "OT_HOST_DIR" private
-                                          "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
-                                          "HERDR_PANE_ID" "tasks"}
-                              :out :string :err :string})
-             result (deref proc 15000 nil)]
-         (when-not result (p/destroy-tree proc))
-         (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
-         (let [out (read-string (last (str/split-lines (:out result))))]
-           (is (= [(str dir "/a") (str dir "/b")] (:directories out)) "A first, then B after the focus change")
-           (is (= #{"compact"} (:modes out)))
-           (is (= #{["ctrl+b t: select"]} (:hints out)))
-           (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")))))))
+     (let [out (run-supervisor-probe dir 2 "")]
+       (is (= [(str dir "/a") (str dir "/b")] (:directories out)) "A first, then B after the focus change")
+       (is (= #{"compact"} (:modes out)))
+       (is (= #{["ctrl+b t: select"]} (:hints out)))
+       (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")))))
 
 (deftest ot-resolution-prefers-the-home-skill
   (temporary
