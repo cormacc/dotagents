@@ -5114,3 +5114,24 @@ CLOSED: [2026-11-09 Mon 18:31]
 - State "DONE" from "TODO" [2026-11-09 Mon 18:31]
 :END:
 Follow-up to task f7457cc5-64a5-4139-ba94-7da9eca8f6ed. The owner deferred native Linux validation to another machine. Use [[plan:2026-11-05-herdr-app-orch-mod.org]] as the requirements source, especially Summary/Acceptance and the native validation plan task a8cb3a32-0c02-4755-9634-02044fdfa9dc. Run native checks for both mods; demonstrate real Linux CPU/RAM and optional NVIDIA metrics, quota popup and keyboard access, narrow/light/dark readability, shared in-flight refresh, native timeout/process cleanup, real five-minute stale expiry/recovery, individual symlink discovery/source watching and app restart persistence. Preserve installed files, selected layout and user terminals; obtain consent for disruptive actions. Use fake quota commands for failure/lifecycle probes, never live credentials or endpoints in automated tests. Record exact app/core versions, commands, statuses and native screenshots in the linked record. macOS fixture or initial-check evidence is not Linux delivery evidence. Prerequisite: transfer the committed implementation and parent Nix wiring to the target machine before validation.
+
+** DONE [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
+CLOSED: [2026-11-09 Mon 21:32]
+:PROPERTIES:
+:CUSTOM_ID: 9f667467-a23c-497b-afe8-54afab3b0e5b
+:CREATED: [2026-08-16 Sun 11:02]
+:STARTED: [2026-11-04 Wed 00:27]
+:ARCHIVED: [2026-11-09 Mon 21:32]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-16 Sun 11:02]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:27]
+- State "DONE" from "STARTED" [2026-11-09 Mon 21:32]
+:END:
+#+IMPORT: [[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]
+Make the Herdr TUI plugins and the herdr-app mods depend on one shared install of the herdr-orch and org-tasks skills at `~/.agents/skills`, and diagnose a missing or mismatched install from each surface. Neither surface installs the skills; Home Manager owns the install on the owner's machines, and other users follow the surface READMEs through a redirect in the skill.
+
+Rescoped [2026-11-09 Mon]: the consented setup action is cancelled. The change-record `** Decisions` gives the reasons (Herdr plugin update and uninstall semantics, no herdr-app install mechanism, both surfaces run side by side).
+
+Follow-up: [[task:a04ef53b-4251-4b65-976f-2db4d67875e7]] (Claude Code and Codex trait adapters).

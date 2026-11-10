@@ -95,25 +95,6 @@ Acceptance criteria:
 
 * Improvements
 
-** DONE [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
-CLOSED: [2026-11-09 Mon 21:32]
-:PROPERTIES:
-:CUSTOM_ID: 9f667467-a23c-497b-afe8-54afab3b0e5b
-:CREATED: [2026-08-16 Sun 11:02]
-:STARTED: [2026-11-04 Wed 00:27]
-:END:
-:LOGBOOK:
-- Created [2026-08-16 Sun 11:02]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:27]
-- State "DONE" from "STARTED" [2026-11-09 Mon 21:32]
-:END:
-#+IMPORT: [[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]
-Make the Herdr TUI plugins and the herdr-app mods depend on one shared install of the herdr-orch and org-tasks skills at `~/.agents/skills`, and diagnose a missing or mismatched install from each surface. Neither surface installs the skills; Home Manager owns the install on the owner's machines, and other users follow the surface READMEs through a redirect in the skill.
-
-Rescoped [2026-11-09 Mon]: the consented setup action is cancelled. The change-record `** Decisions` gives the reasons (Herdr plugin update and uninstall semantics, no herdr-app install mechanism, both surfaces run side by side).
-
-Follow-up: [[task:a04ef53b-4251-4b65-976f-2db4d67875e7]] (Claude Code and Codex trait adapters).
-
 ** TODO [#C] Claude Code and Codex UserPromptSubmit trait adapters :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: a04ef53b-4251-4b65-976f-2db4d67875e7

@@ -1,6 +1,6 @@
 #+TITLE: herdr plugin wrapper for herdr-orch
 #+DATE: 2026-08-16 Sun
-#+PARENT: [[task:9f667467-a23c-497b-afe8-54afab3b0e5b][herdr plugin wrapper for herdr-orch]]
+#+PARENT: [[archive:9f667467-a23c-497b-afe8-54afab3b0e5b][herdr plugin wrapper for herdr-orch]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
