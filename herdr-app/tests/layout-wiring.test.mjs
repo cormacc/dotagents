@@ -34,11 +34,20 @@ function validateWiring(value) {
     assert.ok(value.includes(`check_herdr_app_leaf "\${config.home.homeDirectory}/.config/herdr-app/${leaf}" "\${agentsRoot}/herdr-app/${leaf}"`), leaf);
   }
   assert.ok(value.includes('lib.hm.dag.entryBefore [ "writeBoundary" ]'));
-  // keys.json is a macOS-only leaf with a platform-named source.
-  const keys = ['"${config.home.homeDirectory}/.config/herdr-app/keys.json"', '"${agentsRoot}/herdr-app/keys.darwin.json"'];
+  // keys.json is linked on every platform, from that platform's key table.
+  const keys = ['"${config.home.homeDirectory}/.config/herdr-app/keys.json"', '"${agentsRoot}/herdr-app/keys.${herdrAppKeysPlatform}.json"'];
+  assert.ok(value.includes('herdrAppKeysPlatform = if pkgs.stdenv.hostPlatform.isDarwin then "darwin" else "linux";'), "keys platform");
   assert.ok(value.includes(`${keys[0]} = link ${keys[1]};`), "keys link");
   assert.ok(value.includes(`keys=${keys[0]}`) && value.includes(`check_herdr_app_leaf "$keys" ${keys[1]}`), "keys guard");
 }
+
+test("each platform has a key table that binds the org-tasks actions", () => {
+  for (const platform of ["darwin", "linux"]) {
+    const actions = Object.values(JSON.parse(readFileSync(`herdr-app/keys.${platform}.json`, "utf8")).global);
+    for (const action of ["org-tasks.select", "layout.toggle:org-tasks"])
+      assert.ok(actions.includes(action), `${platform}: ${action}`);
+  }
+});
 
 test("layout validator rejects missing status", () => {
   validateLayout(layout);
@@ -64,7 +73,8 @@ test("parent wiring validators reject missing leaf", { skip: wiringPath === unde
   const wiring = readFileSync(wiringPath, "utf8");
   validateWiring(wiring);
   assert.throws(() => validateWiring(wiring.replace('/.config/herdr-app/mods/system" = link', '/.config/herdr-app/mods/other" = link')));
-  assert.throws(() => validateWiring(wiring.replace('herdr-app/keys.darwin.json";', 'herdr-app/keys.json";')));
+  assert.throws(() => validateWiring(wiring.replace('herdr-app/keys.${herdrAppKeysPlatform}.json";', 'herdr-app/keys.json";')));
+  assert.throws(() => validateWiring(wiring.replace('else "linux";', 'else "darwin";')));
 });
 
 test("collision guard rejects foreign files, directories and dangling links", { skip: wiringPath === undefined }, () => {

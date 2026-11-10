@@ -106,7 +106,7 @@ The consuming `agents.nix` links:
 - `herdr/config.toml` → `~/.config/herdr/config.toml` (the file only; the directory also holds Herdr's sockets and session state)
 - `herdr/plugins/{org-tasks,herdr-orch}/` → `~/.local/share/herdr-plugins/{org-tasks,herdr-orch}` (guarded leaves)
 - `herdr-app/settings.json`, `herdr-app/mods/{herdr-orch,system,org-tasks,orch-spaces}`, and `herdr-app/layouts/herdr-orch.json` → `~/.config/herdr-app/...` (personal leaves only; bundled mods and layouts stay app-owned)
-- `herdr-app/keys.darwin.json` → `~/.config/herdr-app/keys.json` (macOS only)
+- `herdr-app/keys.darwin.json` (macOS) or `herdr-app/keys.linux.json` (Linux) → `~/.config/herdr-app/keys.json`
 
 Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > home (`~/.agents/subagents/`) > packaged (`skills/herdr-orch/subagents/`). Home Manager manages `~/.agents/subagents/` (out-of-store, from this repo's `subagents/`) so the harness permission overrides ship to every host; it holds home overrides only, never the packaged persona defaults. The parallel `config.edn` chain replaces complete model-ID rows in the same precedence order and never uses a model or weight alias to select kind. The packaged weights are `heavy`, `middle`, `light`, and `feather`; their per-kind values are enumerated once, in [skills/herdr-orch/scripts/docs/contract.md#Model resolution](skills/herdr-orch/scripts/docs/contract.md#model-resolution).
 

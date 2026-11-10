@@ -17,12 +17,12 @@ The mods need the dotagents skills at `~/.agents/skills`: the quota mod runs `~/
    ln -s "$PWD/herdr-app/layouts/herdr-orch.json" "$app/layouts/herdr-orch.json"
    ```
 
-2. Optionally, add the bindings from [keys.darwin.json](keys.darwin.json) to your own `keys.json`.
+2. Optionally, add the bindings from [keys.darwin.json](keys.darwin.json) (macOS) or [keys.linux.json](keys.linux.json) (Linux) to your own `keys.json`.
 3. Restart Herdr app, then explicitly select the `herdr-orch` layout.
 
 ### With the owner's Home Manager module
 
-1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks`, `mods/orch-spaces`, `layouts/herdr-orch.json` and, on macOS, `keys.darwin.json` as `keys.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
+1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks`, `mods/orch-spaces`, `layouts/herdr-orch.json` and the platform's key table (`keys.darwin.json` or `keys.linux.json`) as `keys.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
 2. In Herdr app, explicitly select the `herdr-orch` layout. The existing layout remains selected until you do this.
 
 To remove the personal layout, select another layout in Herdr app first. Remove the personal leaf declarations and `checkHerdrAppLeaves` guard from the parent `agents.nix`, then reapply the parent configuration using the normal host procedure. Do not remove app-owned directories or the source checkout.
@@ -54,7 +54,14 @@ The `org-tasks` block below the tab area shows the selected task of the focused 
 
 The mod runs `~/.agents/skills/org-tasks/scripts/ot` by absolute path, not `ot` on `PATH`: an app started from the desktop session can have a `PATH` without the shell's additions, such as `~/.local/bin`. Layout props can name another executable: `{"mod": "org-tasks", "props": {"ot": "/path/to/ot"}}`. When `ot` cannot start and its file is absent, the widget shows `ot not installed at <path>` with a link to the [install-surfaces reference](../skills/herdr-orch/references/install-surfaces.md).
 
-On macOS, [keys.darwin.json](keys.darwin.json) is linked as `keys.json` and binds `cmd-shift-t` to `org-tasks.select` and `cmd-shift-o` to `layout.toggle:org-tasks`, matching `prefix+t` and `prefix+ctrl+o` in the terminal Herdr plugin. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation. Linux keeps its own unmanaged `keys.json` until a Linux variant is checked; add those two bindings there, with the `ctrl-shift-` forms if `cmd` is not available.
+Activation links the platform's key table as `keys.json`. It binds `org-tasks.select` and `layout.toggle:org-tasks`, which match `prefix+t` and `prefix+ctrl+o` in the terminal Herdr plugin:
+
+| Platform | Key table | `org-tasks.select` | `layout.toggle:org-tasks` |
+|---|---|---|---|
+| macOS | [keys.darwin.json](keys.darwin.json) | `cmd-shift-t` | `cmd-shift-o` |
+| Linux | [keys.linux.json](keys.linux.json) | `ctrl-alt-t` | `ctrl-alt-shift-t` |
+
+Linux does not use the `ctrl-shift-` forms of the macOS keys: the app's Linux defaults bind `ctrl-shift-t` to `tab.new` and `ctrl-shift-o` to `pane.split:right`. The `ctrl-alt-` chords do not take keys from terminal programs, such as `M-t` in readline and Emacs. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation.
 
 ## Refresh and limits
 
