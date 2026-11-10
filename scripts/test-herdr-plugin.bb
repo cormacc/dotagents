@@ -74,6 +74,38 @@
           (is (= 1 exit) script)
           (is (str/includes? err "HERDR_PLUGIN_ROOT") err))))))
 
+(defn- executable! [path text]
+  (fs/create-dirs (fs/parent path))
+  (spit (str path) text)
+  (fs/set-posix-file-permissions path "rwxr-xr-x"))
+
+(deftest home-skill-oh-comes-before-the-checkout
+  (with-env
+    (fn [env]
+      (let [home-oh (fs/path (get env "HOME") ".agents" "skills" "herdr-orch" "scripts" "oh")]
+        (testing "positive control: without a home skill the checkout oh is named"
+          (let [{:keys [exit out]} (run! env "bash" "quota-stanza.sh")]
+            (is (zero? exit))
+            (is (str/includes? out (str (fs/canonicalize oh))) out)))
+        (executable! home-oh "#!/usr/bin/env bash\necho home-oh\n")
+        (let [{:keys [exit out err]} (run! env "bash" "quota-stanza.sh")]
+          (is (zero? exit) err)
+          (is (str/includes? out (str "command = \"'" home-oh "' usage")) out))
+        (testing "a home oh that is not executable is skipped"
+          (fs/set-posix-file-permissions home-oh "rw-r--r--")
+          (let [{:keys [out]} (run! env "bash" "quota-stanza.sh")]
+            (is (str/includes? out (str (fs/canonicalize oh))) out)))))))
+
+(deftest missing-oh-names-both-paths-tried
+  (with-env
+    (fn [env]
+      (let [fake-root (fs/path (get env "HOME") "clone" "herdr" "plugins" "herdr-orch")]
+        (fs/create-dirs fake-root)
+        (let [{:keys [exit err]} (run! (assoc env "HERDR_PLUGIN_ROOT" (str fake-root)) "bash" "quota-stanza.sh")]
+          (is (= 1 exit))
+          (is (str/includes? err (str (get env "HOME") "/.agents/skills/herdr-orch/scripts/oh")) err)
+          (is (str/includes? err (str (fs/canonicalize (fs/path (get env "HOME") "clone")) "/skills/herdr-orch/scripts/oh")) err))))))
+
 (deftest plugin-files-hold-no-checkout-path
   (let [files (map str (filter fs/regular-file? (fs/list-dir plugin)))]
     (is (seq files) "positive control: the plugin directory has files")

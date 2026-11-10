@@ -1,6 +1,6 @@
 # herdr-orch Herdr plugin
 
-Herdr plugin `cormacc.herdr-orch` provides quota display and a sidebar agent tree. Quota commands use `../../../skills/herdr-orch/scripts/oh` in the same checkout, resolved from `HERDR_PLUGIN_ROOT`. The sidebar tree reads the ledgers directly, as described below.
+Herdr plugin `cormacc.herdr-orch` provides quota display and a sidebar agent tree. Quota commands use `~/.agents/skills/herdr-orch/scripts/oh` when it is executable, so that they use the same `oh` as the herdr-app quota mod; otherwise they use `../../../skills/herdr-orch/scripts/oh` in the same checkout, resolved from `HERDR_PLUGIN_ROOT`. When neither is executable, the error names both paths. The sidebar tree reads the ledgers directly, as described below.
 
 The separate [org-tasks plugin](../org-tasks/README.md) embeds the shared task TUI in a tab-local bottom split. It has its own registration and configuration.
 

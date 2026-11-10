@@ -4,7 +4,7 @@
 
 ## Requirements and installation
 
-Use Herdr 0.9.5 or later on Linux or macOS, with Babashka, Bash and `ps` on the server's PATH. Keep the full dotagents checkout: the adapter runs its co-located `skills/org-tasks/scripts/ot`. No new dependencies are required.
+Use Herdr 0.9.5 or later on Linux or macOS, with Babashka, Bash and `ps` on the server's PATH. The adapter runs `~/.agents/skills/org-tasks/scripts/ot` when it is executable, so that it uses the same `ot` as the herdr-app task widget; otherwise it runs the co-located `skills/org-tasks/scripts/ot`, so keep the full dotagents checkout. When neither is executable, `serve` and `select-pane` fail with an error that names both paths. No new dependencies are required.
 
 1. Link this plugin separately from the [herdr-orch plugin](../herdr-orch/README.md), from the repository root:
 

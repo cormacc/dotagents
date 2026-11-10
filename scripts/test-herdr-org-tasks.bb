@@ -483,5 +483,27 @@
            (is (= #{["ctrl+b t: Select a task from the backlog"]} (:hints out)))
            (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")))))))
 
+(deftest ot-resolution-prefers-the-home-skill
+  (temporary
+   (fn [dir]
+     (let [home (fs/path dir "home")
+           plugin-root (fs/path dir "clone" "herdr" "plugins" "org-tasks")
+           home-ot (str (fs/path home ".agents" "skills" "org-tasks" "scripts" "ot"))
+           checkout-ot (str (fs/path plugin-root ".." ".." ".." "skills" "org-tasks" "scripts" "ot"))
+           executable! (fn [path] (fs/create-dirs (fs/parent path)) (spit path "#!/bin/sh\n")
+                         (fs/set-posix-file-permissions path "rwxr-xr-x"))]
+       (fs/create-dirs plugin-root)
+       (testing "neither candidate: the error names both"
+         (let [e (try (host/resolve-ot (str home) (str plugin-root)) nil (catch Exception e e))]
+           (is (some? e))
+           (is (str/includes? (ex-message e) home-ot) (ex-message e))
+           (is (str/includes? (ex-message e) checkout-ot) (ex-message e))))
+       (executable! checkout-ot)
+       (is (= checkout-ot (host/resolve-ot (str home) (str plugin-root))) "checkout only")
+       (executable! home-ot)
+       (is (= home-ot (host/resolve-ot (str home) (str plugin-root))) "home first")
+       (fs/set-posix-file-permissions home-ot "rw-r--r--")
+       (is (= checkout-ot (host/resolve-ot (str home) (str plugin-root))) "a non-executable home ot is skipped")))))
+
 (let [{:keys [fail error]} (run-tests)]
   (System/exit (if (zero? (+ fail error)) 0 1)))

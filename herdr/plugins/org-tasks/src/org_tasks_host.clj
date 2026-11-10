@@ -422,14 +422,25 @@
           (fs/delete-if-exists file)
           (p/destroy-tree child))))))
 
+(defn resolve-ot
+  "The first executable `ot`: the home skill, then the skill in the checkout
+  that holds `plugin-root`. The home skill comes first so that this plugin and
+  the herdr-app widget, which runs the home skill, use the same `ot`."
+  [home plugin-root]
+  (let [candidates [(str (fs/path home ".agents" "skills" "org-tasks" "scripts" "ot"))
+                    (str (fs/path plugin-root ".." ".." ".." "skills" "org-tasks" "scripts" "ot"))]]
+    (or (some #(when (fs/executable? %) %) candidates)
+        (throw (ex-info (str "ot not found at " (str/join " or " candidates)) {:candidates candidates})))))
+
 (defn -main [& [operation]]
   (try
     (let [root (or (System/getenv "HERDR_PLUGIN_ROOT") (throw (ex-info "HERDR_PLUGIN_ROOT is required" {})))
-          ot (str (fs/path root ".." ".." ".." "skills" "org-tasks" "scripts" "ot"))
+          ;; Only the pane operations run `ot`; toggle and ensure must work without it.
+          ot #(resolve-ot (or (System/getenv "HOME") (System/getProperty "user.home")) root)
           config #(config! (System/getenv "HERDR_PLUGIN_CONFIG_DIR"))]
       (case operation
-        "serve" (supervise! ot)
-        "select-pane" (select-pane! ot)
+        "serve" (supervise! (ot))
+        "select-pane" (select-pane! (ot))
         "select" (select!)
         "toggle" (toggle! (config))
         ;; Startup and tab.created hooks: idempotent, so neither needs the
