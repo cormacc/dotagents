@@ -52,16 +52,18 @@ export function countParts(model) {
 }
 
 const ACTIONS = [
-  ["org-tasks.select", "Select a task from the backlog"],
-  ["layout.toggle:org-tasks", "Show/hide org-tasks widget"],
+  ["org-tasks.select", "select"],
+  ["layout.toggle:org-tasks", "show/hide"],
 ];
 
-// Key hints for the bound actions, read from the live key table.
-export function hints(bindings) {
-  return ACTIONS.flatMap(([action, text]) => {
+// One key-hint line for the bound actions, read from the live key table, as
+// the Herdr TUI compact pane shows it; null when neither action is bound.
+export function hint(bindings) {
+  const parts = ACTIONS.flatMap(([action, text]) => {
     const b = bindings.find(k => k.action === action);
     return b ? [`${b.keys}: ${text}`] : [];
   });
+  return parts.length ? parts.join(" / ") : null;
 }
 
 // Did a watch report touch a file the view reads?

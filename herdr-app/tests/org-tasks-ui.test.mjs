@@ -135,16 +135,53 @@ test("a missing ot shows as not installed, with its path; a present one that fai
   }
 });
 
-test("without a selection it shows counts and the bound key hints", async () => {
-  const dir = project(null);
+// The operations of the element that holds `text`, from its preceding `div`
+// call: the spy records each element's builder calls in order.
+const ownOps = (ops, text) => {
+  const i = ops.findIndex(o => o[0] === "child" && o[1] === text);
+  const start = ops.slice(0, i).findLastIndex(o => o[0] === "id" || o[0] === "child" && typeof o[1] !== "string");
+  return ops.slice(start + 1, i + 1).map(o => o[0]);
+};
+
+for (const [name, selected, content] of [["above the selected-task rows", PARENT, "Gamma [44444444]"],
+                                         ["above the status counts without a selection", null, "5 tasks:"]]) {
+  test(`one muted key hint sits right of the title, ${name}`, async () => {
+    const dir = project(selected);
+    const hint = "cmd-shift-t: select / cmd-shift-o: show/hide";
+    try {
+      const a = await app({ focus: () => ({ space: "s1", pane: "p1", cwd: dir }),
+                            panes: () => [{ pane: "p1", status: "idle", cwd: dir }],
+                            bindings: [{ section: "global", keys: "cmd-shift-t", action: "org-tasks.select" },
+                                       { section: "global", keys: "cmd-shift-o", action: "layout.toggle:org-tasks" }] });
+      await a.settle();
+      const ops = a.render(), w = words(ops);
+      assert.ok(w.includes(content), `control: the content shows, got ${JSON.stringify(w)}`);
+      assert.equal(w.filter(x => x.includes(": select") || x.includes(": show/hide")).length, 1, "one hint line");
+      const title = w.findIndex(x => x.startsWith("Tasks :: "));
+      assert.ok(title >= 0, `control: the title shows, got ${JSON.stringify(w)}`);
+      assert.equal(w[title + 1], hint, "the hint follows the title");
+      assert.ok(w.indexOf(content) > title + 1, "the content follows the title row");
+      // The title and the hint are the two element children of one row.
+      const row = ops.findIndex(o => o[0] === "id" && o[1] === "org-tasks-title");
+      assert.ok(row >= 0, "control: the title row exists");
+      const end = ops.findIndex((o, i) => i > row && o[0] === "id");
+      assert.equal(ops.slice(row, end).filter(o => o[0] === "child" && typeof o[1] !== "string").length, 2, "title and hint share the row");
+      assert.equal(colourOf(ops, hint), "#777777");
+      assert.ok(ownOps(ops, hint).includes("flex_none"), JSON.stringify(ownOps(ops, hint)));
+      assert.ok(!ownOps(ops, hint).includes("text_center"), JSON.stringify(ownOps(ops, hint)));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+}
+
+test("no key-hint line shows when neither action is bound", async () => {
+  const dir = project(PARENT);
   try {
     const a = await app({ focus: () => ({ space: "s1", pane: "p1", cwd: dir }),
-                          panes: () => [{ pane: "p1", status: "idle", cwd: dir }],
-                          bindings: [{ section: "global", keys: "cmd-shift-t", action: "org-tasks.select" }] });
+                          panes: () => [{ pane: "p1", status: "idle", cwd: dir }] });
     await a.settle();
     const w = words(a.render());
-    assert.ok(w.includes("5 tasks:"));
-    assert.ok(w.includes("cmd-shift-t: Select a task from the backlog"));
+    assert.ok(w.includes("Gamma [44444444]"), "control: the rows show");
+    assert.ok(!w.some(x => x.includes(": select") || x.includes(": show/hide")), JSON.stringify(w));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

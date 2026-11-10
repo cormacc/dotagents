@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { project, settle, statusColor, hints, touches, parse, fitHeight } from "../mods/org-tasks/state.js";
+import { project, settle, statusColor, hint, touches, parse, fitHeight } from "../mods/org-tasks/state.js";
 
 const agentPane = { pane: "p1", status: "idle", cwd: "/work/a" };
 const shellPane = { pane: "p2", status: null, cwd: "/work/b" };
@@ -48,13 +48,13 @@ test("status colours come from the theme", () => {
                    ["#y", "#w", "#b", "#d", "#m", "#f"]);
 });
 
-test("hints name only bound actions with their keys", () => {
+test("hint joins only the bound actions, with their keys, on one line", () => {
   const bound = [{ section: "global", keys: "cmd-shift-t", action: "org-tasks.select" },
                  { section: "global", keys: "cmd-shift-o", action: "layout.toggle:org-tasks" },
                  { section: "global", keys: "cmd-t", action: "tab.new" }];
-  assert.deepEqual(hints(bound), ["cmd-shift-t: Select a task from the backlog", "cmd-shift-o: Show/hide org-tasks widget"]);
-  assert.deepEqual(hints(bound.slice(1)), ["cmd-shift-o: Show/hide org-tasks widget"]);
-  assert.deepEqual(hints([]), []);
+  assert.equal(hint(bound), "cmd-shift-t: select / cmd-shift-o: show/hide");
+  assert.equal(hint(bound.slice(1)), "cmd-shift-o: show/hide");
+  assert.equal(hint([]), null);
 });
 
 test("only changes to watched files reload", () => {

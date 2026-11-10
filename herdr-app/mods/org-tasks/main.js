@@ -4,7 +4,7 @@
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { exec, hc, home, focused, panes, spaces, theme, keys, props, settings, run, openOverlay, nextCommand, watchFolder, notify, readTextFile } from "herdr";
-import { project, settle, statusColor, countParts, hints, touches, parse, fitHeight, notInstalled } from "./state.js";
+import { project, settle, statusColor, countParts, hint, touches, parse, fitHeight, notInstalled } from "./state.js";
 
 // Layout props may name the `ot` executable and the block that holds this
 // widget (default: `org-tasks`), which it sizes to its rows. The default `ot` is
@@ -137,7 +137,7 @@ export default class OrgTasks extends View {
         div().text_color(t.muted).child(`${i ? "/ " : ""}${count}`),
         div().text_color(statusColor(t, status)).child(status),
       ]));
-    return [summary, ...hints(keys()).map(h => div().text_color(t.muted).child(h))];
+    return [summary];
   }
 
   // Size the block to the rows shown. The layout's px are at zoom 1.
@@ -151,10 +151,16 @@ export default class OrgTasks extends View {
   render() {
     const t = theme();
     const title = this.model?.title ?? "Tasks";
+    const keyHint = hint(keys());
     // The rows column keeps its natural height, so its size is what the block needs.
+    // The key hint shares the title row, right-justified, so it costs no row of
+    // its own and stays visible in every state. The title truncates first.
+    const header = h_flex().id("org-tasks-title").w_full().gap(8).text_size(11)
+      .child(div().min_w(0).flex_1().truncate().text_color(t.dim).child(title))
+      .when(keyHint !== null, el => el.child(div().id("org-tasks-hint").flex_none().text_color(t.muted).child(keyHint)));
     const rows = v_flex().id("org-tasks-rows").flex_none().w_full().gap(2)
       .on_size_change(size => this.fit(size.height))
-      .child(div().truncate().text_size(11).text_color(t.dim).child(title))
+      .child(header)
       .children(this.lines(t));
     return v_flex().id("org-tasks").size_full().px(12).py(PAD_Y).text_size(12).overflow_hidden()
       .on_click(() => this.select())
