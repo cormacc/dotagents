@@ -439,7 +439,10 @@
         ;; on the first successful call after them.
         timeouts (set (map parse-long (remove str/blank? (str/split (or (System/getenv "PROBE_TIMEOUTS") "") #","))))
         switch-at (inc (reduce max 2 timeouts))
-        snapshots (atom 0) contexts (atom []) renames (atom []) real-atomic host/atomic!]
+        ;; PROBE_ALONE_AT: from that snapshot call on, the agents' panes are
+        ;; gone and the task pane is alone in its tab.
+        alone-at (some-> (System/getenv "PROBE_ALONE_AT") not-empty parse-long)
+        snapshots (atom 0) contexts (atom []) renames (atom []) closes (atom []) real-atomic host/atomic!]
     (with-redefs [host/call! (fn [& args]
                                (case (vec (take 2 args))
                                  ["api" "snapshot"]
@@ -448,11 +451,14 @@
                                      (throw (ex-info "Herdr request timed out" {:args args :timeout true})))
                                    (when (= switch-at n)
                                      (swap! state assoc :layouts [{:tab_id tab :focused_pane_id "agent-b"}]))
+                                   (when (= alone-at n)
+                                     (swap! state update :panes (fn [ps] (filterv #(= "tasks" (:pane_id %)) ps))))
                                    {:snapshot @state})
                                  ["pane" "process-info"] {:process_info (if (= "tasks" (last args))
                                                                            {:shell_pid (.pid (java.lang.ProcessHandle/current))}
                                                                            local-info)}
-                                 ["pane" "rename"] (do (swap! renames conj (vec (drop 2 args))) {})))
+                                 ["pane" "rename"] (do (swap! renames conj (vec (drop 2 args))) {})
+                                 ["plugin" "pane"] (do (swap! closes conj (vec (drop 2 args))) {})))
                   host/herdr-config-text (constantly "[[keys.command]]\nkey = \"prefix+t\"\ncommand = \"cormacc.org-tasks.select\"\n")
                   host/state-root! (constantly root) host/identity! (constantly "fixture")
                   host/atomic! (fn [file value]
@@ -464,7 +470,8 @@
                       :directories (vec (distinct (keep :directory @contexts)))
                       :modes (set (map :mode @contexts))
                       :hints (set (map :hints @contexts))
-                      :renames @renames}))))
+                      :renames @renames
+                      :closes @closes}))))
 
 (when-let [root (System/getenv "SUPERVISOR_PROBE_ROOT")]
   (supervisor-probe root)
@@ -472,7 +479,7 @@
 
 (defn run-supervisor-probe
   "Run the probe with an `ot` child that lives `seconds`; return its report."
-  [dir seconds timeouts]
+  [dir seconds timeouts & [alone-at]]
   (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
     (fs/create-dir (str dir "/a")) (fs/create-dir (str dir "/b"))
     (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " " seconds "\n"))
@@ -481,7 +488,8 @@
     (let [proc (p/process ["bb" probe-script]
                           {:extra-env {"SUPERVISOR_PROBE_ROOT" dir "OT_HOST_DIR" private
                                        "OT_HOST_INSTANCE" instance "OT_HOST_TAB" tab
-                                       "HERDR_PANE_ID" "tasks" "PROBE_TIMEOUTS" timeouts}
+                                       "HERDR_PANE_ID" "tasks" "PROBE_TIMEOUTS" timeouts
+                                       "PROBE_ALONE_AT" (str (or alone-at ""))}
                            :out :string :err :string})
           result (deref proc 15000 nil)]
       (when-not result (p/destroy-tree proc))
@@ -504,7 +512,19 @@
        (is (= [(str dir "/a") (str dir "/b")] (:directories out)) "A first, then B after the focus change")
        (is (= #{"compact"} (:modes out)))
        (is (= #{["ctrl+b t: select"]} (:hints out)))
-       (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")))))
+       (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")
+       (is (= [] (:closes out)) "control: with other panes in the tab, the pane stays open")))))
+
+(deftest supervisor-closes-its-pane-when-alone-in-the-tab
+  ;; Herdr closes a tab with its last pane. A compact pane left alone, after
+  ;; an agent's pane closes, must close too, so the finished tab goes.
+  (temporary
+   (fn [dir]
+     (let [started (System/currentTimeMillis)
+           out (run-supervisor-probe dir 10 "" 3)]
+       (is (= [["close" "tasks"]] (:closes out)) "the supervisor closes its own pane")
+       (is (< (- (System/currentTimeMillis) started) 8000) "and ends before its ot child would")
+       (is (= [(str dir "/a")] (:directories out)) "control: the pane worked before it was alone")))))
 
 (deftest ot-resolution-prefers-the-home-skill
   (temporary

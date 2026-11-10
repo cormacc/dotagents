@@ -383,6 +383,13 @@
       (try (call! "pane" "rename" (:pane_id current) title)
            (catch Exception _ nil)))))
 
+(defn sole-pane?
+  "Is pane `id` the only pane left in `tab`? Herdr closes a tab with its last
+  pane, so a compact pane that outlives the tab's other panes would keep an
+  otherwise finished tab, such as a collected subagent's, open."
+  [snapshot tab id]
+  (= [id] (map :pane_id (filter #(= tab (:tab_id %)) (:panes snapshot)))))
+
 (defn supervise! [ot]
   (let [dir (System/getenv "OT_HOST_DIR") instance (System/getenv "OT_HOST_INSTANCE")
         tab (System/getenv "OT_HOST_TAB") id (System/getenv "HERDR_PANE_ID")
@@ -419,18 +426,28 @@
                                 (when-not (and (= (:terminal owner) (:terminal_id current)) (= tab (:tab_id current))
                                                (= instance (:instance (read-json index))))
                                   (throw (ex-info "Task pane moved or disappeared" {})))
-                                (sync-label! current)
-                                (sample! snapshot owner previous last-context pending roots hint-lines))
+                                (if (sole-pane? snapshot tab id)
+                                  ::alone
+                                  (do (sync-label! current)
+                                      (sample! snapshot owner previous last-context pending roots hint-lines))))
                               (catch clojure.lang.ExceptionInfo e
-                                (when-not (timeout? e) (throw e))))]
-                (when sampled (atomic! file (:context sampled)))
-                ;; The supervisor is alive during a retry, so its lease stays
-                ;; fresh and `ensure` does not open a second pane.
-                (atomic! owner-file (assoc owner :updatedAt (now)))
-                (Thread/sleep (max 1 (- 500 (- (now) started))))
-                (if sampled
-                  (recur (:candidate sampled) (:context sampled) (:pending sampled))
-                  (recur previous last-context pending))))))
+                                (when-not (timeout? e) (throw e))))
+                    ;; Alone in its tab: close the pane so Herdr closes the
+                    ;; tab. A timed-out close is retried at the next poll; a
+                    ;; closed pane ends the loop, and `finally` cleans up.
+                    closed (when (= ::alone sampled)
+                             (try (call! "plugin" "pane" "close" id) true
+                                  (catch clojure.lang.ExceptionInfo e
+                                    (when-not (timeout? e) (throw e)))))]
+                (when-not closed
+                  (when (map? sampled) (atomic! file (:context sampled)))
+                  ;; The supervisor is alive during a retry, so its lease stays
+                  ;; fresh and `ensure` does not open a second pane.
+                  (atomic! owner-file (assoc owner :updatedAt (now)))
+                  (Thread/sleep (max 1 (- 500 (- (now) started))))
+                  (if (map? sampled)
+                    (recur (:candidate sampled) (:context sampled) (:pending sampled))
+                    (recur previous last-context pending)))))))
         (finally
           ;; known-limit: retain private instance metadata for ownership diagnosis;
           ;; add bounded pruning if repeated reopening causes material state growth.
