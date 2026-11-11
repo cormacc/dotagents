@@ -506,6 +506,69 @@
         (is (zero? (:exit (tree! ctx "reconcile"))))
         (is (= [view-set] (requests-after ctx q)))))))
 
+(deftest failed-view-clear-is-retried-while-off
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:repo ctx))
+      (is (zero? (:exit (tree! ctx "reconcile"))))
+      (let [{:keys [exit]} (tree! ctx "toggle" {"HERDR_SOCKET_PATH" (str (fs/path (:dir ctx) "missing.sock"))})]
+        (is (= 1 exit))
+        (is (= {:view true :panes {}} (select-keys (state ctx) [:view :panes])))
+        (let [[r q] (counts ctx)
+              result (tree! ctx "reconcile")]
+          (is (zero? (:exit result)) (:err result))
+          (is (empty? (reports-after ctx r)))
+          (is (= [view-clear] (requests-after ctx q)))
+          (is (= {:view false :panes {}} (select-keys (state ctx) [:view :panes]))))))))
+
+(deftest stale-pane-alone-resends-view
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:repo ctx))
+      (set-agents! ctx (conj [(agent-row "w1:p1" (:repo ctx) "sP")
+                              (agent-row "w1:p2" (:repo ctx) "s1")
+                              (agent-row "w1:p3" (:repo ctx) "s2")]
+                             (agent-row "w1:p9" (:repo ctx) "unrelated")))
+      (is (zero? (:exit (tree! ctx "reconcile"))))
+      (let [[r q] (counts ctx)]
+        (set-agents! ctx [(agent-row "w1:p1" (:repo ctx) "sP")
+                          (agent-row "w1:p2" (:repo ctx) "s1")
+                          (agent-row "w1:p3" (:repo ctx) "s2")])
+        (is (zero? (:exit (tree! ctx "reconcile"))))
+        (is (= [(clear "w1:p9")] (reports-after ctx r)))
+        (is (= [view-set] (requests-after ctx q)))))))
+
+(deftest server-restart-reports-unchanged-panes
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:repo ctx))
+      (is (zero? (:exit (tree! ctx "reconcile"))))
+      (let [[r q] (counts ctx)
+            sock (fs/path (fs/parent (get-in ctx [:env "HERDR_SOCKET_PATH"])) "new.sock")
+            replacement (start-socket! sock)]
+        (try
+          (let [result (tree! ctx "reconcile" {"HERDR_SOCKET_PATH" (str sock)})]
+            (is (zero? (:exit result)) (:err result))
+            (is (same-calls? two-children-reports (reports-after ctx r)))
+            (is (= [view-set] @(:requests replacement)))
+            (is (empty? (requests-after ctx q))))
+          (finally ((:close replacement))))))))
+
+(deftest contender-rechecks-lock-after-marking-dirty
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:repo ctx))
+      ;; Model the holder releasing immediately after the first failed lock attempt.
+      (let [expr (str "(require '[orch-tree :as tree]) "
+                      "(let [v (ns-resolve 'orch-tree 'try-lock) original @v calls (atom 0)] "
+                      "(with-redefs-fn {v (fn [dir] (if (= 1 (swap! calls inc)) nil (original dir)))} "
+                      "(fn [] (System/exit (if (tree/reconcile!) 0 1)))))")
+            result @(process/process [bb "-e" expr] {:dir plugin :extra-env (:env ctx) :out :string :err :string})]
+        (is (zero? (:exit result)) (:err result))
+        (is (same-calls? two-children-reports (reports ctx)))
+        (is (= [view-set] @(:requests ctx)))
+        (is (not (fs/exists? (fs/path (:state ctx) "session-tree-test" "tree.dirty"))))))))
+
 (deftest git-launch-failure-warns-once
   (with-env
     (fn [ctx]
