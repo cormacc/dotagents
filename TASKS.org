@@ -271,7 +271,7 @@ Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeou
 :CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
 :CREATED: [2026-11-11 Wed 08:07]
 :STARTED: [2026-11-11 Wed 12:07]
-:HANDOFF: All 9 plan tasks DONE, committed through 5a7ba31 (05686844: hc refusal kept, see hc-new-space.md; display follow-up 166a41b8). Remaining: closeout per org-execute section 6 -- fresh independent validators, root runs cmd: evidence on the integrated tree, closure-time refresh and prune of the record, then close e9199488. Known unrelated failure: scripts/check-section-links.bb reports TASKS.org:24 TOC anchor 'link-the-running-pi-install-as-the-development-dependency' (present before 5a7ba31). Follow-up TODO ed35a3f5 (herdr-app 0.1.15 mod changes).
+:HANDOFF: Plan work committed through 1c67318: --workspace placement reverted after a complexity review (04998e9e and e41cb123 CANCELLED); hc test 05686844 DONE (hc-new-space.md); display follow-up 166a41b8. Remaining: closeout per org-execute section 6 -- fresh independent validators, root runs cmd: evidence on the integrated tree, closure-time refresh and prune of the record, then close e9199488. Known failures not caused by this work: bb test stops at scripts/test-herdr-org-tasks.bb ('Unix domain path too long' under the long macOS tmpdir; passes with -Djava.io.tmpdir=/tmp); pi/extensions/herdr-orch/test.sh fails in recovery-integration.test.ts (installed pi 1.5.2 lacks proper-lockfile at the fixture's path); check-section-links reports TASKS.org:24 TOC anchor. Follow-up TODO ed35a3f5.
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
