@@ -126,6 +126,7 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
 - `rm -rf` and a cleared `.tmp/` bypass the lock, and leave a locked registration until `oh worktree remove` or a manual unlock.
 - The mark `⑂` (U+2442) can be absent from a font. It is one constant; each sidebar task checks the rendering and may replace it with an ASCII mark.
 - The plugin and the mod run the home skill's `oh`. An older home skill does not know `--all`; the sidebars then show no worktree state.
+- `oh worktree list --all` run inside a managed checkout resolves that checkout as the assignment root and returns no entries. The plugin merges the listings of every Git root in the session, so a child gets its token only while an agent in the main checkout is listed in the same session.
 
 ** Follow-ups
 
@@ -225,7 +226,8 @@ Acceptance criteria:
 
 Extend `placement-flag` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; put the worktree check beside `assert-scoped-target!`, which runs after target resolution and before allocation. Add a `:workspace` branch to `TuiRuntime` `place!` in `skills/herdr-orch/scripts/src/herdr_orch/runtime.clj`, using the existing `herdr/workspace-create!` and a new `herdr/worktree-open!`. Closing a workspace's only pane closes the workspace, so no workspace-close call is needed. Measured behaviour: `design/log/2026-11-11-herdr-orch-worktree-integration/placement-spike.md`.
 
-** STARTED Show worktree state on Herdr TUI agent rows :herdr_tui:
+** DONE Show worktree state on Herdr TUI agent rows :herdr_tui:
+CLOSED: [2026-11-11 Wed 19:30]
 :PROPERTIES:
 :CUSTOM_ID: 0a2d0696-4378-4e46-ba78-68b95bea4a03
 :CREATED: [2026-11-11 Wed 08:10]
@@ -235,6 +237,7 @@ Extend `placement-flag` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; p
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:10]
 - State "STARTED" from "TODO" [2026-11-11 Wed 14:42]
+- State "DONE" from "STARTED" [2026-11-11 Wed 19:30]
 :END:
 Acceptance criteria:
 - For a listed agent whose session equals a listing entry's `:child-session`, the reconcile reports the token `worktree` with that entry's `:display`.
@@ -345,15 +348,19 @@ Acceptance criteria:
 
 Needs the user: run it with the user present, in the user's app or an instance that the user nominates. See `place!` and `launch!` in `skills/herdr-orch/scripts/src/herdr_orch/hc.clj` for the labels that `oh` passes today.
 
-** TODO Verify workspace placement against real Herdr :herdr_tui:
+** DONE Verify workspace placement against real Herdr :herdr_tui:
+CLOSED: [2026-11-11 Wed 19:30]
 :PROPERTIES:
 :CUSTOM_ID: e41cb123-8c16-4416-95ed-a46597965e2a
 :CREATED: [2026-11-11 Wed 10:18]
 :BLOCKED-BY: task:04998e9e-4cd0-438a-a3cd-04a196e0b32c
 :BLOCKED-BY+: task:0a2d0696-4378-4e46-ba78-68b95bea4a03
+:STARTED: [2026-11-11 Wed 18:10]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 10:18]
+- State "STARTED" from "TODO" [2026-11-11 Wed 18:10]
+- State "DONE" from "STARTED" [2026-11-11 Wed 19:30]
 :END:
 Acceptance criteria:
 - One real `oh task start --workspace --worktree new` from a Herdr TUI session shows the child's space grouped under the caller's space.
@@ -364,3 +371,12 @@ Acceptance criteria:
 `design/log/2026-11-11-herdr-orch-worktree-integration/placement-spike.md` records Herdr 0.9.5 behaviour for the create-then-open argv, `--env`, a locked checkout and closing the only pane; `cli_test.clj` proves that `oh` sends that argv.
 
 * Implementation
+
+* Validation
+
+Herdr 0.9.5, disposable session `oh-verify-e41c` started without the herdr-app variables, in this repository, which is a submodule of dotfiles. A pi agent in workspace `agents-main` (cwd the main checkout) ran `oh task start worker --workspace --worktree new`.
+
+- `oh` created workspace `worker-1-light` with its root pane cwd at the managed checkout; the ledger recorded `placement: workspace`. `workspace list` gave both workspaces `repo_key` `<dotfiles>/.git/modules/agents`, the main `is_linked_worktree: false` and the child `true`.
+- The user observed the child's space grouped under `agents-main` in the Herdr TUI Spaces list. The faulty main row of `herdr worktree list` in a submodule (`path` `.git/modules/agents`, `is_linked_worktree: true`, `open_workspace_id: null`) does not affect the grouping.
+- With the sidebar agent tree toggled on, the user observed the `⑂ +2` worktree token on the child's agent row, and the mark rendered. While the tree was off (the global setting since 2026-11-10) the token was absent, as the toggle contract requires.
+- In herdr-app, with a demonstration child, the user observed `⑂ +2 ~1` before the status mark on the orch-spaces agent row and the branch in its tooltip; `oh worktree remove` then removed that locked checkout.

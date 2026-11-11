@@ -271,7 +271,7 @@ Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeou
 :CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
 :CREATED: [2026-11-11 Wed 08:07]
 :STARTED: [2026-11-11 Wed 12:07]
-:HANDOFF: Commits through f76513c. a61d6b82 DONE (user confirmed the herdr-app row and tooltip visually with demo child 6e0989cd), uncommitted. Demo child closed; its locked checkout removed by oh worktree remove (status removed); branch orch/6e0989cd (tip c48fe57, demo files only) remains pending user approval to delete. 0a2d0696 STARTED pending Herdr TUI visual check (with e41cb123). Remaining: f92c0d67, 05686844 (user present), e41cb123 (real Herdr).
+:HANDOFF: Commits through b6cd18a; uncommitted: 0a2d0696 and e41cb123 DONE, record * Validation and a Risks bullet (listing inside a managed checkout returns no entries). Disposable session oh-verify-e41c stopped and deleted; its child closed and checkout removed. Throwaway branches orch/6e0989cd and orch/f1b9ffac await user approval to delete (orch/66182bd3, orch/6cffeb88 predate this work; not ours). Remaining: f92c0d67 (reword the Herdr draft criterion: path value is Git's own porcelain output; Herdr defects are is_linked_worktree and open_workspace_id) and 05686844 (user present).
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
