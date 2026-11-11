@@ -125,3 +125,13 @@ Run the interpreter-path and failure-control fixtures with `bb scripts/test-vali
 `scripts/check.sh` calls it in place of the previous single-skill validation, which checked only `skills/code-review` and so proved the tooling ran without covering the skill set.
 
 The Agent Skills specification defines exactly six frontmatter fields -- `name`, `description`, `license`, `compatibility`, `metadata` and `allowed-tools` -- and nominates `metadata` as the extension slot for client-specific data. Upstream `gitlab-cli-skills` adds top-level `openclaw:` and `requirements:` keys, so it warns on every run; that is upstream's non-conformance to fix, and the warning is the record of it. A hard error is the wrong severity for keys we do not own: Anthropic's own validator rejects the extension fields Claude Code documents (see anthropics/skills issue #394).
+
+## Bundled herdr-app mod recovery
+
+Recover an older herdr-app version's bundled mod source as the diff base for an `orch-spaces` review:
+
+```sh
+bb scripts/herdr-app-bundled-mod.bb <executable> '<first line of main.js>' <sha256> .tmp/spaces-old.js
+```
+
+The app embeds each bundled mod as plain text, and the installed `~/.config/herdr-app/mods/` holds only the current version's copy. The script starts at the first match of the marker and ends where the SHA-256 equals the hash recorded in `herdr-app/mods/orch-spaces/UPSTREAM.md`. It writes nothing and exits 1 when the marker is absent or no candidate matches the hash. The previous executable is available only while its Nix store path survives garbage collection. [herdr-app/README.md#Provenance and updates](../herdr-app/README.md#provenance-and-updates) gives the review procedure.

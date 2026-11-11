@@ -10,7 +10,7 @@ const space = (id, name, tabs) => ({ id, name, machine: null, active: id === "s1
 const term = (address, extra = {}) => ({ address, state: "live", parent: null, labels: {}, status: "idle", ...extra });
 const agent = (address, sp, extra = {}) => ({ address, space: sp, pane: `p-${address}`, status: "idle", focused: false, ...extra });
 
-async function app({ agents, terminals, sidebar = 268, spaceList, gitExec, ohExec }) {
+async function app({ agents, terminals, sidebar = 268, spaceList, paneList = [], gitExec, ohExec }) {
   const elements = [], runs = [], orders = [];
   const cx = { notify() {}, spawn() {}, stop_propagation() {}, timer: { every() {} } };
   function element() {
@@ -32,7 +32,7 @@ async function app({ agents, terminals, sidebar = 268, spaceList, gitExec, ohExe
     "gpui-base": { h_flex: element, v_flex: element },
     herdr: {
       spaces: () => spaceList ?? [space("s1", "alpha", [{ id: "tb1", name: "1" }, { id: "tb3", name: "notes" }]), space("s2", "beta", [{ id: "tb2", name: "1" }])],
-      machines: () => [], panes: () => [], agents: () => agents, terminals: () => terminals,
+      machines: () => [], panes: () => paneList, agents: () => agents, terminals: () => terminals,
       focused: () => ({ agent: null }), setAgentOrder: (list) => { orders.push(list); return null; },
       run: (name, args) => { runs.push([name, args]); }, openOverlay() {},
       home: () => "/home/test",
@@ -93,8 +93,8 @@ test("check identifies plain and submodule checkouts and orders their worktrees"
     ];
     const gitExec = async (_cmd, args, { cwd }) => {
       const output = args.includes("worktree") ? `worktree ${top}\0branch refs/heads/main\0\0`
-        : args.includes("status") ? "# branch.head branch\n"
-        : args.includes("--show-toplevel") ? cwd
+        : args.includes("symbolic-ref") ? "refs/heads/feature/x"
+        : args.includes("rev-list") ? "2\t1"
         : args.includes("--git-common-dir") ? common
         : args.includes("--absolute-git-dir") ? dirs[cwd]
         : null;
@@ -108,8 +108,13 @@ test("check identifies plain and submodule checkouts and orders their worktrees"
     await a.view.check(worktreeKey, a.cx);
     assert.equal(a.view.git[mainKey].linked, false, `${top} main checkout`);
     assert.equal(a.view.git[worktreeKey].linked, true, `${top} linked checkout`);
+    assert.deepEqual(plain([a.view.git[mainKey].branch, a.view.git[mainKey].ahead, a.view.git[mainKey].behind]), ["feature/x", 2, 1]);
     assert.deepEqual(plain(a.view.ordered().map(({ w, tree }) => [w.id, tree ?? null])),
       [["other", null], ["main", null], ["worktree", "└─"]]);
+    // The app's order follows the shown order; each index counts the moves before it.
+    assert.deepEqual(plain(a.runs), [["space.move", { id: "other", index: 1 }], ["space.move", { id: "main", index: 2 }]]);
+    a.view.ordered();
+    assert.equal(a.runs.length, 2, "the same pending order is not written again before it is due");
   }
 });
 
@@ -117,7 +122,7 @@ const worktreeEntry = { "pane-id": "t2", display: "⑂ +3 ~2", reconciliation: {
 const listing = (entries) => ({ code: 0, stdout: JSON.stringify({ schema: "herdr-orch/v1", ok: true, result: { entries, unledgered: [] } }) });
 const worktreeGit = async (_cmd, args) => ({ code: 0, stdout: args.includes("worktree")
   ? "worktree /main checkout\0branch refs/heads/main\0\0worktree /linked\0"
-  : args.includes("status") ? "# branch.head main\n" : "/super/.git/modules/sub\n" });
+  : args.includes("symbolic-ref") ? "refs/heads/main\n" : args.includes("rev-list") ? "0\t0\n" : "/super/.git/modules/sub\n" });
 const rowChildren = (row) => row.filter(([op]) => op === "child").map(([, child]) => child);
 const childText = (child) => child.operations?.find(([op, value]) => op === "child" && typeof value === "string")?.[1];
 
@@ -189,4 +194,16 @@ test("a tab without an agent is a row named by the tab; a click selects it", asy
   a.click(els, "tab-tb3");
   assert.deepEqual(plain(a.runs), [["tab.select", { id: "tb3" }]]);
   assert.equal(a.byId(els, "tab-tb1"), undefined, "a tab that holds an agent has no row of its own");
+});
+
+test("an unnamed tab row reads as its pane's live title, unless the title is a path or the program", async () => {
+  const shell = { name: "zsh", key: "zsh", shell: true };
+  const tabs = [{ id: "tb1", name: "1" }, { id: "ta", name: "2", named: false }, { id: "tb", name: "3", named: false },
+                { id: "tc", name: "notes", named: true }, { id: "td", name: "5", named: false }];
+  const pane = (tab, title, extra = {}) => ({ tab, terminal: `t-${tab}`, title, program: shell, focused: false, ...extra });
+  const a = await app({ ...world, spaceList: [space("s1", "alpha", tabs)],
+    paneList: [pane("ta", "✳ vim notes.md"), pane("tb", "~/dev/agents"), pane("tc", "vim todo.org"), pane("td", "zsh")] });
+  const els = a.render();
+  const label = (id) => childText(rowChildren(a.byId(els, `tab-${id}`)).at(-1));
+  assert.deepEqual(["ta", "tb", "tc", "td"].map(label), ["vim notes.md", "3", "notes", "5"]);
 });
