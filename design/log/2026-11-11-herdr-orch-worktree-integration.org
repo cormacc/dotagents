@@ -193,7 +193,8 @@ Acceptance criteria:
 
 Extend `worktree-list!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` and reuse `reconciliation`. Put the display function in `skills/herdr-orch/scripts/src/herdr_orch/core.clj` as a pure function, with the mark as one `def`. `ledger/entries` calls `ledger/ensure!`, which creates the ledger directory: do not call it on a root that has none.
 
-** STARTED Add --workspace placement for worktree children (Herdr TUI runtime) :herdr_tui:
+** DONE Add --workspace placement for worktree children (Herdr TUI runtime) :herdr_tui:
+CLOSED: [2026-11-11 Wed 15:29]
 :PROPERTIES:
 :CUSTOM_ID: 04998e9e-4cd0-438a-a3cd-04a196e0b32c
 :CREATED: [2026-11-11 Wed 08:07]
@@ -203,6 +204,7 @@ Extend `worktree-list!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` an
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
 - State "STARTED" from "TODO" [2026-11-11 Wed 14:42]
+- State "DONE" from "STARTED" [2026-11-11 Wed 15:29]
 :END:
 Acceptance criteria:
 - `oh task run|start --workspace --worktree new`, in the TUI runtime, starts the child in a new Herdr workspace whose label is the child's `oh` label.
@@ -273,15 +275,17 @@ Acceptance criteria:
 
 Edit `check` in `herdr-app/mods/orch-spaces/main.js`: the `linked` field compares the common dir with `<top>/.git`, which is wrong for a submodule. Run `bb scripts/test-herdr-app.bb`.
 
-** TODO Show worktree state on orch-spaces agent rows :herdr_app:
+** STARTED Show worktree state on orch-spaces agent rows :herdr_app:
 :PROPERTIES:
 :CUSTOM_ID: a61d6b82-5a10-4fba-9ac0-66498fec810b
 :CREATED: [2026-11-11 Wed 08:07]
 :BLOCKED-BY: task:01a472ba-9aed-4cb4-a5cd-0569ff3d3e77
 :BLOCKED-BY+: task:b24a5cfe-e85a-442f-89bd-0283dda1f314
+:STARTED: [2026-11-11 Wed 15:50]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
+- State "STARTED" from "TODO" [2026-11-11 Wed 15:50]
 :END:
 Acceptance criteria:
 - An agent row whose terminal address equals a listing entry's `:pane-id` shows that entry's `:display` before the status mark.
