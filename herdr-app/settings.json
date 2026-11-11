@@ -1,8 +1,9 @@
 {
-  "zoom": 1.0,
+  "zoom": 0.8,
   "sounds": {
     "enabled": true
   },
+  "font_ligatures": false,
   "minimum_contrast": 1.0,
   "option_as_alt": "on"
 }
