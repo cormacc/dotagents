@@ -423,8 +423,8 @@
         (when-not (every? #{:placement} (keys defaults))
           (throw (ex-info "config :defaults has unknown key" {:path path :defaults defaults})))
         (when (contains? defaults :placement)
-          (when-not (#{:split :tab :tab-split} (:placement defaults))
-            (throw (ex-info "config :defaults :placement must be :split, :tab, or :tab-split"
+          (when-not (= :tab (:placement defaults))
+            (throw (ex-info "config :defaults :placement must be :tab"
                             {:path path :placement (:placement defaults)})))))))
   config)
 ;; Parse is pure given text: `parse-config` never touches disk (file IO — `fs/exists?`,
@@ -499,14 +499,6 @@
     (some? target) {:kind :existing :path target}
     (and in-flight? (not read-only?)) {:kind :new}
     :else {:kind :shared :path source}))
-(defn resolve-placement [{:keys [flag configured below-root?]}]
-  (case flag
-    "tab" "tab"
-    "split" "split"
-    (case configured
-      :tab "tab"
-      :tab-split (if below-root? "split" "tab")
-      "split")))
 ;; Claude Code 2.1.220 accepts this file transport. Intentionally no runtime version
 ;; probe or body-text fallback: unsupported versions fail loudly at startup.
 (defn persona-args [kind path]

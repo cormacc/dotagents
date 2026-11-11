@@ -468,6 +468,7 @@
                     cli/home-directory (constantly (str dir))
                     ledger/assignment-root (constantly (str dir))
                     cli/launcher-bin (constantly launcher)
+                    cli/default-config-path (constantly (str (fs/absolutize "skills/herdr-orch/subagents/config.edn")))
                     usage/usage-for (fn [_ options]
                                       (when-not (= {:providers ["anthropic" "openai-codex"] :harness :pi} options)
                                         (throw (ex-info "UNEXPECTED USAGE REQUEST" {:options options})))

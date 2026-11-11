@@ -366,7 +366,7 @@
         (is (= {:source "packaged" :description "packaged gamma" :selected-by []}
                (select-keys (t "gamma") [:source :description :selected-by])))
         (is (some #{"sonnet"} (:aliases (first (filter #(= light (:canonical %)) models)))))
-        (is (= :tab-split (:placement defaults)))
+        (is (= :tab (:placement defaults)))
         (is (= ["project" "home" "packaged"] (mapv :source (:personas layers)) (mapv :source (:traits layers))))
         (testing "one renderer serves markdown and org"
           (let [listing (cli/roster-listing)
@@ -477,10 +477,8 @@
           (is (= (str (cli/roster-text listing "org" section false) "\n") embedded)
               (str "README.org `" section "` listing is stale; run `bb readme-roster` from the repository root")))))))
 
-;; `--split` is explicit because this test pins the split argv itself, not the shipped
-;; placement default (which is `:tab-split`, so a root spawn otherwise creates a tab).
 (deftest preflight-and-vector-argv-contract
-  (let [{:keys [env log prompt-file dir env-file]} (fake-env {}) proc (call! env "task" "run" "worker" "--split" "--task" "quotes ' newline\n $(unsafe) `unsafe`" "--timeout" "20")
+  (let [{:keys [env log prompt-file dir env-file]} (fake-env {}) proc (call! env "task" "run" "worker" "--task" "quotes ' newline\n $(unsafe) `unsafe`" "--timeout" "20")
         argv (calls log)
         injected (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
     (is (zero? (:exit proc)))
@@ -489,12 +487,9 @@
     (is (str/starts-with? (injected "HERDR_ORCH_RESULT") (str (fs/path dir ".tmp" "herdr-orch"))))
     (is (= (str dir) (injected "ORCH_ASSIGNMENT_ROOT")))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
-    (is (= ["pane" "split" "--pane" "w:p" "--direction" "right"] (subvec (vec (first (filter #(= ["pane" "split"] (vec (take 2 %))) argv))) 0 6)))
-    ;; Delegation never moves the UI: the raw `--focus` option (task af7273fd) is not
-    ;; reachable from a spawn, so the delegated split always carries `--no-focus`.
-    (let [split (vec (first (filter #(= ["pane" "split"] (vec (take 2 %))) argv)))]
-      (is (some #{"--no-focus"} split))
-      (is (not-any? #{"--focus"} split)))
+    (let [tab (vec (first (filter #(= ["tab" "create"] (vec (take 2 %))) argv)))]
+      (is (some #{"--no-focus"} tab))
+      (is (not-any? #{"--focus"} tab)))
     ;; Capture closes nothing: the pane persists until `close` or `continue` acts on it.
     (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) argv))
     (is (re-find #"(?s)\$\(unsafe\).*`unsafe`" (slurp prompt-file)))
@@ -649,12 +644,12 @@
 (deftest worktree-new-creates-one-managed-target-and-composes-with-placement
   (let [{:keys [env log dir env-file]} (fake-env {})
         before (git-worktree-list dir)
-        proc (call! env "task" "start" "worker" "--worktree" "new" "--split"
+        proc (call! env "task" "start" "worker" "--worktree" "new"
                     "--task" "explicit managed checkout")
         entry (ledger-entry* dir (get-in (result proc) [:result :task]))
         checkout (get-in entry [:worktree :path])]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= "split" (:placement entry)))
+    (is (= "tab" (:placement entry)))
     (is (= checkout (placement-cwd log)))
     (is (= (str "orch/" (subs (:task entry) 0 8)) (get-in entry [:worktree :branch])))
     (is (= (git-head dir) (get-in entry [:worktree :base])))
@@ -1058,20 +1053,18 @@
     (is (some #(= (str roster "/worker.md") %) start))
     (is (not-any? #(= (str root "/skills/herdr-orch/subagents/worker.md") %) start))))
 
-(deftest spawns-env-is-identical-for-tab-and-split-placement
-  (let [{split-env :env split-env-file :env-file} (fake-env {})
+(deftest spawns-env-is-identical-for-default-and-explicit-tab
+  (let [{default-env :env default-env-file :env-file} (fake-env {})
         {tab-env :env tab-env-file :env-file} (fake-env {})
-        split (call! split-env "task" "start" "worker" "--task" "split policy env")
+        default (call! default-env "task" "start" "worker" "--task" "default policy env")
         tab (call! tab-env "task" "start" "worker" "--tab" "--task" "tab policy env")]
-    (is (zero? (:exit split)) (:err split))
+    (is (zero? (:exit default)) (:err default))
     (is (zero? (:exit tab)) (:err tab))
-    (is (= "scout researcher advisor" (injected-env split-env-file "HERDR_ORCH_SPAWNS")))
-    (is (= (injected-env split-env-file "HERDR_ORCH_SPAWNS")
+    (is (= "scout researcher advisor" (injected-env default-env-file "HERDR_ORCH_SPAWNS")))
+    (is (= (injected-env default-env-file "HERDR_ORCH_SPAWNS")
            (injected-env tab-env-file "HERDR_ORCH_SPAWNS")))))
 
-;; `--tab` places the child in a new tab of the caller's workspace instead of a split, but
-;; every other contract (env, label, ledger, collect, closure) is identical. Delegation
-;; always creates the tab without focusing it.
+;; Delegation creates the tab without focusing it.
 (deftest tab-placement-contract
   (let [{:keys [env log env-file dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--tab" "--task" "tab placement" "--timeout" "20")
         argv (calls log)
@@ -1088,11 +1081,10 @@
     (is (some #{"--label"} tab-create))
     ;; No split command at all for a tab-placed spawn.
     (is (not-any? #(= ["pane" "split"] (vec (take 2 %))) argv))
-    ;; The rename→start→prompt flow is unchanged, against the tab's root pane, and capture
-    ;; leaves it standing exactly as it leaves a split.
+    ;; The rename→start→prompt flow uses the tab's root pane, and capture leaves it standing.
     (is (some #(= ["pane" "rename" "w:child"] (vec (take 3 %))) argv))
     (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) argv))
-    ;; Env injection is identical to a split spawn.
+    ;; Environment injection reaches the tab's root pane.
     (is (str/starts-with? (injected "HERDR_ORCH_CHILD") "worker-"))
     ;; Nothing lifecycle-related reaches the child: the waiting policy lives only on the
     ;; ledger entry, so a continued round cannot inherit a stale spawn-time value.
@@ -1103,11 +1095,7 @@
     (is (= "w:tab" (:tab-id entry)))
     (is (= "w:child" (:pane-id entry)))))
 
-;; The shipped `:defaults :placement` is `:tab-split`, so an unflagged *root* spawn takes a
-;; tab -- one tab per first-level subagent, rather than an ever-narrowing column of splits --
-;; and an unflagged *below-root* spawn still splits, keeping a nested unit together.
-;; `--split` remains the escape hatch and must issue no `tab create` at all.
-(deftest shipped-default-placement-is-tab-at-root-and-split-below
+(deftest shipped-default-placement-is-tab-at-every-depth
   (testing "root: tab"
     (let [{:keys [env log dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--task" "default placement" "--timeout" "20")
           task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
@@ -1120,26 +1108,17 @@
       (let [tab-create (first (filter #(= ["tab" "create"] (vec (take 2 %))) (calls log)))]
         (is (some #{"--no-focus"} tab-create))
         (is (not-any? #{"--focus"} tab-create)))))
-  (testing "below root: split"
+  (testing "below root: own tab"
     (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
                                            "FAKE_PARENT_LABEL" "worker-1-light"})
           proc (call! env "task" "run" "scout" "--task" "nested placement" "--timeout" "20")
           _ (is (zero? (:exit proc)) (:out proc))
           task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
-      (is (not-any? #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
-      (is (= "split" (:placement entry)))
-      (is (nil? (:tab-id entry)))
-      (is (not (contains? entry :focus)))
-      (let [split (first (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log)))]
-        (is (some #{"--no-focus"} split))
-        (is (not-any? #{"--focus"} split)))))
-  (testing "--split overrides the configured default and issues no tab command"
-    (let [{:keys [env log dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--split" "--task" "forced split" "--timeout" "20")
-          task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (not-any? #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
-      (is (= "split" (:placement entry)))
-      (is (nil? (:tab-id entry))))))
+      (is (some #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
+      (is (not-any? #(= ["pane" "split"] (vec (take 2 %))) (calls log)))
+      (is (= "tab" (:placement entry)))
+      (is (= "w:tab" (:tab-id entry)))
+      (is (not (contains? entry :focus))))))
 
 ;; `--tab` under non-blocking `start` follows the same contract: the ledger records the
 ;; tab placement immediately and a later `collect --wait` captures and closes as usual.
@@ -1155,8 +1134,7 @@
     (is (= "w:child" (:pane-id entry)))
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
-    ;; Retention is identical to a split spawn: the tab's root pane survives the capture,
-    ;; and `close` is what later takes it (Herdr closes a tab whose last pane closes).
+    ;; The tab's root pane survives capture; close removes the last pane and its tab.
     (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))
     (let [closed (call! env "task" "close" task)]
       (is (zero? (:exit closed)) (:err closed))
@@ -1277,16 +1255,15 @@
     (is (not-any? mutating? (calls log)))))
 
 (deftest placement-flags-and-preview-contract
-  (testing "--tab and --split are mutually exclusive before ledger allocation or mutation"
+  (testing "--split is refused for delegation before ledger allocation or mutation"
     (let [{:keys [env log dir]} (fake-env {})
-          proc (call! env "task" "start" "worker" "--tab" "--split" "--task" "conflicting placement")]
+          proc (call! env "task" "start" "worker" "--split" "--task" "conflicting placement")]
       (is (= 2 (:exit proc)))
-      (is (re-find #"--tab and --split are mutually exclusive" (:out proc)))
+      (is (re-find #"--split is accepted only for a measurement monitor" (:out proc)))
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log)))))
-  ;; The unflagged root row is the shipped `:tab-split` default resolving at root.
   (testing "--print-prompt reports the resolved placement"
-    (doseq [[flag expected] [[[] "tab"] [["--tab"] "tab"] [["--split"] "split"]]]
+    (doseq [[flag expected] [[[] "tab"] [["--tab"] "tab"]]]
       (let [{:keys [env]} (fake-env {})
             proc (apply call! env (concat ["task" "run" "worker"] flag ["--task" "placement preview" "--print-prompt"]))]
         (is (zero? (:exit proc)) (:err proc))
@@ -1310,10 +1287,17 @@
       (is (zero? (:exit proc)) (:err proc))
       (is (= "tab" (:placement entry)))
       (is (some #(= ["tab" "create"] (vec (take 2 %))) (calls log))))
-    (spit (str project-config) "{:defaults {:placement :tab-split}}")
-    (is (= "tab" (preview env)))
-    (is (= "split" (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
-    (is (= "split" (preview env "--split")))))
+    (doseq [placement [":split" ":tab-split"]]
+      (let [{bad-env :env bad-log :log bad-dir :dir} (fake-env {})
+            bad-config (fs/path bad-dir ".agents" "subagents" "config.edn")]
+        (fs/create-dirs (fs/parent bad-config))
+        (spit (str bad-config) (str "{:defaults {:placement " placement "}}"))
+        (let [proc (call! bad-env "task" "start" "worker" "--task" "invalid placement")]
+          (is (not (zero? (:exit proc))))
+          (is (str/includes? (:out proc) "placement must be :tab"))
+          (is (str/includes? (:out proc) (str bad-config)))
+          (is (not-any? mutating? (calls bad-log)))
+          (is (not (fs/exists? (fs/path bad-dir ".tmp" "herdr-orch" "ledger")))))))))
 
 (deftest configured-harness-extra-args-reach-agent-start
   ;; A permission bypass is opt-in configuration, never a shipped default: the same spawn
@@ -7708,11 +7692,11 @@
       (is (= 1 (:exit proc)))
       (is (re-find #"orphans is root-only" (:out proc)))
       (is (empty? (calls log)))))
-  (testing "placement is below-root (split) rather than the root tab default"
+  (testing "below-root placement is a tab"
     (let [{:keys [env]} (fake-env anonymous-caller)
           proc (call! env "task" "start" "scout" "--print-prompt" "--task" "placement")]
       (is (zero? (:exit proc)) (:out proc))
-      (is (= "split" (get-in (result proc) [:result :placement]))))))
+      (is (= "tab" (get-in (result proc) [:result :placement]))))))
 
 (deftest subject-marked-invocations-fail-before-identity-fallback
   (doseq [argv [["task" "start" "worker" "--task" "x"] ["task" "run" "--task" "x"]
@@ -9680,8 +9664,8 @@
   (testing "unnamed: renamed once, to the lowest free number"
     (doseq [[other expected] [["2" "orch-0"] ["orch-0" "orch-1"]]]
       (let [{:keys [env log dir]} (fake-env {"FAKE_OTHER_TAB_LABEL" other})
-            first-proc (call! env "task" "start" "scout" "--split" "--task" "first root spawn")
-            second-proc (call! env "task" "start" "scout" "--split" "--task" "second root spawn")
+            first-proc (call! env "task" "start" "scout" "--task" "first root spawn")
+            second-proc (call! env "task" "start" "scout" "--task" "second root spawn")
             renames (filter #(= ["tab" "rename"] (vec (take 2 %))) (calls log))]
         (is (zero? (:exit first-proc)) (:out first-proc))
         (is (zero? (:exit second-proc)) (:out second-proc))
@@ -9693,7 +9677,7 @@
         (is (not-any? #(= ["pane" "rename" "w:p"] (vec (take 3 %))) (calls log)) "the root pane keeps its name"))))
   (testing "named by the user: left alone"
     (let [{:keys [env log dir]} (fake-env {"FAKE_ROOT_TAB_LABEL" "main"})
-          proc (call! env "task" "start" "scout" "--split" "--task" "named root tab")]
+          proc (call! env "task" "start" "scout" "--task" "named root tab")]
       (is (zero? (:exit proc)) (:out proc))
       (is (not-any? #(= ["tab" "rename"] (vec (take 2 %))) (calls log)))
       (is (= "main" (get-in (ledger-entry* dir (get-in (result proc) [:result :task])) [:root-tab :name])))))

@@ -64,7 +64,7 @@
     (is (= 1 (:exit (probe (assoc env "FAKE_HC_NO_STATUS" "1") "identity"))))))
 
 (deftest hc-launch-delivers-one-native-prompt-with-flags-env-and-placement
-  (doseq [placement ["--tab" "--split"]]
+  (doseq [placement ["--tab"]]
     (let [{:keys [env log hc-log] :as fixture} (hc-env {})
           launched (start! fixture placement)
           task (:task launched)
@@ -76,7 +76,7 @@
       (is (= 1 (count runs)))
       (is (every? (set run) ["--bg" "--no-notify" "--outlive-parent" "env"]))
       (is (= "space-parent" (get-in terminal [:labels :herdr.space])))
-      (is (= (= "--split" placement) (= "tab-parent" (get-in terminal [:labels :herdr.tab]))))
+      (is (not= "tab-parent" (get-in terminal [:labels :herdr.tab])))
       (is (= (:tab-id saved) (get-in terminal [:labels :herdr.tab])))
       (is (= "t1" (:parent terminal)))
       (is (false? (:die_with_parent terminal)))
@@ -323,29 +323,28 @@
 (deftest hc-tab-child-and-root-tabs-get-names
   (let [{:keys [env] :as fixture} (hc-env {"FAKE_HERDR_APP_LOG" "/dev/null"})
         tabbed (entry fixture (:task (start! fixture "--tab")))
-        split (entry fixture (:task (start! fixture "--split")))
+        second-tab (entry fixture (:task (start! fixture "--tab")))
         names (app-names fixture)]
-    (testing "a tab child's tab carries its label; a split leaves its parent's tab alone"
+    (testing "each child's tab carries its label"
       (is (= (:label tabbed) (:tab-name tabbed) (get names (:tab-id tabbed))))
-      (is (nil? (:tab-name split)))
-      (is (nil? (:tab-name-error split))))
+      (is (= (:label second-tab) (:tab-name second-tab) (get names (:tab-id second-tab)))))
     (testing "the root's tab is named once, and the root terminal gets the same oh.label"
       (is (= "orch-0" (get names "tab-parent")))
       (is (= {:tab "tab-parent" :name "orch-0" :named-by "oh"} (:root-tab tabbed)))
-      (is (= {:tab "tab-parent" :name "orch-0" :named-by "user"} (:root-tab split)))
+      (is (= {:tab "tab-parent" :name "orch-0" :named-by "user"} (:root-tab second-tab)))
       (is (= "orch-0" (get-in (state fixture) ["t1" :labels :oh.label]))))
     (is (= 2 (count (filter #(= "run" (first %)) (cli/calls (:hc-log fixture))))))
     env))
 
 (deftest hc-root-tab-takes-the-lowest-free-number-and-keeps-a-users-name
   (let [fixture (hc-env {"FAKE_HERDR_APP_TABS" (pr-str {"tab-other" "orch-0"})})
-        saved (entry fixture (:task (start! fixture "--split")))]
+        saved (entry fixture (:task (start! fixture "--tab")))]
     (is (= "orch-1" (get-in saved [:root-tab :name])))
     (is (= "orch-1" (get (app-names fixture) "tab-parent"))))
   (let [fixture (hc-env {"FAKE_HERDR_APP_TABS" (pr-str {"tab-parent" "my work"})})
-        saved (entry fixture (:task (start! fixture "--split")))]
+        saved (entry fixture (:task (start! fixture "--tab")))]
     (is (= {:tab "tab-parent" :name "my work" :named-by "user"} (:root-tab saved)))
-    (is (empty? (app-names fixture)))
+    (is (nil? (get (app-names fixture) "tab-parent")))
     (is (nil? (get-in (state fixture) ["t1" :labels :oh.label])) "no label without a tab name from oh")))
 
 (deftest hc-tab-naming-failures-are-recorded-and-never-fail-the-spawn

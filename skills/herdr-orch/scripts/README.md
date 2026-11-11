@@ -52,7 +52,7 @@ Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, ref
 | `--spawns NAMES` / `none` | override the persona allow-list; `none` forces a leaf | [docs/contract.md#Spawn gating](docs/contract.md#spawn-gating) |
 | `--worktree <path>` / `new` | use an existing checkout or create one managed target | [docs/contract.md#Checkout target resolution](docs/contract.md#checkout-target-resolution) |
 | `--scope PATH` (repeatable) | declare a worktree round's allowed paths; reconciliation reports `:undeclared` writes without refusing them | [docs/contract.md#Worktree reconciliation and teardown](docs/contract.md#worktree-reconciliation-and-teardown) |
-| `--tab` / `--split` | force placement; the flags are mutually exclusive | [docs/contract.md#Placement](docs/contract.md#placement) |
+| `--tab` | explicitly request the default tab for a delegated child | [docs/contract.md#Placement](docs/contract.md#placement) |
 | `--context measurement --measurement-config PATH` | TUI-only: run one headless measurement sample; `--tab`/`--split` add a read-only monitor | [docs/contract.md#Measurement launch](docs/contract.md#measurement-launch) |
 | `task status [UUID]` / `task list [--include-failed] [--full]` | inspect one round or list compact rounds with counts; opt into detailed or retained failed entries | [docs/contract.md#JSON output](docs/contract.md#json-output) |
 | `task collect UUID` | capture the next published item | [docs/contract.md#Ledger and completion](docs/contract.md#ledger-and-completion) |

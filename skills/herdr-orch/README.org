@@ -252,31 +252,15 @@ Publication and capture can work without agent recognition, but never bypass a r
 
 ** Child placement
 
-=:defaults :placement= chooses where a child's pane comes from:
-
-| Value        | At root                                    | Below root (spawner has =HERDR_ORCH_PERSONA=) |
-|--------------+--------------------------------------------+-----------------------------------------------|
-| =:split=     | split the caller's pane                    | split the caller's pane                       |
-| =:tab=       | new tab in the caller's workspace or space | new tab in the caller's workspace or space    |
-| =:tab-split= | new tab                                    | split the caller's pane                       |
-
-Resolution, highest first:
-
-1. =--tab= or =--split= on =task run= or =task start= (both together fail).
-2. The merged =:defaults :placement= (project > home > packaged, merged per key).
-3. The code fallback in =resolve-placement=, which is ="split"=.
-
-=:tab-split= is the shipped default. Spawning is cheap and frequent, so first-level children accumulate fast. One tab each stays readable and recoverable, but a split for each one makes an ever-narrower column. A grandchild splits its parent's pane, so a nested unit stays together where its parent can watch it. =oh= detects depth from its own injected =HERDR_ORCH_PERSONA=, never from a label or a counter.
+Each delegated child gets a new tab in the caller's workspace or space, including below root. =:defaults :placement= accepts only =:tab=, which is also the fallback when the key is absent. =--tab= is optional.
 
 In both runtimes a child's own tab carries its label, such as =worker-1-light=. When the root first delegates, =oh= names the root's tab =orch-0= (or the next free =orch-<n>= in that workspace or space), unless someone already named it. [[file:scripts/docs/contract.md]] section 'Labels and geometry' gives the rules.
 
-The code fallback is deliberately not kept in step with the shipped value. It applies only when no config declares =:placement=, and the packaged config always does, because a missing packaged =config.edn= is fatal. In that degraded case a split stays beside the addressed parent pane. To change the product default, edit [[file:subagents/config.edn][subagents/config.edn]]. No code change is necessary.
-
-Placement is resolved for each spawn and never inherited: it is not stored per child, passed in the child's environment, or read by the child's own spawns. Both placements stay in the parent's workspace or herdr-app space and preserve focus. Children in both runtimes outlive their parent; =close= and =orphans --close= are the guarded cleanup paths. hc launch uses the environment wrapper, =--no-notify= and =--outlive-parent= specified in [[file:scripts/docs/contract.md]] section 'Start and prompt outcomes'. The ledger records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. [[file:scripts/docs/contract.md]] section 'Placement' gives the details.
+The tab stays in the parent's workspace or herdr-app space and preserves focus. Children in both runtimes outlive their parent; =close= and =orphans --close= are the guarded cleanup paths. hc launch uses the environment wrapper, =--no-notify= and =--outlive-parent= specified in [[file:scripts/docs/contract.md]] section 'Start and prompt outcomes'. The ledger records =:placement= and =:tab-id= for audit. [[file:scripts/docs/contract.md]] section 'Placement' gives the details.
 
 ** Verifying a configuration change
 
-=oh= parses and validates config before it allocates a ledger entry or touches a pane, and each failure names the file, so a bad override costs nothing billable. =:defaults= is a closed map (=:placement= only, with =:split=, =:tab=, or =:tab-split=), so a typo fails instead of being ignored.
+=oh= parses and validates config before it allocates a ledger entry or touches a pane, and each failure names the file, so a bad override costs nothing billable. =:defaults= is a closed map (=:placement= only, with =:tab=), so a typo fails instead of being ignored.
 
 Preview a spawn without running it:
 

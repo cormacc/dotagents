@@ -221,6 +221,8 @@
     (doseq [[label text message] [["non-map defaults" "{:defaults :split}" #"defaults must be a map"]
                                   ["unknown defaults key" "{:defaults {:unknown :split}}" #"defaults has unknown key"]
                                   ["unknown placement" "{:defaults {:placement :sideways}}" #"placement must be" ]
+                                  ["removed split" "{:defaults {:placement :split}}" #"placement must be :tab"]
+                                  ["removed tab-split" "{:defaults {:placement :tab-split}}" #"placement must be :tab"]
                                   ["removed focus default" "{:defaults {:focus true}}" #"defaults has unknown key"]]]
       (is (try
             (core/parse-config "/tmp/defaults.edn" text)
@@ -381,25 +383,6 @@
     (testing "a vector alias with no :providers at all fails (sparse configs only allow string aliases)"
       (is (some? (thrown {:aliases {"h" [{:model "a/b" :rank 1}]}})))
       (is (nil? (thrown {:aliases {"h" "a/b"}}))))))
-
-(deftest placement-resolution-contract
-  (testing "every flag/configuration/depth combination"
-    (doseq [[flag configured below-root? expected]
-            [[nil nil false "split"] [nil nil true "split"]
-             [nil :split false "split"] [nil :split true "split"]
-             [nil :tab false "tab"] [nil :tab true "tab"]
-             [nil :tab-split false "tab"] [nil :tab-split true "split"]
-             ["tab" nil false "tab"] ["tab" nil true "tab"]
-             ["tab" :split false "tab"] ["tab" :split true "tab"]
-             ["tab" :tab false "tab"] ["tab" :tab true "tab"]
-             ["tab" :tab-split false "tab"] ["tab" :tab-split true "tab"]
-             ["split" nil false "split"] ["split" nil true "split"]
-             ["split" :split false "split"] ["split" :split true "split"]
-             ["split" :tab false "split"] ["split" :tab true "split"]
-             ["split" :tab-split false "split"] ["split" :tab-split true "split"]]]
-      (is (= expected
-             (core/resolve-placement {:flag flag :configured configured :below-root? below-root?}))
-          (str {:flag flag :configured configured :below-root? below-root?})))))
 
 (deftest worktree-branch-naming-is-predictable
   (is (= "orch/89c7f5f6" (core/worktree-branch "89c7f5f6-cccc-dddd-eeee-000000000000")))

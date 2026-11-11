@@ -32,16 +32,12 @@
 ;; `:harnesses <kind> :providers` is the set of providers that kind can run; a kind without
 ;; it accepts every provider.
 ;;
-;; `:defaults` contains spawn defaults. `:placement` is :split, :tab, or :tab-split;
-;; :tab-split chooses tab at root and split below root. Placement is never inherited.
-;; The shipped value is :tab-split: with promiscuous spawning, one tab per first-level
-;; subagent stays reviewable and recoverable, where splitting every root child produces an
-;; ever-narrowing column, while a grandchild still splits so a nested unit reads as a unit.
+;; `:defaults :placement` is :tab. Each delegated child receives its own tab.
 ;;
 ;; Override chain (project wins): this file (default) ← ~/.agents/subagents/config.edn
 ;; ← <assignment-root>/.agents/subagents/config.edn. `:models` rows, `:harnesses`
 ;; entries and `:providers` rows replace wholesale; `:aliases` and `:defaults` merge per key.
-{:defaults {:placement :tab-split}
+{:defaults {:placement :tab}
  :harnesses {:pi     {:model-flag "--model" :effort-flag "--thinking"}
              :claude {:model-flag "--model" :effort-flag "--effort" :providers #{"anthropic"}}
              :codex  {:model-flag "--model" :effort-flag "-c model_reasoning_effort={}" :providers #{"openai-codex"}}}

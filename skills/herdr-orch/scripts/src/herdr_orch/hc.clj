@@ -91,12 +91,11 @@
     (let [parent (terminal! (System/getenv "HC_TERMINAL_ID"))
           space (get-in parent [:labels :herdr.space])
           tab (get-in parent [:labels :herdr.tab])]
-      (when-not (and (seq space) (seq tab) (#{:tab :split} mode))
+      (when-not (and (seq space) (seq tab) (= :tab mode))
         (throw (failure "missing_placement" "hc placement needs the parent's herdr.space/herdr.tab labels" {:mode mode})))
       ;; Label adoption creates the pane in this space even if another tab has focus.
-      ;; A new tab id and the parent's existing tab id select tab and split respectively.
       (assoc request :parent (:address parent) :space space
-             :tab (if (= :tab mode) (str (java.util.UUID/randomUUID)) tab)))))
+             :tab (str (java.util.UUID/randomUUID))))))
 (defn read! [target {:keys [source lines]}]
   (output/truncate-output
    (:text (invoke! (cond-> ["read" (local! target) "--json"]

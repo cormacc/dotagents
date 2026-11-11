@@ -1,7 +1,6 @@
 (ns herdr-orch.runtime
   "Terminal needs for delegation; raw TUI control is a separate, guarded escape hatch."
   (:require [herdr-orch.backend :as backend]
-            [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
             [herdr-orch.hc :as hc]))
 
@@ -10,7 +9,7 @@
   (identity! [runtime] [runtime opts]
     "Return parent identity; :local? requests only :parent-pane without a host lookup.")
   (place! [runtime request]
-    "Plan or allocate by :mode (tab/split), cwd, label and env, or prepare :target's label.
+    "Allocate a tab by cwd, label and env, or prepare :target's label.
     Return an opaque placement descriptor, with :pane_id and optional :tab-id if allocated.")
   (launch! [runtime request]
     "Start name/kind using :placement (or allocated :pane) and :native-args.
@@ -40,12 +39,10 @@
         {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent))
          :parent-kind (:agent agent) :parent-pane (:pane_id agent)
          :parent-session-kind (get-in agent [:agent_session :kind])})))
-  (place! [_ {:keys [mode target label] :as request}]
+  (place! [_ {:keys [target label] :as request}]
     (if target
       (herdr/rename! target label)
-      (case mode
-        :tab (herdr/tab-create! request)
-        :split (herdr/split! (assoc request :direction (core/direction (herdr/caller-rect!)))))))
+      (herdr/tab-create! request)))
   (launch! [_ {:keys [name kind pane native-args]}] (herdr/start! name kind pane native-args))
   (prompt-runtime! [_ target text opts]
     (if (seq opts) (herdr/prompt! target text opts) (herdr/prompt! target text)))
