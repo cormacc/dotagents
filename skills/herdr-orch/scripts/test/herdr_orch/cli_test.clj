@@ -2612,6 +2612,96 @@
     (is (not= (get-in (first (filter #(= (:task a) (:task %)) res)) [:worktree :branch])
               (get-in (first (filter #(= (:task b) (:task %)) res)) [:worktree :branch])))))
 
+(defn- ledger-bytes [dir]
+  (into {} (map (fn [path] [(str (fs/file-name path)) (vec (java.nio.file.Files/readAllBytes path))])
+                (filter fs/regular-file? (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "**")))))
+
+(deftest worktree-list-all-is-read-only-and-lists-newest-rounds-across-parents
+  (let [{:keys [env dir]} (fake-env {})
+        a (spawn-worktree! env dir "first checkout")
+        b (spawn-worktree! env dir "foreign checkout")
+        _ (patch-entry! dir b :parent-session "foreign")
+        newer (assoc a :task (str (java.util.UUID/randomUUID)) :created-at "9999-01-01T00:00:00Z")
+        _ (spit (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task newer) ".json"))) (json/generate-string newer))
+        checkout (get-in a [:worktree :path])
+        index (fs/path (str/trim (git-in! checkout "rev-parse" "--absolute-git-dir")) "index")
+        _ (git-in! dir "worktree" "unlock" checkout)
+        _ (is (.setLastModified (java.io.File. (str (fs/path checkout ".fixture-seed"))) (+ (System/currentTimeMillis) 5000)))
+        before-index (vec (java.nio.file.Files/readAllBytes index))
+        before-ledger (ledger-bytes dir)
+        before-git (git-in! dir "worktree" "list" "--porcelain")
+        proc (call! (assoc env "FAKE_FAIL_AGENT_GET" "w:p") "worktree" "list" "--all" "--format" "json")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= #{:entries :unledgered} (set (keys res))))
+    (is (= #{(:task newer) (:task b)} (set (map :task (:entries res)))))
+    (doseq [entry (:entries res)]
+      (is (= #{:task :child :pane-id :child-session :worktree :reconciliation :display} (set (keys entry))))
+      (is (= "present" (get-in entry [:reconciliation :checkout-state])))
+      (is (= "⑂" (:display entry))))
+    (is (= [] (:unledgered res)))
+    (is (= before-index (vec (java.nio.file.Files/readAllBytes index))))
+    (is (= before-ledger (ledger-bytes dir)))
+    (is (= before-git (git-in! dir "worktree" "list" "--porcelain")))
+    (let [plain (call! (assoc env "FAKE_FAIL_AGENT_GET" "w:p") "worktree" "list")]
+      (is (= 1 (:exit plain)))
+      (is (str/includes? (:out plain) "caller session is unresolvable")))
+    (is (= 1 (:exit (call! (assoc env "FAKE_FAIL_AGENT_GET" "w:p") "worktree" "remove" (:task newer)))))
+    (is (fs/exists? checkout))))
+
+(deftest worktree-list-all-reports-unledgered-managed-registrations-and-vanished-checkouts
+  (let [{:keys [env dir]} (fake-env {})
+        a (spawn-worktree! env dir "vanished checkout")
+        b (spawn-worktree! env dir "invalid checkout")
+        orphan (str (fs/path dir ".tmp" "herdr-orch" "worktrees" "unledgered"))
+        outside (str (fs/path dir "external"))]
+    (git-in! dir "worktree" "add" "--detach" orphan "HEAD")
+    (git-in! dir "worktree" "add" "--detach" outside "HEAD")
+    (fs/delete-tree (get-in a [:worktree :path]))
+    (fs/delete (fs/path (get-in b [:worktree :path]) ".git"))
+    (let [proc (call! env "worktree" "list" "--all" "--format" "json")
+          res (:result (result proc))
+          entries (into {} (map (juxt :task identity) (:entries res)))]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= [orphan] (:unledgered res)))
+      (is (= "missing" (get-in entries [(:task a) :reconciliation :checkout-state])))
+      (is (= "⑂ missing" (get-in entries [(:task a) :display])))
+      (is (= "invalid" (get-in entries [(:task b) :reconciliation :checkout-state])))
+      (is (= "⑂ invalid" (get-in entries [(:task b) :display]))))))
+
+(deftest worktree-list-all-displays-reconciled-path-counts-and-excludes-shared-rounds
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "count paths")
+        checkout (get-in entry [:worktree :path])
+        _ (patch-entry! dir entry :scope [".fixture-seed"])
+        shared (-> entry (dissoc :worktree :pane-id :child-session)
+                   (assoc :task (str (java.util.UUID/randomUUID)) :child "shared-child"))]
+    (spit (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task shared) ".json"))) (json/generate-string shared))
+    (spit (str (fs/path checkout "committed")) "committed\n")
+    (git-in! checkout "add" "committed")
+    (git-in! checkout "commit" "-qm" "committed path")
+    (spit (str (fs/path checkout "dirty")) "dirty\n")
+    (let [proc (call! env "worktree" "list" "--all" "--format" "json")
+          entries (get-in (result proc) [:result :entries])]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= [(:task entry)] (mapv :task entries)))
+      (is (= "⑂ +1 ~1 !2" (:display (first entries))))
+      (is (= ["committed" "dirty"] (get-in (first entries) [:reconciliation :undeclared]))))))
+
+(deftest worktree-list-all-without-ledger-creates-nothing
+  (let [{:keys [env dir]} (fake-env {})
+        ledger-dir (fs/path dir ".tmp" "herdr-orch" "ledger")
+        _ (is (not (fs/exists? ledger-dir)))
+        proc (call! (assoc env "FAKE_FAIL_AGENT_GET" "w:p") "worktree" "list" "--all" "--format" "json")]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= {:entries [] :unledgered []} (:result (result proc))))
+    (is (not (fs/exists? ledger-dir))))
+  (is (contains? (cli/boolean-flags-for "worktree" "list") "--all"))
+  (is (not (contains? (cli/boolean-flags-for "worktree" "remove") "--all")))
+  (is (not (contains? (cli/boolean-flags-for "task" "list") "--all")))
+  (doseq [[group op] [["worktree" "remove"] ["task" "list"]]]
+    (is (thrown? Exception (cli/option-map ["--all" "yes"] (cli/boolean-flags-for group op) cli/known-options)))))
+
 ;; Sealing (a real published terminal RESULT, via `publish-child!`) is deliberately never
 ;; paired with `task collect` in the tests below: closing a pane and tearing down its
 ;; checkout are independent actions, so every happy-path removal here seals a round

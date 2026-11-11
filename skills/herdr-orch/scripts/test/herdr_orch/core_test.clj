@@ -7,6 +7,20 @@
             [herdr-orch.ledger :as ledger]
             [herdr-orch.smoke :as smoke]))
 
+(deftest worktree-display-contract
+  (let [display (ns-resolve 'herdr-orch.core 'worktree-display)]
+    (is (some? display))
+    (when display
+      (doseq [[rec expected]
+              [[{:checkout-state "present" :committed [] :dirty [] :undeclared []} "⑂"]
+               [{:checkout-state "present" :committed ["a" "b" "c"] :dirty ["a" "d"]} "⑂ +3 ~2"]
+               [{:checkout-state "present" :committed ["a" "b" "c"] :dirty ["a" "d"] :undeclared ["d"]} "⑂ +3 ~2 !1"]
+               [{:checkout-state "present" :dirty ["a"]} "⑂ ~1"]
+               [{:checkout-state "present" :undeclared ["a"]} "⑂ !1"]
+               [{:checkout-state "missing" :committed ["a"]} "⑂ missing"]
+               [{:checkout-state "invalid"} "⑂ invalid"]]]
+        (is (= expected (display rec)))))))
+
 (deftest resolution-and-label-contract
   (let [directories (core/persona-directories "/project" "/home/u" "/installed/herdr-orch/subagents")]
     (is (= ["/project/.agents/subagents" "/home/u/.agents/subagents" "/installed/herdr-orch/subagents"] directories))

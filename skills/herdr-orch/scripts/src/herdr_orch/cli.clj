@@ -22,7 +22,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-<N> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list [--all] [--format json]\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-<N> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn usage-error [message data]
   (throw (ex-info message (assoc data :error-kind :usage))))
@@ -79,14 +79,15 @@
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (or (and (#{"tab" "ws"} group) (= "create" op))
-        (and (= "pane" group) (= "split" op))) (conj "--focus")))
+        (and (= "pane" group) (= "split" op))) (conj "--focus")
+    (and (= "worktree" group) (= "list" op)) (conj "--all")))
 (defn option-map [args flags known]
   (loop [xs args out {}]
     (if-let [x (first xs)]
       (cond (= "--" x) (assoc out :native (vec (next xs)))
             (str/starts-with? x "--")
             (let [key (keyword (subs x 2))]
-              (when-not (known key)
+              (when-not (and (known key) (or (not= key :all) (flags x)))
                 (usage-error "unknown option" {:option x}))
               (if (flags x)
                 (recur (next xs) (assoc out key true))
@@ -1096,8 +1097,12 @@
 ;; actual repository is wherever `oh` was launched from, and an `ORCH_ASSIGNMENT_ROOT`
 ;; override relocates only the ledger/RESULT/checkout *destination*, never which repository
 ;; HEAD, `status --porcelain`, and `worktree add` read from (task f49a63f5's constraint).
+;; Listing must not let Git refresh the index as a side effect of status queries.
+(def ^:dynamic *read-only-git?* false)
 (defn- git! [dir & argv]
-  (let [{:keys [exit out err]} @(process/process (into ["git"] argv) {:dir dir :out :string :err :string})]
+  (let [{:keys [exit out err]} @(process/process (into ["git"] argv)
+                                               (cond-> {:dir dir :out :string :err :string}
+                                                 *read-only-git?* (assoc :extra-env {"GIT_OPTIONAL_LOCKS" "0"})))]
     (if (zero? exit) (str/trim out)
         (fail (str "git " (str/join " " argv) " failed") {:dir dir :argv (vec argv) :exit exit :stderr (str/trim err)}))))
 (defn head-sha [dir] (git! dir "rev-parse" "HEAD"))
@@ -1204,7 +1209,9 @@
   (vec (remove str/blank? (str/split-lines (git! dir "diff" "--name-status" base tip)))))
 
 (defn- git-nul [dir & argv]
-  (let [{:keys [exit out err]} @(process/process (into ["git"] argv) {:dir dir :out :string :err :string})]
+  (let [{:keys [exit out err]} @(process/process (into ["git"] argv)
+                                               (cond-> {:dir dir :out :string :err :string}
+                                                 *read-only-git?* (assoc :extra-env {"GIT_OPTIONAL_LOCKS" "0"})))]
     (when-not (zero? exit)
       (fail "git path query failed" {:dir dir :argv argv :exit exit :stderr err}))
     (if (empty? out) [] (str/split out #"\u0000"))))
@@ -2781,15 +2788,39 @@
 ;; to surface.
 (defn- newest-entry-per-child [entries]
   (->> entries (group-by :child) vals (map last)))
-(defn worktree-list! []
-  (let [caller (or (caller-parent-session) (fail "worktree list refused: caller session is unresolvable" {}))]
-    (->> (ledger/entries)
-         newest-entry-per-child
-         (filter #(and (= caller (:parent-session %)) (:worktree %)))
-         (sort-by :created-at)
-         (mapv (fn [entry]
-                 (-> (select-keys entry [:task :child :status])
-                     (assoc :worktree (:worktree entry) :reconciliation (reconciliation entry))))))))
+(defn- unledgered-worktrees [entries]
+  (let [recorded (set (keep #(some-> (get-in % [:worktree :path]) resolve-worktree-path) entries))]
+    (->> (git-nul (source-cwd) "worktree" "list" "--porcelain" "-z")
+         (keep #(when (str/starts-with? % "worktree ") (subs % 9)))
+         (filter #(let [resolved (resolve-worktree-path %)]
+                    (and (within-managed-worktree-root? resolved) (not (recorded resolved)))))
+         sort vec)))
+
+(defn worktree-list!
+  ([] (worktree-list! {}))
+  ([opts]
+   (if (:all opts)
+     (binding [*read-only-git?* true]
+       ;; ledger/entries ensures its directory, which a read-only listing must not do.
+       (if-not (fs/directory? (ledger/directory))
+         {:entries [] :unledgered []}
+         (let [entries (ledger/entries)]
+           {:entries (->> entries newest-entry-per-child (filter :worktree) (sort-by :created-at)
+                          (mapv (fn [entry]
+                                  (let [rec (reconciliation entry)]
+                                    {:task (:task entry) :child (:child entry)
+                                     :pane-id (:pane-id entry) :child-session (:child-session entry)
+                                     :worktree (:worktree entry) :reconciliation rec
+                                     :display (core/worktree-display rec)}))))
+            :unledgered (unledgered-worktrees entries)})))
+     (let [caller (or (caller-parent-session) (fail "worktree list refused: caller session is unresolvable" {}))]
+       (->> (ledger/entries)
+            newest-entry-per-child
+            (filter #(and (= caller (:parent-session %)) (:worktree %)))
+            (sort-by :created-at)
+            (mapv (fn [entry]
+                    (-> (select-keys entry [:task :child :status])
+                        (assoc :worktree (:worktree entry) :reconciliation (reconciliation entry))))))))))
 ;; `git merge-base --is-ancestor` exits 0 (ancestor) or 1 (not); anything else -- a bad
 ;; object name, a corrupt repository -- is a real error, never silently read as "not an
 ;; ancestor".
@@ -2893,7 +2924,7 @@
   ;; this file (next to `help-text`), and this dispatcher sits beside `orphans!` above it
   ;; -- referencing it here would fail to compile as an unresolved forward reference.
   (case op
-    "list" (do (when (seq positional) (usage-error "worktree list takes no arguments" {:arguments positional})) (worktree-list!))
+    "list" (do (when (seq positional) (usage-error "worktree list takes no arguments" {:arguments positional})) (worktree-list! opts))
     "remove" (worktree-remove! (first positional))
     (usage-error "unknown worktree command" {:command op})))
 ;; --- retention ------------------------------------------------------------------------
@@ -3493,7 +3524,7 @@
            "compact <full-task-uuid>"
            "compact --closed"
            "harvest [--format json|text]"]
-   "worktree" ["list"
+   "worktree" ["list [--all] [--format json]"
                "remove <full-task-uuid>"]
    "spawn" ["spawn \"<shell command>\""]
    "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]"]

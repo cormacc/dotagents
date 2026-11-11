@@ -4,6 +4,17 @@
             [clojure.edn :as edn]
             [cheshire.core :as json]))
 
+(def worktree-mark "⑂")
+(defn worktree-display
+  "Render reconciliation as a mark and non-zero path counts, or the checkout state."
+  [{:keys [checkout-state committed dirty undeclared]}]
+  (if (#{"missing" "invalid"} checkout-state)
+    (str worktree-mark " " checkout-state)
+    (str/join " " (cons worktree-mark
+                        (keep (fn [[prefix paths]]
+                                (when (seq paths) (str prefix (count paths))))
+                              [["+" committed] ["~" dirty] ["!" undeclared]])))))
+
 (def schema "herdr-orch/v1")
 (def statuses #{"COMPLETE" "BLOCKED" "FAILED" "WAITING"})
 (def terminal-statuses #{"COMPLETE" "BLOCKED" "FAILED"})
