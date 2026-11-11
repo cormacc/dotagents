@@ -164,14 +164,18 @@ Acceptance criteria:
 
 Edit `create-worktree!`, `worktree-remove!` and `cleanup-failed-checkout!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`. `git worktree unlock` fails on an entry that is not locked, so read the `locked` line of `git worktree list --porcelain` first. Unlock only after every existing guard has passed. Tests go beside `worktree-remove-removes-the-checkout-retains-the-branch-and-reports-ancestry-as-information` in `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj`.
 
-** TODO Add oh worktree list --all, a read-only listing for UI consumers :herdr_app:herdr_tui:
+** DONE Add oh worktree list --all, a read-only listing for UI consumers :herdr_app:herdr_tui:
+CLOSED: [2026-11-11 Wed 14:41]
 :PROPERTIES:
 :CUSTOM_ID: 01a472ba-9aed-4cb4-a5cd-0569ff3d3e77
 :CREATED: [2026-11-11 Wed 08:10]
 :BLOCKED-BY: task:b06d302e-b089-4ab6-9e60-8f9db151059b
+:STARTED: [2026-11-11 Wed 14:14]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:10]
+- State "STARTED" from "TODO" [2026-11-11 Wed 14:14]
+- State "DONE" from "STARTED" [2026-11-11 Wed 14:41]
 :END:
 Acceptance criteria:
 - `oh worktree list --all --format json` exits 0 with no resolvable caller session.
@@ -189,14 +193,16 @@ Acceptance criteria:
 
 Extend `worktree-list!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` and reuse `reconciliation`. Put the display function in `skills/herdr-orch/scripts/src/herdr_orch/core.clj` as a pure function, with the mark as one `def`. `ledger/entries` calls `ledger/ensure!`, which creates the ledger directory: do not call it on a root that has none.
 
-** TODO Add --workspace placement for worktree children (Herdr TUI runtime) :herdr_tui:
+** STARTED Add --workspace placement for worktree children (Herdr TUI runtime) :herdr_tui:
 :PROPERTIES:
 :CUSTOM_ID: 04998e9e-4cd0-438a-a3cd-04a196e0b32c
 :CREATED: [2026-11-11 Wed 08:07]
 :BLOCKED-BY: task:01a472ba-9aed-4cb4-a5cd-0569ff3d3e77
+:STARTED: [2026-11-11 Wed 14:42]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
+- State "STARTED" from "TODO" [2026-11-11 Wed 14:42]
 :END:
 Acceptance criteria:
 - `oh task run|start --workspace --worktree new`, in the TUI runtime, starts the child in a new Herdr workspace whose label is the child's `oh` label.
@@ -217,14 +223,16 @@ Acceptance criteria:
 
 Extend `placement-flag` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; put the worktree check beside `assert-scoped-target!`, which runs after target resolution and before allocation. Add a `:workspace` branch to `TuiRuntime` `place!` in `skills/herdr-orch/scripts/src/herdr_orch/runtime.clj`, using the existing `herdr/workspace-create!` and a new `herdr/worktree-open!`. Closing a workspace's only pane closes the workspace, so no workspace-close call is needed. Measured behaviour: `design/log/2026-11-11-herdr-orch-worktree-integration/placement-spike.md`.
 
-** TODO Show worktree state on Herdr TUI agent rows :herdr_tui:
+** STARTED Show worktree state on Herdr TUI agent rows :herdr_tui:
 :PROPERTIES:
 :CUSTOM_ID: 0a2d0696-4378-4e46-ba78-68b95bea4a03
 :CREATED: [2026-11-11 Wed 08:10]
 :BLOCKED-BY: task:01a472ba-9aed-4cb4-a5cd-0569ff3d3e77
+:STARTED: [2026-11-11 Wed 14:42]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:10]
+- State "STARTED" from "TODO" [2026-11-11 Wed 14:42]
 :END:
 Acceptance criteria:
 - For a listed agent whose session equals a listing entry's `:child-session`, the reconcile reports the token `worktree` with that entry's `:display`.

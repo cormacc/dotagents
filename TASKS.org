@@ -271,7 +271,7 @@ Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeou
 :CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
 :CREATED: [2026-11-11 Wed 08:07]
 :STARTED: [2026-11-11 Wed 12:07]
-:HANDOFF: Batch 1 committed: 0cf8f54 (b24a5cfe orch-spaces submodule fix), d3e633e (b06d302e managed-checkout lock + stale-launch test context pin). Next: dispatch 01a472ba (oh worktree list --all) on base d3e633e; then 04998e9e and 0a2d0696 (both after 01a472ba), a61d6b82. f92c0d67 and 05686844 need the user present. Question routing: raise immediately. Artefacts: .tmp/exec-wt/.
+:HANDOFF: Committed: 0cf8f54, d3e633e, 89d95bd. 01a472ba DONE, uncommitted on shared main checkout (worker round 49cedf21 closed; root reviewed diff and live-probed: --all exit 0 without caller, ledger hashes unchanged). Next: commit 01a472ba (pending user approval), then dispatch 04998e9e (--workspace) and 0a2d0696 (TUI token); both depend only on 01a472ba and edit disjoint files (runtime/cli vs herdr/plugins). Light tier failed 3 times on 01a472ba; middle tier succeeded. f92c0d67 and 05686844 need the user present.
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
