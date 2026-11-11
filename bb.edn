@@ -55,6 +55,7 @@
                     ["scripts/test-run-trait-gate.bb"]
                     ["scripts/test-analyse-anthropic-cache-ttl.bb"]
                     ["scripts/test-check-section-links.bb"]
+                    ["scripts/test-readme-roster.bb"]
                     ["scripts/test-herdr-plugin.bb"]
                     ["scripts/test-herdr-orch-tree.bb"]
                     ["scripts/test-herdr-org-tasks.bb"]
