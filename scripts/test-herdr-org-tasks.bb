@@ -36,7 +36,10 @@
   the request lines it read. `respond` gets a line writer; the connection
   closes when `respond` returns."
   [respond f]
-  (let [dir (fs/create-temp-dir {:prefix "ot-sock-"}) ; short: the Unix socket path limit
+  ;; The Unix socket path limit (104 bytes on macOS) needs a short directory. The
+  ;; isolated `bb test` runner sets java.io.tmpdir to a long per-run root.
+  (let [dir (fs/create-temp-dir {:dir (if (fs/directory? "/tmp") "/tmp" (System/getProperty "java.io.tmpdir"))
+                                 :prefix "ot-sock-"})
         path (str dir "/h.sock")
         server (doto (java.nio.channels.ServerSocketChannel/open java.net.StandardProtocolFamily/UNIX)
                  (.bind (java.net.UnixDomainSocketAddress/of path)))
