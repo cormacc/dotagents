@@ -262,10 +262,21 @@
                 (when (= "finished" (:state terminal))
                   (throw (failure "pane_not_found" "hc terminal's program has ended" {:target target})))
                 (agent-info terminal))
+    ;; `hc ls` rows are summaries: a bare status string and no created_ms, pid or labels.
+    ;; Re-read each local program row with `hc get`, so that liveness, kind and the
+    ;; process witness come from the same shape as a single-terminal read.
     :agents (let [terminals (:terminals (invoke! ["ls" "--all"]))]
               (when-not (and (vector? terminals) (every? #(string? (:address %)) terminals))
                 (throw (failure "invalid_response" "hc ls returned an unusable terminal listing" {})))
-              (mapv agent-info (filter #(and (not (str/includes? (:address %) "/")) (kind-of %)) terminals)))
+              (into [] (comp (filter #(and (not (str/includes? (:address %) "/")) (not (str/blank? (:agent %)))))
+                             (keep #(try (terminal! (:address %))
+                                         (catch clojure.lang.ExceptionInfo e
+                                           ;; A terminal removed between ls and get is absent, not an error.
+                                           (when-not (= "pane_not_found" (get-in (ex-data e) [:response :error :code]))
+                                             (throw e)))))
+                             (filter kind-of)
+                             (map agent-info))
+                    terminals))
     :process (let [terminal (terminal! target)]
                {:shell_pid (process-witness terminal)
                 :foreground_process_group_id (when-let [pid (get-in terminal [:foreground :pid])]

@@ -127,6 +127,19 @@
         (change! fixture assoc-in [(:pane-id entry) :status :state] "idle")
         (is (= "closed" (get-in (cli/result (cli/call! env "task" "close" (:task entry))) [:result :status])))))))
 
+(deftest hc-collect-any-waits-on-working-children-listed-as-ls-summaries
+  ;; hc `ls` rows carry a bare status string, so a listing read from them alone
+  ;; found no live child and returned no-live-children while children worked.
+  (let [{:keys [env] :as fixture} (hc-env {})
+        a (start! fixture "--worktree" (str (:dir fixture)))
+        b (start! fixture "--worktree" (str (:dir fixture)))]
+    (doseq [entry [a b]]
+      (change! fixture assoc-in [(:pane-id entry) :status :state] "working"))
+    (let [collected (cli/call! env "task" "collect" "--any" "--wait" "--timeout" "1500")
+          result (:result (cli/result collected))]
+      (is (= "pending" (:status result)) (:out collected))
+      (is (= "timeout" (:reason result)) (:out collected)))))
+
 (deftest hc-blocked-send-surfaces-exit-nine-and-never-forces
   (let [{:keys [env hc-log] :as fixture} (hc-env {})
         launched (start! fixture) saved (entry fixture (:task launched))]

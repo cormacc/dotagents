@@ -27,6 +27,14 @@
       (some #(when (= target (:name %)) %) (vals @state))
       (when (= target parent) (parent-terminal))
       (fail! "not_found" 4)))
+;; hc 0.1.15 `ls` lists summary rows, not `get` terminals: `agent` names the program and
+;; `status` is the bare state string, with no `created_ms`, `pid` or `labels`.
+(defn ls-row [{:keys [address cwd name parent state status argv turn]}]
+  (cond-> {:address address :agent (or (:app status) (first argv)) :cwd cwd :state state
+           :turn (or turn 0) :where "fake / 1"}
+    name (assoc :name name)
+    parent (assoc :parent parent)
+    (:state status) (assoc :status (:state status))))
 (defn put! [terminal] (swap! state assoc (:address terminal) terminal) (save!) terminal)
 (defn option [flag] (second (drop-while #(not= flag %) argv)))
 (defn publish! [terminal]
@@ -83,7 +91,7 @@
            (publish! (find-terminal next-child))
            (swap! state update :publish-queue #(vec (rest %)))
            (save!))
-         (reply {:terminals (into [(parent-terminal)] (filter map? (vals (dissoc @state :publish-queue)))) :hidden_finished 0 :machines []}))
+         (reply {:terminals (mapv ls-row (into [(parent-terminal)] (filter map? (vals (dissoc @state :publish-queue))))) :hidden_finished 0 :machines []}))
   "kill" (let [terminal (find-terminal (second argv))
                stopped (assoc terminal :state "finished" :status nil :reason "killed" :pid nil :foreground nil)]
            (doseq [child (vals @state)
