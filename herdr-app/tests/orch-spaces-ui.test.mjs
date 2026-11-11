@@ -10,7 +10,7 @@ const space = (id, name, tabs) => ({ id, name, machine: null, active: id === "s1
 const term = (address, extra = {}) => ({ address, state: "live", parent: null, labels: {}, status: "idle", ...extra });
 const agent = (address, sp, extra = {}) => ({ address, space: sp, pane: `p-${address}`, status: "idle", focused: false, ...extra });
 
-async function app({ agents, terminals, sidebar = 268 }) {
+async function app({ agents, terminals, sidebar = 268, spaceList, gitExec }) {
   const elements = [], runs = [], orders = [];
   const cx = { notify() {}, spawn() {}, stop_propagation() {}, timer: { every() {} } };
   function element() {
@@ -31,10 +31,10 @@ async function app({ agents, terminals, sidebar = 268 }) {
     "gpui-kit": { View: class {}, div: element, svg: element, image: element },
     "gpui-base": { h_flex: element, v_flex: element },
     herdr: {
-      spaces: () => [space("s1", "alpha", [{ id: "tb1", name: "1" }, { id: "tb3", name: "notes" }]), space("s2", "beta", [{ id: "tb2", name: "1" }])],
+      spaces: () => spaceList ?? [space("s1", "alpha", [{ id: "tb1", name: "1" }, { id: "tb3", name: "notes" }]), space("s2", "beta", [{ id: "tb2", name: "1" }])],
       machines: () => [], panes: () => [], agents: () => agents, terminals: () => terminals,
       focused: () => ({ agent: null }), setAgentOrder: (list) => { orders.push(list); return null; },
-      run: (name, args) => { runs.push([name, args]); }, openOverlay() {}, exec: async () => ({ code: 128, stdout: "", stderr: "not a git repository" }),
+      run: (name, args) => { runs.push([name, args]); }, openOverlay() {}, exec: gitExec ?? (async () => ({ code: 128, stdout: "", stderr: "not a git repository" })),
       hc: async () => ({ code: 1, stdout: "", stderr: "" }), theme: () => t, shared: () => null, setShared() {},
       watchFolder: () => new Promise(() => {}), window: () => ({ active: false, platform: "macos" }),
       layout: () => ({ id: "root", children: [{ id: "sidebar", size: { px: sidebar } }] }),
@@ -62,7 +62,7 @@ async function app({ agents, terminals, sidebar = 268 }) {
   const render = () => { elements.length = 0; view.render(cx); return elements.map((e) => e.operations); };
   const byId = (els, id) => els.find((ops) => ops.some((o) => o[0] === "id" && o[1] === id));
   const click = (els, id) => byId(els, id).find((o) => o[0] === "on_click")[1](null, cx);
-  return { render, byId, click, runs, orders };
+  return { render, byId, click, runs, orders, view, cx };
 }
 
 // Values made inside the VM context are not deepStrictEqual to this realm's.
@@ -77,6 +77,36 @@ const world = {
               term("t4", { parent: "t3", labels: { "oh.label": "planner-1/scout-2-fable" } }),
               term("t5", { program: { name: "Pi" } })],
 };
+
+test("check identifies plain and submodule checkouts and orders their worktrees", async () => {
+  for (const [top, common] of [["/plain", "/plain/.git"], ["/super/sub", "/super/.git/modules/sub"]]) {
+    const worktree = `${top}-worktree`;
+    const dirs = { [top]: common, [worktree]: `${common}/worktrees/branch` };
+    const spaceList = [
+      { ...space("worktree", "worktree", []), folder: worktree },
+      { ...space("other", "other", []), folder: "/other" },
+      { ...space("main", "main", []), folder: top },
+    ];
+    const gitExec = async (_cmd, args, { cwd }) => {
+      const output = args.includes("status") ? "# branch.head branch\n"
+        : args.includes("--show-toplevel") ? cwd
+        : args.includes("--git-common-dir") ? common
+        : args.includes("--absolute-git-dir") ? dirs[cwd]
+        : null;
+      assert.notEqual(output, null, `unexpected git command: ${args}`);
+      return { code: 0, stdout: `${output}\n`, stderr: "" };
+    };
+    const a = await app({ agents: [], terminals: [], spaceList, gitExec });
+    const mainKey = JSON.stringify([null, top]);
+    const worktreeKey = JSON.stringify([null, worktree]);
+    await a.view.check(mainKey, a.cx);
+    await a.view.check(worktreeKey, a.cx);
+    assert.equal(a.view.git[mainKey].linked, false, `${top} main checkout`);
+    assert.equal(a.view.git[worktreeKey].linked, true, `${top} linked checkout`);
+    assert.deepEqual(plain(a.view.ordered().map(({ w, tree }) => [w.id, tree ?? null])),
+      [["other", null], ["main", null], ["worktree", "└─"]]);
+  }
+});
 
 test("each space is followed by its agent tree, named by the oh label", async () => {
   const a = await app(world);
