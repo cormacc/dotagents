@@ -306,17 +306,22 @@ Acceptance criteria:
 
 Edit `check` and `agentRows` in `herdr-app/mods/orch-spaces/main.js`. Use the `oh` path rule of `ohPath` in `herdr-app/mods/herdr-orch/quota-state.js`. Under the `hc` runtime a ledger `:pane-id` is the terminal address. Run `bb scripts/test-herdr-app.bb`.
 
-** TODO Draft upstream reports for submodule worktree detection (Herdr and herdr-app) :herdr_tui:herdr_app:
+** DONE Draft upstream reports for submodule worktree detection (Herdr and herdr-app) :herdr_tui:herdr_app:
+CLOSED: [2026-11-11 Wed 19:41]
 :PROPERTIES:
 :CUSTOM_ID: f92c0d67-debf-4859-989f-31c74476395f
 :CREATED: [2026-11-11 Wed 08:10]
+:STARTED: [2026-11-11 Wed 19:33]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:10]
+- State "STARTED" from "TODO" [2026-11-11 Wed 19:33]
+- State "DONE" from "STARTED" [2026-11-11 Wed 19:41]
 :END:
 Acceptance criteria:
 - `design/log/2026-11-11-herdr-orch-worktree-integration/upstream-herdr-worktree-list.md` gives the Herdr version and commands that reproduce the defect from an empty directory.
-- That draft states actual and expected values for the main-checkout row of `worktree list` in a submodule repository: `path`, `is_linked_worktree` and `open_workspace_id`.
+- That draft states actual and expected values for `is_linked_worktree` and `open_workspace_id` on the main-checkout row of `worktree list` in a submodule repository.
+- That draft reports the row's `path` (`<super>/.git/modules/<name>`) as Git's own `git worktree list --porcelain` output, and names `git rev-parse --show-toplevel` as a source of the checkout path.
 - That draft reports that `worktree open --branch main` fails with `worktree_not_found` there.
 - `design/log/2026-11-11-herdr-orch-worktree-integration/upstream-herdr-app-checkout.md` gives the herdr-app version and names the defective test: `checkout()` in the bundled `menu` mod and `check` in the bundled `spaces` mod.
 - That draft states the effects: `Remove worktree` is offered on a submodule main checkout, and worktree spaces are not nested under it.

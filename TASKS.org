@@ -271,7 +271,7 @@ Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeou
 :CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
 :CREATED: [2026-11-11 Wed 08:07]
 :STARTED: [2026-11-11 Wed 12:07]
-:HANDOFF: Commits through b6cd18a; uncommitted: 0a2d0696 and e41cb123 DONE, record * Validation and a Risks bullet (listing inside a managed checkout returns no entries). Disposable session oh-verify-e41c stopped and deleted; its child closed and checkout removed. Throwaway branches orch/6e0989cd and orch/f1b9ffac await user approval to delete (orch/66182bd3, orch/6cffeb88 predate this work; not ours). Remaining: f92c0d67 (reword the Herdr draft criterion: path value is Git's own porcelain output; Herdr defects are is_linked_worktree and open_workspace_id) and 05686844 (user present).
+:HANDOFF: All plan work committed through 082d937 (8 of 9 plan tasks DONE; no child rounds or disposable sessions open). Remaining: 05686844 (hc new-space test) -- run it from a local herdr-app session with the user present, not over a remote connection; see the task body. Then closeout per org-execute section 6: fresh independent validators, root runs cmd: evidence on the integrated tree, closure-time refresh and prune of the record, then close e9199488. Question routing: raise immediately. Scratch evidence: .tmp/exec-wt/ (gitignored, this machine only). Follow-up TODO ed35a3f5 (herdr-app 0.1.15 mod changes).
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
@@ -368,6 +368,16 @@ Acceptance criteria:
 - Record the exit status and complete failure/error summary; fix failures or create scoped follow-ups before claiming a green suite.
 
 Evidence: design/log/2026-11-05-axi-cli-guidelines.org and .tmp/routing-plan-commits-1/tree-1-portable.out.
+
+** TODO Carry herdr-app 0.1.15 bundled spaces and agents changes into orch-spaces :herdr_app:
+:PROPERTIES:
+:CUSTOM_ID: ed35a3f5-29b9-486d-9f6a-2f8a154779a1
+:CREATED: [2026-11-11 Wed 20:33]
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 20:33]
+:END:
+The installed herdr-app is 0.1.15 (found on 2026-11-11 during task f92c0d67). The SHA-256 of its bundled `spaces` mod `main.js` is `98d3f3637296f9e8aa8f19ad7b4f4b2e1375144f8e73ad53d90ebc5a438c87b8` and of its `agents` mod `main.js` is `0f013ba91718309927c009080263c7dd43c878c6ffe0ce7b5eec63b6d9e33eea`; `herdr-app/mods/orch-spaces/UPSTREAM.md` records the 0.1.10 hashes. Follow `herdr-app/README.md` (the paragraph on updating after an app upgrade): review the bundled changes, carry the relevant ones into `orch-spaces`, record the new version and hashes, and run `bb scripts/test-herdr-app.bb`. Keep the local submodule linked-checkout test and the worktree row state.
 
 * Agent feedback
 
