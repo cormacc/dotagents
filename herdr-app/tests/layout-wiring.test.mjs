@@ -28,17 +28,24 @@ function validateLayout(value) {
     assert.ok(!text.includes(`"mod":"${name}"`), `${name} is replaced by orch-spaces`);
 }
 
+// One `herdrAppLeaves` list drives both the links and the activation guard.
+function leafList(value) {
+  const block = value.match(/herdrAppLeaves = \[([\s\S]*?)\];/);
+  assert.ok(block, "herdrAppLeaves list");
+  return [...block[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+}
+
 function validateWiring(value) {
-  for (const leaf of leaves) {
-    assert.ok(value.includes(`/.config/herdr-app/${leaf}" = link "\${agentsRoot}/herdr-app/${leaf}";`), leaf);
-    assert.ok(value.includes(`check_herdr_app_leaf "\${config.home.homeDirectory}/.config/herdr-app/${leaf}" "\${agentsRoot}/herdr-app/${leaf}"`), leaf);
-  }
+  assert.deepEqual(leafList(value).toSorted(), leaves.toSorted(), "leaf list");
+  assert.ok(value.includes('herdrAppConfig = "${config.home.homeDirectory}/.config/herdr-app";'), "app config");
+  assert.match(value, /lib\.nameValuePair "\$\{herdrAppConfig\}\/\$\{leaf\}" \(link "\$\{agentsRoot\}\/herdr-app\/\$\{leaf\}"\)\)\s+herdrAppLeaves/, "leaf links");
+  assert.match(value, /check_herdr_leaf app "\$\{herdrAppConfig\}\/\$\{leaf\}" "\$\{agentsRoot\}\/herdr-app\/\$\{leaf\}"\s+''\) herdrAppLeaves/, "leaf guard");
   assert.ok(value.includes('lib.hm.dag.entryBefore [ "writeBoundary" ]'));
   // keys.json is linked on every platform, from that platform's key table.
   const keys = ['"${config.home.homeDirectory}/.config/herdr-app/keys.json"', '"${agentsRoot}/herdr-app/keys.${herdrAppKeysPlatform}.json"'];
   assert.ok(value.includes('herdrAppKeysPlatform = if pkgs.stdenv.hostPlatform.isDarwin then "darwin" else "linux";'), "keys platform");
   assert.ok(value.includes(`${keys[0]} = link ${keys[1]};`), "keys link");
-  assert.ok(value.includes(`keys=${keys[0]}`) && value.includes(`check_herdr_app_leaf "$keys" ${keys[1]}`), "keys guard");
+  assert.ok(value.includes('keys="${herdrAppConfig}/keys.json"') && value.includes(`check_herdr_leaf app "$keys" ${keys[1]}`), "keys guard");
 }
 
 test("each platform has a key table that binds the org-tasks actions", () => {
@@ -72,23 +79,24 @@ test("layout validator rejects a missing task widget", () => {
 test("parent wiring validators reject missing leaf", { skip: wiringPath === undefined }, () => {
   const wiring = readFileSync(wiringPath, "utf8");
   validateWiring(wiring);
-  assert.throws(() => validateWiring(wiring.replace('/.config/herdr-app/mods/system" = link', '/.config/herdr-app/mods/other" = link')));
+  assert.throws(() => validateWiring(wiring.replace('"mods/system"', '"mods/other"')));
+  assert.throws(() => validateWiring(wiring.replace('check_herdr_leaf app "${herdrAppConfig}/${leaf}"', 'true "${herdrAppConfig}/${leaf}"')));
   assert.throws(() => validateWiring(wiring.replace('herdr-app/keys.${herdrAppKeysPlatform}.json";', 'herdr-app/keys.json";')));
   assert.throws(() => validateWiring(wiring.replace('else "linux";', 'else "darwin";')));
 });
 
 test("collision guard rejects foreign files, directories and dangling links", { skip: wiringPath === undefined }, () => {
   const wiring = readFileSync(wiringPath, "utf8");
-  const match = wiring.match(/check_herdr_app_leaf\(\) \{([\s\S]*?)\n        \}/);
+  const match = wiring.match(/check_herdr_leaf\(\) \{([\s\S]*?)\n        \}/);
   assert.ok(match);
   const dir = mkdtempSync(resolve(".tmp/herdr-leaves-"));
-  const fn = `check_herdr_app_leaf() {${match[1]}\n}`
+  const fn = `check_herdr_leaf() {${match[1]}\n}`
     .replaceAll('${pkgs.coreutils}/bin/readlink', 'readlink')
     .replaceAll('${builtins.storeDir}', dir);
   try {
     const source = join(dir, "source"), target = join(dir, "target");
     writeFileSync(source, "same");
-    const check = () => spawnSync("bash", ["-c", `${fn}\ncheck_herdr_app_leaf "$1" "$2"`, "guard", target, source], { encoding: "utf8" });
+    const check = () => spawnSync("bash", ["-c", `${fn}\ncheck_herdr_leaf app "$1" "$2"`, "guard", target, source], { encoding: "utf8" });
     assert.equal(check().status, 0);
     writeFileSync(target, "same");
     assert.equal(check().status, 1);
@@ -109,16 +117,16 @@ test("collision guard rejects foreign files, directories and dangling links", { 
     assert.equal(check().status, 0);
     const alias = join(dir, "alias");
     symlinkSync(dir, alias);
-    assert.equal(spawnSync("bash", ["-c", `${fn}\ncheck_herdr_app_leaf "$1" "$2"`, "guard", target, join(alias, "source")]).status, 0);
+    assert.equal(spawnSync("bash", ["-c", `${fn}\ncheck_herdr_leaf app "$1" "$2"`, "guard", target, join(alias, "source")]).status, 0);
     for (const failedPath of [target, source]) {
       for (const outcome of ["return 1", "return 0"]) {
         const override = `readlink() { if [ "$1" = -f ] && [ "$2" = "$FAIL_PATH" ]; then ${outcome}; fi; command readlink "$@"; }`;
-        assert.equal(spawnSync("bash", ["-c", `${override}\n${fn}\ncheck_herdr_app_leaf "$1" "$2"`, "guard", target, source], { env: { ...process.env, FAIL_PATH: failedPath } }).status, 1);
+        assert.equal(spawnSync("bash", ["-c", `${override}\n${fn}\ncheck_herdr_leaf app "$1" "$2"`, "guard", target, source], { env: { ...process.env, FAIL_PATH: failedPath } }).status, 1);
       }
     }
     rmSync(source);
     assert.equal(check().status, 1);
-    assert.equal(spawnSync("bash", ["-c", `${fn}\ncheck_herdr_app_leaf "$1" "$2"`, "guard", target, ""]).status, 1);
+    assert.equal(spawnSync("bash", ["-c", `${fn}\ncheck_herdr_leaf app "$1" "$2"`, "guard", target, ""]).status, 1);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
