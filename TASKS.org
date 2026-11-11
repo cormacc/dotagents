@@ -270,7 +270,8 @@ The terminal plugin and the herdr-app widget were checked live on macOS only (20
 :END:
 The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tree.org]]) was checked live on macOS only (2026-11-08, plan task 076c6a03). On xps15, repeat that live check in a scratch session: marks and the U+2800 depth-2 indent, next/previous order, child close, `prefix+ctrl+t` toggle, and the startup hook after a scratch-session restart. Check the per-session state key (`HERDR_SESSION`) and the `server` identity in `tree-state.json`, which uses the socket file creation time (unverified on Linux).
 
-** STARTED Cover the untested herdr-orch sidebar tree reconcile paths
+** DONE Cover the untested herdr-orch sidebar tree reconcile paths
+CLOSED: [2026-11-11 Wed 23:05]
 :PROPERTIES:
 :CUSTOM_ID: bfcb1bef-7282-4ae9-a65a-16db734a026c
 :CREATED: [2026-11-08 Sun 15:31]
@@ -279,8 +280,11 @@ The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tr
 :LOGBOOK:
 - Created [2026-11-08 Sun 15:31]
 - State "STARTED" from "TODO" [2026-11-11 Wed 22:49]
+- State "DONE" from "STARTED" [2026-11-11 Wed 23:05]
 :END:
 Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeout reviews of task 9777d1ec found untested ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Risks): the retry of a failed `agent.view.clear` by the next off reconcile (mutants in `orch_tree.clj` `reconcile-once!` and `reset-once!` survived the runner), a view re-send caused only by a stale-pane clear, and the contended-branch dirty re-check in `reconcile!`. Also: nothing tests `server-id` (the re-report after a server restart; a constant body leaves the runner green), and the simplification review proposed replacing it by treating `HERDR_PLUGIN_EVENT` = `startup` as a fresh run, with a test; and the off path's `(or (seq (:panes old)) (:view old))` survives an `off-panes-only` mutant.
+
+Outcome [2026-11-11 Wed]: commit 9dd56a1 adds four runner cases (failed view-clear retry while off, stale-pane-only view re-send, server restart through a replacement socket, contended-lock re-check). The worker reports that each of five production mutants turns the runner red; the constant `server-id` mutant was re-checked by the root (2 failures). The `HERDR_PLUGIN_EVENT` = `startup` simplification was not done: it is unproven for concurrent hooks or a missed startup event. A live server restart and Linux remain with task cbbdb783.
 
 ** STARTED herdr-orch: remove split placement for delegated children :herdr_orch:
 :PROPERTIES:
