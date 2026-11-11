@@ -275,7 +275,8 @@ Acceptance criteria:
 
 Edit `check` in `herdr-app/mods/orch-spaces/main.js`: the `linked` field compares the common dir with `<top>/.git`, which is wrong for a submodule. Run `bb scripts/test-herdr-app.bb`.
 
-** STARTED Show worktree state on orch-spaces agent rows :herdr_app:
+** DONE Show worktree state on orch-spaces agent rows :herdr_app:
+CLOSED: [2026-11-11 Wed 16:34]
 :PROPERTIES:
 :CUSTOM_ID: a61d6b82-5a10-4fba-9ac0-66498fec810b
 :CREATED: [2026-11-11 Wed 08:07]
@@ -286,6 +287,7 @@ Edit `check` in `herdr-app/mods/orch-spaces/main.js`: the `linked` field compare
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
 - State "STARTED" from "TODO" [2026-11-11 Wed 15:50]
+- State "DONE" from "STARTED" [2026-11-11 Wed 16:34]
 :END:
 Acceptance criteria:
 - An agent row whose terminal address equals a listing entry's `:pane-id` shows that entry's `:display` before the status mark.

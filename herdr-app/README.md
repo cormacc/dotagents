@@ -38,6 +38,7 @@ The `orch-spaces` block replaces the bundled Spaces and Agents lists. It starts 
 - Tree :: an agent is shown under the terminal that started it while that terminal is live, else under its space. A sub-agent that has its own pane is shown once, under its parent.
 - Tabs :: a tab that holds no agent is a row at the root of its space, beside the agents, in tab order. Its name is the tab name (its number when nobody named it). A tab that holds only a sub-agent shows through that sub-agent, under its parent.
 - Name :: the `oh.label` that `oh` gives an agent it starts (`planner-1-heavy`, nested `planner-1/scout-2-fable`), else the terminal's name, else the program's name.
+- Worktree :: a managed child's agent row shows the `oh worktree list --all --format json` display string (for example `⑂ +3 ~2`) before its status mark. The tooltip adds the branch to the agent name; the row shows counts, not the branch. The mod runs the home skill's `oh` from the main checkout on the existing Git refresh triggers, with no extra timer. A failed listing (including an older home skill without `--all`) clears the worktree state and leaves the tree visible. The mod does not write the ledger or remove or unlock checkouts.
 - Click :: an agent with a pane gets focus; one without a pane opens in a peek; a tab row selects that tab.
 - Order :: `agent.next` and `agent.prev` follow the list as shown.
 - Rail :: the narrow sidebar shows spaces only, with the control that widens it again.

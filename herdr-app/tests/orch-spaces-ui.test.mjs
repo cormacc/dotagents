@@ -10,7 +10,7 @@ const space = (id, name, tabs) => ({ id, name, machine: null, active: id === "s1
 const term = (address, extra = {}) => ({ address, state: "live", parent: null, labels: {}, status: "idle", ...extra });
 const agent = (address, sp, extra = {}) => ({ address, space: sp, pane: `p-${address}`, status: "idle", focused: false, ...extra });
 
-async function app({ agents, terminals, sidebar = 268, spaceList, gitExec }) {
+async function app({ agents, terminals, sidebar = 268, spaceList, gitExec, ohExec }) {
   const elements = [], runs = [], orders = [];
   const cx = { notify() {}, spawn() {}, stop_propagation() {}, timer: { every() {} } };
   function element() {
@@ -34,7 +34,11 @@ async function app({ agents, terminals, sidebar = 268, spaceList, gitExec }) {
       spaces: () => spaceList ?? [space("s1", "alpha", [{ id: "tb1", name: "1" }, { id: "tb3", name: "notes" }]), space("s2", "beta", [{ id: "tb2", name: "1" }])],
       machines: () => [], panes: () => [], agents: () => agents, terminals: () => terminals,
       focused: () => ({ agent: null }), setAgentOrder: (list) => { orders.push(list); return null; },
-      run: (name, args) => { runs.push([name, args]); }, openOverlay() {}, exec: gitExec ?? (async () => ({ code: 128, stdout: "", stderr: "not a git repository" })),
+      run: (name, args) => { runs.push([name, args]); }, openOverlay() {},
+      home: () => "/home/test",
+      exec: (cmd, args, options) => cmd === "git"
+        ? (gitExec ?? (async () => ({ code: 128, stdout: "", stderr: "not a git repository" })))(cmd, args, options)
+        : (ohExec ?? (async () => ({ code: 1, stdout: "", stderr: "unavailable" })))(cmd, args, options),
       hc: async () => ({ code: 1, stdout: "", stderr: "" }), theme: () => t, shared: () => null, setShared() {},
       watchFolder: () => new Promise(() => {}), window: () => ({ active: false, platform: "macos" }),
       layout: () => ({ id: "root", children: [{ id: "sidebar", size: { px: sidebar } }] }),
@@ -88,7 +92,8 @@ test("check identifies plain and submodule checkouts and orders their worktrees"
       { ...space("main", "main", []), folder: top },
     ];
     const gitExec = async (_cmd, args, { cwd }) => {
-      const output = args.includes("status") ? "# branch.head branch\n"
+      const output = args.includes("worktree") ? `worktree ${top}\0branch refs/heads/main\0\0`
+        : args.includes("status") ? "# branch.head branch\n"
         : args.includes("--show-toplevel") ? cwd
         : args.includes("--git-common-dir") ? common
         : args.includes("--absolute-git-dir") ? dirs[cwd]
@@ -106,6 +111,50 @@ test("check identifies plain and submodule checkouts and orders their worktrees"
     assert.deepEqual(plain(a.view.ordered().map(({ w, tree }) => [w.id, tree ?? null])),
       [["other", null], ["main", null], ["worktree", "└─"]]);
   }
+});
+
+const worktreeEntry = { "pane-id": "t2", display: "⑂ +3 ~2", reconciliation: { branch: "orch/example" } };
+const listing = (entries) => ({ code: 0, stdout: JSON.stringify({ schema: "herdr-orch/v1", ok: true, result: { entries, unledgered: [] } }) });
+const worktreeGit = async (_cmd, args) => ({ code: 0, stdout: args.includes("worktree")
+  ? "worktree /main checkout\0branch refs/heads/main\0\0worktree /linked\0"
+  : args.includes("status") ? "# branch.head main\n" : "/super/.git/modules/sub\n" });
+const rowChildren = (row) => row.filter(([op]) => op === "child").map(([, child]) => child);
+const childText = (child) => child.operations?.find(([op, value]) => op === "child" && typeof value === "string")?.[1];
+
+test("managed agent rows show the listing display before status and add the branch only to the tooltip", async () => {
+  const calls = [];
+  const a = await app({ ...world, gitExec: worktreeGit, ohExec: async (...args) => { calls.push(args); return listing([worktreeEntry]); } });
+  await a.view.check(JSON.stringify([null, "/linked"]), a.cx);
+  assert.deepEqual(plain(calls), [["/home/test/.agents/skills/herdr-orch/scripts/oh", ["worktree", "list", "--all", "--format", "json"], { cwd: "/main checkout", on: null }]]);
+  const els = a.render();
+  const match = a.byId(els, "agent-t2");
+  assert.equal(match.find(([op]) => op === "tooltip")[1], "reviewer-9-astra\norch/example");
+  const children = rowChildren(match);
+  assert.equal(childText(children.at(-2)), "⑂ +3 ~2", "display is immediately before status");
+  assert.ok(!words(els).includes("orch/example"), "branch is not row text");
+  const unmatched = a.byId(els, "agent-t3");
+  assert.equal(unmatched.find(([op]) => op === "tooltip")[1], "planner-1-heavy");
+  assert.ok(!rowChildren(unmatched).some((c) => childText(c)?.includes("⑂")));
+  assert.deepEqual(plain(a.orders.at(-1)), ["t1", "t2", "t3", "t4", "t5"]);
+});
+
+for (const [failure, response] of [
+  ["non-zero exit", () => ({ code: 1, stdout: "unsupported --all" })],
+  ["missing executable", () => { throw new Error("not found"); }],
+  ["ok:false envelope", () => ({ code: 0, stdout: JSON.stringify({ schema: "herdr-orch/v1", ok: false, result: { entries: [worktreeEntry] } }) })],
+  ["malformed JSON", () => ({ code: 0, stdout: "not JSON" })],
+]) test(`a failed worktree listing (${failure}) clears old state but keeps the tree`, async () => {
+  let result = () => listing([worktreeEntry]);
+  const a = await app({ ...world, gitExec: worktreeGit, ohExec: async () => result() });
+  const key = JSON.stringify([null, "/linked"]);
+  await a.view.check(key, a.cx);
+  assert.ok(words(a.render()).includes("⑂ +3 ~2"), "successful snapshot control");
+  result = response;
+  await a.view.check(key, a.cx);
+  const els = a.render();
+  assert.ok(!words(els).includes("⑂ +3 ~2"));
+  assert.equal(a.byId(els, "agent-t2").find(([op]) => op === "tooltip")[1], "reviewer-9-astra");
+  assert.deepEqual(plain(a.orders.at(-1)), ["t1", "t2", "t3", "t4", "t5"]);
 });
 
 test("each space is followed by its agent tree, named by the oh label", async () => {

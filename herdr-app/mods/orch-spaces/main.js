@@ -8,7 +8,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { spaces, machines, panes, agents, terminals, focused, setAgentOrder, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout } from "herdr";
+import { spaces, machines, panes, agents, terminals, focused, setAgentOrder, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, home } from "herdr";
 import { spaceTree, agentName, agentStatus } from "./tree.js";
 
 function find(node, id) {
@@ -68,6 +68,7 @@ export function tone(t, status) {
 export default class Spaces extends View {
   init(_props, cx) {
     this.git = {}; // where() -> { name, branch, ahead, behind, repo, linked }, null: not a repo
+    this.worktrees = {}; // repo -> listing entries
     this.checked = {}; // where() -> when it was last looked at
     this.unsure = new Set(); // where()s git couldn't answer for (a machine away)
     this.pending = new Set(); // where()s to look at next
@@ -195,6 +196,21 @@ export default class Spaces extends View {
       }
       this.git[key] = info;
       if (!on) this.watch(repo, cx);
+      try {
+        // Git lists the main checkout first, including for a submodule repository.
+        const trees = await exec("git", ["worktree", "list", "--porcelain", "-z"], { cwd, on });
+        if (trees.code !== 0 || !trees.stdout.startsWith("worktree ")) throw new Error("No main checkout");
+        const main = trees.stdout.split("\0")[0].slice(9);
+        const result = await exec(home() + "/.agents/skills/herdr-orch/scripts/oh",
+          ["worktree", "list", "--all", "--format", "json"], { cwd: main, on });
+        if (result.code !== 0) throw new Error("Worktree listing failed");
+        const data = JSON.parse(result.stdout);
+        if (data?.schema !== "herdr-orch/v1" || data.ok !== true || !Array.isArray(data.result?.entries)) throw new Error("Invalid worktree listing");
+        this.worktrees[info.repo] = data.result.entries;
+      } catch {
+        // An older or unavailable home skill must not hide the tree or retain counts.
+        this.worktrees = {};
+      }
     } catch {
       // Couldn't ask (the machine is away): keep what it showed, look again later.
       this.git[key] ??= null;
@@ -393,6 +409,8 @@ export default class Spaces extends View {
       this.order.push(k.address);
       const on = k.address === this.current;
       const pic = icon(k.program, 14, t.foreground);
+      const entry = Object.values(this.worktrees).flat().find(e => e?.["pane-id"] === k.address && typeof e.display === "string" && e.display);
+      const branch = entry?.reconciliation?.branch;
       return h_flex()
         .id(`agent-${k.address}`)
         .pl(tree ? 39 : 17)
@@ -404,11 +422,12 @@ export default class Spaces extends View {
         .text_size(12.5)
         .when(on, (el) => el.bg(t.raised))
         .hover((s) => s.bg(t.hover))
-        .tooltip(agentName(k))
+        .tooltip(branch ? `${agentName(k)}\n${branch}` : agentName(k))
         .on_click(() => (pane ? run("pane.focus", { pane }) : run("terminal.peek", { terminal: k.address })))
         .children(this.marks(lines, t))
         .when(Boolean(pic), (el) => el.child(div().mr(8).child(pic)))
         .child(div().flex_1().truncate().text_color(on ? t.foreground : t.muted).child(agentName(k)))
+        .when(Boolean(entry), el => el.child(div().flex_none().mx(5).text_size(11.5).text_color(t.dim).child(entry.display)))
         .child(this.status(t, agentStatus(k, this.listed)));
     });
   }
