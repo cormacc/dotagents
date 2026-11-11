@@ -271,7 +271,7 @@ Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeou
 :CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
 :CREATED: [2026-11-11 Wed 08:07]
 :STARTED: [2026-11-11 Wed 12:07]
-:HANDOFF: All plan work committed through 082d937 (8 of 9 plan tasks DONE; no child rounds or disposable sessions open). Remaining: 05686844 (hc new-space test) -- run it from a local herdr-app session with the user present, not over a remote connection; see the task body. Then closeout per org-execute section 6: fresh independent validators, root runs cmd: evidence on the integrated tree, closure-time refresh and prune of the record, then close e9199488. Question routing: raise immediately. Scratch evidence: .tmp/exec-wt/ (gitignored, this machine only). Follow-up TODO ed35a3f5 (herdr-app 0.1.15 mod changes).
+:HANDOFF: All 9 plan tasks DONE, committed through 5a7ba31 (05686844: hc refusal kept, see hc-new-space.md; display follow-up 166a41b8). Remaining: closeout per org-execute section 6 -- fresh independent validators, root runs cmd: evidence on the integrated tree, closure-time refresh and prune of the record, then close e9199488. Known unrelated failure: scripts/check-section-links.bb reports TASKS.org:24 TOC anchor 'link-the-running-pi-install-as-the-development-dependency' (present before 5a7ba31). Follow-up TODO ed35a3f5 (herdr-app 0.1.15 mod changes).
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
