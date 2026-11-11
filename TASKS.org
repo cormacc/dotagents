@@ -446,7 +446,8 @@ Evidence:
 #+IMPORT: [[plan:2026-11-04-trigger-eval-isolation.org]]
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
 
-** STARTED Make roster regeneration replace complete mixed-format results :skill:herdr_orch:
+** DONE Make roster regeneration replace complete mixed-format results :skill:herdr_orch:
+CLOSED: [2026-11-11 Wed 23:10]
 :PROPERTIES:
 :CUSTOM_ID: fbf2c697-64a5-4d8d-94d7-1cd8377d9cfb
 :CREATED: [2026-11-05 Thu 01:45]
@@ -455,6 +456,7 @@ With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one
 :LOGBOOK:
 - Created [2026-11-05 Thu 01:45]
 - State "STARTED" from "TODO" [2026-11-11 Wed 22:49]
+- State "DONE" from "STARTED" [2026-11-11 Wed 23:10]
 :END:
 Make bb readme-roster idempotent for model results containing an Org table followed by ranked-alias paragraphs and lists. Preserve the whole generated result boundary instead of replacing only the table.
 
@@ -471,3 +473,5 @@ Acceptance criteria:
 - Two consecutive regeneration runs leave the README byte-identical after the first run.
 - A configuration change replaces the old ranked aliases instead of appending another list.
 - Maintainer instructions use the supported regeneration path without manual result edits.
+
+Outcome [2026-11-11 Wed]: commit 4fbf768 had already wrapped the roster results in `:results output drawer replace`, which makes the whole mixed output one replaceable result. Commit ad81791 adds scripts/test-readme-roster.bb to `bb test`: it runs `bb readme-roster` four times in a disposable copy, with a ranked-alias change, and checks byte-identical reruns and one ranked list. It skips when Emacs is absent, and it depends on the current packaged `heavy` ranks.
