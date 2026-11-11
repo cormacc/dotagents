@@ -24,7 +24,7 @@ The `herdr.space` and `herdr.tab` values were new ids in the app's `sp`/`tb` + 3
 
 ## Decision
 
-Keep the refusal of `--workspace` under the hc runtime. Under hc, a new space adds a top-level row, does not nest, and does not move the child's agent row. It also exposes the child to herdr-app's `Remove worktree`, which calls `space.close` before Git refuses a locked removal. The user chose to avoid complexity for display only. A backlog task covers a tree view of the current delegation through the `oh` CLI, or better names in the Herdr views. No investigation of the nesting failure is planned.
+No workspace placement under the hc runtime. Under hc, a new space adds a top-level row, does not nest, and does not move the child's agent row. It also exposes the child to herdr-app's `Remove worktree`, which calls `space.close` before Git refuses a locked removal. The user chose to avoid complexity for display only, and a later review removed `--workspace` from the Herdr TUI runtime too, so no refusal remains. A backlog task covers a tree view of the current delegation through the `oh` CLI, or better names in the Herdr views. No investigation of the nesting failure is planned.
 
 ## Cleanup
 

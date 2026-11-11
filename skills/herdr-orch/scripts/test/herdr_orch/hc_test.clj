@@ -44,16 +44,6 @@
              "\nRESULT: " (:result entry) "\nWORK-ROOT: " (:work-root entry)
              "\nSTATUS: COMPLETE\nSUMMARY: fixture publication\nARTIFACTS:\n- none\nFINDINGS:\n- none\nNEXT: none\n--- END HERDR RESULT ---\n")))
 
-(deftest hc-workspace-placement-refuses-before-allocation
-  (doseq [args [[] ["--worktree" "new"] ["--print-prompt"]]]
-    (let [{:keys [env dir hc-log]} (hc-env {})
-          proc (apply cli/call! env "task" "start" "scout" "--task" "unsupported" (concat args ["--workspace"]))]
-      (is (= 2 (:exit proc)) (:out proc))
-      (is (str/includes? (:out proc) "hc runtime does not support"))
-      (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger"))))
-      (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/worktrees"))))
-      (is (not-any? #(= "run" (first %)) (cli/calls hc-log))))))
-
 (deftest hc-runtime-protocol-observes-local-identity-and-errors
   (let [{:keys [env session] :as fixture} (hc-env {})
         identity (probe env "identity")]

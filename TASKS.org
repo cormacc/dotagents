@@ -308,7 +308,7 @@ Reopens the parent-owned-integration decision of `design/log/2026-08-13-herdr-or
 :LOGBOOK:
 - Created [2026-11-11 Wed 20:54]
 :END:
-Give a user one view of the current delegation tree (parent, children, persona, status, worktree state) that does not depend on sidebar nesting. Options (not ranked): better `oh.label` and space/tab names, so that the existing Herdr TUI and herdr-app views already read correctly; or an `oh` CLI command (for example a tree renderer that a Herdr or herdr-app popup can run). Constraint: minimise complexity for display only; do not change bundled herdr-app mods, and do not add workspace placement under hc. Origin: the hc new-space test ([[proj:design/log/2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]) showed that a space from `hc run` labels does not nest under the main checkout, and the child agent row stays under its parent space.
+Give a user one view of the current delegation tree (parent, children, persona, status, worktree state) that does not depend on sidebar nesting. Options (not ranked): better `oh.label` and space/tab names, so that the existing Herdr TUI and herdr-app views already read correctly; or an `oh` CLI command (for example a tree renderer that a Herdr or herdr-app popup can run). Constraint: minimise complexity for display only; do not change bundled herdr-app mods, and do not add workspace placement. Origin: the hc new-space test ([[proj:design/log/2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]) showed that a space from `hc run` labels does not nest under the main checkout, and the child agent row stays under its parent space.
 
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:

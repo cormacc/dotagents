@@ -10,7 +10,7 @@
   (identity! [runtime] [runtime opts]
     "Return parent identity; :local? requests only :parent-pane without a host lookup.")
   (place! [runtime request]
-    "Plan or allocate by :mode (tab/split/workspace), cwd, label and env, or prepare :target's label.
+    "Plan or allocate by :mode (tab/split), cwd, label and env, or prepare :target's label.
     Return an opaque placement descriptor, with :pane_id and optional :tab-id if allocated.")
   (launch! [runtime request]
     "Start name/kind using :placement (or allocated :pane) and :native-args.
@@ -42,15 +42,6 @@
       (herdr/rename! target label)
       (case mode
         :tab (herdr/tab-create! request)
-        :workspace (let [created (herdr/workspace-create! request)
-                         pane (assoc (:root_pane created) :tab-id (get-in created [:tab :tab_id]))]
-                     (try
-                       (herdr/worktree-open! request)
-                       pane
-                       (catch Exception e
-                         (throw (ex-info (ex-message e)
-                                         (assoc (ex-data e) :pane-id (:pane_id pane) :tab-id (:tab-id pane))
-                                         e)))))
         :split (herdr/split! (assoc request :direction (core/direction (herdr/caller-rect!)))))))
   (launch! [_ {:keys [name kind pane native-args]}] (herdr/start! name kind pane native-args))
   (prompt-runtime! [_ target text opts]
@@ -75,10 +66,7 @@
   (preflight-runtime! [_] (hc/preflight!))
   (identity! [_] (hc/identity!))
   (identity! [_ opts] (hc/identity! opts))
-  (place! [_ request]
-    (when (= :workspace (:mode request))
-      (throw (ex-info "the hc runtime does not support workspace placement" {:kind :environment})))
-    (hc/place! request))
+  (place! [_ request] (hc/place! request))
   (launch! [_ request] (hc/launch! request))
   (prompt-runtime! [_ target text opts] (hc/prompt! target text opts))
   (wait-runtime! [_ target timeout until] (hc/wait! target timeout until))

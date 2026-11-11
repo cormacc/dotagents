@@ -52,7 +52,7 @@ Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, ref
 | `--spawns NAMES` / `none` | override the persona allow-list; `none` forces a leaf | [docs/contract.md#Spawn gating](docs/contract.md#spawn-gating) |
 | `--worktree <path>` / `new` | use an existing checkout or create one managed target | [docs/contract.md#Checkout target resolution](docs/contract.md#checkout-target-resolution) |
 | `--scope PATH` (repeatable) | declare a worktree round's allowed paths; reconciliation reports `:undeclared` writes without refusing them | [docs/contract.md#Worktree reconciliation and teardown](docs/contract.md#worktree-reconciliation-and-teardown) |
-| `--tab` / `--split` / `--workspace` | force placement; mutually exclusive; `--workspace` requires a non-shared worktree and the TUI runtime, and refuses measurement context | [docs/contract.md#Placement](docs/contract.md#placement) |
+| `--tab` / `--split` | force placement; the flags are mutually exclusive | [docs/contract.md#Placement](docs/contract.md#placement) |
 | `--context measurement --measurement-config PATH` | TUI-only: run one headless measurement sample; `--tab`/`--split` add a read-only monitor | [docs/contract.md#Measurement launch](docs/contract.md#measurement-launch) |
 | `task status [UUID]` / `task list [--include-failed] [--full]` | inspect one round or list compact rounds with counts; opt into detailed or retained failed entries | [docs/contract.md#JSON output](docs/contract.md#json-output) |
 | `task collect UUID` | capture the next published item | [docs/contract.md#Ledger and completion](docs/contract.md#ledger-and-completion) |
@@ -75,15 +75,12 @@ Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, ref
 
 `oh worktree list --all --format json` returns `{:entries [...] :unledgered [...]}` without ledger or Git writes. Entries carry join keys, reconciliation and a compact display such as `⑂ +3 ~2 !1`; unledgered paths report managed registrations that no ledger entry names. It creates no ledger directory when none exists and grants no removal authority. See [docs/contract.md#Worktree reconciliation and teardown](docs/contract.md#worktree-reconciliation-and-teardown) for the fields and display rules.
 
-`--workspace` gives the child its own unfocused workspace, named by its `oh` label and grouped with the caller repository for Herdr worktree views. The root pane uses the checkout cwd and the same protocol environment as tab placement. It is opt-in; neither the default nor the accepted configuration values change. See [docs/contract.md#Placement](docs/contract.md#placement) for create-then-open, failure cleanup and lifecycle behaviour.
-
 A `WAITING` item is not completion -- only a validated terminal result item is.
 
 ```sh
 OH="<skill-dir>/scripts/oh"   # <skill-dir>: e.g. ~/.agents/skills/herdr-orch
 "$OH" task run scout --task 'Find the relevant source files.' --timeout 600000
 "$OH" task start reviewer --task-file assignment.md
-"$OH" task start worker --workspace --worktree new --task-file assignment.md
 "$OH" task collect <full-task-uuid> --wait --timeout 600000
 "$OH" task collect --any --wait --timeout 600000
 "$OH" task start --context measurement --measurement-config experiment/measurement.json --worktree new --task-file sample.txt

@@ -16,7 +16,8 @@
          (t/desired {"w1:p1" {:order 0 :name nil}
                      "w1:p2" {:order 12 :marks "├" :name "scout-1-light"}}
                     agents
-                    {"w1" "space1" "w2" "space2"})))
+                    {"w1" "space1" "w2" "space2"}
+                    {})))
   (is (= "local:space1:worker-1" (t/root-name (first agents) {"w1" "space1"} "worker-1"))
       "a root ledger name wins over the agent kind"))
 

@@ -59,19 +59,18 @@
   child's name is its mark, a space and its ledger name; a root, with or without a tree row, gets
   `root-name`. The mark is part of the name, not a token of its own, because Herdr draws a `·`
   separator between row tokens. An agent outside the tree has no order, so the plugin view does
-  not move it. Optional `worktrees` maps child session values to listing display strings;
-  matching agents also get a `:worktree` value."
-  ([rows agents labels] (desired rows agents labels {}))
-  ([rows agents labels worktrees]
-   (into {} (map (fn [{pane :pane_id :as a}]
-                   (let [{:keys [order marks name] :as row} (get rows pane)
-                         order (some->> order (format "%04d"))
-                         display (get worktrees (get-in a [:agent_session :value]))]
-                     [pane (cond-> (if (str/blank? marks)
-                                     {:name (root-name a labels (when row name)) :marks "" :order order}
-                                     {:name (some->> name (str marks " ")) :marks marks :order order})
-                             display (assoc :worktree display))])))
-         agents)))
+  not move it. `worktrees` maps child session values to listing display strings; matching
+  agents also get a `:worktree` value."
+  [rows agents labels worktrees]
+  (into {} (map (fn [{pane :pane_id :as a}]
+                  (let [{:keys [order marks name] :as row} (get rows pane)
+                        order (some->> order (format "%04d"))
+                        display (get worktrees (get-in a [:agent_session :value]))]
+                    [pane (cond-> (if (str/blank? marks)
+                                    {:name (root-name a labels (when row name)) :marks "" :order order}
+                                    {:name (some->> name (str marks " ")) :marks marks :order order})
+                            display (assoc :worktree display))])))
+        agents))
 
 (defn set-args
   "Argv tail after `herdr` for reporting `want` on `pane`, given the `prev` state entry or nil.

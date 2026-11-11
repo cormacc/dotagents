@@ -287,7 +287,6 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   ok(composeHelp("help", "", false).includes("not detected"), "help reports missing Herdr");
   ok(/Spawn a subagent\* starts a fresh context.*fork a subagent\* inherits your completed earlier turns, not the current one/.test(help), "usage routes spawn to fresh and fork to forked context");
   ok(/--context measurement --measurement-config PATH`: a headless Pi sample with no pane/.test(help), "usage describes headless measurement apart from its optional monitor");
-  ok(help.includes("`--workspace`") && help.includes("This is opt-in") && help.includes("measurement context and hc"), "usage describes workspace placement and its limits");
   ok(help.includes("skills/herdr-orch/references/workflow-recipes.md"), "usage links root-owned workflow recipes");
   ok(help.includes("metadata: {herdr-orch: workflow}"), "usage documents the self-declaration marker");
   ok(help.includes("does not run it or grant permission to delegate"), "catalogue membership does not grant execution authority");
