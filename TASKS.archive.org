@@ -5419,3 +5419,20 @@ Origin:
 
 Evidence:
 - About 22 tabs each ran a supervisor when the panes failed together on 2026-11-09.
+
+** DONE herdr-orch worktree integration :herdr_orch:
+CLOSED: [2026-11-11 Wed 21:27]
+:PROPERTIES:
+:CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
+:CREATED: [2026-11-11 Wed 08:07]
+:STARTED: [2026-11-11 Wed 12:07]
+:ARCHIVED: [2026-11-11 Wed 21:27]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 08:07]
+- State "STARTED" from "TODO" [2026-11-11 Wed 12:07]
+- State "DONE" from "STARTED" [2026-11-11 Wed 21:27]
+:END:
+#+IMPORT: [[plan:2026-11-11-herdr-orch-worktree-integration.org]]
+Herdr models a Git worktree as a workspace (`herdr worktree create|open|list|remove`; API `WorkspaceInfo.worktree`, events `worktree_created|opened|removed`), and the herdr-app `spaces` mod nests worktree spaces under their main checkout. `oh task run|start --worktree new` creates its own checkout under `.tmp/herdr-orch/worktrees/<task>` but places the child in a tab or split of the caller workspace, so Herdr worktree views do not apply to it. `herdr worktree list` already reports `oh` checkouts (with no `open_workspace_id`). The Herdr TUI has the same model natively: sidebar `New worktree`, `Open worktree...` and `Delete worktree checkout...` actions, `[worktrees] directory`, and grouped Spaces rows. Subtask tags give the surface: `herdr_app` (herdr-app mods), `herdr_tui` (Herdr TUI or the herdr-orch Herdr plugin), both tags for shared `oh` work.

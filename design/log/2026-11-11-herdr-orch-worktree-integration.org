@@ -1,8 +1,8 @@
 #+TITLE: herdr-orch worktree integration
 #+DATE: 2026-11-11 Wed
-#+PARENT: [[task:e9199488-27ca-421d-80e0-9637f327beb9][herdr-orch worktree integration]]
+#+PARENT: [[archive:e9199488-27ca-421d-80e0-9637f327beb9][herdr-orch worktree integration]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Accepted
+#+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 #+SPEC: [[proj:skills/herdr-orch/scripts/README.md]]
@@ -18,7 +18,7 @@ Make an `oh` child that works in a managed checkout visible and safe in the Herd
 
 *Level:* production · *Tests:* thorough · *Docs:* full
 
-Planned state. `oh` Git-locks every managed checkout it creates, so `git worktree remove` (and so Herdr's and herdr-app's remove actions) refuses it; `oh worktree remove` unlocks under its existing guards. `oh worktree list --all` is a read-only listing for callers with no parent session; it returns each worktree round with its reconciliation and a compact display string, and names unledgered checkouts. The herdr-orch plugin and the orch-spaces mod show the display string on agent rows. orch-spaces nests worktree spaces correctly in a submodule repository.
+`oh` Git-locks every managed checkout it creates, so `git worktree remove` (and so Herdr's and herdr-app's remove actions) refuses it; `oh worktree remove` unlocks under its existing guards. `oh worktree list --all` is a read-only listing for callers with no parent session; it returns each worktree round with its reconciliation and a compact display string, and names unledgered checkouts. The herdr-orch plugin and the orch-spaces mod show the display string on agent rows. orch-spaces nests worktree spaces correctly in a submodule repository. Worktree children keep tab and split placement.
 
 ** Scope
 
@@ -42,38 +42,38 @@ Planned state. `oh` Git-locks every managed checkout it creates, so `git worktre
 
 ** Acceptance
 
-Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
+Consolidated ideal-state checklist, confirmed by the user on 2026-11-11. Verified at closure by the root and two fresh validators (conformance and correctness) at 8c430cd, with the documentation fixes of 93983ce; live items by the user ([[*Validation]]).
 
 *** Core functionality
 
-- [ ] In orch-spaces, a space in a submodule main checkout is not `linked`.
-- [ ] In orch-spaces, a worktree space of a submodule repository nests under its main-checkout space.
-- [ ] A checkout that `--worktree new` creates is Git-locked, with a reason that names `oh worktree remove`.
-- [ ] `oh worktree remove` removes a locked managed checkout under its existing guards and keeps the branch.
-- [ ] Launch-failure cleanup removes the locked checkout that the failed launch created.
-- [ ] Herdr's `worktree remove --force` on a managed checkout is refused and the checkout remains.
-- [ ] `oh worktree list --all` runs with no resolvable caller session.
-- [ ] The listing returns one entry for each newest ledger entry with `:worktree` under the assignment root, with `:worktree`, `:reconciliation`, `:pane-id` and `:child-session`.
-- [ ] Each entry carries the compact display string: the mark, `+N` committed paths, `~N` dirty paths, `!N` undeclared paths, or the state word for `missing` and `invalid`.
-- [ ] The listing reports Git-registered checkouts under the managed root that no ledger entry names.
-- [ ] In the Herdr TUI, the agent row of a child with `:worktree` shows the display string as the `$worktree` token.
-- [ ] In orch-spaces, the agent row of a child with `:worktree` shows the display string.
-- [ ] In orch-spaces, that row's tooltip adds the branch.
-- [ ] An upstream report draft exists for Herdr's `worktree list` submodule row, with reproduction steps.
-- [ ] An upstream report draft exists for the bundled herdr-app `checkout()` submodule test, with reproduction steps.
-- [ ] The `hc` new-space test has a recorded result and a decision.
-- [ ] `contract.md`, `SKILL.md`, `scripts/README.md` and CLI help describe the lock and `worktree list --all`.
-- [ ] The plugin README, `herdr-app/README.md` and `UPSTREAM.md` describe the agent-row state and the submodule fix.
+- [X] In orch-spaces, a space in a submodule main checkout is not `linked`.
+- [X] In orch-spaces, a worktree space of a submodule repository nests under its main-checkout space.
+- [X] A checkout that `--worktree new` creates is Git-locked, with a reason that names `oh worktree remove`.
+- [X] `oh worktree remove` removes a locked managed checkout under its existing guards and keeps the branch.
+- [X] Launch-failure cleanup removes the locked checkout that the failed launch created.
+- [X] Herdr's `worktree remove --force` on a managed checkout is refused and the checkout remains.
+- [X] `oh worktree list --all` runs with no resolvable caller session.
+- [X] The listing returns one entry for each newest ledger entry with `:worktree` under the assignment root, with `:worktree`, `:reconciliation`, `:pane-id` and `:child-session`.
+- [X] Each entry carries the compact display string: the mark, `+N` committed paths, `~N` dirty paths, `!N` undeclared paths, or the state word for `missing` and `invalid`.
+- [X] The listing reports Git-registered checkouts under the managed root that no ledger entry names.
+- [X] In the Herdr TUI, the agent row of a child with `:worktree` shows the display string as the `$worktree` token.
+- [X] In orch-spaces, the agent row of a child with `:worktree` shows the display string.
+- [X] In orch-spaces, that row's tooltip adds the branch.
+- [X] An upstream report draft exists for Herdr's `worktree list` submodule row, with reproduction steps.
+- [X] An upstream report draft exists for the bundled herdr-app `checkout()` submodule test, with reproduction steps.
+- [X] The `hc` new-space test has a recorded result and a decision.
+- [X] `contract.md`, `SKILL.md`, `scripts/README.md` and CLI help describe the lock and `worktree list --all`.
+- [X] The plugin README, `herdr-app/README.md` and `UPSTREAM.md` describe the agent-row state and the submodule fix.
 
 *** Edge cases
 
-- [ ] A managed checkout created before this change (unlocked) is listed, and `oh worktree remove` removes it.
-- [ ] A vanished checkout lists as `missing`.
-- [ ] After `oh worktree remove` on a `missing` managed checkout, `git worktree prune` removes its registration.
-- [ ] The recovery text gives `git worktree unlock` before `git worktree prune`.
-- [ ] With no ledger directory, the listing returns an empty result with exit 0 and creates no directory.
-- [ ] With the TUI tree toggled off, the `worktree` token is cleared.
-- [ ] When `oh worktree list --all` fails, each sidebar shows its tree with no worktree state.
+- [X] A managed checkout created before this change (unlocked) is listed, and `oh worktree remove` removes it.
+- [X] A vanished checkout lists as `missing`.
+- [X] After `oh worktree remove` on a `missing` managed checkout, `git worktree prune` removes its registration.
+- [X] The recovery text gives `git worktree unlock` before `git worktree prune`.
+- [X] With no ledger directory, the listing returns an empty result with exit 0 and creates no directory.
+- [X] With the TUI tree toggled off, the `worktree` token is cleared.
+- [X] When `oh worktree list --all` fails, each sidebar shows its tree with no worktree state.
 
 *** Reversed
 
@@ -81,21 +81,21 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
 
 *** Anti-criteria
 
-- [ ] Must not: let `oh` merge, rebase, push or delete a branch.
-- [ ] Must not: mutate the ledger or Git from the listing, or grant ownership through it.
-- [ ] Must not: write a ledger, or remove or unlock a checkout, from the plugin or a mod.
-- [ ] Must not: change the default placement.
-- [ ] Must not: lock or unlock a checkout that `oh` did not create.
-- [ ] Must not: pass `-f -f` to `git worktree remove`.
-- [ ] Must not: edit bundled herdr-app mods.
-- [ ] Must not: add polling to the plugin or a new timer to the mod.
+- [X] Must not: let `oh` merge, rebase, push or delete a branch.
+- [X] Must not: mutate the ledger or Git from the listing, or grant ownership through it.
+- [X] Must not: write a ledger, or remove or unlock a checkout, from the plugin or a mod.
+- [X] Must not: change the default placement.
+- [X] Must not: lock or unlock a checkout that `oh` did not create.
+- [X] Must not: pass `-f -f` to `git worktree remove`.
+- [X] Must not: edit bundled herdr-app mods.
+- [X] Must not: add polling to the plugin or a new timer to the mod.
 
 ** Decisions
 
-- No workspace placement :: worktree children keep tab and split placement, as the "third placement mode" exclusion of [[proj:design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org]] decided. An opt-in Herdr TUI `--workspace` (create-then-open, task 04998e9e) was built, verified (task e41cb123), and then reverted after a complexity review: it only grouped the child's space in Herdr's views, which the sidebar tree and the worktree token already cover, and it added three placement refusals, an `hc` asymmetry and a `workspace close --group` risk.
+- No workspace placement :: worktree children keep tab and split placement, as the "third placement mode" exclusion of [[proj:design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org]] decided. An opt-in Herdr TUI `--workspace` (create-then-open) was built and verified, then reverted after a complexity review: it only grouped the child's space in Herdr's views, which the sidebar tree and the worktree token already cover, and it added three placement refusals, an `hc` asymmetry and a `workspace close --group` risk.
   Rejected:
   - Opt-in `--workspace` in the TUI runtime: about 180 lines of code, tests and docs for display only.
-  - Workspace placement under `hc`: the `hc` new-space test ([[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]) showed a top-level space that does not nest, with the child's agent row still under its parent's space.
+  - Workspace placement under `hc`: the space nests, but the child's agent row stays under its parent's space, and herdr-app's `Remove worktree` would end the child ([[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]).
   - Workspace as the default for worktree children: a fan-out of N workers would make N spaces, and both sidebar trees nest a child under its parent.
 - Lock every managed checkout :: Git refuses `worktree remove` and `remove --force` on a locked entry, so Herdr, herdr-app and a manual command cannot remove a checkout under a running child. Measured against Herdr 0.9.5: [[file:2026-11-11-herdr-orch-worktree-integration/placement-spike.md]].
   Rejected:
@@ -106,15 +106,28 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
   - A shared namespace called in-process by the plugin: a refactor of `cli.clj` to save about 0.13 s of start time, and two call paths.
   - Each sidebar reads the ledger and runs Git: reconciliation rules written three times in two languages.
 - The row shows counts, not the branch :: an `orch/*` branch has no upstream, so Git ahead/behind is empty; the branch name is always `orch/<task prefix>`. Counts are path counts against the recorded `:base`.
-- The drift report is the `:unledgered` list only :: reconciliation already reports a vanished checkout as `missing`.
+- The drift report is the `:unledgered` list only, with no flag :: reconciliation already reports a vanished checkout as `missing`. Its `git worktree list` took at most 0.01 s against about 0.3 s for the whole `oh worktree list --all`.
+
+** Shipped
+
+- MODIFIED :: `skills/herdr-orch/scripts/docs/contract.md` -- managed-checkout lock and unlock, `worktree list --all`, and the recovery order `git worktree unlock` before `git worktree prune`.
+- MODIFIED :: `skills/herdr-orch/SKILL.md` and `skills/herdr-orch/scripts/README.md` -- the lock and `worktree list --all`; CLI help likewise.
+- MODIFIED :: `herdr/plugins/herdr-orch/README.md` -- the `$worktree` token on Herdr TUI agent rows; `herdr/config.toml` adds it to the agent row.
+- MODIFIED :: `herdr-app/README.md` and `herdr-app/mods/orch-spaces/UPSTREAM.md` -- the display string and branch tooltip on orch-spaces agent rows, and the submodule linked-worktree test.
+- ADDED :: upstream report drafts [[file:2026-11-11-herdr-orch-worktree-integration/upstream-herdr-worktree-list.md]] and [[file:2026-11-11-herdr-orch-worktree-integration/upstream-herdr-app-checkout.md]].
+
+** Gotchas
+
+- herdr-app does not reload a mod when its source changes. A live check in an app started before the mod change tests the old code: the first `hc` new-space run reported "no nesting" for that reason. Run `touch -h ~/.config/herdr-app/mods/<mod>` before a live check.
+- In a submodule, the main checkout's common Git directory is `<super>/.git/modules/<name>`, not `<top>/.git`. Compare `git rev-parse --absolute-git-dir` with the common directory to tell a linked worktree from the main checkout.
+- orch-spaces draws a nested worktree space after the main space's agent and tab rows, so it can look like a child of the last tab row.
 
 ** Risks
 
-- herdr-app's bundled `Remove worktree` closes the space before it runs Git. With the lock the checkout survives. `oh` places no child in a worktree space, so no child runs there unless a user opens one; the herdr-app upstream draft names it.
+- herdr-app's bundled `Remove worktree` closes the space before it runs Git. With the lock the checkout survives, but a child that a user runs in that space ends; the herdr-app upstream draft names it.
 - Row state changes when a plugin hook or a mod refresh fires, not while a child edits. Counts are current at the end of a turn.
 - Reconcile cost grows with the number of present checkouts: one `oh` start and one Git status and diff for each. Revisit if the sidebar lags.
 - `rm -rf` and a cleared `.tmp/` bypass the lock, and leave a locked registration until `oh worktree remove` or a manual unlock.
-- The mark `⑂` (U+2442) can be absent from a font. It is one constant; each sidebar task checks the rendering and may replace it with an ASCII mark.
 - The plugin and the mod run the home skill's `oh`. An older home skill does not know `--all`; the sidebars then show no worktree state.
 - `oh worktree list --all` run inside a managed checkout resolves that checkout as the assignment root and returns no entries. The plugin merges the listings of every Git root in the session, so a child gets its token only while an agent in the main checkout is listed in the same session.
 
@@ -122,8 +135,9 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
 
 - [[task:a21f1073-3a5f-4dd1-9204-ee357b87d268]] -- remove split placement for delegated children.
 - [[task:e88e718e-09b1-4dc0-a0df-dc176f1e451f]] -- evaluate `oh`-assisted integration of worktree branches.
+- [[task:166a41b8-719d-4d33-a184-dc40ce26e59e]] -- show the current delegation tree without sidebar changes.
+- [[task:64547358-891c-49fb-bd33-ca8e85fe0f05]] -- `collect --any --wait` reports `no-live-children` while `hc` children work (found during closeout).
 - File the two upstream reports from the drafts (user action).
-- [[task:166a41b8-719d-4d33-a184-dc40ce26e59e]] -- show the current delegation tree without sidebar changes ([[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]).
 
 * Plan
 ** DONE Lock managed checkouts against removal outside oh :herdr_tui:herdr_app:
@@ -140,20 +154,7 @@ CLOSED: [2026-11-11 Wed 13:21]
 - State "STARTED" from "TODO" [2026-11-11 Wed 12:26]
 - State "DONE" from "STARTED" [2026-11-11 Wed 13:21]
 :END:
-Acceptance criteria:
-- After `--worktree new`, `git worktree list --porcelain` shows the checkout as `locked`, with a reason that names `oh worktree remove`.
-- `git worktree remove --force <checkout>` exits non-zero and the checkout remains.
-- `oh worktree remove` removes a locked managed checkout and keeps the branch.
-- `oh worktree remove` removes an unlocked managed checkout (one created before this change).
-- When `git worktree remove` fails after the unlock, the checkout is locked again.
-- Launch-failure cleanup removes the locked checkout that the failed launch created.
-- After `oh worktree remove` on a `missing` managed checkout, `git worktree prune` removes its registration.
-- `contract.md`, `SKILL.md` and `scripts/README.md` describe the lock.
-- The cleared-`.tmp/` recovery text in `contract.md` gives `git worktree unlock` before `git worktree prune`.
-- Must not: lock or unlock a checkout outside the managed root.
-- Must not: pass `-f -f` to `git worktree remove`.
-
-Edit `create-worktree!`, `worktree-remove!` and `cleanup-failed-checkout!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`. `git worktree unlock` fails on an entry that is not locked, so read the `locked` line of `git worktree list --porcelain` first. Unlock only after every existing guard has passed. Tests go beside `worktree-remove-removes-the-checkout-retains-the-branch-and-reports-ancestry-as-information` in `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj`.
+Delivered in 6871711.
 
 ** DONE Add oh worktree list --all, a read-only listing for UI consumers :herdr_app:herdr_tui:
 CLOSED: [2026-11-11 Wed 14:41]
@@ -168,21 +169,7 @@ CLOSED: [2026-11-11 Wed 14:41]
 - State "STARTED" from "TODO" [2026-11-11 Wed 14:14]
 - State "DONE" from "STARTED" [2026-11-11 Wed 14:41]
 :END:
-Acceptance criteria:
-- `oh worktree list --all --format json` exits 0 with no resolvable caller session.
-- The result is `{:entries [...] :unledgered [...]}`.
-- `:entries` has one entry for the newest ledger entry of each child that has `:worktree`, across every parent session under the assignment root.
-- Each entry has `:task`, `:child`, `:pane-id`, `:child-session`, `:worktree`, `:reconciliation` and `:display`.
-- `:display` for a present checkout is the mark, then `+N` (committed paths), `~N` (dirty paths) and `!N` (undeclared paths), each only when N is not zero, in that order, separated by one space: `⑂`, `⑂ +3 ~2`, `⑂ +3 ~2 !1`.
-- `:display` for a `missing` or `invalid` checkout is the mark and the state word: `⑂ missing`.
-- `:unledgered` lists the Git-registered checkouts inside the managed root that no ledger entry names.
-- With no ledger directory, the result is empty, the exit status is 0, and no directory is created.
-- The ledger files are byte-identical before and after a run.
-- `oh worktree list` without `--all` still refuses an unresolvable caller and returns the caller's entries only.
-- `contract.md`, `scripts/README.md` and the usage text document `--all`.
-- Must not: grant ownership. The `oh worktree remove` guards do not change.
-
-Extend `worktree-list!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` and reuse `reconciliation`. Put the display function in `skills/herdr-orch/scripts/src/herdr_orch/core.clj` as a pure function, with the mark as one `def`. `ledger/entries` calls `ledger/ensure!`, which creates the ledger directory: do not call it on a root that has none.
+Delivered in 198cb8f.
 
 ** CANCELLED Add --workspace placement for worktree children (Herdr TUI runtime) :herdr_tui:
 CLOSED: [2026-11-11 Wed 15:29]
@@ -198,26 +185,7 @@ CLOSED: [2026-11-11 Wed 15:29]
 - State "DONE" from "STARTED" [2026-11-11 Wed 15:29]
 - State "CANCELLED" from "DONE" [2026-11-11 Wed 21:06]
 :END:
-Acceptance criteria:
-- `oh task run|start --workspace --worktree new`, in the TUI runtime, starts the child in a new Herdr workspace whose label is the child's `oh` label.
-- The root pane's cwd is the checkout.
-- `oh` calls `herdr workspace create --cwd <checkout> --label <label> --env ... --no-focus`, then `herdr worktree open --workspace <caller workspace> --path <checkout> --no-focus`, in that order.
-- The pane environment has the same protocol variables as for tab placement.
-- The ledger entry has `:placement "workspace"`.
-- A managed checkout that `oh` selects implicitly for an additional concurrent write-enabled child also accepts `--workspace`.
-- `--workspace` without a non-shared worktree refuses before allocation.
-- `--workspace` with `--tab` or with `--split` refuses.
-- `--workspace` with `--context measurement` refuses.
-- `--workspace` under the `hc` runtime refuses before allocation, and the error says that the runtime does not support it.
-- When `herdr worktree open` fails after the workspace exists, the created pane is closed, the entry is marked failed, and the existing checkout cleanup applies.
-- `oh task close` on the child closes its pane and leaves the checkout and the branch.
-- `oh task continue`, `collect` and `poke` work on a workspace-placed child.
-- `contract.md` section 'Placement', `SKILL.md`, `scripts/README.md`, the usage text and `pi/extensions/herdr-orch/help.ts` describe `--workspace`.
-- Must not: change the default placement or the accepted values of `:defaults :placement`.
-
-Reverted after a complexity review; see Decisions 'No workspace placement'.
-
-Extend `placement-flag` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; put the worktree check beside `assert-scoped-target!`, which runs after target resolution and before allocation. Add a `:workspace` branch to `TuiRuntime` `place!` in `skills/herdr-orch/scripts/src/herdr_orch/runtime.clj`, using the existing `herdr/workspace-create!` and a new `herdr/worktree-open!`. Closing a workspace's only pane closes the workspace, so no workspace-close call is needed. Measured behaviour: `design/log/2026-11-11-herdr-orch-worktree-integration/placement-spike.md`.
+Delivered in fb99b8d, reverted in 1c67318; see Decisions 'No workspace placement'.
 
 ** DONE Show worktree state on Herdr TUI agent rows :herdr_tui:
 CLOSED: [2026-11-11 Wed 19:30]
@@ -232,20 +200,7 @@ CLOSED: [2026-11-11 Wed 19:30]
 - State "STARTED" from "TODO" [2026-11-11 Wed 14:42]
 - State "DONE" from "STARTED" [2026-11-11 Wed 19:30]
 :END:
-Acceptance criteria:
-- For a listed agent whose session equals a listing entry's `:child-session`, the reconcile reports the token `worktree` with that entry's `:display`.
-- An agent with no matching entry has no `worktree` token; a token reported earlier is cleared.
-- An unchanged display string causes no `herdr pane report-metadata` call.
-- With the tree toggled off, the `worktree` token is cleared.
-- When `oh worktree list --all` fails, or `oh` is not found, the reconcile still reports names and order, reports no `worktree` token, and writes one warning line.
-- `oh` runs once for each distinct Git root in one reconcile.
-- The tracked `herdr/config.toml` row is `["state_icon", "agent", "$worktree"]`.
-- `herdr/plugins/herdr-orch/README.md` section 'Sidebar agent tree' documents the token and the row stanza.
-- The mark renders in the Herdr TUI sidebar (visual check). If it does not, replace the mark constant in `core.clj` with an ASCII mark.
-- Must not: write a ledger, or remove or unlock a checkout.
-- Must not: add a hook, a daemon or polling.
-
-Edit `desired`, `set-args`, `clear-args` and `reconcile!` in `herdr/plugins/herdr-orch/src/orch_tree.clj`. Resolve `oh` in the order of `plugin_oh` in `herdr/plugins/herdr-orch/lib.sh`. The join is the one that `match-agent` in `skills/herdr-orch/scripts/src/herdr_orch/tree.clj` uses. Tests: `scripts/test-herdr-orch-tree.bb`.
+Delivered in cf87986. The mark rendered in the Herdr TUI.
 
 ** DONE Fix linked-worktree detection for submodule checkouts in orch-spaces :herdr_app:
 CLOSED: [2026-11-11 Wed 12:28]
@@ -261,15 +216,7 @@ CLOSED: [2026-11-11 Wed 12:28]
 - State "STARTED" from "TODO" [2026-11-11 Wed 12:26]
 - State "DONE" from "STARTED" [2026-11-11 Wed 12:28]
 :END:
-Acceptance criteria:
-- When `git rev-parse --absolute-git-dir` equals the common dir, `check` sets `linked` to false. This includes a common dir of the form `<super>/.git/modules/<name>`.
-- When they differ, `check` sets `linked` to true.
-- `ordered()` puts a worktree space of a submodule repository under its main-checkout space.
-- `herdr-app/tests/orch-spaces-ui.test.mjs` covers a plain repository and a submodule repository.
-- `herdr-app/mods/orch-spaces/UPSTREAM.md` lists the change under local changes.
-- Must not: edit a bundled herdr-app mod.
-
-Edit `check` in `herdr-app/mods/orch-spaces/main.js`: the `linked` field compares the common dir with `<top>/.git`, which is wrong for a submodule. Run `bb scripts/test-herdr-app.bb`.
+Delivered in 9534e37.
 
 ** DONE Show worktree state on orch-spaces agent rows :herdr_app:
 CLOSED: [2026-11-11 Wed 16:34]
@@ -285,19 +232,7 @@ CLOSED: [2026-11-11 Wed 16:34]
 - State "STARTED" from "TODO" [2026-11-11 Wed 15:50]
 - State "DONE" from "STARTED" [2026-11-11 Wed 16:34]
 :END:
-Acceptance criteria:
-- An agent row whose terminal address equals a listing entry's `:pane-id` shows that entry's `:display` before the status mark.
-- That row's tooltip is the agent name and the branch.
-- A row with no matching entry is drawn as before.
-- The mod runs `oh worktree list --all --format json` with the main checkout as cwd, on the triggers that already call `check`.
-- When `oh` fails, the rows are drawn with no worktree state.
-- `herdr-app/tests/orch-spaces-ui.test.mjs` covers a matching row, a non-matching row and a failed `oh`.
-- `herdr-app/README.md` and `herdr-app/mods/orch-spaces/UPSTREAM.md` describe the row state.
-- The mark renders in herdr-app (visual check with the user). If it does not, replace the mark constant in `core.clj` with an ASCII mark.
-- Must not: add a timer.
-- Must not: write a ledger, or remove or unlock a checkout.
-
-Edit `check` and `agentRows` in `herdr-app/mods/orch-spaces/main.js`. Use the `oh` path rule of `ohPath` in `herdr-app/mods/herdr-orch/quota-state.js`. Under the `hc` runtime a ledger `:pane-id` is the terminal address. Run `bb scripts/test-herdr-app.bb`.
+Delivered in 7bc04e6. The mark rendered in herdr-app.
 
 ** DONE Draft upstream reports for submodule worktree detection (Herdr and herdr-app) :herdr_tui:herdr_app:
 CLOSED: [2026-11-11 Wed 19:41]
@@ -311,21 +246,7 @@ CLOSED: [2026-11-11 Wed 19:41]
 - State "STARTED" from "TODO" [2026-11-11 Wed 19:33]
 - State "DONE" from "STARTED" [2026-11-11 Wed 19:41]
 :END:
-Acceptance criteria:
-- `design/log/2026-11-11-herdr-orch-worktree-integration/upstream-herdr-worktree-list.md` gives the Herdr version and commands that reproduce the defect from an empty directory.
-- That draft states actual and expected values for `is_linked_worktree` and `open_workspace_id` on the main-checkout row of `worktree list` in a submodule repository.
-- That draft reports the row's `path` (`<super>/.git/modules/<name>`) as Git's own `git worktree list --porcelain` output, and names `git rev-parse --show-toplevel` as a source of the checkout path.
-- That draft reports that `worktree open --branch main` fails with `worktree_not_found` there.
-- `design/log/2026-11-11-herdr-orch-worktree-integration/upstream-herdr-app-checkout.md` gives the herdr-app version and names the defective test: `checkout()` in the bundled `menu` mod and `check` in the bundled `spaces` mod.
-- That draft states the effects: `Remove worktree` is offered on a submodule main checkout, and worktree spaces are not nested under it.
-- That draft proposes the replacement test: `--absolute-git-dir` against the common dir.
-- That draft notes that `Remove worktree` closes the space before Git can refuse the removal.
-- Each draft separates what was observed from what was read in source.
-- The reproduction commands were run again on the installed versions when the drafts were written.
-- Must not: file a report.
-- Must not: edit a bundled herdr-app mod.
-
-Start from `design/log/2026-11-11-herdr-orch-worktree-integration/placement-spike.md` section 'Submodule repository'. Use a disposable Herdr session for the Herdr reproduction. The herdr-app effects need the user's app: observe them with the user, or mark them as read in source.
+Delivered in ed853e2.
 
 ** DONE Test hc for a new-space launch at a checkout :herdr_app:
 CLOSED: [2026-11-11 Wed 20:55]
@@ -337,18 +258,7 @@ CLOSED: [2026-11-11 Wed 20:55]
 - Created [2026-11-11 Wed 10:18]
 - State "DONE" from "TODO" [2026-11-11 Wed 20:55]
 :END:
-Acceptance criteria:
-- `design/log/2026-11-11-herdr-orch-worktree-integration/hc-new-space.md` gives the herdr-app version and the commands that were run.
-- It records whether `hc run` with a new `herdr.space` label and `--cwd <checkout>` creates a new space.
-- It records whether orch-spaces nests that space under the main-checkout space.
-- It records where the child's agent row appears: under its parent's space or under its own.
-- It states a decision: implement workspace placement under `hc`, or keep the refusal. For implement, a new plan task exists.
-- Every terminal and space that the test created is removed.
-- Must not: restart or reconfigure the user's app.
-
-Needs the user: run it with the user present, in the user's app or an instance that the user nominates. See `place!` and `launch!` in `skills/herdr-orch/scripts/src/herdr_orch/hc.clj` for the labels that `oh` passes today.
-
-Result: [[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]. herdr-app 0.1.15 made a new top-level space that did not nest, and the child's agent row stayed under its parent's space. Decision: no workspace placement under `hc`; display follow-up [[task:166a41b8-719d-4d33-a184-dc40ce26e59e]].
+Delivered in 5a7ba31: [[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]].
 
 ** CANCELLED Verify workspace placement against real Herdr :herdr_tui:
 CLOSED: [2026-11-11 Wed 19:30]
@@ -365,25 +275,17 @@ CLOSED: [2026-11-11 Wed 19:30]
 - State "DONE" from "STARTED" [2026-11-11 Wed 19:30]
 - State "CANCELLED" from "DONE" [2026-11-11 Wed 21:06]
 :END:
-Acceptance criteria:
-- One real `oh task start --workspace --worktree new` from a Herdr TUI session shows the child's space grouped under the caller's space.
-- That child's agent row shows the `$worktree` token.
-- `* Validation` in the record gives the Herdr version and the two observations.
-- Must not: stop, restart or reconfigure the user's Herdr session.
-
-The verified placement was then reverted; see Decisions 'No workspace placement'. The `$worktree` token observation still applies to tab-placed children.
-
-`design/log/2026-11-11-herdr-orch-worktree-integration/placement-spike.md` records Herdr 0.9.5 behaviour for the create-then-open argv, `--env`, a locked checkout and closing the only pane; `cli_test.clj` proves that `oh` sends that argv.
+Verified on Herdr 0.9.5 in 08d54c6; the placement was then reverted in 1c67318.
 
 * Implementation
 
+- `worktree list --all` binds `*read-only-git?*`, which runs Git with `GIT_OPTIONAL_LOCKS=0`, so that a listing does not refresh the index as a side effect of a status query.
+- The lock reason is the fixed string `Managed by oh; use oh worktree remove`. `oh` unlocks only a lock with that reason, and locks the checkout again when `git worktree remove` fails after the unlock.
+- The plugin resolves `oh` as `plugin_oh` in `herdr/plugins/herdr-orch/lib.sh` does: the home skill first, then this checkout. The mod uses the home skill only.
+
 * Validation
 
-The workspace placement that the first two bullets verify was later reverted (Decisions 'No workspace placement'). The token observations do not depend on it.
-
-Herdr 0.9.5, disposable session `oh-verify-e41c` started without the herdr-app variables, in this repository, which is a submodule of dotfiles. A pi agent in workspace `agents-main` (cwd the main checkout) ran `oh task start worker --workspace --worktree new`.
-
-- `oh` created workspace `worker-1-light` with its root pane cwd at the managed checkout; the ledger recorded `placement: workspace`. `workspace list` gave both workspaces `repo_key` `<dotfiles>/.git/modules/agents`, the main `is_linked_worktree: false` and the child `true`.
-- The user observed the child's space grouped under `agents-main` in the Herdr TUI Spaces list. The faulty main row of `herdr worktree list` in a submodule (`path` `.git/modules/agents`, `is_linked_worktree: true`, `open_workspace_id: null`) does not affect the grouping.
-- With the sidebar agent tree toggled on, the user observed the `⑂ +2` worktree token on the child's agent row, and the mark rendered. While the tree was off (the global setting since 2026-11-10) the token was absent, as the toggle contract requires.
-- In herdr-app, with a demonstration child, the user observed `⑂ +2 ~1` before the status mark on the orch-spaces agent row and the branch in its tooltip; `oh worktree remove` then removed that locked checkout.
+- Herdr TUI 0.9.5, disposable session (08d54c6): with the sidebar agent tree on, the user saw `⑂ +2` on a worktree child's agent row, and the mark rendered; with the tree off, the token was absent. That child was workspace-placed, which the token join does not depend on.
+- herdr-app 0.1.15: the user saw `⑂ +2 ~1` before the status mark on an orch-spaces agent row, and the branch in its tooltip; `oh worktree remove` then removed the locked checkout.
+- herdr-app 0.1.15 nesting, after a mod reload: a space opened with `Open worktree` and a space created from `hc run` labels both nested under the submodule's main-checkout space ([[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]).
+- Closeout at 8c430cd: a fresh correctness reviewer approved with no findings; a fresh conformance reviewer found the nesting conflict (settled by the live check above) and documentation gaps (fixed in 93983ce). `bb test` stopped at `scripts/test-herdr-org-tasks.bb` with "Unix domain path too long" under the long macOS temporary directory; that suite passes with `-Djava.io.tmpdir=/tmp`.

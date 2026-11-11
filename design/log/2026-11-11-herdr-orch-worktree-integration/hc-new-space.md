@@ -1,31 +1,39 @@
 # hc new-space test (task 05686844, 2026-11-11)
 
-herdr-app 0.1.15 (`/nix/store/315f77xx611a1zgkgzrcckyllp9hdcl3-herdr-app-0.1.15`), `hc 0.1.15`. The test ran in the user's running app with the user present. The app was not restarted or reconfigured. The caller was the pi agent in terminal `t3` in the "agents" space (`herdr.space=sp9e5571646029ef64fff55b417ad3805c`). This repository is a submodule of dotfiles.
+herdr-app 0.1.15 (`/nix/store/315f77xx611a1zgkgzrcckyllp9hdcl3-herdr-app-0.1.15`), `hc 0.1.15`. Both runs used the user's running app with the user present; the app was not restarted. The caller was the pi agent in terminal `t3` in the "agents" space. This repository is a submodule of dotfiles.
 
 ## Commands
 
 ```shell
-git worktree add --detach .tmp/hc-new-space/checkout HEAD
-hc run --json --bg --no-notify --outlive-parent --name hc-ns-test \
-  --cwd /Users/cormacc/dotfiles/agents/.tmp/hc-new-space/checkout --parent t3 \
-  --label herdr.space=spcf1a7428c19b44acba2ac959dbc77661 \
-  --label herdr.tab=tb5fe3243604104edfa7c69fe63a47d04e \
-  --label oh.label=hc-ns-test -- pi
-hc get t3c --json
+git worktree add --detach .tmp/<dir>/<checkout> HEAD
+hc run --json --bg --no-notify --outlive-parent --name <name> \
+  --cwd <checkout> --parent t3 \
+  --label herdr.space=sp<32 hex, new> --label herdr.tab=tb<32 hex, new> \
+  --label oh.label=<name> -- pi
+hc get <name> --json
 ```
 
-The `herdr.space` and `herdr.tab` values were new ids in the app's `sp`/`tb` + 32-hex form. `place!` and `launch!` in `skills/herdr-orch/scripts/src/herdr_orch/hc.clj` pass the same labels for tab placement, with the parent's space id.
+`place!` and `launch!` in `skills/herdr-orch/scripts/src/herdr_orch/hc.clj` pass the same labels for tab placement, with the parent's space id.
 
-## Results
+## Run 1 (20:41, stale mod)
 
-- New space :: yes. `hc run` returned terminal `t3c` with `pi` idle. The app added the label `where: "checkout / 1"`, and the user saw a new space called "checkout".
-- Nesting :: no. The user saw "checkout" as a top-level space with the right-justified suffix "agents (detached)". The "agents" space row had no suffix. The mod's Git commands give the same common directory (`/Users/cormacc/dotfiles/.git/modules/agents`) from the main checkout and from the test checkout, with the main checkout not linked and the test checkout linked, so the orch-spaces `ordered()` rule should have nested it. The cause was not found. A candidate that was not tested: the bundled `worktree` mod passes `machine: this.on ?? ""` to `space.new`, and orch-spaces keys a repository by `[machine, common dir]`, so a space adopted from labels can have a different `machine` value.
-- Agent row :: under the parent's "agents" space, not under "checkout". orch-spaces builds the agent tree from the hc `--parent` link.
+- New space :: yes. `hc run` returned `t3c` with `pi` idle; the app added the label `where: "checkout / 1"`, and a space called "checkout" appeared.
+- Nesting :: no. "checkout" was top-level, with the suffix "agents (detached)".
+- Agent row :: under the parent's "agents" space, because orch-spaces builds the agent tree from the hc `--parent` link.
+
+## Run 2 (21:20, reloaded mod)
+
+The app process started at 14:13:29 and the submodule fix (`9534e37`) was committed at 14:13:58. herdr-app does not reload a mod when its source changes (`herdr-app/README.md`), so run 1 used an orch-spaces build without the fix. `touch -h ~/.config/herdr-app/mods/orch-spaces` reloaded the mod at 21:20:29. Then:
+
+- A checkout opened through the bundled `Open worktree` menu action (`space.new`) nested under "agents".
+- A second `hc run` space (`t3h`, "hc-check") also nested under "agents", and its agent row stayed under its parent `pi` row.
+
+So label-created spaces nest like app-created ones; the `machine` key hypothesis of run 1 is refuted. orch-spaces draws nested worktree spaces after the main space's agent and tab rows, so a nested space can look like a child of the last tab row.
 
 ## Decision
 
-No workspace placement under the hc runtime. Under hc, a new space adds a top-level row, does not nest, and does not move the child's agent row. It also exposes the child to herdr-app's `Remove worktree`, which calls `space.close` before Git refuses a locked removal. The user chose to avoid complexity for display only, and a later review removed `--workspace` from the Herdr TUI runtime too, so no refusal remains. A backlog task covers a tree view of the current delegation through the `oh` CLI, or better names in the Herdr views. No investigation of the nesting failure is planned.
+No workspace placement under the hc runtime. A new space only adds a row: the child's agent row stays under its parent's space. It also exposes the child to herdr-app's `Remove worktree`, which calls `space.close` before Git refuses a locked removal. The user chose to avoid complexity for display only, and a later review removed `--workspace` from the Herdr TUI runtime too. Task 166a41b8 covers the delegation tree view.
 
 ## Cleanup
 
-`hc kill t3c` and `hc rm t3c` exited 0, and `hc ls --all` no longer lists `t3c`. `git worktree remove .tmp/hc-new-space/checkout` exited 0. The user confirmed that the "checkout" space left the sidebar.
+`hc kill` and `hc rm` exited 0 for `t3c`, `t3g` (the app's shell in the opened checkout) and `t3h`, and `hc ls --all` no longer lists them. `git worktree remove` exited 0 for each checkout. The user confirmed after each run that its spaces left the sidebar.
