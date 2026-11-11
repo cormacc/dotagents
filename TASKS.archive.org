@@ -5436,3 +5436,19 @@ CLOSED: [2026-11-11 Wed 21:27]
 :END:
 #+IMPORT: [[plan:2026-11-11-herdr-orch-worktree-integration.org]]
 Herdr models a Git worktree as a workspace (`herdr worktree create|open|list|remove`; API `WorkspaceInfo.worktree`, events `worktree_created|opened|removed`), and the herdr-app `spaces` mod nests worktree spaces under their main checkout. `oh task run|start --worktree new` creates its own checkout under `.tmp/herdr-orch/worktrees/<task>` but places the child in a tab or split of the caller workspace, so Herdr worktree views do not apply to it. `herdr worktree list` already reports `oh` checkouts (with no `open_workspace_id`). The Herdr TUI has the same model natively: sidebar `New worktree`, `Open worktree...` and `Delete worktree checkout...` actions, `[worktrees] directory`, and grouped Spaces rows. Subtask tags give the surface: `herdr_app` (herdr-app mods), `herdr_tui` (Herdr TUI or the herdr-orch Herdr plugin), both tags for shared `oh` work.
+
+** DONE Carry herdr-app 0.1.15 bundled spaces and agents changes into orch-spaces :herdr_app:
+CLOSED: [2026-11-11 Wed 22:25]
+:PROPERTIES:
+:CUSTOM_ID: ed35a3f5-29b9-486d-9f6a-2f8a154779a1
+:CREATED: [2026-11-11 Wed 20:33]
+:STARTED: [2026-11-11 Wed 21:52]
+:ARCHIVED: [2026-11-11 Wed 22:25]
+:ARCHIVE_OLPATH: Chores
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 20:33]
+- State "STARTED" from "TODO" [2026-11-11 Wed 21:52]
+- State "DONE" from "STARTED" [2026-11-11 Wed 22:25]
+:END:
+The installed herdr-app is 0.1.15 (found on 2026-11-11 during task f92c0d67). The SHA-256 of its bundled `spaces` mod `main.js` is `98d3f3637296f9e8aa8f19ad7b4f4b2e1375144f8e73ad53d90ebc5a438c87b8` and of its `agents` mod `main.js` is `0f013ba91718309927c009080263c7dd43c878c6ffe0ce7b5eec63b6d9e33eea`; `herdr-app/mods/orch-spaces/UPSTREAM.md` records the 0.1.10 hashes. Follow `herdr-app/README.md` (the paragraph on updating after an app upgrade): review the bundled changes, carry the relevant ones into `orch-spaces`, record the new version and hashes, and run `bb scripts/test-herdr-app.bb`. Keep the local submodule linked-checkout test and the worktree row state.

@@ -13,16 +13,30 @@
 
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
-  - [[#started-b-herdr-orch-llm-usage-limit-fallback][STARTED [#B] herdr-orch: LLM usage limit fallback]]
   - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
   - [[#re-evaluate-pi-context-with-a-week-of-session-data-after-2026-11-10][Re-evaluate pi-context with a week of session data (after 2026-11-10)]]
+  - [[#evaluate-hierarchical-agentsmd-discovery-for-pi][Evaluate hierarchical AGENTS.md discovery for Pi]]
+  - [[#decide-whether-to-trial-standalone-rpiv-btw][Decide whether to trial standalone rpiv-btw]]
 - [[#improvements][Improvements]]
-  - [[#started-b-herdr-plugin-wrapper-for-herdr-orch][STARTED [#B] herdr plugin wrapper for herdr-orch]]
+  - [[#claude-code-and-codex-userpromptsubmit-trait-adapters][Claude Code and Codex UserPromptSubmit trait adapters]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#started-b-traits-probe-backlog][STARTED [#B] traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
-  - [[#link-the-running-pi-install-as-the-development-dependency][Link the running Pi install as the development dependency]]
+  - [[#warn-when-native-cli-and-pi-logins-use-different-subscriptions][Warn when native CLI and Pi logins use different subscriptions]]
+  - [[#add-read-only-native-os-store-quota-reporting][Add read-only native OS-store quota reporting]]
+  - [[#add-workspace-pinning-to-the-herdr-org-tasks-adapters][Add workspace pinning to the Herdr org-tasks adapters]]
+  - [[#plan-accepted-pi-recovery-selection-limits][Plan accepted Pi recovery selection limits]]
+  - [[#validate-the-org-tasks-herdr-uis-natively-on-linux-and-after-installation][Validate the org-tasks Herdr UIs natively on Linux and after installation]]
+  - [[#validate-the-herdr-tui-sidebar-agent-tree-on-linux][Validate the Herdr TUI sidebar agent tree on Linux]]
+  - [[#cover-the-untested-herdr-orch-sidebar-tree-reconcile-paths][Cover the untested herdr-orch sidebar tree reconcile paths]]
+  - [[#herdr-orch-remove-split-placement-for-delegated-children][herdr-orch: remove split placement for delegated children]]
+  - [[#herdr-orch-evaluate-oh-assisted-integration-of-worktree-branches][herdr-orch: evaluate oh-assisted integration of worktree branches]]
+  - [[#herdr-orch-show-the-current-delegation-tree-without-sidebar-changes][herdr-orch: show the current delegation tree without sidebar changes]]
 - [[#fixes][Fixes]]
+  - [[#diagnose-intermittent-herdr-app-quota-loading-stall][Diagnose intermittent herdr-app quota loading stall]]
+  - [[#route-explicit-model-requests-across-subscription-accounts][Route explicit model requests across subscription accounts]]
+  - [[#refresh-pi-web-access-transitive-dependencies-for-advisories][Refresh pi-web-access transitive dependencies for advisories]]
+  - [[#herdr-orch-collect---any---wait-reports-no-live-children-while-hc-children-work][herdr-orch: collect --any --wait reports no-live-children while hc children work]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
   - [[#validate-axi-cli-changes-on-linux-without-measurement-exclusions][Validate AXI CLI changes on Linux without measurement exclusions]]
@@ -374,16 +388,6 @@ Acceptance criteria:
 - Record the exit status and complete failure/error summary; fix failures or create scoped follow-ups before claiming a green suite.
 
 Evidence: design/log/2026-11-05-axi-cli-guidelines.org and .tmp/routing-plan-commits-1/tree-1-portable.out.
-
-** TODO Carry herdr-app 0.1.15 bundled spaces and agents changes into orch-spaces :herdr_app:
-:PROPERTIES:
-:CUSTOM_ID: ed35a3f5-29b9-486d-9f6a-2f8a154779a1
-:CREATED: [2026-11-11 Wed 20:33]
-:END:
-:LOGBOOK:
-- Created [2026-11-11 Wed 20:33]
-:END:
-The installed herdr-app is 0.1.15 (found on 2026-11-11 during task f92c0d67). The SHA-256 of its bundled `spaces` mod `main.js` is `98d3f3637296f9e8aa8f19ad7b4f4b2e1375144f8e73ad53d90ebc5a438c87b8` and of its `agents` mod `main.js` is `0f013ba91718309927c009080263c7dd43c878c6ffe0ce7b5eec63b6d9e33eea`; `herdr-app/mods/orch-spaces/UPSTREAM.md` records the 0.1.10 hashes. Follow `herdr-app/README.md` (the paragraph on updating after an app upgrade): review the bundled changes, carry the relevant ones into `orch-spaces`, record the new version and hashes, and run `bb scripts/test-herdr-app.bb`. Keep the local submodule linked-checkout test and the worktree row state.
 
 * Agent feedback
 
