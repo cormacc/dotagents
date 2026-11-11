@@ -4,6 +4,7 @@
             [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.string :as str]
+            [herdr-orch.core :as core]
             [herdr-orch.herdr :as output]))
 
 (defn- decode [text]
@@ -118,6 +119,56 @@
                                {:target address :agent agent :output (read! address {:source "visible"})}))
           (and (= kind (:agent agent)) (#{"idle" "working" "done"} state)) terminal
           :else (do (Thread/sleep 100) (recur)))))))
+;; Tabs belong to the herdr-app window, not to the core, so `hc` cannot name one; the
+;; app's own CLI can. Each call is bounded: a window that does not answer must not hold
+;; a delegation. Tab naming is display only, so callers record a failure and continue.
+(def ^:private app-timeout-ms 5000)
+(defn- app-invoke! [argv]
+  (let [bin (fs/which "herdr-app")
+        _ (when-not bin (throw (failure "missing_executable" "herdr-app is not on PATH" {})))
+        proc (process/process (into [(str bin)] argv) {:out :string :err :string})
+        finished (deref proc app-timeout-ms ::timeout)]
+    (when (= ::timeout finished)
+      (process/destroy-tree proc)
+      (throw (failure "timeout" "herdr-app did not answer" {:argv argv})))
+    (let [{:keys [exit out err]} finished value (decode out)]
+      (if (and (zero? exit) (map? value) (not (:error value)))
+        value
+        (throw (failure "herdr_app_error" (str "herdr-app " (first argv) " failed: " (or (:error value) (not-empty err) out))
+                        {:argv argv :exit exit}))))))
+;; `herdr-app ls` lists only the open window's spaces, with local terminal addresses
+;; unprefixed, so a local address identifies its tab directly.
+(defn- app-tab-of [address]
+  (first (for [space (:spaces (app-invoke! ["ls"]))
+               tab (:tabs space)
+               :when (some #(= address (:terminal %)) (:terminals tab))]
+           {:tab tab :space space})))
+(defn- app-rename-tab! [tab tab-name]
+  (app-invoke! ["do" "tab.rename" (json/generate-string {:id tab :name tab-name})])
+  tab-name)
+(defn- name-child-tab! [address label]
+  ;; The window adopts the new terminal into a tab after `hc run` returns.
+  (let [deadline (+ (System/currentTimeMillis) 3000)]
+    (loop []
+      (if-let [{:keys [tab]} (app-tab-of address)]
+        (app-rename-tab! (:id tab) label)
+        (if (< (System/currentTimeMillis) deadline)
+          (do (Thread/sleep 100) (recur))
+          (throw (failure "tab_not_found" "herdr-app shows no tab for the new terminal" {:target address})))))))
+(defn name-root-tab!
+  "Name the caller's tab `orch-<n>` (lowest free in its space) when nobody named it, and
+  give the caller's terminal the same `oh.label` when it has none, so space lists that
+  name agents by that label show it."
+  []
+  (let [address (local! (System/getenv "HC_TERMINAL_ID"))
+        {:keys [tab space]} (or (app-tab-of address)
+                                (throw (failure "tab_not_found" "herdr-app shows no tab for the caller" {:target address})))]
+    (if-not (core/unnamed-tab? (:name tab))
+      {:tab (:id tab) :name (:name tab) :named-by "user"}
+      (let [tab-name (app-rename-tab! (:id tab) (core/orch-tab-name (map :name (:tabs space))))]
+        (when (str/blank? (get-in (terminal! address) [:labels :oh.label]))
+          (invoke! ["label" address (str "oh.label=" tab-name)]))
+        {:tab (:id tab) :name tab-name :named-by "oh"}))))
 (defn launch! [{:keys [name kind native-args prompt placement]}]
   (when-not placement
     (throw (failure "missing_placement" "hc launch requires a deferred placement" {})))
@@ -135,7 +186,11 @@
       (let [ready (ready! address kind 30000)
             witness (process-witness ready)]
         (invoke! ["label" address (str "oh.process=" (pr-str witness))])
-        (assoc (agent-info ready) :tab-id tab :shell_pid witness :prompt-delivered? true))
+        (cond-> (assoc (agent-info ready) :tab-id tab :shell_pid witness :prompt-delivered? true)
+          ;; A split shares its parent's tab, which keeps the parent's name.
+          (= :tab (:mode placement))
+          (merge (try {:tab-name (name-child-tab! address label)}
+                      (catch Exception e {:tab-name-error (ex-message e)})))))
       ;; Deferred launch owns the terminal until it returns its address to the ledger.
       (catch Exception e (try (close! address) (catch Exception _)) (throw e)))))
 (defn wait! [target timeout until]

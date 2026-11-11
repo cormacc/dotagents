@@ -1034,3 +1034,12 @@
     (is (= "openai-codex/gpt-6-astra" (chosen cs (assoc rows "anthropic" {}))) "known sibling beats unresolved scope at the same rank")
     (is (= "lemonade/Qwen-Dense" (chosen cs (assoc rows "openai-codex" (ok 0.05)))))
     (is (true? (:refused (core/route (core/candidates config "claude" "heavy") (evidence rows)))))))
+
+(deftest orch-tab-naming-rules
+  (testing "a tab whose name is blank or only digits is unnamed"
+    (is (every? core/unnamed-tab? [nil "" "1" "12" " 3 "]))
+    (is (not-any? core/unnamed-tab? ["orch-0" "shell" "1a" "my 2"])))
+  (testing "the lowest free orch-<n> from 0"
+    (is (= "orch-0" (core/orch-tab-name [])))
+    (is (= "orch-0" (core/orch-tab-name ["1" "orch-1"])))
+    (is (= "orch-2" (core/orch-tab-name ["orch-0" "orch-1" "orch-3"])))))

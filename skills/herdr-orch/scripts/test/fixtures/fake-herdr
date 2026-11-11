@@ -179,7 +179,7 @@ case "${1:-}" in
         if [ -f "$(state_dir)/panes/$target/get-error" ]; then
           printf '{"error":{"code":"%s","message":"pane lookup failed"}}\n' "$(cat "$(state_dir)/panes/$target/get-error")" >&2; exit 1
         fi
-        printf '{"result":{"pane":{"pane_id":"%s","label":"%s"}}}\n' "$target" "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
+        printf '{"result":{"pane":{"pane_id":"%s","label":"%s","tab_id":"w:t1","workspace_id":"w"}}}\n' "$target" "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
       # `--pane <id>`, herdr 0.8.0 shape: `.result.process_info.shell_pid`. Same `gone`
       # marker as `get` above; otherwise a per-pane `shell-pid` file lets a test model a
       # pane whose shell has genuinely changed (a reused id), defaulting to a fixed value
@@ -225,6 +225,15 @@ case "${1:-}" in
   tab)
     case "$2" in
       create) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"root_pane":{"pane_id":"%s"},"tab":{"tab_id":"%s"}}}\n' "$pane" "${pane/child/tab}" ;;
+      # Every pane is in tab `w:t1` of workspace `w`. Its label is <state>/root-tab-label,
+      # else FAKE_ROOT_TAB_LABEL, else its number; a second tab is FAKE_OTHER_TAB_LABEL.
+      list)
+        root_label="${FAKE_ROOT_TAB_LABEL:-1}"
+        [ -f "$(state_dir)/root-tab-label" ] && root_label="$(cat "$(state_dir)/root-tab-label")"
+        printf '{"result":{"tabs":[{"tab_id":"w:t1","workspace_id":"w","number":1,"label":"%s"},{"tab_id":"w:t2","workspace_id":"w","number":2,"label":"%s"}]}}\n' "$root_label" "${FAKE_OTHER_TAB_LABEL:-2}" ;;
+      rename)
+        [ "${3:-}" = w:t1 ] && printf '%s' "${4:-}" >"$(state_dir)/root-tab-label"
+        echo '{"result":{}}' ;;
     esac ;;
   agent)
     case "$2" in

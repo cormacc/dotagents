@@ -2,7 +2,8 @@
   "Safe argv adapter for Herdr 0.9.1. No command text is passed to a shell."
   (:require [babashka.process :as process]
             [cheshire.core :as json]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [herdr-orch.core :as core]))
 
 (def minimum-version [0 9 1])
 (def minimum-version-text (str/join "." minimum-version))
@@ -135,6 +136,17 @@
 (defn tab-list! [workspace]
   (get-in (value! (cond-> ["tab" "list"] workspace (into ["--workspace" workspace]))) [:result :tabs]))
 (defn tab-focus! [tab] (get-in (value! ["tab" "focus" tab]) [:result :tab]))
+(defn tab-rename! [tab label] (value! ["tab" "rename" tab label]) label)
+;; The caller's tab gets the lowest free `orch-<n>` in its workspace when nobody named
+;; it. Only the tab: the herdr-orch sidebar plugin names root agents itself.
+(defn name-root-tab! []
+  (let [{:keys [tab_id workspace_id]} (pane! (System/getenv "HERDR_PANE_ID"))
+        tabs (tab-list! workspace_id)
+        mine (some #(when (= tab_id (:tab_id %)) %) tabs)]
+    (cond
+      (nil? mine) (throw (ex-info "caller tab absent from Herdr tab list" {:tab tab_id :workspace workspace_id}))
+      (not (core/unnamed-tab? (:label mine))) {:tab tab_id :name (:label mine) :named-by "user"}
+      :else {:tab tab_id :name (tab-rename! tab_id (core/orch-tab-name (map :label tabs))) :named-by "oh"})))
 (defn pane-list! [workspace]
   (get-in (value! (cond-> ["pane" "list"] workspace (into ["--workspace" workspace]))) [:result :panes]))
 (defn pane-layout! [pane] (get-in (value! ["pane" "layout" "--pane" pane]) [:result :layout]))

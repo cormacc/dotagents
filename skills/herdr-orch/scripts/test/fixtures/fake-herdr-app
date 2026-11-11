@@ -1,0 +1,41 @@
+#!/usr/bin/env bb
+;; Fake herdr-app CLI: `ls` and `do tab.rename`. Its window shows the fake hc state
+;; (FAKE_HC_STATE_DIR): each terminal in the tab its `herdr.tab` label names, the caller
+;; `t1` in `tab-parent` of `space-parent`. An unnamed tab reads as its position, as in
+;; the app. FAKE_HERDR_APP_TABS (EDN) adds tabs `{tab-id name}` to `space-parent`;
+;; FAKE_HERDR_APP_HIDE=1 shows no child terminal; FAKE_HERDR_APP_FAIL=1 fails every call.
+(require '[babashka.fs :as fs]
+         '[cheshire.core :as json]
+         '[clojure.edn :as edn]
+         '[clojure.string :as str])
+(def argv (vec *command-line-args*))
+(when-let [log (System/getenv "FAKE_HERDR_APP_LOG")]
+  (spit log (str (str/join "\u001f" argv) "\u001f\n") :append true))
+(when (= "1" (System/getenv "FAKE_HERDR_APP_FAIL"))
+  (println (json/generate-string {:error "fake herdr-app failure"}))
+  (System/exit 1))
+(def state-dir (System/getenv "FAKE_HC_STATE_DIR"))
+(defn read-edn [file default]
+  (let [path (str (fs/path state-dir file))] (if (fs/exists? path) (edn/read-string (slurp path)) default)))
+(def names-file "app-tab-names.edn")
+(defn tabs []
+  (let [terminals (filter map? (vals (read-edn "terminals.edn" {})))
+        children (if (= "1" (System/getenv "FAKE_HERDR_APP_HIDE")) [] terminals)
+        by-tab (group-by #(get-in % [:labels :herdr.tab]) children)
+        extra (some-> (System/getenv "FAKE_HERDR_APP_TABS") edn/read-string)
+        ids (distinct (concat ["tab-parent"] (keys extra) (remove #{"tab-parent"} (keys by-tab))))
+        named (merge extra (read-edn names-file {}))]
+    (map-indexed (fn [i id]
+                   {:id id :name (get named id (str (inc i)))
+                    :terminals (vec (concat (when (= "tab-parent" id) [{:terminal "t1"}])
+                                            (for [t (get by-tab id) :when (not= "t1" (:address t))]
+                                              {:terminal (:address t)})))})
+                 ids)))
+(case (first argv)
+  "ls" (println (json/generate-string {:spaces [{:id "space-parent" :name "fixture" :machine nil :tabs (tabs)}]}))
+  "do" (let [{:keys [id name]} (json/parse-string (nth argv 2) true)]
+         (when-not (= "tab.rename" (second argv)) (System/exit 2))
+         (fs/create-dirs state-dir)
+         (spit (str (fs/path state-dir names-file)) (pr-str (assoc (read-edn names-file {}) id name)))
+         (println (json/generate-string {})))
+  (System/exit 2))

@@ -541,6 +541,16 @@
   (str (when parent-label (str (nested-prefix parent-label parent-persona) "/"))
        (root-label persona index model)))
 
+;; Herdr TUI reports an unnamed tab's label as its number, and herdr-app reports its
+;; position; neither CLI listing carries a separate named flag. A tab that someone named
+;; with only digits is therefore treated as unnamed.
+(defn unnamed-tab? [tab-name] (boolean (re-matches #"\s*[0-9]*\s*" (or tab-name ""))))
+(defn orch-tab-name
+  "The lowest free `orch-<n>`, from 0, among the tab names of one workspace or space."
+  [tab-names]
+  (let [taken (set tab-names)]
+    (first (remove taken (map #(str "orch-" %) (range))))))
+
 ;; Artifact grammar lives with the link renderer further down; the serializer is its first
 ;; caller, so the two names it needs are declared rather than the whole section moved.
 (declare absolute-work-root! artifact-relative-path)

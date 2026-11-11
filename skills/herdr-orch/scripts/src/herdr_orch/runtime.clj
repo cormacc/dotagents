@@ -24,7 +24,10 @@
     Preserve ledger-compatible agent/session, pane_id, label and process witness fields;
     absence errors use :response :error :code pane_not_found.")
   (close-runtime! [runtime target])
-  (notify-runtime! [runtime title body]))
+  (notify-runtime! [runtime title body])
+  (name-root-tab! [runtime]
+    "Name the caller's tab the lowest free `orch-<n>` in its workspace or space, unless
+    someone named it. Return :tab, :name and :named-by (\"oh\" or \"user\")."))
 
 (defrecord TuiRuntime []
   Runtime
@@ -59,7 +62,8 @@
       :terminal (herdr/pane! target)
       :process (herdr/process-info! target)))
   (close-runtime! [_ target] (herdr/close! target))
-  (notify-runtime! [_ title body] (herdr/notify! title body)))
+  (notify-runtime! [_ title body] (herdr/notify! title body))
+  (name-root-tab! [_] (herdr/name-root-tab!)))
 
 (defrecord HcRuntime []
   Runtime
@@ -73,7 +77,8 @@
   (read-runtime! [_ target opts] (hc/read! target opts))
   (status! [_ request] (hc/status! request))
   (close-runtime! [_ target] (hc/close! target))
-  (notify-runtime! [_ title body] (hc/notify! title body)))
+  (notify-runtime! [_ title body] (hc/notify! title body))
+  (name-root-tab! [_] (hc/name-root-tab!)))
 
 (def ^:private tui (->TuiRuntime))
 (def ^:private core-runtime (->HcRuntime))

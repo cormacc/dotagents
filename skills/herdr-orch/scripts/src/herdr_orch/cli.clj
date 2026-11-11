@@ -1300,6 +1300,13 @@
     (try (pi-adapter/run-op! (fork-adapter-file) "fork-discard"
                              {:sessionFile (:sessionFile created) :sessionId (:sessionId created) :source (select-keys (:source created) [:path])})
          (catch Exception _ nil))))
+;; Display only: the root's tab reads `orch-<n>` beside its children's tabs, which carry
+;; their labels. A failure is recorded on the round and never fails the spawn.
+(defn- name-root-tab-for! [task]
+  (ledger/update! task merge
+                  (try {:root-tab (herdr/name-root-tab! (herdr/selected!))}
+                       (catch Exception e {:root-tab-error (or (ex-message e) (str e))}))))
+
 (defn- spawn-interactive! [persona opts waiting-policy]
   (herdr/preflight!)
   (let [;; Composition (extends, traits:, --trait) and its failure policy run in the
@@ -1482,10 +1489,14 @@
                                            (contains? launched :tab-id) (assoc :tab-id (:tab-id launched))))))
                 (when-let [pid (:shell_pid launched)]
                   (ledger/update! task assoc :shell-pid pid))
+                (when-some [tab-naming (not-empty (select-keys launched [:tab-name :tab-name-error]))]
+                  (ledger/update! task merge tab-naming))
                 (record-session! task (:agent_session launched))
                 (ledger/update! task assoc :status "started" :started-at (now))
                 (when-not (:prompt-delivered? launched)
                   (herdr/prompt-runtime! (herdr/selected!) name prompt {}))
+                (when-not caller-persona (name-root-tab-for! task))
+                ;; The prompted entry is the spawn's result.
                 (ledger/update! task assoc :status "prompted" :prompted-at (now)))))
           (catch Exception e
             (safe-cleanup! (ledger/read! task) :start)

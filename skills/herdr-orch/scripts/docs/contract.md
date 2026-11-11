@@ -620,7 +620,11 @@ Depth is bounded to one nesting level absolutely, with no depth counter: a CLI w
 
 ## Labels and geometry
 
-Labels are `<persona>-<index>[-<model-basename>]`. A below-root child is `<parent-persona>-<n>/<persona>-<index>[-<model-basename>]`, prefixed from the spawning agent's injected `HERDR_ORCH_PERSONA`. Workspace names are excluded. Labels are display metadata only: capability and depth are enforced by [#Spawn gating](#spawn-gating), never by label parsing. Direction is `right` only when the caller's own matching layout pane rect has `width >= 80 && width >= 2 * height`, otherwise `down`. Tab area is irrelevant.
+Labels are `<persona>-<index>[-<model-basename>]`. A below-root child is `<parent-persona>-<n>/<persona>-<index>[-<model-basename>]`, prefixed from the spawning agent's injected `HERDR_ORCH_PERSONA`. Workspace names are excluded. Labels are display metadata only: capability and depth are enforced by [#Spawn gating](#spawn-gating), never by label parsing.
+
+Tab names are display metadata too. A tab-placed child's tab is named by its label: TUI passes it to `tab create`; for hc, `oh` waits up to 3 seconds for `herdr-app ls` to show the child's terminal in a tab, then runs `herdr-app do tab.rename`, and records `:tab-name` or `:tab-name-error`. A split child shares its parent's tab and names nothing. After a root spawn is prompted, `oh` names the caller's tab `orch-<n>`, the lowest `n` from 0 that no other tab in its workspace (TUI) or space (hc) uses, but only when the tab is unnamed: neither CLI reports a named flag, so a blank or all-digit name counts as unnamed. On hc it also sets `oh.label=orch-<n>` on the caller's terminal when it has no `oh.label`; on TUI the root pane keeps its name, because the herdr-orch sidebar plugin names root agents. The entry records `:root-tab {:tab :name :named-by}`, where `:named-by` is `"oh"` or `"user"`, or `:root-tab-error`. Below root, nothing is named. Every `herdr-app` call is bounded to 5 seconds, and no naming failure fails a spawn. Two roots that spawn at once in one space can both choose the same `orch-<n>`.
+
+Direction is `right` only when the caller's own matching layout pane rect has `width >= 80 && width >= 2 * height`, otherwise `down`. Tab area is irrelevant.
 
 ## Placement
 

@@ -28,6 +28,7 @@
 (def bin (str root "/skills/herdr-orch/scripts/oh"))
 (def fake (str root "/skills/herdr-orch/scripts/test/fixtures/fake-herdr"))
 (def fake-hc (str root "/skills/herdr-orch/scripts/test/fixtures/fake-hc"))
+(def fake-herdr-app (str root "/skills/herdr-orch/scripts/test/fixtures/fake-herdr-app"))
 (defn calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
 ;; One shared per-run dir for babashka's deps.clj-honoured `CLJ_CACHE` (user classpath
 ;; cache override, normally `~/.clojure/.cpcache`) and `CLJ_CONFIG` (user config-dir
@@ -62,6 +63,8 @@
          home (fs/path dir "home") roster (fs/path dir ".agents" "subagents") skills (fs/path dir "skills")]
      (fs/create-sym-link (fs/path dir "herdr") fake)
      (fs/create-sym-link (fs/path dir "hc") fake-hc)
+     ;; Ahead of the system PATH, so no test can rename a tab in a real herdr-app window.
+     (fs/create-sym-link (fs/path dir "herdr-app") fake-herdr-app)
      (fs/create-dirs home)
      (support/routing-auth! dir)
      (fs/create-dirs (fs/parent roster))
@@ -9670,3 +9673,34 @@
     (testing "known-bad control: an override that drops :providers loses the filter"
       (let [bad (core/merge-config shipped {:harnesses {:claude (dissoc (get-in home [:harnesses :claude]) :providers)}})]
         (is (< 1 (count (core/candidates bad "claude" "heavy"))))))))
+
+;; A root spawn names the caller's unnamed tab `orch-<n>` (lowest free in its workspace)
+;; and leaves a named one, and the root pane, alone. Below root, nothing is named.
+(deftest root-spawn-names-the-callers-tab-once
+  (testing "unnamed: renamed once, to the lowest free number"
+    (doseq [[other expected] [["2" "orch-0"] ["orch-0" "orch-1"]]]
+      (let [{:keys [env log dir]} (fake-env {"FAKE_OTHER_TAB_LABEL" other})
+            first-proc (call! env "task" "start" "scout" "--split" "--task" "first root spawn")
+            second-proc (call! env "task" "start" "scout" "--split" "--task" "second root spawn")
+            renames (filter #(= ["tab" "rename"] (vec (take 2 %))) (calls log))]
+        (is (zero? (:exit first-proc)) (:out first-proc))
+        (is (zero? (:exit second-proc)) (:out second-proc))
+        (is (= [["tab" "rename" "w:t1" expected]] (mapv #(vec (take 4 %)) renames)))
+        (is (= {:tab "w:t1" :name expected :named-by "oh"}
+               (:root-tab (ledger-entry* dir (get-in (result first-proc) [:result :task])))))
+        (is (= {:tab "w:t1" :name expected :named-by "user"}
+               (:root-tab (ledger-entry* dir (get-in (result second-proc) [:result :task])))))
+        (is (not-any? #(= ["pane" "rename" "w:p"] (vec (take 3 %))) (calls log)) "the root pane keeps its name"))))
+  (testing "named by the user: left alone"
+    (let [{:keys [env log dir]} (fake-env {"FAKE_ROOT_TAB_LABEL" "main"})
+          proc (call! env "task" "start" "scout" "--split" "--task" "named root tab")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (not-any? #(= ["tab" "rename"] (vec (take 2 %))) (calls log)))
+      (is (= "main" (get-in (ledger-entry* dir (get-in (result proc) [:result :task])) [:root-tab :name])))))
+  (testing "below root: no tab lookup or rename"
+    (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
+                                           "FAKE_PARENT_LABEL" "worker-1-light"})
+          proc (call! env "task" "start" "scout" "--task" "nested spawn")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (not-any? #(#{["tab" "list"] ["tab" "rename"]} (vec (take 2 %))) (calls log)))
+      (is (not (contains? (ledger-entry* dir (get-in (result proc) [:result :task])) :root-tab))))))
