@@ -28,22 +28,16 @@
   - [[#plan-accepted-pi-recovery-selection-limits][Plan accepted Pi recovery selection limits]]
   - [[#validate-the-org-tasks-herdr-uis-natively-on-linux-and-after-installation][Validate the org-tasks Herdr UIs natively on Linux and after installation]]
   - [[#validate-the-herdr-tui-sidebar-agent-tree-on-linux][Validate the Herdr TUI sidebar agent tree on Linux]]
-  - [[#cover-the-untested-herdr-orch-sidebar-tree-reconcile-paths][Cover the untested herdr-orch sidebar tree reconcile paths]]
-  - [[#herdr-orch-remove-split-placement-for-delegated-children][herdr-orch: remove split placement for delegated children]]
   - [[#herdr-orch-evaluate-oh-assisted-integration-of-worktree-branches][herdr-orch: evaluate oh-assisted integration of worktree branches]]
   - [[#herdr-orch-show-the-current-delegation-tree-without-sidebar-changes][herdr-orch: show the current delegation tree without sidebar changes]]
 - [[#fixes][Fixes]]
   - [[#diagnose-intermittent-herdr-app-quota-loading-stall][Diagnose intermittent herdr-app quota loading stall]]
-  - [[#route-explicit-model-requests-across-subscription-accounts][Route explicit model requests across subscription accounts]]
-  - [[#refresh-pi-web-access-transitive-dependencies-for-advisories][Refresh pi-web-access transitive dependencies for advisories]]
-  - [[#herdr-orch-collect---any---wait-reports-no-live-children-while-hc-children-work][herdr-orch: collect --any --wait reports no-live-children while hc children work]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
   - [[#validate-axi-cli-changes-on-linux-without-measurement-exclusions][Validate AXI CLI changes on Linux without measurement exclusions]]
 - [[#agent-feedback][Agent feedback]]
   - [[#started-guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][STARTED Guard against a parallel tool batch that writes and reads the same path]]
   - [[#started-stop-parallel-claude-trigger-evals-picking-another-workers-candidate][STARTED Stop parallel claude trigger evals picking another worker's candidate]]
-  - [[#make-roster-regeneration-replace-complete-mixed-format-results][Make roster regeneration replace complete mixed-format results]]
 
 * Explorations
 
@@ -270,34 +264,6 @@ The terminal plugin and the herdr-app widget were checked live on macOS only (20
 :END:
 The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tree.org]]) was checked live on macOS only (2026-11-08, plan task 076c6a03). On xps15, repeat that live check in a scratch session: marks and the U+2800 depth-2 indent, next/previous order, child close, `prefix+ctrl+t` toggle, and the startup hook after a scratch-session restart. Check the per-session state key (`HERDR_SESSION`) and the `server` identity in `tree-state.json`, which uses the socket file creation time (unverified on Linux).
 
-** DONE Cover the untested herdr-orch sidebar tree reconcile paths
-CLOSED: [2026-11-11 Wed 23:05]
-:PROPERTIES:
-:CUSTOM_ID: bfcb1bef-7282-4ae9-a65a-16db734a026c
-:CREATED: [2026-11-08 Sun 15:31]
-:STARTED: [2026-11-11 Wed 22:49]
-:END:
-:LOGBOOK:
-- Created [2026-11-08 Sun 15:31]
-- State "STARTED" from "TODO" [2026-11-11 Wed 22:49]
-- State "DONE" from "STARTED" [2026-11-11 Wed 23:05]
-:END:
-Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeout reviews of task 9777d1ec found untested ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Risks): the retry of a failed `agent.view.clear` by the next off reconcile (mutants in `orch_tree.clj` `reconcile-once!` and `reset-once!` survived the runner), a view re-send caused only by a stale-pane clear, and the contended-branch dirty re-check in `reconcile!`. Also: nothing tests `server-id` (the re-report after a server restart; a constant body leaves the runner green), and the simplification review proposed replacing it by treating `HERDR_PLUGIN_EVENT` = `startup` as a fresh run, with a test; and the off path's `(or (seq (:panes old)) (:view old))` survives an `off-panes-only` mutant.
-
-Outcome [2026-11-11 Wed]: commit 9dd56a1 adds four runner cases (failed view-clear retry while off, stale-pane-only view re-send, server restart through a replacement socket, contended-lock re-check). The worker reports that each of five production mutants turns the runner red; the constant `server-id` mutant was re-checked by the root (2 failures). The `HERDR_PLUGIN_EVENT` = `startup` simplification was not done: it is unproven for concurrent hooks or a missed startup event. A live server restart and Linux remain with task cbbdb783.
-
-** STARTED herdr-orch: remove split placement for delegated children :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: a21f1073-3a5f-4dd1-9204-ee357b87d268
-:CREATED: [2026-11-11 Wed 10:15]
-:STARTED: [2026-11-11 Wed 22:49]
-:END:
-:LOGBOOK:
-- Created [2026-11-11 Wed 10:15]
-- State "STARTED" from "TODO" [2026-11-11 Wed 22:49]
-:END:
-Delegated children are placed in tabs only in practice. Remove `--split`, the `:split` and `:tab-split` values of `:defaults :placement`, and the below-root split rule (`core/resolve-placement`, `TuiRuntime` `place!`, `hc/place!`), with their docs and tests. Keep `oh pane split` and the measurement monitor, which use `core/direction` and `caller-rect!`. Parked from the worktree-integration record (task e9199488) because it does not simplify workspace placement.
-
 ** TODO herdr-orch: evaluate oh-assisted integration of worktree branches :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: e88e718e-09b1-4dc0-a0df-dc176f1e451f
@@ -328,64 +294,6 @@ Give a user one view of the current delegation tree (parent, children, persona, 
 - Created [2026-11-05 Thu 20:50]
 :END:
 Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the owner accepted this as a known limit on 2026-11-09 (herdr-app/README.md). Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
-
-** STARTED Route explicit model requests across subscription accounts :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 547639a6-dcbf-4e8d-ad37-959449d782d3
-:CREATED: [2026-11-07 Sat 23:37]
-:STARTED: [2026-11-11 Wed 22:49]
-:END:
-:LOGBOOK:
-- Created [2026-11-07 Sat 23:37]
-- State "STARTED" from "TODO" [2026-11-11 Wed 22:49]
-:END:
-A subagent spawned with an explicit string alias or base canonical ID (for example `oh task start reviewer --model fable`) runs on the base `anthropic` account, even when that account has no quota and a named account (`anthropic-1`) has quota. The user states that this is not the design intent: an explicit model request must keep its model but still choose among the authenticated accounts that serve it.
-
-Observed on 2026-11-07: reviewer task 53272a31-4a9d-4ec4-a0df-cf6b9663a10c got `model-canonical: anthropic/claude-fable-5-1` and `model-route: null` while `oh usage --format status` reported `anthropic 0%s 100%w | anthropic-1 19%s 20%w`. A `--print-prompt` preview with `--model heavy` routed to `anthropic-1/claude-fable-5-1`; one with `--model anthropic-1/claude-fable-5-1` was accepted unrouted. The user recovered the child manually.
-
-Cause: skills/herdr-orch/scripts/docs/contract.md section 'Routing' states that a string alias, a canonical ID or an unknown name is never routed and makes no usage call, and that an explicit string alias or canonical ID bypasses routing. The shared route operation already supports same-model account selection for a direct model (its `model` input normalises a named-account model to the base canonical model; `current` prefers same-model sibling accounts). Origin: plan task 85ec22af-7010-4778-8b97-ea95217d5ec8 'Route model-account pairs through primary and subagent entry points' in [[plan:2026-multiple-subscriptions.org]].
-
-Acceptance criteria:
-- A Pi-kind spawn with a string alias or base canonical model selects an eligible account for that same model, using the same evidence and eligibility rules as vector-alias routing, and never changes the model.
-- An explicit concrete account ID (for example `anthropic-1/claude-fable-5-1`) stays unrouted.
-- When no account for the model is eligible, the spawn is refused before any mutation, with the same diagnostic shape as an exhausted vector alias.
-- The ledger, `task start` envelope and `--print-prompt` result carry `:model-route` for these launches; `HERDR_ORCH_MODEL` carries the concrete account/model ID.
-- Native non-Pi kinds keep their single-account behaviour.
-- The contract section 'Routing' and the SKILL.md routing guidance describe the new rule; regression tests cover base-account exhaustion with a named account available.
-
-** DONE Refresh pi-web-access transitive dependencies for advisories :security:
-CLOSED: [2026-11-11 Wed 22:51]
-:PROPERTIES:
-:CUSTOM_ID: ee9a5389-51b9-4909-bb6e-5dd7a50fe9eb
-:CREATED: [2026-11-08 Sun 10:58]
-:STARTED: [2026-11-11 Wed 22:49]
-:END:
-:LOGBOOK:
-- Created [2026-11-08 Sun 10:58]
-- State "STARTED" from "TODO" [2026-11-11 Wed 22:49]
-- State "DONE" from "STARTED" [2026-11-11 Wed 22:51]
-:END:
-On 2026-11-08, after task:6c82bead-d124-4ff1-b9e9-939ed43454de removed the unused packages, npm audit in ~/.pi/agent/npm reported 5 vulnerable packages (4 high, 1 moderate). pi-web-access@0.47.0 brings in all of them: undici 8.11.2 directly, and body-parser, qs, fast-uri and zod through @modelcontextprotocol/sdk@1.32.1. npm audit reports a non-major fix for each. Evidence: .tmp/pi-prune-20261108/audit-after.json.
-
-Acceptance criteria:
-- Copy package.json and package-lock.json to .tmp/ before the change.
-- Use the flags that Pi uses for managed installs (--legacy-peer-deps --no-audit --no-fund) and add --ignore-scripts. Without --legacy-peer-deps, npm installs Pi itself and its peers into the managed directory.
-- Do not use npm audit fix: Pi skips audit advice because audit fix runs without --legacy-peer-deps.
-- Confirm that the 7 npm packages in settings are still installed, then run npm audit again and start Pi.
-
-Outcome [2026-11-11 Wed]: `npm update undici body-parser qs fast-uri zod --legacy-peer-deps --no-audit --no-fund --ignore-scripts` (npm 11.19.1) changed 5 packages: body-parser 2.4.0, fast-uri 3.1.9, qs 6.17.1, undici 8.12.4, zod 4.6.7; package.json unchanged. npm audit reports 0 vulnerabilities; all 7 packages are installed; Pi starts in RPC mode and lists the pi-web-access commands. Backup and audit files: .tmp/backlog-20261111/npm-before/.
-
-** STARTED herdr-orch: collect --any --wait reports no-live-children while hc children work :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 64547358-891c-49fb-bd33-ca8e85fe0f05
-:CREATED: [2026-11-11 Wed 21:08]
-:STARTED: [2026-11-11 Wed 22:49]
-:END:
-:LOGBOOK:
-- Created [2026-11-11 Wed 21:08]
-- State "STARTED" from "TODO" [2026-11-11 Wed 22:49]
-:END:
-Under the hc runtime (herdr-app 0.1.15, caller terminal t3), `oh task collect --any --wait --timeout 20000` returned `{"status":"pending","reason":"no-live-children"}` after 1.4 s while two reviewer children (t3d, t3f) were live with `status.state` "working". In the same minute, `oh task collect <full-task-uuid> --wait --timeout 20000` on one of them returned `pending/timeout` with `child-status` "working". Evidence: `.tmp/closeout-e9199488/any-bug.json` (gitignored, this machine only). Not yet checked: whether the TUI runtime behaves the same, and which liveness read `--any` uses under hc. Workaround: collect each task UUID.
 
 * Upstream issues
 
@@ -445,33 +353,3 @@ Evidence:
 :END:
 #+IMPORT: [[plan:2026-11-04-trigger-eval-isolation.org]]
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
-
-** DONE Make roster regeneration replace complete mixed-format results :skill:herdr_orch:
-CLOSED: [2026-11-11 Wed 23:10]
-:PROPERTIES:
-:CUSTOM_ID: fbf2c697-64a5-4d8d-94d7-1cd8377d9cfb
-:CREATED: [2026-11-05 Thu 01:45]
-:STARTED: [2026-11-11 Wed 22:49]
-:END:
-:LOGBOOK:
-- Created [2026-11-05 Thu 01:45]
-- State "STARTED" from "TODO" [2026-11-11 Wed 22:49]
-- State "DONE" from "STARTED" [2026-11-11 Wed 23:10]
-:END:
-Make bb readme-roster idempotent for model results containing an Org table followed by ranked-alias paragraphs and lists. Preserve the whole generated result boundary instead of replacing only the table.
-
-Origin:
-- cwd: /Users/cormacc/dotfiles/agents
-- git: main
-- timestamp: [2026-11-05 Thu 01:44]
-- sender: agent
-
-Evidence:
-Running bb readme-roster after alias changes replaced the model table but retained the earlier ranked list below the replacement, producing duplicate ranked-alias sections. The shipped readme-roster-listings-are-current test detected the stale output. Clearing the complete generated model block before regeneration restored exact output. Evidence: .tmp/routing-plan-commits-1/portable.out and readme-roster.out.
-
-Acceptance criteria:
-- Two consecutive regeneration runs leave the README byte-identical after the first run.
-- A configuration change replaces the old ranked aliases instead of appending another list.
-- Maintainer instructions use the supported regeneration path without manual result edits.
-
-Outcome [2026-11-11 Wed]: commit 4fbf768 had already wrapped the roster results in `:results output drawer replace`, which makes the whole mixed output one replaceable result. Commit ad81791 adds scripts/test-readme-roster.bb to `bb test`: it runs `bb readme-roster` four times in a disposable copy, with a ranked-alias change, and checks byte-identical reruns and one ranked list. It skips when Emacs is absent, and it depends on the current packaged `heavy` ranks.
