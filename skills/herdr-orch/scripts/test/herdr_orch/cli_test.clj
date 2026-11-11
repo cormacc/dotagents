@@ -1069,6 +1069,104 @@
 ;; `--tab` places the child in a new tab of the caller's workspace instead of a split, but
 ;; every other contract (env, label, ledger, collect, closure) is identical. Delegation
 ;; always creates the tab without focusing it.
+(deftest workspace-placement-contract
+  (doseq [verb ["run" "start"]]
+    (let [{:keys [env log dir env-file]} (fake-env {"HERDR_WORKSPACE_ID" "w:parent"})
+          proc (call! env "task" verb "worker" "--workspace" "--worktree" "new" "--task" "workspace child" "--timeout" "5000")]
+      (is (zero? (:exit proc)) (:out proc))
+      (when (zero? (:exit proc))
+        (let [entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+              checkout (get-in entry [:worktree :path])
+              argv (calls log)
+              placements (filterv #(#{["workspace" "create"] ["worktree" "open"]} (vec (take 2 %))) argv)
+              create (first placements)
+              injected (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
+          (is (= "workspace" (:placement entry)))
+          (is (= "w:child" (:pane-id entry)))
+          (is (= ["workspace" "create" "--cwd" checkout "--label" (:label entry)] (vec (take 6 create))))
+          (is (= "--no-focus" (last create)))
+          (is (= "--env" (nth create 6 nil)))
+          (is (not-any? #{"--focus"} create))
+          (is (= ["worktree" "open" "--workspace" "w:parent" "--path" checkout "--no-focus"] (second placements)))
+          (is (= 2 (count placements)))
+          (is (= checkout (injected "HERDR_ORCH_WORK_ROOT")))
+          (is (= (:task entry) (injected "HERDR_ORCH_TASK")))
+          (is (= (:result entry) (injected "HERDR_ORCH_RESULT")))
+          (is (= (:child entry) (injected "HERDR_ORCH_CHILD")))
+          (is (= (str dir) (injected "ORCH_ASSIGNMENT_ROOT")))
+          (is (= (set (keys injected))
+                 #{"HERDR_ORCH_CHILD" "HERDR_ORCH_TASK" "HERDR_ORCH_RESULT" "HERDR_ORCH_BIN"
+                   "HERDR_ORCH_WORK_ROOT" "HERDR_ORCH_PERSONA" "HERDR_ORCH_SPAWNS" "HERDR_ORCH_EFFORT"
+                   "ORCH_ASSIGNMENT_ROOT" "HERDR_ORCH_MODEL"}))
+          (when (= verb "start")
+            (is (zero? (:exit (call! env "task" "collect" (:task entry) "--wait" "--timeout" "5000")))))
+          (is (zero? (:exit (call! env "task" "close" (:task entry)))))
+          (is (some #(= ["pane" "close" "w:child"] %) (calls log)))
+          (is (fs/exists? checkout))
+          (is (str/includes? (git-in! dir "branch" "--list") (get-in entry [:worktree :branch]))))))))
+
+(deftest workspace-placement-refuses-before-allocation
+  (doseq [args [["--workspace"] ["--workspace" "--worktree" :shared]
+                ["--workspace" "--tab" "--worktree" "new"]
+                ["--workspace" "--split" "--worktree" "new"]
+                ["--workspace" "--context" "measurement" "--measurement-config" "unused"]]]
+    (let [{:keys [env log dir]} (fake-env {})
+          proc (apply call! env "task" "start" "--task" "refuse" (replace {:shared (str dir)} args))]
+      (is (= 2 (:exit proc)) (:out proc))
+      (is (re-find #"requires a non-shared worktree|mutually exclusive|measurement refuses --workspace" (:out proc)))
+      (is (not-any? #(or (mutating? %) (#{["workspace" "create"] ["worktree" "open"]} (vec (take 2 %)))) (calls log)))
+      (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger")))))))
+
+(deftest workspace-placement-supports-continue-collect-and-poke
+  (let [{:keys [env dir log]} (fake-env {"HERDR_WORKSPACE_ID" "w:parent"})
+        start (call! env "task" "start" "worker" "--workspace" "--worktree" "new" "--task" "first round")]
+    (is (zero? (:exit start)) (:out start))
+    (when (zero? (:exit start))
+      (let [task (get-in (result start) [:result :task])
+            entry (ledger-entry* dir task)]
+        (is (zero? (:exit (call! env "task" "collect" task "--wait" "--timeout" "5000"))))
+        (let [continued (call! env "task" "continue" task "--task" "second round")]
+          (is (zero? (:exit continued)) (:out continued))
+          (when (zero? (:exit continued))
+            (let [next-task (get-in (result continued) [:result :task])
+                  next-entry (ledger-entry* dir next-task)]
+              (is (= "workspace" (:placement next-entry)))
+              (is (= (:pane-id entry) (:pane-id next-entry)))
+              (is (= (:worktree entry) (:worktree next-entry)))
+              (is (zero? (:exit (call! env "task" "poke" next-task))))
+              (seal-round! next-entry)
+              (let [collected (call! env "task" "collect" next-task "--wait" "--timeout" "5000")]
+                (is (zero? (:exit collected)) (:out collected))
+                (is (= "COMPLETE" (get-in (result collected) [:result :status]))))
+              (let [closed (call! env "task" "close" next-task)]
+                (is (zero? (:exit closed)) (:out closed))))))
+        (is (= 1 (count (filter #(= ["workspace" "create"] (vec (take 2 %))) (calls log)))))))))
+
+(deftest workspace-placement-accepts-implicit-worktree
+  (let [{:keys [env dir]} (fake-env {"HERDR_WORKSPACE_ID" "w:parent"})
+        first-child (call! env "task" "start" "worker" "--task" "first writer")
+        proc (call! env "task" "start" "worker" "--task" "second writer" "--workspace")]
+    (is (zero? (:exit first-child)))
+    (is (zero? (:exit proc)) (:out proc))
+    (when (zero? (:exit proc))
+      (let [entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+        (is (= "workspace" (:placement entry)))
+        (is (some? (:worktree entry)))))))
+
+(deftest workspace-open-failure-cleans-pane-and-checkout
+  (let [{:keys [env dir log]} (fake-env {"HERDR_WORKSPACE_ID" "w:parent" "FAKE_FAIL_WORKTREE_OPEN" "1"})
+        proc (call! env "task" "start" "worker" "--workspace" "--worktree" "new" "--task" "failed open")]
+    (is (= 1 (:exit proc)) (:out proc))
+    (is (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger")))
+    (when (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger"))
+      (let [file (first (fs/glob (fs/path dir ".tmp/herdr-orch/ledger") "*.json"))
+            entry (json/parse-string (slurp (str file)) true)]
+        (is (= "failed" (:status entry)))
+        (is (= "w:child" (:pane-id entry)))
+        (is (some #(= ["pane" "close" "w:child"] %) (calls log)))
+        (is (not (fs/exists? (get-in entry [:worktree :path]))))
+        (is (str/includes? (git-in! dir "branch" "--list") (get-in entry [:worktree :branch])))))))
+
 (deftest tab-placement-contract
   (let [{:keys [env log env-file dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--tab" "--task" "tab placement" "--timeout" "20")
         argv (calls log)

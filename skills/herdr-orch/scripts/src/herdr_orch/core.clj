@@ -503,6 +503,7 @@
   (case flag
     "tab" "tab"
     "split" "split"
+    "workspace" "workspace"
     (case configured
       :tab "tab"
       :tab-split (if below-root? "split" "tab")

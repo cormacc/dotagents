@@ -126,11 +126,13 @@
 
 (defn workspace-list! [] (get-in (value! ["workspace" "list"]) [:result :workspaces]))
 (defn workspace-create! [{:keys [cwd label env focus]}]
-  (get-in (value! (into (cond-> ["workspace" "create" "--cwd" cwd]
-                          label (into ["--label" label])
-                          focus (conj "--focus")
-                          (not focus) (conj "--no-focus"))
-                        (env-args env))) [:result]))
+  (get-in (value! (conj (into (cond-> ["workspace" "create" "--cwd" cwd]
+                               label (into ["--label" label]))
+                             (env-args env))
+                       (if focus "--focus" "--no-focus"))) [:result]))
+(defn worktree-open! [{:keys [cwd workspace]}]
+  (get-in (value! ["worktree" "open" "--workspace" (or workspace (System/getenv "HERDR_WORKSPACE_ID"))
+                   "--path" cwd "--no-focus"]) [:result]))
 (defn workspace-focus! [workspace] (get-in (value! ["workspace" "focus" workspace]) [:result :workspace]))
 (defn tab-list! [workspace]
   (get-in (value! (cond-> ["tab" "list"] workspace (into ["--workspace" workspace]))) [:result :tabs]))

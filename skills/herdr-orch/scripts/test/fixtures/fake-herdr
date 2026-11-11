@@ -402,6 +402,14 @@ case "${1:-}" in
   # FAKE_WORKSPACE_LIST_FILE answers `workspace list` with that file verbatim (the sidebar
   # tree reconcile reads workspace labels from it).
   workspace)
-    if [ "${2:-}" = list ] && [ -n "${FAKE_WORKSPACE_LIST_FILE:-}" ]; then cat "$FAKE_WORKSPACE_LIST_FILE"; fi ;;
+    case "${2:-}" in
+      list) if [ -n "${FAKE_WORKSPACE_LIST_FILE:-}" ]; then cat "$FAKE_WORKSPACE_LIST_FILE"; fi ;;
+      create) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"root_pane":{"pane_id":"%s"},"tab":{"tab_id":"%s"},"workspace":{"workspace_id":"%s"}}}\n' "$pane" "${pane/child/tab}" "${pane/child/workspace}" ;;
+    esac ;;
+  worktree)
+    if [ "${FAKE_FAIL_WORKTREE_OPEN:-}" = 1 ]; then
+      echo '{"error":{"code":"worktree_open_failed","message":"fake open failure"}}' >&2; exit 1
+    fi
+    echo '{"result":{"already_open":true}}' ;;
   notification) [ "${FAKE_NOTIFY_FAIL:-}" = 1 ] && { echo '{"error":"notify"}' >&2; exit 1; }; echo '{"result":{}}' ;;
 esac
