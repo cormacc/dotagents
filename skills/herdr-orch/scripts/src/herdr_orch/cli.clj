@@ -1114,9 +1114,12 @@
 ;; (`ledger/composed-persona-path`, `ledger/fresh-result`), never under the source cwd.
 (defn managed-worktree-root [] (fs/path (ledger/assignment-root) ".tmp" "herdr-orch" "worktrees"))
 (defn worktree-checkout-path [task] (str (fs/path (managed-worktree-root) task)))
+(declare assert-managed-worktree-path!)
+(def ^:private worktree-lock-reason "Managed by oh; use oh worktree remove")
 (defn create-worktree! [dir path branch base]
+  (assert-managed-worktree-path! nil path)
   (fs/create-dirs (fs/parent (fs/path path)))
-  (git! dir "worktree" "add" "-b" branch path base))
+  (git! dir "worktree" "add" "--lock" "--reason" worktree-lock-reason "-b" branch path base))
 
 (defn- canonical-checkout! [label path]
   (when-not (and path (fs/directory? path))
@@ -2796,6 +2799,34 @@
       0 true
       1 false
       (fail "git merge-base --is-ancestor failed" {:dir dir :tip tip :exit exit :stderr (str/trim err)}))))
+(defn- worktree-lock [dir path]
+  (let [records (partition-by empty? (git-nul dir "worktree" "list" "--porcelain" "-z"))
+        resolved (resolve-worktree-path path)]
+    (some (fn [record]
+            (let [header (first record)]
+              (when (and (str/starts-with? header "worktree ")
+                         (= resolved (resolve-worktree-path (subs header 9))))
+                (some #(when (or (= % "locked") (str/starts-with? % "locked ")) %) record))))
+          records)))
+
+(defn- unlock-worktree! [dir path]
+  (when-let [lock (worktree-lock dir path)]
+    (when-not (= lock (str "locked " worktree-lock-reason))
+      (fail (str "worktree removal refused: foreign lock: " lock) {:path path :lock lock}))
+    (git! dir "worktree" "unlock" path)
+    true))
+
+(defn- remove-managed-worktree! [dir path]
+  (let [locked? (unlock-worktree! dir path)]
+    (try
+      (git! dir "worktree" "remove" path)
+      (catch Exception e
+        (when locked?
+          (try (git! dir "worktree" "lock" "--reason" worktree-lock-reason path)
+               (catch Exception lock-error
+                 (throw (ex-info "worktree removal and re-lock failed" {:path path :lock-error (ex-message lock-error)} e)))))
+        (throw e)))))
+
 (defn worktree-remove! [task]
   (when-not task (usage-error "worktree remove requires a full task uuid" {}))
   (let [entry (ledger/read! task)]
@@ -2805,12 +2836,13 @@
       (when (worktree-referenced-by-live-round? path (ledger/entries))
         (fail "worktree remove refused: a live round of this session still references the checkout" {:task task :path path}))
       (if-not (fs/exists? path)
-        {:status "missing" :task task :child (:child entry) :path path :branch branch :base base}
+        (do (unlock-worktree! (source-cwd) path)
+            {:status "missing" :task task :child (:child entry) :path path :branch branch :base base})
         (let [dirty (dirty-paths path) ignored (ignored-paths path)]
           (when (seq dirty)
             (fail "worktree remove refused: checkout is dirty" {:task task :path path :dirty dirty :ignored ignored}))
           (let [tip (head-sha path) ancestor? (ancestor-of-parent-head? (source-cwd) tip)]
-            (git! (source-cwd) "worktree" "remove" path)
+            (remove-managed-worktree! (source-cwd) path)
             {:status "removed" :task task :child (:child entry) :path path :branch branch :base base
              :tip tip :tip-is-ancestor-of-parent-head ancestor? :ignored ignored}))))))
 ;; --- failed-launch checkout cleanup --------------------------------------------------
@@ -2832,7 +2864,10 @@
       {:status "retained" :reason "not-created-by-round"}
       (let [rec (reconciliation entry)]
         (cond
-          (= "missing" (:checkout-state rec)) {:status "missing"}
+          ;; Cleanup unlocks a missing registration, so the live-reference guard comes first.
+          (= "missing" (:checkout-state rec)) (if (worktree-referenced-by-live-round? path (ledger/entries))
+                                                  {:status "retained" :reason "live-reference"}
+                                                  {:status "missing"})
           (= "invalid" (:checkout-state rec)) {:status "retained" :reason "invalid" :diagnostic (:diagnostic rec)}
           (not= branch (checkout-branch! path)) {:status "retained" :reason "branch-mismatch"}
           (not= base (:tip rec)) {:status "retained" :reason "committed" :tip (:tip rec)}
@@ -2842,9 +2877,14 @@
 ;; Never throws: the launch failure that triggered it is the error the caller must see.
 (defn cleanup-failed-checkout! [entry phase]
   (when (and (:worktree entry) (checkout-cleanup-phases (name phase)))
-    (let [outcome (try (or (failed-checkout-retention entry)
-                           (do (git! (source-cwd) "worktree" "remove" (get-in entry [:worktree :path]))
-                               {:status "removed"}))
+    (let [outcome (try (let [retention (failed-checkout-retention entry)
+                             path (get-in entry [:worktree :path])]
+                         (if retention
+                           (do (when (= "missing" (:status retention))
+                                 (unlock-worktree! (source-cwd) path))
+                               retention)
+                           (do (remove-managed-worktree! (source-cwd) path)
+                               {:status "removed"})))
                        (catch Exception e {:status "retained" :reason "error" :diagnostic (bounded-diagnostic e)}))]
       (try (ledger/update! (:task entry) assoc :checkout-cleanup outcome) (catch Exception _))
       outcome)))

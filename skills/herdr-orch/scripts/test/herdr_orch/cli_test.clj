@@ -605,6 +605,7 @@
         (is (= 1 (count shared)))
         (is (= 1 (count managed)))
         (is (fs/exists? (get-in (first managed) [:worktree :path])))
+        (git-in! dir "worktree" "unlock" (get-in (first managed) [:worktree :path]))
         (git-in! dir "worktree" "remove" "--force" (get-in (first managed) [:worktree :path]))))))
 
 (deftest absent-target-with-a-live-write-sibling-creates-one-managed-checkout
@@ -803,6 +804,7 @@
         (is (= (git-head source) (get-in entry [:worktree :base])))
         (is (str/includes? (git-worktree-list source) checkout))
         (is (not (fs/exists? (fs/path source ".tmp"))))
+        (git-in! source "worktree" "unlock" checkout)
         (git-in! source "worktree" "remove" "--force" checkout))
       (finally
         (fs/delete-tree assign)
@@ -847,6 +849,7 @@
         (let [entry (ledger-entry* source (get-in (result managed) [:result :task]))]
           (is (fs/exists? (get-in entry [:worktree :path]))
               "positive control: the managed spawn created its checkout")
+          (git-in! source "worktree" "unlock" (get-in entry [:worktree :path]))
           (git-in! source "worktree" "remove" "--force" (get-in entry [:worktree :path]))))
       (finally (fs/delete-tree source)))))
 
@@ -2613,6 +2616,123 @@
 ;; paired with `task collect` in the tests below: closing a pane and tearing down its
 ;; checkout are independent actions, so every happy-path removal here seals a round
 ;; without ever capturing or closing it, to prove removal never needed either.
+(deftest managed-worktree-lock-refuses-forced-git-removal
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "locked checkout")
+        path (get-in entry [:worktree :path])
+        listing (git-in! dir "worktree" "list" "--porcelain")
+        removal @(process/process ["git" "worktree" "remove" "--force" path] {:dir dir :out :string :err :string})]
+    (is (str/includes? listing "locked Managed by oh; use oh worktree remove"))
+    (is (not (zero? (:exit removal))))
+    (is (fs/exists? path))))
+
+(deftest ^:serial failed-worktree-removal-restores-the-lock
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "removal failure")
+        path (get-in entry [:worktree :path])
+        original cli/git!]
+    (is (thrown-with-msg? Exception #"injected removal failure"
+          (with-redefs [cli/git! (fn [cwd & args]
+                                   (if (= ["worktree" "remove" path] (vec args))
+                                     (do (is (not (str/includes? (git-in! dir "worktree" "list" "--porcelain")
+                                                                  "locked Managed by oh; use oh worktree remove")))
+                                         (throw (ex-info "injected removal failure" {})))
+                                     (apply original cwd args)))]
+            (cli/remove-managed-worktree! dir path))))
+    (is (str/includes? (git-in! dir "worktree" "list" "--porcelain")
+                       "locked Managed by oh; use oh worktree remove"))
+    (is (fs/exists? path))))
+
+(deftest worktree-remove-resolves-symlinked-managed-root
+  (doseq [missing? [false true]]
+    (let [{:keys [env dir]} (fake-env {})
+          tmp (fs/path dir ".tmp")
+          real-tmp (fs/path dir "real-tmp")]
+      (fs/create-dirs tmp)
+      (fs/move tmp real-tmp)
+      (fs/create-sym-link tmp real-tmp)
+      (let [entry (spawn-worktree! env dir "symlinked root")
+            path (get-in entry [:worktree :path])]
+        (publish-child! entry)
+        (when missing? (fs/delete-tree path))
+        (let [proc (call! env "worktree" "remove" (:task entry))]
+          (is (zero? (:exit proc)) (:out proc))
+          (is (= (if missing? "missing" "removed") (get-in (result proc) [:result :status])))
+          (git-in! dir "worktree" "prune")
+          (is (not (str/includes? (git-worktree-list dir) (str (cli/resolve-worktree-path path))))))))))
+
+(deftest worktree-remove-refuses-foreign-lock
+  (doseq [missing? [false true]]
+    (let [{:keys [env dir]} (fake-env {})
+          path (str (fs/path dir ".tmp/herdr-orch/worktrees/operator"))]
+      (fs/create-dirs (fs/parent path))
+      (git-in! dir "worktree" "add" "--lock" "--reason" "operator owned" "-b" "operator" path "HEAD")
+      (let [started (call! env "task" "start" "worker" "--worktree" path "--task" "attached checkout")
+            entry (ledger-entry* dir (get-in (result started) [:result :task]))]
+        (is (zero? (:exit started)) (:out started))
+        (publish-child! entry)
+        (when missing? (fs/delete-tree path))
+        (let [proc (call! env "worktree" "remove" (:task entry))]
+          (is (not (zero? (:exit proc))))
+          (is (str/includes? (:out proc) "operator owned"))
+          (is (= (not missing?) (fs/exists? path)))
+          (is (str/includes? (git-in! dir "worktree" "list" "--porcelain") "locked operator owned")))))))
+
+(deftest ^:serial failed-launch-cleanup-respects-lock-ownership
+  (doseq [missing? [false true] foreign? [false true]]
+    (let [{:keys [env dir]} (fake-env {})
+          entry (spawn-worktree! env dir "cleanup lock")
+          path (get-in entry [:worktree :path])]
+      (when foreign?
+        (git-in! dir "worktree" "unlock" path)
+        (git-in! dir "worktree" "lock" "--reason" "operator owned" path))
+      (when missing? (fs/delete-tree path))
+      (let [outcome (with-redefs [ledger/assignment-root (constantly dir)
+                                  ledger/entries (constantly [])
+                                  ledger/update! (fn [& _] nil)
+                                  cli/source-cwd (constantly dir)]
+                      (cli/cleanup-failed-checkout! entry :start))]
+        (is (= (cond foreign? "retained" missing? "missing" :else "removed") (:status outcome)))
+        (when foreign?
+          (is (= "error" (:reason outcome)))
+          (is (str/includes? (:diagnostic outcome) "operator owned")))
+        (is (= (and foreign? (not missing?)) (fs/exists? path)))
+        (let [listing (git-in! dir "worktree" "list" "--porcelain")]
+          (is (= foreign? (str/includes? listing "locked operator owned")))
+          (is (not (str/includes? listing "locked Managed by oh; use oh worktree remove"))))))))
+
+(deftest ^:serial failed-launch-cleanup-keeps-the-lock-of-a-missing-checkout-a-live-round-references
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "cleanup live reference")
+        path (get-in entry [:worktree :path])
+        ;; A second round attached to the checkout while the failed round's pane closed.
+        second-round (assoc entry :task (ledger/fresh-task) :child "worker-second")]
+    (fs/delete-tree path)
+    (let [outcome (with-redefs [ledger/assignment-root (constantly dir)
+                                ledger/entries (constantly [second-round])
+                                ledger/update! (fn [& _] nil)
+                                cli/source-cwd (constantly dir)]
+                    (cli/cleanup-failed-checkout! entry :start))]
+      (is (= {:status "retained" :reason "live-reference"} outcome))
+      (is (str/includes? (git-in! dir "worktree" "list" "--porcelain") "locked Managed by oh; use oh worktree remove")))))
+
+(deftest worktree-remove-handles-unlocked-and-missing-checkouts
+  (doseq [missing? [false true]]
+    (let [{:keys [env dir]} (fake-env {})
+          entry (spawn-worktree! env dir "legacy or missing")
+          path (get-in entry [:worktree :path])]
+      (publish-child! entry)
+      (if missing? (fs/delete-tree path) (git-in! dir "worktree" "unlock" path))
+      (let [listing (call! env "worktree" "list")]
+        (is (zero? (:exit listing)) (:out listing))
+        (is (= (if missing? "missing" "present")
+               (get-in (first (:result (result listing))) [:reconciliation :checkout-state]))))
+      (let [proc (call! env "worktree" "remove" (:task entry))]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= (if missing? "missing" "removed") (get-in (result proc) [:result :status])))
+        (git-in! dir "worktree" "prune")
+        (is (not (str/includes? (git-worktree-list dir) path)))))))
+
 (deftest worktree-remove-removes-the-checkout-retains-the-branch-and-reports-ancestry-as-information
   (let [{:keys [env dir]} (fake-env {})
         entry (spawn-worktree! env dir "removed without ever closing")
@@ -3266,6 +3386,7 @@
     (let [{:keys [env dir]} (fake-env {})
           entry (spawn-worktree! env dir "missing at publication")
           checkout (get-in entry [:worktree :path])]
+      (git-in! dir "worktree" "unlock" checkout)
       (git-in! dir "worktree" "remove" "--force" checkout)
       (let [proc (call! (child-publish-env env entry) "task" "publish"
                         "--status" "COMPLETE" "--summary" "missing")]
@@ -4032,6 +4153,7 @@
         (doseq [proc @processes]
           (process/destroy-tree proc))
         (when (fs/exists? checkout)
+          (git-in! dir "worktree" "unlock" checkout)
           (git-in! dir "worktree" "remove" "--force" checkout))))))
 
 (deftest continue-and-explicit-start-serialize-the-same-checkout-under-concurrency
@@ -5877,6 +5999,7 @@
       (is (not= (str dir) (:work-root entry)))
       (is (= checkout (placement-cwd log)))
       (is (= checkout (injected-env env-file "HERDR_ORCH_WORK_ROOT")))
+      (git-in! (str dir) "worktree" "unlock" checkout)
       (git-in! (str dir) "worktree" "remove" "--force" checkout))))
 
 ;; A continued round is a new immutable entry in the same pane, so it inherits the work root
@@ -8617,6 +8740,9 @@
       (let [stale (only-entry (str dir))
             _ (reset! task (:task stale))
             fired (atom false)]
+        ;; Detect no host, as in a plain terminal, so the in-process liveness reads do not
+        ;; depend on the terminal that runs the suite.
+        (binding [backend/*context* (delay nil)]
         (with-redefs [ledger/assignment-root (constantly (str dir))
                       cli/parent-identity (constantly {:parent-session (:parent-session stale)})
                       herdr/agents (fn []
@@ -8645,7 +8771,7 @@
               (is (= "refused" (try (:status (first (cli/orphans! {:prune true})))
                                       (catch clojure.lang.ExceptionInfo e (ex-message e))))
                   "a stale orphan listing refuses the live execution before the final update"))
-            (is (nil? (:pruned-at (ledger/read! @task))))))
+            (is (nil? (:pruned-at (ledger/read! @task)))))))
         (spit gate "go")
         (release! fixture @task)
         (is (= "COMPLETE" (get-in (result (call! env "task" "collect" @task "--wait" "--timeout" "30000")) [:result :status]))
