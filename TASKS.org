@@ -271,7 +271,7 @@ Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeou
 :CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
 :CREATED: [2026-11-11 Wed 08:07]
 :STARTED: [2026-11-11 Wed 12:07]
-:HANDOFF: Plan work committed through 1c67318: --workspace placement reverted after a complexity review (04998e9e and e41cb123 CANCELLED); hc test 05686844 DONE (hc-new-space.md); display follow-up 166a41b8. Remaining: closeout per org-execute section 6 -- fresh independent validators, root runs cmd: evidence on the integrated tree, closure-time refresh and prune of the record, then close e9199488. Known failures not caused by this work: bb test stops at scripts/test-herdr-org-tasks.bb ('Unix domain path too long' under the long macOS tmpdir; passes with -Djava.io.tmpdir=/tmp); pi/extensions/herdr-orch/test.sh fails in recovery-integration.test.ts (installed pi 1.5.2 lacks proper-lockfile at the fixture's path); check-section-links reports TASKS.org:24 TOC anchor. Follow-up TODO ed35a3f5.
+:HANDOFF: Closeout in progress at 8c430cd. Fresh Class C validators (reviewer): conformance e12460f8-7003-4b18-b3b4-b74a91c67302, correctness 85f3d44e-9e66-4a21-8726-ba7bace5f558; briefs in .tmp/closeout-e9199488/. Next: collect both, reconcile findings, then closure-time refresh and prune of the record, then close e9199488. Known failures not from this work: bb test stops at scripts/test-herdr-org-tasks.bb (long macOS tmpdir; passes with -Djava.io.tmpdir=/tmp); unverified: pi recovery-integration.test.ts missing proper-lockfile; check-section-links TASKS.org:24 TOC anchor. Follow-up TODO ed35a3f5.
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
@@ -358,6 +358,16 @@ Acceptance criteria:
 - Use the flags that Pi uses for managed installs (--legacy-peer-deps --no-audit --no-fund) and add --ignore-scripts. Without --legacy-peer-deps, npm installs Pi itself and its peers into the managed directory.
 - Do not use npm audit fix: Pi skips audit advice because audit fix runs without --legacy-peer-deps.
 - Confirm that the 7 npm packages in settings are still installed, then run npm audit again and start Pi.
+
+** TODO herdr-orch: collect --any --wait reports no-live-children while hc children work :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 64547358-891c-49fb-bd33-ca8e85fe0f05
+:CREATED: [2026-11-11 Wed 21:08]
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 21:08]
+:END:
+Under the hc runtime (herdr-app 0.1.15, caller terminal t3), `oh task collect --any --wait --timeout 20000` returned `{"status":"pending","reason":"no-live-children"}` after 1.4 s while two reviewer children (t3d, t3f) were live with `status.state` "working". In the same minute, `oh task collect <full-task-uuid> --wait --timeout 20000` on one of them returned `pending/timeout` with `child-status` "working". Evidence: `.tmp/closeout-e9199488/any-bug.json` (gitignored, this machine only). Not yet checked: whether the TUI runtime behaves the same, and which liveness read `--any` uses under hc. Workaround: collect each task UUID.
 
 * Upstream issues
 

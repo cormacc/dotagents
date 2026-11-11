@@ -12,7 +12,7 @@
 
 * Intent
 
-Make an `oh` child that works in a managed checkout visible and safe in the Herdr surfaces: its worktree state shows on its sidebar row in the Herdr TUI and in herdr-app, it can run in its own Herdr worktree workspace, and nothing but `oh` can remove its checkout through Git. `oh` keeps ownership of its checkouts and its ledger.
+Make an `oh` child that works in a managed checkout visible and safe in the Herdr surfaces: its worktree state shows on its sidebar row in the Herdr TUI and in herdr-app, and nothing but `oh` can remove its checkout through Git. `oh` keeps ownership of its checkouts and its ledger.
 
 * Summary
 
@@ -75,6 +75,10 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
 - [ ] With the TUI tree toggled off, the `worktree` token is cleared.
 - [ ] When `oh worktree list --all` fails, each sidebar shows its tree with no worktree state.
 
+*** Reversed
+
+- Reversed [2026-11-11 Wed] :: the eight `--workspace` criteria (TUI workspace with the child's label and checkout cwd, linked-worktree provenance, protocol environment, ledger placement `workspace`, close keeps the checkout, and the refusals for a shared target, `--tab`/`--split`, measurement context and `hc`). They were met and verified, then removed with the feature; see Decisions 'No workspace placement'.
+
 *** Anti-criteria
 
 - [ ] Must not: let `oh` merge, rebase, push or delete a branch.
@@ -119,7 +123,7 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
 - [[task:a21f1073-3a5f-4dd1-9204-ee357b87d268]] -- remove split placement for delegated children.
 - [[task:e88e718e-09b1-4dc0-a0df-dc176f1e451f]] -- evaluate `oh`-assisted integration of worktree branches.
 - File the two upstream reports from the drafts (user action).
-- [[task:166a41b8-719d-4d33-a184-dc40ce26e59e]] -- show the current delegation tree without sidebar changes. The `hc` new-space test kept the `hc` refusal ([[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]).
+- [[task:166a41b8-719d-4d33-a184-dc40ce26e59e]] -- show the current delegation tree without sidebar changes ([[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]).
 
 * Plan
 ** DONE Lock managed checkouts against removal outside oh :herdr_tui:herdr_app:
