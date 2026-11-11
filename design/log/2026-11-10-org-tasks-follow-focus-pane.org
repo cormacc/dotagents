@@ -1,6 +1,6 @@
 #+TITLE: Show one org-tasks compact pane that follows focus
 #+DATE: 2026-11-10 Tue
-#+PARENT: [[task:cf3550d1-9f06-4e9a-85ce-b6c6c490130b][Show one org-tasks compact pane that follows focus]]
+#+PARENT: [[archive:cf3550d1-9f06-4e9a-85ce-b6c6c490130b][Show one org-tasks compact pane that follows focus]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:herdr/plugins/org-tasks/README.md]]

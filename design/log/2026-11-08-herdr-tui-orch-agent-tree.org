@@ -1,6 +1,6 @@
 #+TITLE: Port the orch-spaces workspace tree view to the Herdr TUI
 #+DATE: 2026-11-08 Sun
-#+PARENT: [[task:9777d1ec-52a2-45b0-881e-33981d159e84][Port the orch-spaces workspace tree view to the Herdr TUI]]
+#+PARENT: [[archive:9777d1ec-52a2-45b0-881e-33981d159e84][Port the orch-spaces workspace tree view to the Herdr TUI]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:herdr/plugins/herdr-orch/README.md]]
@@ -226,4 +226,3 @@ Outcome: live macOS check in a scratch session; evidence in the same-stem folder
 - Reconcile: the `tree` token is always cleared (the mark lives in the display name); an agent outside an oh tree gets no `order` token; the view is set once a row exists and re-sent in any pass that reports; the state records the server socket identity, so a new server discards it and the startup hook re-reports everything; a failed report keeps the old state entry for retry; a clear answered `pane_not_found` is dropped silently; a `git` launch failure warns once.
 - Toggle: `tree.bb toggle` flips `display.json` under the global `display.lock`, then runs the normal reconcile, which reads the flag inside the session lock (off: reset what the session recorded; on: rebuild). A toggle that finds the session lock held leaves the dirty marker, so the holder applies the latest flag and no toggle is lost. A failed off reset run by the toggle itself exits 1.
 - Reviews: two code reviews before live activation and three closeout correctness validations found and fixed a stale-entry adoption through the pane-id fallback, whitespace-trimmed marks, a lost dirty marker on the contended path, toggle exit codes and toggle races.
-

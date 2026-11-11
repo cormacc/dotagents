@@ -192,30 +192,6 @@ Acceptance criteria:
 - Require exactly one match; on no match or several matches, report each candidate location and change nothing.
 - Report the file location of the replacement, and add the tool to the pi-clojure README and to skills/clojure/SKILL.md.
 
-** TODO [#B] Link the running Pi install as the development dependency :pi:
-:PROPERTIES:
-:CUSTOM_ID: a08802a5-e751-43de-a2c7-34638dac66a0
-:CREATED: [2026-11-04 Wed 01:31]
-:END:
-:LOGBOOK:
-- Created [2026-11-04 Wed 01:31]
-:END:
-The original advisories are resolved: commit b8e5e99 moved the =devDependencies= pin of @earendil-works/pi-coding-agent to 1.5.0, and on 2026-11-08 npm audit at the repository root reported 0 vulnerabilities. A fixed pin can still drift from the Pi that runs, which comes from nixpkgs (=pi-coding-agent= in the dotfiles agents.nix). Linux and Darwin follow separate nixpkgs inputs, so the two hosts can run different Pi versions.
-
-Decision (user, 2026-11-08): replace the npm pin with a link to the running install. Types and tests then use the exact Pi that runs. nixpkgs, not this repository's lock, then owns the advisories for Pi's own dependencies.
-
-Facts to use:
-- The package root of the running install is =$(dirname $(readlink -f $(which pi)))/../lib/node_modules/pi-monorepo=; its package.json name is @earendil-works/pi-coding-agent.
-- That directory's node_modules has @earendil-works/pi-ai, @earendil-works/pi-tui and typebox, which this repository declares as =peerDependencies=.
-- =npm ci= deletes node_modules, so a link must be made again after each install.
-
-Acceptance criteria:
-- Remove @earendil-works/pi-coding-agent from =devDependencies= and update package-lock.json in the same change.
-- Add a Babashka script that links pi-coding-agent, pi-ai, pi-tui and typebox from the running install into node_modules. It must fail with a clear message when =pi= is not on PATH or is not a nix store install.
-- Make scripts/check.sh run the link step, or fail when the links are missing or point to a different install than the =pi= on PATH.
-- Run =npm run check= with the links in place; confirm that the type checks and tests resolve Pi through the links.
-- Update the documentation that describes the development dependency.
-
 ** TODO Warn when native CLI and Pi logins use different subscriptions :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 159d1d5f-878c-44c6-a842-c92bbc600ad8
@@ -235,16 +211,6 @@ herdr-orch assumes that Pi and each native CLI log in to one subscription per pr
 - Created [2026-11-05 Thu 16:46]
 :END:
 Deferred by the owner from the owned quota collector delivery. Support native Claude Code on macOS and Codex OS credential stores only when credentials can be read non-interactively, without refresh, credential writes, prompts or cross-harness fallback. Verify host-specific behaviour on macOS; Linux file fixtures do not establish Keychain support. Pi file-store subscription reporting does not depend on this work. Contract: skills/herdr-orch/scripts/docs/contract.md section Owned credential boundary. Origin: design/log/2026-11-05-owned-quota-collector.org.
-
-** TODO Add herdr-orch subagent fanout pane
-:PROPERTIES:
-:CUSTOM_ID: f51216ab-0bb7-41d9-a6d3-2d225b40a667
-:CREATED: [2026-11-05 Thu 19:46]
-:END:
-:LOGBOOK:
-- Created [2026-11-05 Thu 19:46]
-:END:
-Add a pane that shows herdr-orch subagent fanout as a tree or hierarchy. Use [[https://github.com/mashhoodr/herdr-space-sidebar][herdr-space-sidebar]] as a tree/hierarchy design reference. Additional reference: [[https://github.com/yoshiori/herdr-configurable-picker][herdr-configurable-picker]].
 
 ** TODO Add workspace pinning to the Herdr org-tasks adapters
 :PROPERTIES:
@@ -280,21 +246,6 @@ The linked record owns the decision and evidence. Existing task 4 owns implement
 :END:
 The terminal plugin and the herdr-app widget were checked live on macOS only (2026-11-07). On xps15: (1) terminal plugin: startup and tab.created display, global prefix+ctrl+o toggle (moved from prefix+shift+o by task 9777d1ec), prefix+t popup selection with Esc and focus return, label title; (2) herdr-app widget: install via the parent HM switch, project follow, refresh, selection dialog, toggle, block fitting, and the keys.json spelling (cmd-shift-t / cmd-shift-o, else ctrl-shift-). On macOS after darwin-rebuild: confirm the herdr-app widget loads from the installed leaf and survives an app restart. Record: [[archive:82126d8e-eb54-45b8-abbe-9e76451b3963]].
 
-** DONE Port the orch-spaces workspace tree view to the Herdr TUI
-CLOSED: [2026-11-09 Mon 10:47]
-:PROPERTIES:
-:CUSTOM_ID: 9777d1ec-52a2-45b0-881e-33981d159e84
-:CREATED: [2026-11-08 Sun 11:41]
-:STARTED: [2026-11-08 Sun 12:45]
-:END:
-:LOGBOOK:
-- Created [2026-11-08 Sun 11:41]
-- State "STARTED" from "TODO" [2026-11-08 Sun 12:45]
-- State "DONE" from "STARTED" [2026-11-09 Mon 10:47]
-:END:
-#+IMPORT: [[plan:2026-11-08-herdr-tui-orch-agent-tree.org]]
-Port the herdr-app `orch-spaces` mod (`herdr-app/mods/orch-spaces/`, commits cea045e and e41e43e) to the Herdr TUI. The mod shows each space with its agent tree under it in one sidebar list: rows use the `oh.label` naming rule, a sub-agent with its own pane appears once under its parent, and tabs without an agent are listed. Find the Herdr TUI extension surface that can host an equivalent view (for example a plugin under `herdr/plugins/`), and share the tree model (`herdr-app/mods/orch-spaces/tree.js`) where practical. Related: task f7457cc5 (herdr-app mod for herdr-orch), task 9f667467 (herdr plugin wrapper).
-
 ** TODO Validate the Herdr TUI sidebar agent tree on Linux
 :PROPERTIES:
 :CUSTOM_ID: cbbdb783-5947-4900-bb63-c67865a52098
@@ -315,63 +266,78 @@ The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tr
 :END:
 Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeout reviews of task 9777d1ec found untested ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Risks): the retry of a failed `agent.view.clear` by the next off reconcile (mutants in `orch_tree.clj` `reconcile-once!` and `reset-once!` survived the runner), a view re-send caused only by a stale-pane clear, and the contended-branch dirty re-check in `reconcile!`. Also: nothing tests `server-id` (the re-report after a server restart; a constant body leaves the runner green), and the simplification review proposed replacing it by treating `HERDR_PLUGIN_EVENT` = `startup` as a fresh run, with a test; and the off path's `(or (seq (:panes old)) (:view old))` survives an `off-panes-only` mutant.
 
-** CANCELLED Decide whether org-tasks ensure should open a Tasks pane in every existing tab
-CLOSED: [2026-11-10 Tue 23:41]
+** TODO herdr-orch worktree integration :herdr_orch:
 :PROPERTIES:
-:CUSTOM_ID: 26a26a84-68a0-4d34-a78f-09994711e5c1
-:CREATED: [2026-11-09 Mon 10:46]
+:CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
+:CREATED: [2026-11-11 Wed 08:07]
 :END:
 :LOGBOOK:
-- Created [2026-11-09 Mon 10:46]
-- State "CANCELLED" from "TODO" [2026-11-10 Tue 23:41]
+- Created [2026-11-11 Wed 08:07]
 :END:
-The org-tasks `ensure` hook runs on startup and `tab.created`. The Herdr TUI spike for task 9777d1ec ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Gotchas) logged it adding a Tasks pane to every existing tab that had none, which produces `pane.created` bursts. Confirm that this is intended (it matches the README statement that display opens the compact pane in each tab with no live instance), or limit it to the new tab.
-
-Cancelled: superseded by [[task:cf3550d1-9f06-4e9a-85ce-b6c6c490130b]]. One compact pane per session follows focus, and `ensure` opens it only in the focused tab, so the question no longer applies.
-
-** DONE Show the herdr-app org-tasks key hints as one footer line :skill:org_tasks:
-CLOSED: [2026-11-10 Tue 13:06]
+Herdr models a Git worktree as a workspace (`herdr worktree create|open|list|remove`; API `WorkspaceInfo.worktree`, events `worktree_created|opened|removed`), and the herdr-app `spaces` mod nests worktree spaces under their main checkout. `oh task run|start --worktree new` creates its own checkout under `.tmp/herdr-orch/worktrees/<task>` but places the child in a tab or split of the caller workspace, so Herdr worktree views do not apply to it. `herdr worktree list` already reports `oh` checkouts (with no `open_workspace_id`). The Herdr TUI has the same model natively: sidebar `New worktree`, `Open worktree...` and `Delete worktree checkout...` actions, `[worktrees] directory`, and grouped Spaces rows. Subtask tags give the surface: `herdr_app` (herdr-app mods), `herdr_tui` (Herdr TUI or the herdr-orch Herdr plugin), both tags for shared `oh` work.
+*** TODO Fix linked-worktree detection for submodule checkouts in orch-spaces :herdr_app:
 :PROPERTIES:
-:CUSTOM_ID: 5b36f562-334b-4043-ac15-d997a035c08a
-:CREATED: [2026-11-10 Tue 12:43]
-:STARTED: [2026-11-10 Tue 13:04]
+:CUSTOM_ID: b24a5cfe-e85a-442f-89bd-0283dda1f314
+:CREATED: [2026-11-11 Wed 08:07]
 :END:
 :LOGBOOK:
-- Created [2026-11-10 Tue 12:43]
-- State "STARTED" from "TODO" [2026-11-10 Tue 13:04]
-- State "DONE" from "STARTED" [2026-11-10 Tue 13:06]
+- Created [2026-11-11 Wed 08:07]
 :END:
-The herdr-app org-tasks widget (`herdr-app/mods/org-tasks/state.js` `hints`, rendered in `main.js`) shows two hint lines, and only when no task is selected. Match the Herdr TUI compact pane: one line, `<key>: select / <key>: show/hide`, centred and muted at the foot of the widget, whether or not a task is selected. Update `herdr-app/README.md` and the widget tests with it.
-
-Inline plan (trivial change, no change-record):
-- Approach :: replace `state.js` `hints` with `hint(bindings)`, which joins the bound parts as `<keys>: select / <keys>: show/hide` and returns null when neither action is bound. `main.js` `render` appends it as the last child of the rows column, in every state, with `text_center`, `truncate` and the muted colour.
-- Acceptance :: one hint line, centred and muted, follows the selected-task rows. → test:`herdr-app/tests/org-tasks-ui.test.mjs`
-- Acceptance :: the same line follows the status counts without a selection. → test:`herdr-app/tests/org-tasks-ui.test.mjs`
-- Acceptance :: with one action bound, the line names only that action; with none, no line shows. → test:`herdr-app/tests/org-tasks-state.test.mjs` `hint`
-- Acceptance :: `herdr-app/README.md` section 'Task widget' describes the footer line.
-- Acceptance :: `bb scripts/test-herdr-app.bb` passes.
-- Must not :: change `ot compact`, the Herdr TUI plugin, or the key bindings in `herdr-app/keys.darwin.json`.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-11-10 Tue 12:42]
-- sender: agent (session retro, approved by the user)
-
-** DONE [#B] Show one org-tasks compact pane that follows focus :skill:org_tasks:
-CLOSED: [2026-11-10 Tue 23:41]
+In a submodule, `git rev-parse --git-common-dir` is `.git/modules/<name>`, so the `linked` test in `herdr-app/mods/orch-spaces/main.js` (`repo !== top/.git`) marks the main checkout as linked, and `ordered()` then nests no worktree under it. Compare `git rev-parse --absolute-git-dir` with `--git-common-dir` instead: they are equal in a main checkout and differ in a linked one (verified in this repository). The Herdr-side counterpart is a separate `herdr_tui` subtask.
+*** TODO Check Herdr native worktree grouping for submodule checkouts and report upstream :herdr_tui:
 :PROPERTIES:
-:CUSTOM_ID: cf3550d1-9f06-4e9a-85ce-b6c6c490130b
-:CREATED: [2026-11-10 Tue 18:11]
-:STARTED: [2026-11-10 Tue 18:41]
+:CUSTOM_ID: f92c0d67-debf-4859-989f-31c74476395f
+:CREATED: [2026-11-11 Wed 08:10]
 :END:
 :LOGBOOK:
-- Created [2026-11-10 Tue 18:11]
-- State "STARTED" from "TODO" [2026-11-10 Tue 18:41]
-- State "DONE" from "STARTED" [2026-11-10 Tue 23:41]
+- Created [2026-11-11 Wed 08:10]
 :END:
-#+IMPORT: [[plan:2026-11-10-org-tasks-follow-focus-pane.org]]
-Replace the per-tab compact panes of the Herdr TUI org-tasks plugin with one pane per session that moves to the focused tab and reacts to Herdr events instead of polling.
+`herdr worktree list --cwd ~/dotfiles/agents` returns the submodule main checkout with `path` `/Users/cormacc/dotfiles/.git/modules/agents` (the git dir, not the checkout) and `is_linked_worktree: true`. The TUI Spaces panel groups worktree workspaces natively from this server data, so it probably fails to group, or groups wrongly, in a submodule repository. Not yet observed in the TUI. Reproduce with `New worktree` (`prefix+shift+g`) on a submodule workspace row, then report upstream with the `worktree list` output if confirmed. herdr-app does not use this data: orch-spaces runs its own git commands.
+*** TODO Add a read-only worktree listing mode to oh for UI consumers :herdr_app:herdr_tui:
+:PROPERTIES:
+:CUSTOM_ID: 01a472ba-9aed-4cb4-a5cd-0569ff3d3e77
+:CREATED: [2026-11-11 Wed 08:10]
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 08:10]
+:END:
+`oh worktree list` refuses a caller without a parent session (`worktree list refused: caller session is unresolvable`), and a UI mod or plugin has none. Add a read-only listing that reports `:worktree` and `:reconciliation` (committed, dirty, undeclared) for every ledger entry under an assignment root, with no ownership grant and no mutation. Prerequisite for the agent-row tasks when they show reconciliation state.
+*** TODO Show worktree state on orch-spaces agent rows :herdr_app:
+:PROPERTIES:
+:CUSTOM_ID: a61d6b82-5a10-4fba-9ac0-66498fec810b
+:CREATED: [2026-11-11 Wed 08:07]
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 08:07]
+:END:
+For an agent terminal whose folder is a linked worktree, show branch, ahead/behind and dirty state on its row, using the per-folder git status that orch-spaces already computes for spaces. Optionally show `oh` reconciliation (committed, dirty, undeclared) from the read-only `oh` listing subtask.
+*** TODO Show worktree state on Herdr TUI agent rows :herdr_tui:
+:PROPERTIES:
+:CUSTOM_ID: 0a2d0696-4378-4e46-ba78-68b95bea4a03
+:CREATED: [2026-11-11 Wed 08:10]
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 08:10]
+:END:
+In the herdr-orch plugin sidebar agent tree, show worktree state for an `oh` child in a managed checkout. Plugin v1 cannot add sidebar rows (`herdr/plugins/herdr-orch/README.md` section "Sidebar agent tree"), so the state must fit in the agent display name or the `[ui.sidebar.agents]` row layout. Check which fields the row layout can show before you design.
+*** TODO Compare Herdr worktree list with the oh ledger to find orphan checkouts :herdr_app:herdr_tui:
+:PROPERTIES:
+:CUSTOM_ID: 6fd96b25-4f98-4595-b5c6-89e2d665cc61
+:CREATED: [2026-11-11 Wed 08:07]
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 08:07]
+:END:
+Add a report (in `oh worktree list` or a new verb) that compares `herdr worktree list` (or `git worktree list --porcelain`) with the ledger: checkouts unknown to the ledger, and ledger entries whose checkout was removed outside `oh` (for example by `herdr worktree remove` or the TUI `Delete worktree checkout...` action). Report only; do not remove. Option: the herdr-orch Herdr plugin hooks the `worktree.removed` event (payload: `workspace_id`, removed `worktree`, `forced`) and marks the matching ledger entry, so detection does not wait for a report run.
+*** TODO Spike: workspace placement for worktree children via herdr worktree open :herdr_app:herdr_tui:
+:PROPERTIES:
+:CUSTOM_ID: 04998e9e-4cd0-438a-a3cd-04a196e0b32c
+:CREATED: [2026-11-11 Wed 08:07]
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 08:07]
+:END:
+Evaluate a placement (for example `--workspace`) valid only with a non-shared worktree: `oh` still runs `git worktree add` and owns the ledger entry, then runs `herdr worktree open --path <checkout> --label <oh.label> --no-focus` and starts the child in that workspace root pane. Gain: Herdr groups the workspace with the main checkout and the sidebar nests it with branch and ahead/behind. Resolve first: `workspace close --group` kills running children; `herdr worktree remove` (and any app menu that calls it) bypasses `oh worktree remove` guards; the orch-spaces rule that shows a sub-agent once under its parent conflicts with a separate space; whether `worktree open` accepts a path under `.tmp/`. Herdr TUI findings (v0.9.5 docs, `configuration.mdx` section 'Worktrees' and `socket-api.mdx`): `Open worktree...` lists every Git worktree of the repository, so it already offers `oh` checkouts today; `Delete worktree checkout...` on a grouped child runs `git worktree remove` and, if Git refuses a dirty checkout, asks again and then forces removal; `worktree.remove` also closes the linked workspace if open, which kills a running child; closing the parent row closes the whole group but keeps checkouts and branches. Herdr places its own checkouts under `[worktrees] directory` (default `~/.herdr/worktrees`) as `<repo>/<branch-slug>`, not under `.tmp/`.
 
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
