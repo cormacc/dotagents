@@ -5329,3 +5329,93 @@ Acceptance criteria:
 - Make scripts/check.sh run the link step, or fail when the links are missing or point to a different install than the =pi= on PATH.
 - Run =npm run check= with the links in place; confirm that the type checks and tests resolve Pi through the links.
 - Update the documentation that describes the development dependency.
+
+** DONE org-tasks Herdr TUI plugin housekeeping :skill:org_tasks:
+CLOSED: [2026-11-11 Wed 11:34]
+:PROPERTIES:
+:CUSTOM_ID: a7cc7fa0-0fa0-4e92-9833-25e62fddb87f
+:CREATED: [2026-11-10 Tue 12:42]
+:STARTED: [2026-11-10 Tue 23:41]
+:ARCHIVED: [2026-11-11 Wed 11:34]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-10 Tue 12:42]
+- State "STARTED" from "TODO" [2026-11-10 Tue 23:41]
+- State "DONE" from "STARTED" [2026-11-11 Wed 11:34]
+:END:
+Housekeeping for the org-tasks Herdr TUI plugin (`herdr/plugins/org-tasks`), from a diagnosis of compact task panes that disappeared and did not come back.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-10 Tue 12:42]
+- sender: agent (session retro, approved by the user)
+*** DONE Record the org-tasks supervisor exit reason
+CLOSED: [2026-11-11 Wed 11:31]
+:PROPERTIES:
+:CUSTOM_ID: c145c3a8-1dae-4923-9f46-4e30180ae2c6
+:CREATED: [2026-11-10 Tue 12:43]
+:END:
+:LOGBOOK:
+- Created [2026-11-10 Tue 12:43]
+- State "DONE" from "TODO" [2026-11-11 Wed 11:31]
+:END:
+The compact-pane supervisor (`supervise!` in `herdr/plugins/org-tasks/src/org_tasks_host.clj`) exits without leaving its reason anywhere: `-main` prints only `ex-message` to stderr and calls `System/exit 1`, Herdr does not keep pane stderr, and `herdr plugin log list` records only hooks and actions. Before it exits, the supervisor writes its exit reason and the time to its private instance directory (`OT_HOST_DIR`), so a lost pane can be diagnosed afterwards.
+
+The supervisor exits when the instance is invalid, the open reservation expired, the pane moved or disappeared, the Herdr event stream ended, or a request failed with an error other than a timeout. The `ensure` hooks reopen the single follow-focus pane at the next focus change, so the pane comes back, but the cause of each exit is lost.
+
+Done: `record-exit!` writes `exit.json` (`reason`, `exitedAt`, and `exit` or `class` and `message`) for `ot-exited`, `closed-alone`, `error`, and `terminated` from a shutdown hook. `scripts/test-herdr-org-tasks.bb` covers each reason; the README section 'Source and safety' documents the file.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-10 Tue 12:42]
+- sender: agent (session retro, approved by the user)
+
+Evidence:
+- On 2026-11-09 at 19:25 UTC, `herdr-server.log` shows 22 plugin panes exiting with code 1 within 21 s, under the earlier one-pane-per-tab design. The exception could not be identified; a request timeout was the probable cause. Since `d23ba6c`, a timed-out request does not end the supervisor.
+*** DONE Restore lost org-tasks compact panes without a manual toggle
+CLOSED: [2026-11-10 Tue 23:41]
+:PROPERTIES:
+:CUSTOM_ID: 106afb3b-53c8-459e-be30-6c06c5093986
+:CREATED: [2026-11-10 Tue 12:43]
+:END:
+:LOGBOOK:
+- Created [2026-11-10 Tue 12:43]
+- State "DONE" from "TODO" [2026-11-10 Tue 23:41]
+:END:
+`ensure` runs only on the `[[startup]]` hook and the `tab.created` event, so a compact pane that dies stays closed until the user toggles the overlay off and on. Run the idempotent `ensure` again on a cheap trigger, such as tab focus, so a lost pane comes back by itself. The policy question in [[task:26a26a84-68a0-4d34-a78f-09994711e5c1]] (whether `ensure` opens panes in existing tabs) applies to this trigger too.
+
+Done by [[task:cf3550d1-9f06-4e9a-85ce-b6c6c490130b]]: the `tab.focused`, `pane.closed`, `tab.closed` and `workspace.closed` hooks run `ensure`, so a lost pane reopens in the focused tab.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-10 Tue 12:42]
+- sender: agent (session retro, approved by the user)
+
+Evidence:
+- After the panes died on 2026-11-09, none reopened: the Herdr server had run since 2026-11-06, so the startup hook did not run again.
+*** DONE Measure and reduce org-tasks supervisor polling load
+CLOSED: [2026-11-10 Tue 23:41]
+:PROPERTIES:
+:CUSTOM_ID: 41f78617-5c16-444f-896d-da062a65a8ee
+:CREATED: [2026-11-10 Tue 12:43]
+:END:
+:LOGBOOK:
+- Created [2026-11-10 Tue 12:43]
+- State "DONE" from "TODO" [2026-11-10 Tue 23:41]
+:END:
+Each tab's supervisor calls `herdr api snapshot` and `pane process-info` every 500 ms, with a 200 ms request timeout (`*request-timeout-ms*`). The load grows with the number of tabs. Measure the server load from this polling, then reduce it (for example, with one shared poller) or make the timeout longer. The supervisor retries a timed-out request, so a timeout no longer ends the pane, but it still delays updates.
+
+Done by [[task:cf3550d1-9f06-4e9a-85ce-b6c6c490130b]]: with 20 idle tabs, process-tree CPU fell from about 150 % to about 4 % of one core, and the idle supervisor makes two Herdr requests per 5 s ([[plan:2026-11-10-org-tasks-follow-focus-pane.org]] * Validation).
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-10 Tue 12:42]
+- sender: agent (session retro, approved by the user)
+
+Evidence:
+- About 22 tabs each ran a supervisor when the panes failed together on 2026-11-09.
