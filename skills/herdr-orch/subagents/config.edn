@@ -49,7 +49,7 @@
  {"anthropic"    {:quota-provider "claude"}
   "openai-codex" {:quota-provider "codex"}
   "lemonade"     {}}
- :models {"anthropic/claude-fable-5-1"  {:claude "fable"}
+ :models {"anthropic/claude-fable-5-2"  {:claude "fable"}
           "anthropic/claude-opus-5-5"   {:claude "opus"}
           "anthropic/claude-sonnet-5-5" {:claude "sonnet"}
           "anthropic/claude-haiku-5-5"  {:claude "haiku"}
@@ -62,7 +62,7 @@
            "light"             [{:model "sonnet" :rank 1} {:model "gpt-terra" :rank 1}]
            "feather"           [{:model "haiku"  :rank 1} {:model "gpt-luna"    :rank 1} {:model "qwen-dense" :rank 2}]
            "qwen-dense"        "lemonade/Qwen3.8-27B-GGUF-Q4_K_M"
-           "fable"             "anthropic/claude-fable-5-1"
+           "fable"             "anthropic/claude-fable-5-2"
            "opus"              "anthropic/claude-opus-5-5"
            "sonnet"            "anthropic/claude-sonnet-5-5"
            "haiku"             "anthropic/claude-haiku-5-5"
