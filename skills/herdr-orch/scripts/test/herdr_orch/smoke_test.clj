@@ -450,10 +450,8 @@
                                     :windows [] :quotaSemantics {:status "unknown" :effectiveAvailability []}}]}]
     (try
       (spit source "synthetic")
-      ;; The implicit role keeps vector routing; the explicit `--model` bypasses it. The fixture
-      ;; accepts only that implicit request and never looks up an executable. The Pi model
-      ;; inventory and credentials are fixtures too, so the result does not depend on the
-      ;; installed Pi version or on the caller's logins.
+      ;; Both vector and direct requests use offline quota, inventory and credentials,
+      ;; so resolution does not depend on the installed Pi version or caller's logins.
       (with-redefs [pi-adapter/run-op! (fn [_ op _]
                                          (when-not (= "model-inventory" op)
                                            (throw (ex-info "UNEXPECTED PI ADAPTER OP" {:op op})))
@@ -470,7 +468,8 @@
                     cli/launcher-bin (constantly launcher)
                     cli/default-config-path (constantly (str (fs/absolutize "skills/herdr-orch/subagents/config.edn")))
                     usage/usage-for (fn [_ options]
-                                      (when-not (= {:providers ["anthropic" "openai-codex"] :harness :pi} options)
+                                      (when-not (contains? #{{:providers ["anthropic" "openai-codex"] :harness :pi}
+                                                            {:providers ["openai-codex"] :harness :pi}} options)
                                         (throw (ex-info "UNEXPECTED USAGE REQUEST" {:options options})))
                                       (swap! usage-calls conj options)
                                       fixture-usage)
@@ -495,9 +494,11 @@
             (is (= (if persona "overlay" "snapshot") (get-in explicit [:fork :role-source])))
             (is (= (if persona 600000 1800000) (:timeout explicit)))))
         (is (= [{:providers ["anthropic" "openai-codex"] :harness :pi}
-                {:providers ["anthropic" "openai-codex"] :harness :pi}]
+                {:providers ["openai-codex"] :harness :pi}
+                {:providers ["anthropic" "openai-codex"] :harness :pi}
+                {:providers ["openai-codex"] :harness :pi}]
                @usage-calls)
-            "only implicit vector aliases reach the offline usage fixture"))
+            "explicit direct requests collect only their own provider's evidence"))
       (finally (fs/delete-tree dir)))))
 
 (deftest live-consent-refusal-precedes-launch

@@ -99,10 +99,10 @@
                   overrides)})))
 
 (def advisor-strategy-roster
-  {"advised-worker" "---\nname: advised-worker\ndescription: fixture executor\nkind: pi\nmodel: anthropic/claude-sonnet-5\nspawns: scout researcher advisor\n---\nFixture executor.\n"
-   "advisor" "---\nname: advisor\ndescription: fixture advisor\nkind: pi\nmodel: anthropic/claude-opus-5\nretro: false\n---\nFixture advisor.\n"
-   "scout" "---\nname: scout\ndescription: fixture scout\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture scout.\n"
-   "researcher" "---\nname: researcher\ndescription: fixture researcher\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture researcher.\n"})
+  {"advised-worker" "---\nname: advised-worker\ndescription: fixture executor\nkind: pi\nmodel: sonnet\nspawns: scout researcher advisor\n---\nFixture executor.\n"
+   "advisor" "---\nname: advisor\ndescription: fixture advisor\nkind: pi\nmodel: opus\nretro: false\n---\nFixture advisor.\n"
+   "scout" "---\nname: scout\ndescription: fixture scout\nkind: pi\nmodel: sonnet\nretro: false\n---\nFixture scout.\n"
+   "researcher" "---\nname: researcher\ndescription: fixture researcher\nkind: pi\nmodel: sonnet\nretro: false\n---\nFixture researcher.\n"})
 ;; The subprocess's own cwd, never merely `ORCH_ASSIGNMENT_ROOT` in its env: task f49a63f5
 ;; added git operations (`worktree add`, `rev-parse HEAD`, `status --porcelain`) that read
 ;; the *source* cwd (`user.dir`) directly, regardless of the assignment root override. Every
@@ -996,14 +996,14 @@
                                                             "HERDR_ORCH_SPAWNS" "advisor"
                                                             "FAKE_PARENT_LABEL" "advised-worker-1-claude-sonnet-5"}
                                                            advisor-strategy-roster)
-          proc (call! env "task" "start" "advisor" "--model" "anthropic/claude-fable-5" "--task" "nested advisor consult")
+          proc (call! env "task" "start" "advisor" "--model" "fable" "--task" "nested advisor consult")
           task (get-in (result proc) [:result :task])
           entry (ledger-entry* dir task)]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "" (injected-env env-file "HERDR_ORCH_SPAWNS")))
       (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
       (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))
-      (is (= "advised-worker-1/advisor-1-claude-fable-5" (:label entry)))
+      (is (= "advised-worker-1/advisor-1-fable" (:label entry)))
       (is (false? (:retro entry)))
       (is (= "frontmatter" (:retro-source entry)))))
   (testing "the root may spawn an advisor directly without a parent grant"
@@ -1012,7 +1012,7 @@
           task (get-in (result proc) [:result :task])
           entry (ledger-entry* dir task)]
       (is (zero? (:exit proc)) (:err proc))
-      (is (= "advisor-1-claude-opus-5" (:label entry)))
+      (is (= "advisor-1-opus" (:label entry)))
       (is (= {:spawns [] :spawns-source "default"} (select-keys entry [:spawns :spawns-source])))
       (is (false? (:retro entry)))
       (is (= "frontmatter" (:retro-source entry)))
@@ -5723,8 +5723,8 @@
 ;; (change-record 2026-09-24-herdr-orch-add-thinking-level-support): --effort flag >
 ;; frontmatter `effort:` > same-kind parent `HERDR_ORCH_EFFORT` > the shipped default.
 (def ^:private effort-roster
-  {"effortful" "---\nname: effortful\ndescription: fixture with a declared effort\nkind: pi\nmodel: anthropic/claude-sonnet-5\neffort: low\nretro: false\n---\nFixture.\n"
-   "effortless" "---\nname: effortless\ndescription: fixture without one\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture.\n"})
+  {"effortful" "---\nname: effortful\ndescription: fixture with a declared effort\nkind: pi\nmodel: sonnet\neffort: low\nretro: false\n---\nFixture.\n"
+   "effortless" "---\nname: effortless\ndescription: fixture without one\nkind: pi\nmodel: sonnet\nretro: false\n---\nFixture.\n"})
 (deftest effort-print-prompt-reports-flag-then-frontmatter-then-parent-then-default
   (testing "--effort flag wins over frontmatter"
     (let [{:keys [env]} (fake-env {} effort-roster)
@@ -7405,9 +7405,9 @@
 ;; A per-persona constant that used to be a standing instruction to every caller. Resolution
 ;; mirrors `model:` and `retro:`: explicit flag > frontmatter > shipped default.
 (def ^:private timeout-roster
-  {"budgeted" "---\nname: budgeted\ndescription: fixture with a declared budget\nkind: pi\nmodel: anthropic/claude-sonnet-5\ntimeout: 1234000\nretro: false\n---\nFixture.\n"
-   "unbudgeted" "---\nname: unbudgeted\ndescription: fixture without one\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture.\n"
-   "misbudgeted" "---\nname: misbudgeted\ndescription: fixture with a bad budget\nkind: pi\nmodel: anthropic/claude-sonnet-5\ntimeout: soon\nretro: false\n---\nFixture.\n"})
+  {"budgeted" "---\nname: budgeted\ndescription: fixture with a declared budget\nkind: pi\nmodel: sonnet\ntimeout: 1234000\nretro: false\n---\nFixture.\n"
+   "unbudgeted" "---\nname: unbudgeted\ndescription: fixture without one\nkind: pi\nmodel: sonnet\nretro: false\n---\nFixture.\n"
+   "misbudgeted" "---\nname: misbudgeted\ndescription: fixture with a bad budget\nkind: pi\nmodel: sonnet\ntimeout: soon\nretro: false\n---\nFixture.\n"})
 (defn- run-wait-budget [log]
   (parse-long (argv-flag (first (filter #(= ["agent" "wait"] (vec (take 2 %))) (calls log))) "--timeout")))
 
@@ -9421,9 +9421,9 @@
     (testing "oh task status reports the route"
       (let [status (call! env "task" "status" (:task envelope))]
         (is (= astra (get-in (result status) [:result :model-route :chosen])) (:out status))))
-    (testing "a string model carries no :model-route"
+    (testing "an unknown string model carries no :model-route"
       (let [{env2 :env dir2 :dir} (routed-fixture (usage-body {:anthropic-used 1.0 :codex-used 1}))
-            p (call! env2 "task" "start" "worker" "--model" "opus" "--task" "string")
+            p (call! env2 "task" "start" "worker" "--model" "unknown-model" "--task" "string")
             e (ledger-entry* dir2 (get-in (result p) [:result :task]))]
         (is (zero? (:exit p)) (:out p))
         (is (not (contains? e :model-route)))
@@ -9489,10 +9489,12 @@
       (is (made-usage-call? (:dir (run {} "task" "run" "pi-heavy" "--task" "x" "--print-prompt"))))
       (is (made-usage-call? (:dir (run {"HERDR_ORCH_MODEL" "heavy" "HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "modelless" "FAKE_PARENT_LABEL" "worker-1"}
                                        "task" "start" "modelless" "--task" "x" "--spawns" "none")))))
-    (testing "a canonical ID, a string alias and an inherited canonical ID make no usage call"
+    (testing "unknown names, named-account pins, native kinds and inherited IDs make no usage call"
       (doseq [[label overrides argv]
-              [["explicit canonical ID" {} ["task" "run" "pi-heavy" "--model" fable "--task" "x" "--print-prompt"]]
-               ["explicit string alias" {} ["task" "run" "pi-heavy" "--model" "opus" "--task" "x" "--print-prompt"]]
+              [["unknown name" {} ["task" "run" "pi-heavy" "--model" "unknown-model" "--task" "x" "--print-prompt"]]
+               ["named-account pin" {} ["task" "run" "pi-heavy" "--model" fable-on-account-2 "--task" "x" "--print-prompt"]]
+               ["native alias" {} ["task" "run" "claude-heavy" "--model" "fable" "--task" "x" "--print-prompt"]]
+               ["native canonical" {} ["task" "run" "claude-heavy" "--model" fable "--task" "x" "--print-prompt"]]
                ["inherited canonical ID" {"HERDR_ORCH_MODEL" astra "HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "modelless" "FAKE_PARENT_LABEL" "worker-1"}
                 ["task" "start" "modelless" "--task" "x" "--spawns" "none"]]]]
         (let [{:keys [proc dir]} (apply run overrides argv)]
@@ -9529,10 +9531,12 @@
           (is (= 1 (:exit proc)))
           (is (re-find #"no candidate of model alias 'heavy' has allowance" (:out proc)) (:out proc))
           (is (no-measurement-allocation? dir (:log fixture) fixture))))
-      (testing "an explicit canonical ID makes no usage call"
+      (testing "an explicit canonical ID routes the same model"
         (use! (usage-body {:anthropic-used 28.0}))
-        (is (zero? (:exit (measure! fixture "run" "--model" fable "--print-prompt" "--task" "x"))))
-        (is (not (made-usage-call? dir)))))))
+        (let [proc (measure! fixture "run" "--model" fable "--print-prompt" "--task" "x")]
+          (is (zero? (:exit proc)) (:out proc))
+          (is (= fable (:chosen (route-of proc))))
+          (is (made-usage-call? dir)))))))
 
 (defn- named-routing! [fixture]
   (let [path (fs/path (:dir fixture) "home/.pi/agent/auth.json")
@@ -9547,6 +9551,78 @@
                                                                :seven_day_fable {:utilization 10}}}}}
             :codex {:body {:rate_limit {:primary_window {:used_percent 90 :limit_window_seconds 18000}}}}})))
   fixture)
+
+(deftest direct-model-selects-a-named-account-without-changing-model
+  (doseq [model ["fable" fable]]
+    (let [{:keys [env dir env-file]} (named-routing! (routed-fixture {} {} heavy-persona))
+          preview (call! env "task" "start" "pi-heavy" "--model" model "--task" "direct" "--print-prompt")
+          proc (call! env "task" "start" "pi-heavy" "--model" model "--task" "direct")
+          out (:result (result proc))
+          route (:model-route out)]
+      (is (zero? (:exit preview)) (:out preview))
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= fable-on-account-2 (:model-canonical out)))
+      (is (= fable (:chosen route)))
+      (is (= #{fable} (set (map :canonical (:candidates route)))))
+      (is (= "anthropic-2" (:account route)))
+      (is (= (:model-route (:result (result preview))) route
+             (:model-route (ledger-entry* dir (:task out)))))
+      (is (= fable-on-account-2 (injected-env env-file "HERDR_ORCH_MODEL"))))))
+
+(deftest direct-persona-defaults-route-and-exhaustion-refuses-before-mutation
+  (doseq [model ["fable" fable]]
+    (let [personas {"direct" (str "---\nname: direct\nkind: pi\nmodel: " model "\nretro: false\n---\nFixture.")}
+          {:keys [env dir log]} (named-routing! (routed-fixture {} {} personas))
+          preview (call! env "task" "start" "direct" "--task" "default" "--print-prompt")]
+      (is (zero? (:exit preview)) (:out preview))
+      (is (= fable-on-account-2 (get-in (result preview) [:result :model-canonical])))
+      (spit (get env "FAKE_QUOTA_REPORT")
+            (json/generate-string (usage-body {:anthropic-used 100 :codex-used 0})))
+      (clear-usage! dir)
+      (doseq [args [["task" "start" "direct" "--task" "refuse" "--worktree" "new"]
+                    ["task" "start" "direct" "--model" model "--task" "refuse" "--print-prompt"]]]
+        (let [proc (apply call! env args)
+              data (get-in (result proc) [:error :data])]
+          (is (= 1 (:exit proc)) (:out proc))
+          (is (= model (:alias data)))
+          (is (= "pi" (:kind data)))
+          (is (= [fable fable] (mapv :canonical (:candidates data))))
+          (is (= [0.0 0.0] (mapv :remaining (:candidates data))))
+          (is (str/includes? (:out proc) "no candidate of model alias"))))
+      (is (zero? (ledger-count dir)))
+      (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger/indices"))))
+      (is (empty? (filter mutating? (calls log)))))))
+
+(deftest direct-model-uses-shared-authentication-evidence-and-reserve-rules
+  (let [{:keys [env dir]} (named-routing! (routed-fixture {} {} heavy-persona))
+        auth-path (str (fs/path dir "home/.pi/agent/auth.json"))
+        auth (json/parse-string (slurp auth-path) true)
+        preview #(call! env "task" "start" "pi-heavy" "--model" "fable" "--task" "eligibility" "--print-prompt")]
+    (testing "quota errors remain eligible only for authenticated registered accounts"
+      (spit (get env "FAKE_QUOTA_REPORT")
+            (json/generate-string {:claude {:accounts {(str "Bearer " anthropic-secret) {:body {:five_hour {:utilization 100}}}
+                                                       "Bearer fixture-work" {:status 503}}}}))
+      (clear-usage! dir)
+      (let [proc (preview)]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "anthropic-2" (:account (route-of proc))))
+        (is (= "unknown" (get-in (route-of proc) [:candidates 1 :status])))))
+    (testing "expired or absent credentials cannot rescue an exhausted base account"
+      (doseq [next-auth [(assoc-in auth [:anthropic-2 :expires] 1) (dissoc auth :anthropic-2)]]
+        (spit auth-path (json/generate-string next-auth))
+        (clear-usage! dir)
+        (let [proc (preview)]
+          (is (= 1 (:exit proc)) (:out proc))
+          (is (= ["anthropic"] (mapv :account (get-in (result proc) [:error :data :candidates])))))))
+    (testing "provider reserve applies to direct requests"
+      (spit auth-path (json/generate-string auth))
+      (named-routing! {:dir dir :env env})
+      (spit (str (fs/path dir ".agents/subagents/config.edn"))
+            (pr-str {:providers {"anthropic" {:quota-provider "claude" :reserve 0.95}}}))
+      (clear-usage! dir)
+      (let [proc (preview)]
+        (is (= 1 (:exit proc)) (:out proc))
+        (is (= [0.95 0.95] (mapv :reserve (get-in (result proc) [:error :data :candidates]))))))))
 
 (deftest named-account-preview-ledger-launch-and-inheritance
   (let [{:keys [env dir log env-file]} (named-routing! (routed-fixture {} {} heavy-persona))

@@ -403,7 +403,7 @@
       (:timeout entry)
       core/default-timeout-ms))
 ;; --- model routing ----------------------------------------------------------------------
-;; Resolve vector aliases before allocation; explicit models bypass collection.
+;; Resolve vector aliases and Pi direct model requests before allocation.
 ;; Pi uses authenticated registered pairs; native harnesses keep one account context.
 (defn- percent [fraction] (format "%.0f%%" (* 100.0 fraction)))
 (defn- candidate-summary [{:keys [canonical rank status remaining reserve reason]}]
@@ -428,13 +428,16 @@
                  (or (nil? adapter)
                      (= "ready" (:status (quota-credentials/credentials :pi adapter context
                                          (when (quota-credentials/pi-account? account) account))))))) inventory)))
-;; Returns nil for a non-vector alias, else the :model-route record; refuses with each
-;; candidate and its allowance when nothing is eligible.
-(defn- route-model [config kind model reasoning]
-  (when (core/vector-alias? config model)
+;; Returns a route for vector aliases or requested Pi base models, otherwise nil.
+;; Inherited concrete selections, named-account pins and unknown names stay unrouted.
+(defn- route-model [config kind model reasoning direct?]
+  (when (or (core/vector-alias? config model)
+            (and direct? (= kind "pi")
+                 (let [provider (core/provider-prefix (core/canonical-model config model))]
+                   (and provider (not (core/account-base provider))))))
     (when (= kind "pi")
       (routing/validate! {:schema routing/schema :model model :reasoning reasoning :inventory [] :attempted []}))
-    (let [candidates (core/candidates config kind model)
+    (let [candidates (routing/candidates config kind model)
           usage (if (seq candidates)
                   (usage-mod/usage-for config {:providers (vec (distinct (map :provider candidates))) :harness (keyword kind)})
                   {:providers []})
@@ -450,8 +453,8 @@
               {:alias model :kind kind :candidates (:candidates (route-record model route))}))
       (route-record model route))))
 ;; The model a launch runs: the concrete routed account/model, else the requested model.
-(defn- model-resolution [config kind model reasoning]
-  (let [route (route-model config kind model reasoning)
+(defn- model-resolution [config kind model reasoning direct?]
+  (let [route (route-model config kind model reasoning direct?)
         effective (or (:concrete route) (:chosen route) model)]
     {:model-route route
      :model-effective effective
@@ -586,7 +589,8 @@
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
         effort (effort-policy effective opts frontmatter kind ident)
         config (config)
-        resolution (model-resolution config kind model (:effort effort))]
+        resolution (model-resolution config kind model (:effort effort)
+                     (or (one opts :model) (:model frontmatter)))]
     {:context context :path path :composition composition :frontmatter frontmatter
      :inherited inherited :fork-source fork-source :overlay-persona persona
      :role-absent (nil? effective) :label-persona (or effective core/anonymous-persona)
@@ -612,7 +616,7 @@
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter {} :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
         effort (effort-policy nil opts {} kind ident)
         config (config)
-        resolution (model-resolution config kind model (:effort effort))]
+        resolution (model-resolution config kind model (:effort effort) (one opts :model))]
     {:resolved resolved :treatment (measurement/compile-treatment resolved)
      :ident ident :kind kind :model model :effort effort :config config
      :model-route (:model-route resolution) :model-effective (:model-effective resolution)
