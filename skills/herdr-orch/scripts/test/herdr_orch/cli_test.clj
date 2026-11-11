@@ -460,9 +460,9 @@
 ;; cli/launcher-bin) -- must run serially.
 (deftest ^:serial readme-roster-listings-are-current
   (let [readme (slurp (str (fs/path root "skills" "herdr-orch" "README.org")))
-        ;; A result may hold a blank line (the models table is followed by a ranked list); the block
-        ;; ends at a blank line followed by a heading, another `#+` line or the end.
-        embeds (re-seq #"(?m)^#\+CALL: oh-roster\[[^\]]*\]\(section=\"([a-z]+)\"\)\n\n#\+RESULTS:\n((?:.+\n|\n(?=[^\n*#]))+)" readme)]
+        ;; Each result is a `:results:` drawer, so org replaces all of it on regeneration even
+        ;; when it holds a blank line (the models table is followed by a ranked list).
+        embeds (re-seq #"(?m)^#\+CALL: oh-roster\[[^\]]*\]\(section=\"([a-z]+)\"\)\n\n#\+RESULTS:\n:results:\n((?:(?!:end:\n).*\n)*?):end:\n" readme)]
     ;; Positive control: a parse that silently matched nothing would pass vacuously.
     (is (= ["personas" "traits" "models"] (mapv second embeds)))
     ;; The babel block runs with an empty HOME and assignment root: packaged layer only.
@@ -5502,7 +5502,7 @@
         (is (= 1 (count (filter #(and (= provider (:provider %)) (= 1 (:rank %))) (shipped-candidates config weight))))
             (str weight " " provider))))
     (testing "feather also lists the local qwen-dense model at rank 2"
-      (is (= [{:model "qwen-dense" :rank 2 :canonical "lemonade/Qwen3.8-27B-GGUF-Q4_K_M" :provider "lemonade"}]
+      (is (= [{:model "qwen-dense" :rank 2 :canonical (shipped-canonical "qwen-dense") :provider "lemonade"}]
              (filter #(= "lemonade" (:provider %)) (shipped-candidates config "feather")))))
     ;; The table names families, so a version bump in config.edn needs no doc edit, while a
     ;; weight that moves to another family (for example light: sonnet -> haiku) still fails.
@@ -5514,8 +5514,9 @@
                 [provider cell] row
                 :let [best (first (sort-by :rank (filter #(= provider (:provider %)) (shipped-candidates config weight))))]]
           (if best
-            (do (is (= cell (alias-family (:canonical best)))
-                    (str "contract.md row " weight " " provider " must name the family of " (:canonical best)))
+            ;; The alias covers a local model whose ID has no separable version tokens.
+            (do (is (contains? #{(alias-family (:canonical best)) (:model best)} cell)
+                    (str "contract.md row " weight " " provider " must name the family or alias of " (:canonical best)))
                 (is (= cell (alias-family cell)) (str "contract.md row " weight " " provider " must name a family without version tokens: " cell)))
             (is (= "--" cell) (str "contract.md row " weight " " provider " names no candidate"))))))))
 
@@ -8940,8 +8941,10 @@
   (into {} (for [kind ["pi" "claude" "codex"]]
              [(str kind "-heavy") (str "---\nname: " kind "-heavy\ndescription: fixture\nkind: " kind "\nmodel: heavy\nretro: false\n---\nFixture.\n")])))
 
-(def ^:private fable "anthropic/claude-fable-5-1")
-(def ^:private astra "openai-codex/gpt-6-astra")
+(def ^:private fable (shipped-canonical "fable"))
+(def ^:private astra (shipped-canonical "gpt-astra"))
+;; `fable` on the named `anthropic-2` account that `named-routing!` adds and gives the most credit.
+(def ^:private fable-on-account-2 (str/replace-first fable #"^anthropic/" "anthropic-2/"))
 
 (defn- route-of [proc] (get-in (result proc) [:result :model-route]))
 
@@ -9182,9 +9185,9 @@
         preview #(:result (result (call! env "task" "run" % "--task" "x" "--print-prompt")))]
     (let [claude (preview "claude-heavy") codex (preview "codex-heavy")]
       (is (= [fable] (map :canonical (get-in claude [:model-route :candidates]))) "claude sees only anthropic")
-      (is (= ["--model" "fable"] (:model-args claude)) "native claude spelling")
+      (is (= ["--model" (shipped-native "fable" :claude)] (:model-args claude)) "native claude spelling")
       (is (= [astra] (map :canonical (get-in codex [:model-route :candidates]))) "codex sees only openai-codex")
-      (is (= ["--model" "gpt-6-astra"] (:model-args codex)) "native codex spelling"))
+      (is (= ["--model" (shipped-native "gpt-astra" :codex)] (:model-args codex)) "native codex spelling"))
     ;; Codex, not Claude: on macOS native Claude credentials live in the Keychain, which
     ;; quota-credentials never reads, so a Claude allowance is unknown rather than exhausted.
     (testing "an exhausted own-provider candidate refuses even when the other provider has credit"
@@ -9347,7 +9350,7 @@
         previewed (:result (result (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")))
         proc (call! env "task" "start" "pi-heavy" "--task" "named account")
         out (:result (result proc))
-        concrete "anthropic-2/claude-fable-5-1"]
+        concrete fable-on-account-2]
     (is (zero? (:exit proc)) (:out proc))
     (is (= concrete (:model-canonical previewed) (:model-canonical out)))
     (is (= "anthropic-2" (get-in previewed [:model-route :account])))
@@ -9367,7 +9370,7 @@
   (let [fixture (named-routing! (seed-subscription-stores! (measurement-fixture)))
         proc (measure! fixture "run" "--model" "heavy" "--print-prompt" "--task" "x")]
     (is (zero? (:exit proc)) (:out proc))
-    (is (= ["--model" "anthropic-2/claude-fable-5-1"]
+    (is (= ["--model" fable-on-account-2]
            (get-in (result proc) [:result :model-args])))))
 
 (deftest named-account-fork-routing-and-expired-account-exclusion
@@ -9375,7 +9378,7 @@
         proc (call! env "task" "start" "pi-heavy" "--context" "fork" "--task" "fork account")
         out (:result (result proc))]
     (is (zero? (:exit proc)) (:out proc))
-    (is (= "anthropic-2/claude-fable-5-1" (:model-canonical out)))
+    (is (= fable-on-account-2 (:model-canonical out)))
     (is (= "anthropic-2" (get-in (ledger-entry* dir (:task out)) [:model-route :account]))))
   (let [{:keys [env dir]} (named-routing! (routed-fixture {} {} heavy-persona))
         path (str (fs/path dir "home/.pi/agent/auth.json"))
@@ -9445,8 +9448,8 @@
           (str kind " restates the packaged provider set")))
     (is (seq (:harnesses home)) "positive control: the override has harness entries")
     (testing "merged shipped + home: a kind still sees only its own provider's candidates"
-      (is (= ["anthropic/claude-fable-5-1"] (map :canonical (core/candidates merged "claude" "heavy"))))
-      (is (= ["openai-codex/gpt-6-astra"] (map :canonical (core/candidates merged "codex" "heavy"))))
+      (is (= [fable] (map :canonical (core/candidates merged "claude" "heavy"))))
+      (is (= [astra] (map :canonical (core/candidates merged "codex" "heavy"))))
       (is (= ["--permission-mode" "auto"] (core/harness-extra-args merged "claude")) "the override's extra args survive"))
     (testing "known-bad control: an override that drops :providers loses the filter"
       (let [bad (core/merge-config shipped {:harnesses {:claude (dissoc (get-in home [:harnesses :claude]) :providers)}})]

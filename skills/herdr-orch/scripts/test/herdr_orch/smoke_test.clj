@@ -10,6 +10,9 @@
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
             [herdr-orch.ledger :as ledger]
+            [herdr-orch.pi-adapter :as pi-adapter]
+            [herdr-orch.quota-credentials :as quota-credentials]
+            [herdr-orch.routing :as routing]
             [herdr-orch.smoke :as smoke]
             [herdr-orch.usage :as usage]))
 
@@ -448,8 +451,20 @@
     (try
       (spit source "synthetic")
       ;; The implicit role keeps vector routing; the explicit `--model` bypasses it. The fixture
-      ;; accepts only that implicit request and never looks up an executable.
-      (with-redefs [cli/execute (fn [argv] (throw (ex-info "LAUNCH FORBIDDEN" {:argv argv})))
+      ;; accepts only that implicit request and never looks up an executable. The Pi model
+      ;; inventory and credentials are fixtures too, so the result does not depend on the
+      ;; installed Pi version or on the caller's logins.
+      (with-redefs [pi-adapter/run-op! (fn [_ op _]
+                                         (when-not (= "model-inventory" op)
+                                           (throw (ex-info "UNEXPECTED PI ADAPTER OP" {:op op})))
+                                         (let [config (cli/config)]
+                                           {:ok true
+                                            :inventory (vec (for [canonical (distinct (concat (keys (:models config))
+                                                                                              (filter string? (vals (:aliases config)))))]
+                                                              {:canonical canonical :account (core/provider-prefix canonical)
+                                                               :reasoning (vec (sort routing/levels))}))}))
+                    quota-credentials/credentials (constantly {:status "ready"})
+                    cli/execute (fn [argv] (throw (ex-info "LAUNCH FORBIDDEN" {:argv argv})))
                     cli/home-directory (constantly (str dir))
                     ledger/assignment-root (constantly (str dir))
                     cli/launcher-bin (constantly launcher)
@@ -471,7 +486,9 @@
                 preview! #(binding [backend/*context* (delay {:backend :herdr})] (cli/preview! persona % "blocking"))
                 implicit (preview! opts)
                 explicit (preview! (assoc opts :model [model]))]
-            (is (= "anthropic/claude-sonnet-5-5" (:model-canonical implicit)))
+            ;; Both providers' allowances are unknown, so routing keeps the first light candidate.
+            (is (= (:canonical (first (core/candidates (cli/config-file (cli/default-config-path)) "pi" "light")))
+                   (:model-canonical implicit)))
             (is (= model (:model-canonical explicit)))
             (is (= ["--model" model] (:model-args explicit)))
             (is (= (if persona "overlay" "snapshot") (get-in explicit [:fork :role-source])))

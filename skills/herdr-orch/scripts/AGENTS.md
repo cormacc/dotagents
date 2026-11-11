@@ -33,7 +33,7 @@ Before you cite a suite result, run it with the `HERDR_ORCH_*` variables unset, 
 
 `../README.org` embeds the packaged personas, traits, and models as `oh roster --format org` output. Each `#+CALL: oh-roster[:eval yes](section="...")` line runs the `oh-roster` block in that file's `Generated listings` section, with an empty `HOME` and assignment root so that only the packaged layer appears. The file-level `#+PROPERTY: header-args :eval no` disables every other block, so executing the whole buffer runs only those calls.
 
-Regenerate after a change to a packaged persona (`../subagents/*.md`), a packaged trait (`../traits/`), `../subagents/config.edn`, or the roster renderer in `cli.clj`. Until then, `bb test` fails in `readme-roster-listings-are-current` with "README.org `<section>` listing is stale". Do not edit a `#+RESULTS:` block by hand.
+Regenerate after a change to a packaged persona (`../subagents/*.md`), a packaged trait (`../traits/`), `../subagents/config.edn`, or the roster renderer in `cli.clj`. Until then, `bb test` fails in `readme-roster-listings-are-current` with "README.org `<section>` listing is stale". Do not edit a `#+RESULTS:` block by hand. The block writes each result in a `:results:` drawer: org replaces only the first element of an undrawered raw result, so a listing that contains a blank line would otherwise keep its old tail.
 
 In Emacs:
 

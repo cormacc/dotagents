@@ -47,8 +47,22 @@
       (println "Clean up with: git worktree prune &&"
                (str/join " " (into ["git" "branch" "-D"] (map #(str/replace % "refs/heads/" "") branches)))))))
 
+(def caller-session-env
+  "Variables that identify the terminal or agent session that started the run. `oh` selects
+  its runtime and parent identity from them, so a run inside Herdr, herdr-app or Pi must not
+  pass them to in-process tests. Fixtures that need them set them explicitly."
+  {:prefixes ["HC_" "HERDR_"]
+   :names #{"PI_SESSION_FILE" "PI_SESSION_ID" "PI_MODEL" "PI_PROVIDER" "PI_REASONING_LEVEL"}})
+
+(defn suite-env
+  "`env` without `caller-session-env`, with TMPDIR set to `root`."
+  [env root]
+  (let [{:keys [prefixes names]} caller-session-env
+        caller? (fn [k] (or (contains? names k) (some #(str/starts-with? k %) prefixes)))]
+    (assoc (into {} (remove (comp caller? key)) env) "TMPDIR" root)))
+
 (defn run-suites
-  "Run each `bb` argument vector in `commands` with java.io.tmpdir and TMPDIR set to one fresh root outside the repository.
+  "Run each `bb` argument vector in `commands` with java.io.tmpdir and TMPDIR set to one fresh root outside the repository, and without `caller-session-env`.
 
   The root is under the system temporary directory, not under `.tmp/`: several tests need a directory outside any git checkout. The root is deleted afterwards unless DOTAGENTS_KEEP_TEST_TMP is set. The run fails if a command fails or if git-state changes."
   [commands]
@@ -59,7 +73,7 @@
                   (doseq [argv commands]
                     (process/check
                      (process/process (into ["bb" (str "-Djava.io.tmpdir=" root)] argv)
-                                      {:inherit true :extra-env {"TMPDIR" root}})))
+                                      {:inherit true :env (suite-env (into {} (System/getenv)) root)})))
                   nil
                   (catch Exception e e))
         changes (state-changes before (git-state repo))]

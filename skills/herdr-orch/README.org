@@ -359,6 +359,7 @@ The listings below come from the packaged definitions only, so a project or home
 #+CALL: oh-roster[:eval yes](section="personas")
 
 #+RESULTS:
+:results:
 - *advisor* -- middle; traits =simple= =read-only= =focused=
   Focused mid-task advisor - assesses a caller-provided decision point and returns actionable guidance
 - *base-analyst* -- light; traits =read-only= =simple=
@@ -377,6 +378,7 @@ The listings below come from the packaged definitions only, so a project or home
   Visual QA tester -- navigates web UIs via Chrome CDP, spots visual issues, tests interactions, produces structured reports
 - *worker* -- light; spawns scout, researcher, advisor; traits =simple=
   Default worker - implements a scoped task with minimal production-quality changes, verifies acceptance criteria, and reports concrete changes and test evidence
+:end:
 
 *** Packaged traits
 
@@ -385,6 +387,7 @@ A trait that no persona selects is for a spawn's =--trait NAME= or for interacti
 #+CALL: oh-roster[:eval yes](section="traits")
 
 #+RESULTS:
+:results:
 - =compact= -- Result format; selected by scout
 - =focused= -- Assignment boundary; selected by advisor, researcher, scout, visual-tester
 - =grounded= -- Evidence bar; selected by reviewer
@@ -393,6 +396,7 @@ A trait that no persona selects is for a spawn's =--trait NAME= or for interacti
 - =read-only= -- Write boundary; selected by advisor, base-analyst, researcher, reviewer, scout, simplifier, visual-tester
 - =refactor= -- Behaviour preservation; no persona selects it
 - =simple= -- Engineering stance; selected by advisor, base-analyst, planner, simplifier, worker
+:end:
 
 *** Packaged models
 
@@ -401,9 +405,10 @@ The first column shows the two shortest string aliases for each canonical ID. A 
 #+CALL: oh-roster[:eval yes](section="models")
 
 #+RESULTS:
+:results:
 | Aliases    | claude                           | codex                            | pi                               |
 |------------+----------------------------------+----------------------------------+----------------------------------|
-| fable      | fable                            | anthropic/claude-fable-5-1       | anthropic/claude-fable-5-1       |
+| fable      | fable                            | anthropic/claude-fable-5-2       | anthropic/claude-fable-5-2       |
 | haiku      | haiku                            | anthropic/claude-haiku-5-5       | anthropic/claude-haiku-5-5       |
 | opus       | opus                             | anthropic/claude-opus-5-5        | anthropic/claude-opus-5-5        |
 | sonnet     | sonnet                           | anthropic/claude-sonnet-5-5      | anthropic/claude-sonnet-5-5      |
@@ -419,6 +424,7 @@ Ranked aliases (lowest rank is preferred):
 - =heavy= -- rank 1 =fable=; rank 1 =gpt-astra=
 - =light= -- rank 1 =sonnet=; rank 1 =gpt-terra=
 - =middle= -- rank 1 =opus=; rank 1 =gpt-sol=
+:end:
 
 * Known gaps
 
@@ -434,7 +440,7 @@ Ranked aliases (lowest rank is preferred):
 The =#+CALL:= lines in [[*Listing personas, traits, models, and workflows]] run this block. The file-level =#+PROPERTY: header-args :eval no= disables every other block, so =org-babel-execute-buffer= runs only those calls. An empty =HOME= and assignment root leave only the packaged layer, so the output does not depend on the machine. [[file:scripts/AGENTS.md]] section 'Regenerating README listings' gives the maintenance workflow.
 
 #+NAME: oh-roster
-#+begin_src sh :var section="personas" :results raw replace
+#+begin_src sh :var section="personas" :results output drawer replace
 home="$(mktemp -d)"; root="$(mktemp -d)"
 trap 'rm -rf "$home" "$root"' EXIT
 HOME="$home" ORCH_ASSIGNMENT_ROOT="$root" scripts/oh roster --format org --section "$section"
