@@ -114,7 +114,9 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
   - Each sidebar reads the ledger and runs Git: reconciliation rules written three times in two languages.
 - The row shows counts, not the branch :: an `orch/*` branch has no upstream, so Git ahead/behind is empty; the branch name is always `orch/<task prefix>`. Counts are path counts against the recorded `:base`.
 - A workspace-placed child is a root of its own space in the TUI tree :: `herdr-orch.tree/rows` joins parent and child only within one workspace. No new rule.
-- The `hc` runtime is gated :: whether `hc run` can start a terminal in a new space rooted at a checkout is unverified and needs the user's app. Until tested, `--workspace` refuses there.
+- The `hc` runtime is gated :: `--workspace` refuses there. The `hc` new-space test showed that `hc run` with a new `herdr.space` label makes a space at the checkout, but the space does not nest and the child's agent row stays under its parent's space ([[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]).
+  Rejected:
+  - Workspace placement under `hc`: an extra top-level row for display only, and herdr-app's `Remove worktree` would end the child.
 - The drift report is the `:unledgered` list only :: reconciliation already reports a vanished checkout as `missing`.
 
 ** Risks
@@ -133,7 +135,7 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
 - [[task:a21f1073-3a5f-4dd1-9204-ee357b87d268]] -- remove split placement for delegated children.
 - [[task:e88e718e-09b1-4dc0-a0df-dc176f1e451f]] -- evaluate `oh`-assisted integration of worktree branches.
 - File the two upstream reports from the drafts (user action).
-- Workspace placement under the `hc` runtime, only if the `hc` new-space test (task 05686844) decides to implement it.
+- [[task:166a41b8-719d-4d33-a184-dc40ce26e59e]] -- show the current delegation tree without sidebar changes. The `hc` new-space test kept the `hc` refusal ([[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]).
 
 * Plan
 ** DONE Lock managed checkouts against removal outside oh :herdr_tui:herdr_app:
@@ -334,13 +336,15 @@ Acceptance criteria:
 
 Start from `design/log/2026-11-11-herdr-orch-worktree-integration/placement-spike.md` section 'Submodule repository'. Use a disposable Herdr session for the Herdr reproduction. The herdr-app effects need the user's app: observe them with the user, or mark them as read in source.
 
-** TODO Test hc for a new-space launch at a checkout :herdr_app:
+** DONE Test hc for a new-space launch at a checkout :herdr_app:
+CLOSED: [2026-11-11 Wed 20:55]
 :PROPERTIES:
 :CUSTOM_ID: 05686844-5b13-4bab-bb44-1bdcf41a1250
 :CREATED: [2026-11-11 Wed 10:18]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 10:18]
+- State "DONE" from "TODO" [2026-11-11 Wed 20:55]
 :END:
 Acceptance criteria:
 - `design/log/2026-11-11-herdr-orch-worktree-integration/hc-new-space.md` gives the herdr-app version and the commands that were run.
@@ -352,6 +356,8 @@ Acceptance criteria:
 - Must not: restart or reconfigure the user's app.
 
 Needs the user: run it with the user present, in the user's app or an instance that the user nominates. See `place!` and `launch!` in `skills/herdr-orch/scripts/src/herdr_orch/hc.clj` for the labels that `oh` passes today.
+
+Result: [[file:2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]. herdr-app 0.1.15 made a new top-level space that did not nest, and the child's agent row stayed under its parent's space. Decision: keep the refusal; display follow-up [[task:166a41b8-719d-4d33-a184-dc40ce26e59e]].
 
 ** DONE Verify workspace placement against real Herdr :herdr_tui:
 CLOSED: [2026-11-11 Wed 19:30]

@@ -300,6 +300,16 @@ Delegated children are placed in tabs only in practice. Remove `--split`, the `:
 :END:
 Reopens the parent-owned-integration decision of `design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org`. Evaluate a guarded verb that applies one sealed child branch to the parent branch by a caller-named strategy (fast-forward, squash or merge commit), refuses on a conflict instead of resolving it, records the integration in the ledger, and so makes a later guarded branch delete safe. Guards: sealed round, clean checkout, branch tip equals the recorded `CHECKPOINT`, clean parent tree. Out: rebase of a child branch, conflict resolution, push, and any claim that the combined tree was remeasured. Parked from the worktree-integration record (task e9199488).
 
+** TODO herdr-orch: show the current delegation tree without sidebar changes :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 166a41b8-719d-4d33-a184-dc40ce26e59e
+:CREATED: [2026-11-11 Wed 20:54]
+:END:
+:LOGBOOK:
+- Created [2026-11-11 Wed 20:54]
+:END:
+Give a user one view of the current delegation tree (parent, children, persona, status, worktree state) that does not depend on sidebar nesting. Options (not ranked): better `oh.label` and space/tab names, so that the existing Herdr TUI and herdr-app views already read correctly; or an `oh` CLI command (for example a tree renderer that a Herdr or herdr-app popup can run). Constraint: minimise complexity for display only; do not change bundled herdr-app mods, and do not add workspace placement under hc. Origin: the hc new-space test ([[proj:design/log/2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]) showed that a space from `hc run` labels does not nest under the main checkout, and the child agent row stays under its parent space.
+
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:
