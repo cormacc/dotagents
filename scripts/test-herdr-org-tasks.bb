@@ -659,6 +659,7 @@
                       :snapshots @snapshots
                       :index (host/read-json (host/index-path root))
                       :error @error
+                      :exit-record (host/read-json (fs/path (System/getenv "OT_HOST_DIR") host/exit-name))
                       :failed-infos @failed-infos}))))
 
 (when-let [root (System/getenv "SUPERVISOR_PROBE_ROOT")]
@@ -667,8 +668,9 @@
 
 (defn run-supervisor-probe
   "Run the probe with an `ot` child that lives `seconds` and the probe `env`;
-  return its report."
-  [dir seconds env]
+  return its report. With `:term-after-ms`, send SIGTERM to the probe at that
+  time instead, and return only the exit record that it left."
+  [dir seconds env & {:keys [term-after-ms]}]
   (let [instance (host/uuid) private (host/private-dir! (fs/path dir instance))]
     (doseq [d ["a" "b" "c"]] (fs/create-dir (str dir "/" d)))
     (spit (str dir "/sleeper") (str "#!/bin/sh\nexec " sleep-bin " " seconds "\n"))
@@ -680,11 +682,17 @@
                                               "HERDR_SOCKET_PATH" "fake"}
                                              env)
                            :out :string :err :string})
-          result (deref proc 20000 nil)]
+          result (if term-after-ms
+                   (do (Thread/sleep term-after-ms) (.destroy (:proc proc)) (deref proc 20000 nil))
+                   (deref proc 20000 nil))]
       (when-not result (p/destroy-tree proc))
-      (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
-      (when (and result (zero? (:exit result)))
-        (read-string (last (str/split-lines (:out result))))))))
+      (cond
+        term-after-ms {:probe-exit (:exit result)
+                       :exit-record (host/read-json (fs/path private host/exit-name))}
+        :else
+        (do (is (and result (zero? (:exit result))) (str "probe exit/err: " (:err result)))
+            (when (and result (zero? (:exit result)))
+              (read-string (last (str/split-lines (:out result))))))))))
 
 (deftest supervisor-survives-host-request-timeouts
   ;; A short Herdr stall must not end the pane: the supervisor retries and
@@ -704,7 +712,10 @@
        (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")
        (is (= [] (:closes out)) "control: with other panes in the tab, the pane stays open")
        (is (= [] (:moves out)) "the focused tab already holds the pane")
-       (is (nil? (:error out)))))))
+       (is (nil? (:error out)))
+       (is (= {:reason "ot-exited" :exit 0} (dissoc (:exit-record out) :exitedAt))
+           "the exit record names the ended ot child")
+       (is (inst? (java.util.Date/from (java.time.Instant/parse (:exitedAt (:exit-record out))))))))))
 
 (deftest supervisor-survives-a-source-pane-that-closes-mid-sample
   ;; A pane can close between the snapshot and its process-info request.
@@ -726,7 +737,8 @@
            out (run-supervisor-probe dir 10 {"PROBE_ALONE_AT" "3"})]
        (is (= [["close" "tasks"]] (:closes out)) "the supervisor closes its own pane")
        (is (< (- (System/currentTimeMillis) started) 8000) "and ends before its ot child would")
-       (is (= [(str dir "/a")] (:directories out)) "control: the pane worked before it was alone")))))
+       (is (= [(str dir "/a")] (:directories out)) "control: the pane worked before it was alone")
+       (is (= "closed-alone" (:reason (:exit-record out))))))))
 
 (deftest supervisor-moves-its-pane-to-the-focused-tab
   (temporary
@@ -801,7 +813,20 @@
            out (run-supervisor-probe dir 10 {"PROBE_EVENTS" (pr-str [{:after 300 :event "pane_focused"}])
                                              "PROBE_EVENTS_END" "1"})]
        (is (= "Herdr event stream ended" (:error out)))
-       (is (< (- (System/currentTimeMillis) started) 8000) "before its ot child would end")))))
+       (is (< (- (System/currentTimeMillis) started) 8000) "before its ot child would end")
+       (is (= {:reason "error" :class "clojure.lang.ExceptionInfo" :message "Herdr event stream ended"}
+              (dissoc (:exit-record out) :exitedAt))
+           "the exit record keeps the exception")))))
+
+(deftest supervisor-records-a-signal-as-its-exit-reason
+  ;; Herdr ends the process with a signal, not an exception, when it closes
+  ;; the pane.
+  (temporary
+   (fn [dir]
+     (let [out (run-supervisor-probe dir 10 {} :term-after-ms 2500)]
+       (is (some? (:probe-exit out)) "control: the probe ended")
+       (is (not= 0 (:probe-exit out)) "control: the signal ended it, not the ot child")
+       (is (= "terminated" (:reason (:exit-record out))) (pr-str out))))))
 
 (deftest ot-resolution-prefers-the-home-skill
   (temporary

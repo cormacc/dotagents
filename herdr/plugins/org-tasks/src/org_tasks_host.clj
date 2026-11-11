@@ -524,6 +524,22 @@
     (.drainTo queue more)
     (cond-> (vec more) first-event (->> (cons first-event) vec))))
 
+(def exit-name "exit.json")
+
+(defn record-exit!
+  "Write why the supervisor ended, and when, to `exit.json` in its instance
+  directory `dir`: Herdr keeps no pane stderr, and `herdr plugin log list`
+  records only hooks and actions. `recorded` keeps the first reason, so the
+  shutdown hook cannot replace a reason that the loop or an exception wrote.
+  A failed write must not hide the exit itself."
+  [dir recorded reason]
+  (when (compare-and-set! recorded false true)
+    (try (atomic! (fs/path dir exit-name) (assoc reason :exitedAt (str (java.time.Instant/now))))
+         (catch Exception _ nil))))
+
+(defn exit-reason [^Throwable e]
+  {:reason "error" :class (.getName (class e)) :message (ex-message e)})
+
 (defn supervise! [ot config]
   (let [dir (System/getenv "OT_HOST_DIR") instance (System/getenv "OT_HOST_INSTANCE")
         initial (System/getenv "HERDR_PANE_ID") socket (System/getenv "HERDR_SOCKET_PATH")
@@ -544,78 +560,94 @@
                    (= instance (str (fs/file-name dir))))
       (throw (ex-info "Invalid task supervisor instance" {})))
     (private-dir! dir)
-    (when-not (= instance (:instance (read-json index)))
-      (throw (ex-info "Task open reservation expired" {})))
-    (atomic! file (context nil instance nil nil hint-lines (now)))
-    (atomic! owner-file (assoc (record-of {:id initial :tab (:tab_id start)}) :updatedAt (now)))
-    (let [queue (java.util.concurrent.LinkedBlockingQueue.)
-          connection (subscribe! socket subscriptions)
-          stream (future (try (events! connection #(.put queue %))
-                              (finally (.put queue ::ended))))
-          child (p/process [ot "tui" "--context-file" (str file) "--instance" instance]
-                           {:in :inherit :out :inherit :err :inherit :shutdown p/destroy-tree})
-          ;; One sample: move to the focused tab, close when alone, or publish.
-          ;; nil skips it after a timed-out request or a source pane that closed
-          ;; mid-sample; every other failure ends the pane.
-          step (fn [st]
-                 (try
-                   (let [snapshot (snapshot!)
-                         current (pane snapshot (:id st))
-                         focus (focused-tab snapshot)]
-                     (when-not (and (= (:terminal owner) (:terminal_id current))
-                                    (= instance (:instance (read-json index))))
-                       (throw (ex-info "Task pane moved or disappeared" {})))
-                     (cond
-                       (and focus (not= focus (:tab_id current)))
-                       (when-let [moved (binding [*request-timeout-ms* 2000]
-                                          (follow! (:id st) focus snapshot config))]
-                         (let [st (assoc st :id (:pane_id moved) :tab (:tab_id moved) :previous nil :due true)]
-                           (session-lock root #(do (atomic! owner-file (assoc (record-of st) :updatedAt (now)))
-                                                   (atomic! index (record-of st))))
-                           (binding [*request-timeout-ms* 2000] (resize! (record-of st) config))
-                           st))
-
-                       (sole-pane? snapshot (:tab_id current) (:id st))
-                       (do (call! "plugin" "pane" "close" (:id st)) ::closed)
-
-                       :else
-                       (do (sync-label! current)
-                           (when-let [sampled (sample! snapshot (record-of (assoc st :tab (:tab_id current)))
-                                                       (:previous st) (:context st) (:pending st) roots hint-lines)]
-                             (atomic! file (:context sampled))
-                             (assoc st :tab (:tab_id current) :previous (:candidate sampled)
-                                    :context (:context sampled) :pending (:pending sampled) :due false
-                                    ;; A pending folder publishes at the first sample after its hold.
-                                    :resample-at (some-> (:pending sampled) :since (+ hold-ms)))))))
-                   (catch clojure.lang.ExceptionInfo e
-                     (when-not (timeout? e) (throw e)))))]
+    ;; The directory is verified, so every later exit is recorded there. A
+    ;; signal, such as when Herdr closes the pane, ends the process without an
+    ;; exception, so a shutdown hook records it.
+    (let [recorded (atom false)
+          exit! #(record-exit! dir recorded %)
+          hook (Thread. #(exit! {:reason "terminated"}))]
+      (.addShutdownHook (Runtime/getRuntime) hook)
       (try
-        (binding [*request-timeout-ms* 200]
-          (loop [st {:id initial :tab (:tab_id start) :due true :sampled-at 0}]
-            (when (nil? (deref child 0 nil))
-              (let [events (take-events! queue (if (:due st) 0 heartbeat-ms))
-                    _ (when (some #{::ended} events)
-                        (throw (ex-info "Herdr event stream ended" {})))
-                    due (or (:due st)
-                            (some #(sample-reason (:tab st) %) events)
-                            (some-> (:resample-at st) (<= (now)))
-                            (>= (- (now) (:sampled-at st)) *fallback-ms*))
-                    wait (- *min-sample-ms* (- (now) (:sampled-at st)))
-                    _ (when (and due (pos? wait)) (Thread/sleep wait))
-                    next-st (if due
-                              (or (step st) (assoc st :due true :sampled-at (now)))
-                              st)]
-                (when-not (= ::closed next-st)
-                  (let [next-st (cond-> next-st due (assoc :sampled-at (now)))]
-                    (heartbeat! next-st)
-                    (recur next-st)))))))
+        (when-not (= instance (:instance (read-json index)))
+          (throw (ex-info "Task open reservation expired" {})))
+        (atomic! file (context nil instance nil nil hint-lines (now)))
+        (atomic! owner-file (assoc (record-of {:id initial :tab (:tab_id start)}) :updatedAt (now)))
+        (let [queue (java.util.concurrent.LinkedBlockingQueue.)
+              connection (subscribe! socket subscriptions)
+              stream (future (try (events! connection #(.put queue %))
+                                  (finally (.put queue ::ended))))
+              child (p/process [ot "tui" "--context-file" (str file) "--instance" instance]
+                               {:in :inherit :out :inherit :err :inherit :shutdown p/destroy-tree})
+              ;; One sample: move to the focused tab, close when alone, or publish.
+              ;; nil skips it after a timed-out request or a source pane that closed
+              ;; mid-sample; every other failure ends the pane.
+              step (fn [st]
+                     (try
+                       (let [snapshot (snapshot!)
+                             current (pane snapshot (:id st))
+                             focus (focused-tab snapshot)]
+                         (when-not (and (= (:terminal owner) (:terminal_id current))
+                                        (= instance (:instance (read-json index))))
+                           (throw (ex-info "Task pane moved or disappeared" {})))
+                         (cond
+                           (and focus (not= focus (:tab_id current)))
+                           (when-let [moved (binding [*request-timeout-ms* 2000]
+                                              (follow! (:id st) focus snapshot config))]
+                             (let [st (assoc st :id (:pane_id moved) :tab (:tab_id moved) :previous nil :due true)]
+                               (session-lock root #(do (atomic! owner-file (assoc (record-of st) :updatedAt (now)))
+                                                       (atomic! index (record-of st))))
+                               (binding [*request-timeout-ms* 2000] (resize! (record-of st) config))
+                               st))
+
+                           (sole-pane? snapshot (:tab_id current) (:id st))
+                           (do (call! "plugin" "pane" "close" (:id st)) ::closed)
+
+                           :else
+                           (do (sync-label! current)
+                               (when-let [sampled (sample! snapshot (record-of (assoc st :tab (:tab_id current)))
+                                                           (:previous st) (:context st) (:pending st) roots hint-lines)]
+                                 (atomic! file (:context sampled))
+                                 (assoc st :tab (:tab_id current) :previous (:candidate sampled)
+                                        :context (:context sampled) :pending (:pending sampled) :due false
+                                        ;; A pending folder publishes at the first sample after its hold.
+                                        :resample-at (some-> (:pending sampled) :since (+ hold-ms)))))))
+                       (catch clojure.lang.ExceptionInfo e
+                         (when-not (timeout? e) (throw e)))))]
+          (try
+            (exit!
+             (binding [*request-timeout-ms* 200]
+               (loop [st {:id initial :tab (:tab_id start) :due true :sampled-at 0}]
+                 (if-let [ended (deref child 0 nil)]
+                   {:reason "ot-exited" :exit (:exit ended)}
+                   (let [events (take-events! queue (if (:due st) 0 heartbeat-ms))
+                         _ (when (some #{::ended} events)
+                             (throw (ex-info "Herdr event stream ended" {})))
+                         due (or (:due st)
+                                 (some #(sample-reason (:tab st) %) events)
+                                 (some-> (:resample-at st) (<= (now)))
+                                 (>= (- (now) (:sampled-at st)) *fallback-ms*))
+                         wait (- *min-sample-ms* (- (now) (:sampled-at st)))
+                         _ (when (and due (pos? wait)) (Thread/sleep wait))
+                         next-st (if due
+                                   (or (step st) (assoc st :due true :sampled-at (now)))
+                                   st)]
+                     (if (= ::closed next-st)
+                       {:reason "closed-alone"}
+                       (let [next-st (cond-> next-st due (assoc :sampled-at (now)))]
+                         (heartbeat! next-st)
+                         (recur next-st))))))))
+            (finally
+              ;; known-limit: retain private instance metadata for ownership diagnosis;
+              ;; add bounded pruning if repeated reopening causes material state growth.
+              (fs/delete-if-exists file)
+              (.close ^java.nio.channels.SocketChannel (:channel connection))
+              (future-cancel stream)
+              (p/destroy-tree child))))
+        (catch Throwable e (exit! (exit-reason e)) (throw e))
         (finally
-          ;; known-limit: retain private instance metadata for ownership diagnosis;
-          ;; add bounded pruning if repeated reopening causes material state growth.
-          (fs/delete-if-exists file)
-          (.close ^java.nio.channels.SocketChannel (:channel connection))
-          (future-cancel stream)
-          (p/destroy-tree child))))))
+          (try (.removeShutdownHook (Runtime/getRuntime) hook)
+               ;; The JVM is already shutting down, so the hook has run.
+               (catch IllegalStateException _ nil)))))))
 
 (defn resolve-ot
   "The first executable `ot`: the home skill, then the skill in the checkout
