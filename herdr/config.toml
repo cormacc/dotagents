@@ -20,7 +20,7 @@ tab_bar_right = [
 # (plugins/herdr-orch/README.md). An open client does not apply this stanza on
 # `herdr server reload-config`.
 [ui.sidebar.agents]
-rows = [["state_icon", "agent"]]
+rows = [["state_icon", "agent", "$worktree"]]
 
 [ui.sound]
 enabled = false

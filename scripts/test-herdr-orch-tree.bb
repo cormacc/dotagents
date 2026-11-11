@@ -83,13 +83,25 @@
     (try
       (let [repo (fs/path dir "repo") wt (fs/path dir "wt")
             _ (git-init! repo) _ (git-init! wt)
+            home (fs/path dir "home")
+            checkout (fs/path dir "checkout")
+            oh (fs/path home ".agents/skills/herdr-orch/scripts/oh")
+            _ (fs/create-dirs (fs/parent oh))
+            _ (spit (str oh) "#!/usr/bin/env bash\nprintf '%s\\n' \"$PWD|$*\" >> \"$FAKE_OH_LOG\"\ncat \"$FAKE_OH_RESULT\"\nexit \"${FAKE_OH_EXIT:-0}\"\n")
+            _ (process/shell "chmod" "+x" (str oh))
+            _ (fs/create-dirs (fs/path checkout "herdr/plugins/herdr-orch"))
             sock (str (fs/path sock-dir "s.sock"))
             {:keys [requests close]} (start-socket! sock)
             ctx {:dir dir :repo repo :wt wt :requests requests
                  :agents (str (fs/path dir "agents.json"))
                  :state (str (fs/path dir "state"))
                  :report-log (str (fs/path dir "report.log"))
-                 :env {"HERDR_BIN_PATH" fake-herdr
+                 :home home :checkout checkout :oh oh
+                 :env {"HOME" (str home)
+                       "HERDR_PLUGIN_ROOT" (str (fs/path checkout "herdr/plugins/herdr-orch"))
+                       "FAKE_OH_LOG" (str (fs/path dir "oh.log"))
+                       "FAKE_OH_RESULT" (str (fs/path dir "worktrees.json"))
+                       "HERDR_BIN_PATH" fake-herdr
                        "HERDR_SOCKET_PATH" sock
                        "HERDR_PLUGIN_STATE_DIR" (str (fs/path dir "state"))
                        "HERDR_SESSION" "tree-test"
@@ -99,6 +111,8 @@
                        "FAKE_WORKSPACE_LIST_FILE" (str (fs/path dir "workspaces.json"))}}]
         (spit (str (fs/path dir "workspaces.json"))
               (json/generate-string {:id "x" :result {:type "workspace_list" :workspaces [{:workspace_id "w1" :label "space1"}]}}))
+        (spit (str (fs/path dir "worktrees.json"))
+              (json/generate-string {:schema "herdr-orch/v1" :ok true :result {:entries [] :unledgered []}}))
         (try (f ctx) (finally (close))))
       (finally (fs/delete-tree dir) (fs/delete-tree sock-dir)))))
 
@@ -137,7 +151,7 @@
   [pane who & tail]
   (apply report pane "--display-agent" (str "local:space1:" who) "--clear-token" "tree" tail))
 
-(defn clear [pane] (report pane "--clear-display-agent" "--clear-token" "tree" "--clear-token" "order"))
+(defn clear [pane] (report pane "--clear-display-agent" "--clear-token" "tree" "--clear-token" "order" "--clear-token" "worktree"))
 
 (defn- same-calls?
   "Order-insensitive comparison: the reconcile's call order across panes is not part of the contract."
@@ -527,6 +541,95 @@
         (is (= 1 exit) err)
         (is (str/includes? err "workspace list") err)
         (is (empty? (reports ctx)))))))
+
+(defn- worktrees! [ctx entries]
+  (spit (get-in ctx [:env "FAKE_OH_RESULT"])
+        (json/generate-string {:schema "herdr-orch/v1" :ok true :result {:entries entries :unledgered []}})))
+
+(def wt-entry
+  {:task "t1" :child "scout-1-light" :pane-id "old-pane"
+   :child-session {:value "s1"} :worktree {:path "/managed/child"}
+   :reconciliation {:checkout-state "present"} :display "⑂ +3 ~2"})
+
+(deftest worktree-token-follows-session-and-display-changes
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:repo ctx))
+      (worktrees! ctx [wt-entry (assoc wt-entry :child-session nil :pane-id "w1:p3" :display "wrong")])
+      (is (zero? (:exit (tree! ctx "reconcile"))))
+      (is (same-calls? (assoc two-children-reports 1
+                             (conj (second two-children-reports) "--token" "worktree=⑂ +3 ~2"))
+                       (reports ctx)) (pr-str (reports ctx)))
+      (let [r (count (reports ctx))]
+        (is (zero? (:exit (tree! ctx "reconcile"))))
+        (is (empty? (reports-after ctx r)) "unchanged display sends no metadata")
+        (worktrees! ctx [(assoc wt-entry :display "⑂ missing")])
+        (is (zero? (:exit (tree! ctx "reconcile"))))
+        (is (= [(conj (second two-children-reports) "--token" "worktree=⑂ missing")]
+               (reports-after ctx r))))
+      (let [r (count (reports ctx))]
+        (worktrees! ctx [])
+        (is (zero? (:exit (tree! ctx "reconcile"))))
+        (is (= [(conj (second two-children-reports) "--clear-token" "worktree")]
+               (reports-after ctx r)))))))
+
+(deftest worktree-toggle-clears-token-without-listing
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:repo ctx))
+      (worktrees! ctx [wt-entry])
+      (is (zero? (:exit (tree! ctx "reconcile"))))
+      (is (= "⑂ +3 ~2" (get-in (state ctx) [:panes :w1:p2 :worktree])))
+      (let [r (count (reports ctx))
+            calls (slurp (get-in ctx [:env "FAKE_OH_LOG"]))]
+        (is (zero? (:exit (tree! ctx "toggle"))))
+        (is (same-calls? (map clear ["w1:p1" "w1:p2" "w1:p3"]) (reports-after ctx r)))
+        (is (= calls (slurp (get-in ctx [:env "FAKE_OH_LOG"]))))))))
+
+(deftest worktree-listing-once-per-root-and-oh-resolution
+  (with-env
+    (fn [ctx]
+      (two-children! ctx (:wt ctx))
+      (is (zero? (:exit (tree! ctx "reconcile"))))
+      (is (= #{(str (:repo ctx) "|worktree list --all --format json")
+               (str (:wt ctx) "|worktree list --all --format json")}
+             (set (str/split-lines (slurp (get-in ctx [:env "FAKE_OH_LOG"]))))))
+      (is (= 2 (count (str/split-lines (slurp (get-in ctx [:env "FAKE_OH_LOG"]))))))
+      ;; The home executable wins even when a checkout executable exists and fails.
+      (let [fallback (fs/path (:checkout ctx) "skills/herdr-orch/scripts/oh")]
+        (fs/create-dirs (fs/parent fallback))
+        (spit (str fallback) "#!/usr/bin/env bash\nexit 42\n")
+        (process/shell "chmod" "+x" (str fallback))
+        (is (= {:exit 0 :err ""} (tree! ctx "reconcile")))
+        (fs/copy (:oh ctx) fallback {:replace-existing true})
+        (fs/delete (:oh ctx))
+        (worktrees! ctx [wt-entry])
+        (is (= {:exit 0 :err ""} (tree! ctx "reconcile")))
+        (is (= "⑂ +3 ~2" (get-in (state ctx) [:panes :w1:p2 :worktree])))))))
+
+(deftest worktree-list-failure-keeps-tree-and-clears-state
+  (doseq [failure [:exit :envelope :malformed :missing]]
+    (with-env
+      (fn [ctx]
+        (two-children! ctx (:wt ctx))
+        (worktrees! ctx [wt-entry])
+        (is (zero? (:exit (tree! ctx "reconcile"))))
+        (is (= "⑂ +3 ~2" (get-in (state ctx) [:panes :w1:p2 :worktree])))
+        (case failure
+          :envelope (spit (get-in ctx [:env "FAKE_OH_RESULT"])
+                          (json/generate-string {:ok false :result {:entries [wt-entry]}}))
+          :malformed (spit (get-in ctx [:env "FAKE_OH_RESULT"]) "{bad json")
+          :missing (fs/delete (:oh ctx))
+          nil)
+        (let [r (count (reports ctx))
+              {:keys [exit err]} (tree! ctx "reconcile" (if (= failure :exit) {"FAKE_OH_EXIT" "1"} {}))]
+          (is (zero? exit) err)
+          (is (= 1 (count (str/split-lines err))) (str failure ": " err))
+          (is (str/includes? err "worktree") err)
+          (is (= [(conj (second two-children-reports) "--clear-token" "worktree")]
+                 (reports-after ctx r)))
+          (is (= "├ scout-1-light" (get-in (state ctx) [:panes :w1:p2 :name])))
+          (is (nil? (get-in (state ctx) [:panes :w1:p2 :worktree]))))))))
 
 (deftest plugin-unit-tests
   ;; the plugin's own namespace tests (herdr/plugins/herdr-orch/test), with the plugin as cwd

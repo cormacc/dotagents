@@ -7,7 +7,8 @@
   ledger file is not a failure); 1 on a failed `herdr` or socket call, an unreadable state file,
   missing environment, or a bad command.
 
-  Environment read: HERDR_BIN_PATH (default `herdr`), HERDR_SOCKET_PATH, HERDR_PLUGIN_STATE_DIR
+  Environment read: HERDR_BIN_PATH (default `herdr`), HERDR_SOCKET_PATH, HERDR_PLUGIN_STATE_DIR,
+  HERDR_PLUGIN_ROOT (default cwd), HOME (for the home skill's `oh`),
   and HERDR_SESSION (absent means `default`). The display flag `$HERDR_PLUGIN_STATE_DIR/display.json`
   (`{\"enabled\": bool}`, absent means enabled; unreadable is an error) is global across sessions.
   While it is off, every reconcile clears what its session recorded and does nothing else; `toggle`
@@ -58,29 +59,36 @@
   child's name is its mark, a space and its ledger name; a root, with or without a tree row, gets
   `root-name`. The mark is part of the name, not a token of its own, because Herdr draws a `·`
   separator between row tokens. An agent outside the tree has no order, so the plugin view does
-  not move it."
-  [rows agents labels]
-  (into {} (map (fn [{pane :pane_id :as a}]
-                  (let [{:keys [order marks name] :as row} (get rows pane)
-                        order (some->> order (format "%04d"))]
-                    [pane (if (str/blank? marks)
-                            {:name (root-name a labels (when row name)) :marks "" :order order}
-                            {:name (some->> name (str marks " ")) :marks marks :order order})])))
-        agents))
+  not move it. Optional `worktrees` maps child session values to listing display strings;
+  matching agents also get a `:worktree` value."
+  ([rows agents labels] (desired rows agents labels {}))
+  ([rows agents labels worktrees]
+   (into {} (map (fn [{pane :pane_id :as a}]
+                   (let [{:keys [order marks name] :as row} (get rows pane)
+                         order (some->> order (format "%04d"))
+                         display (get worktrees (get-in a [:agent_session :value]))]
+                     [pane (cond-> (if (str/blank? marks)
+                                     {:name (root-name a labels (when row name)) :marks "" :order order}
+                                     {:name (some->> name (str marks " ")) :marks marks :order order})
+                             display (assoc :worktree display))])))
+         agents)))
 
 (defn set-args
   "Argv tail after `herdr` for reporting `want` on `pane`, given the `prev` state entry or nil.
   A nil name reports no display name and a nil order clears the order token. The `tree` token is
-  always cleared, so one that an earlier plugin version reported cannot linger."
-  [pane {:keys [name order]} prev]
+  always cleared, so one that an earlier plugin version reported cannot linger.
+  A worktree display sets its token; losing the display clears a previously recorded token."
+  [pane {:keys [name order worktree]} prev]
   (-> ["pane" "report-metadata" pane "--source" source]
       (into (if name ["--display-agent" name] (when (:name prev) ["--clear-display-agent"])))
       (into ["--clear-token" "tree"])
       (into (cond order        ["--token" (str "order=" order)]
-                  (:order prev) ["--clear-token" "order"]))))
+                  (:order prev) ["--clear-token" "order"]))
+      (into (cond worktree         ["--token" (str "worktree=" worktree)]
+                  (:worktree prev) ["--clear-token" "worktree"]))))
 
 (defn clear-args [pane]
-  ["pane" "report-metadata" pane "--source" source "--clear-display-agent" "--clear-token" "tree" "--clear-token" "order"])
+  ["pane" "report-metadata" pane "--source" source "--clear-display-agent" "--clear-token" "tree" "--clear-token" "order" "--clear-token" "worktree"])
 
 (defn parse-agents [text]
   (let [parsed (json/parse-string text true)
@@ -148,6 +156,46 @@
                  (let [dir (fs/path root ".tmp" "herdr-orch" "ledger")]
                    (when (fs/directory? dir) (sort (map str (fs/glob dir "*.json")))))))
        (keep read-ledger-file)))
+
+(defn- resolve-oh []
+  (let [home (fs/path (or (env "HOME") "/") ".agents/skills/herdr-orch/scripts/oh")
+        checkout (fs/normalize (fs/absolutize
+                                (fs/path (or (env "HERDR_PLUGIN_ROOT") (fs/cwd))
+                                         "../../.." "skills/herdr-orch/scripts/oh")))]
+    (or (some #(when (fs/executable? %) (str %)) [home checkout])
+        (throw (ex-info (str "oh not found at " home " or " checkout) {})))))
+
+(defn- worktree-displays
+  "Session -> display, from one `oh` listing per Git root. Any failed listing omits all
+  worktree state for this pass and emits one warning; the tree itself remains available."
+  [agents]
+  (let [roots (distinct (keep (comp git-root :cwd) agents))]
+    (if-not (seq roots)
+      {}
+      (try
+        (let [oh (resolve-oh)
+              results (mapv (fn [root]
+                              (let [r (run {:dir root} oh "worktree" "list" "--all" "--format" "json")]
+                                (try
+                                  (when-not (:ok r)
+                                    (throw (ex-info (str root ": " (:err r)) {})))
+                                  (let [envelope (json/parse-string (:out r) true)]
+                                    (when-not (true? (:ok envelope))
+                                      (throw (ex-info (str root ": oh returned ok != true") {})))
+                                    (let [entries (get-in envelope [:result :entries])]
+                                      (when-not (sequential? entries)
+                                        (throw (ex-info (str root ": no result.entries array") {})))
+                                      {:entries entries}))
+                                  (catch Exception e {:error (ex-message e)}))))
+                            roots)]
+          (if-let [error (some :error results)]
+            (do (warn "worktree listing unavailable:" error) {})
+            (into {} (keep (fn [entry]
+                             (when-let [session (not-empty (get-in entry [:child-session :value]))]
+                               (when-let [display (not-empty (:display entry))]
+                                 [session display]))))
+                  (mapcat :entries results))))
+        (catch Exception e (warn "worktree listing unavailable:" (ex-message e)) {})))))
 
 ;; --- socket -----------------------------------------------------------------------------
 
@@ -259,7 +307,8 @@
       false
       (let [agents  (parse-agents (:out list-r))
             live    (set (map :pane_id agents))
-            want    (desired (tree/rows (ledger-entries agents) agents) agents (parse-workspace-labels (:out ws-r)))
+            want    (desired (tree/rows (ledger-entries agents) agents) agents
+                             (parse-workspace-labels (:out ws-r)) (worktree-displays agents))
             sid     (server-id)
             old     (read-state dir)
             fresh?  (not= sid (:server old))

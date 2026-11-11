@@ -89,7 +89,7 @@ The plugin decorates Herdr's native Agents sidebar with the `oh` agent tree. Und
 How it works:
 
 - Hierarchy comes from the ledgers `.tmp/herdr-orch/ledger/*.json` under the git root of each agent's working directory. A child is joined to its parent by session (`parent-session` and `child-session`), across every discovered root, so a child in a managed worktree sits under its parent. Liveness comes from `herdr agent list`: an agent whose parent is not listed is shown as a root, and ledger `closed-at` is not read.
-- The reconcile (`bb tree.bb reconcile`) reads workspace labels from `herdr workspace list`. It reports `display_agent` for every agent, and an `order` token for each agent in an `oh` tree, with `herdr pane report-metadata`, and sets the session's agent view with `agent.view.set` (source `plugin:cormacc.herdr-orch`; sort by workspace, then `order`, then pane order).
+- The reconcile (`bb tree.bb reconcile`) reads workspace labels from `herdr workspace list`. It reports `display_agent` for every agent, an `order` token for each agent in an `oh` tree, and a `worktree` token for each agent whose session matches a managed-checkout listing entry, with `herdr pane report-metadata`. The token uses the listing's display string, for example `⑂ +3 ~2` (committed and dirty path counts), `⑂ +3 ~2 !1` (also undeclared paths), or `⑂ missing`. It runs `oh worktree list --all --format json` once per distinct Git root, using the executable home skill first, then this checkout, as the quota commands do. A missing `oh`, an older home skill without `--all`, or a failed listing gives one warning and leaves the tree with no worktree state. A lost match clears the token; an unchanged display sends no metadata. It sets the session's agent view with `agent.view.set` (source `plugin:cormacc.herdr-orch`; sort by workspace, then `order`, then pane order).
 - It runs once from the startup hook and from the `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.agent_status_changed`, `tab.closed`, `workspace.closed` and `workspace.renamed` hooks. It is one-shot: no daemon and no polling. Concurrent runs serialise on a file lock under the plugin state directory.
 - It writes no ledger and sends no pane input.
 
@@ -97,14 +97,14 @@ Add the rows stanza to `~/.config/herdr/config.toml` (the tracked [../../config.
 
 ```toml
 [ui.sidebar.agents]
-rows = [["state_icon", "agent"]]
+rows = [["state_icon", "agent", "$worktree"]]
 ```
 
 `herdr server reload-config` does not apply `[ui.sidebar.agents]` to an open client. Use the `reload config` item of the UI menu, or restart the client.
 
 ### Toggle
 
-`prefix+ctrl+t` runs the `tree-toggle` action. It turns the tree off (tokens, display names and the plugin view are cleared, and the hooks then do nothing) and on again (rows and view are rebuilt). The invoking session changes at once; other sessions follow at their next hook. The setting is global and persists across server restarts. Bind it in `config.toml`:
+`prefix+ctrl+t` runs the `tree-toggle` action. It turns the tree off (tokens, including `worktree`, display names and the plugin view are cleared, and the hooks then do nothing) and on again (rows and view are rebuilt). The invoking session changes at once; other sessions follow at their next hook. The setting is global and persists across server restarts. Bind it in `config.toml`:
 
 ```toml
 [[keys.command]]
