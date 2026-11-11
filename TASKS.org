@@ -266,13 +266,16 @@ The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tr
 :END:
 Add runner cases in `scripts/test-herdr-orch-tree.bb` for the paths that closeout reviews of task 9777d1ec found untested ([[plan:2026-11-08-herdr-tui-orch-agent-tree.org]] ** Risks): the retry of a failed `agent.view.clear` by the next off reconcile (mutants in `orch_tree.clj` `reconcile-once!` and `reset-once!` survived the runner), a view re-send caused only by a stale-pane clear, and the contended-branch dirty re-check in `reconcile!`. Also: nothing tests `server-id` (the re-report after a server restart; a constant body leaves the runner green), and the simplification review proposed replacing it by treating `HERDR_PLUGIN_EVENT` = `startup` as a fresh run, with a test; and the off path's `(or (seq (:panes old)) (:view old))` survives an `off-panes-only` mutant.
 
-** TODO herdr-orch worktree integration :herdr_orch:
+** STARTED herdr-orch worktree integration :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: e9199488-27ca-421d-80e0-9637f327beb9
 :CREATED: [2026-11-11 Wed 08:07]
+:STARTED: [2026-11-11 Wed 12:07]
+:HANDOFF: Batch 1 committed: 0cf8f54 (b24a5cfe orch-spaces submodule fix), d3e633e (b06d302e managed-checkout lock + stale-launch test context pin). Next: dispatch 01a472ba (oh worktree list --all) on base d3e633e; then 04998e9e and 0a2d0696 (both after 01a472ba), a61d6b82. f92c0d67 and 05686844 need the user present. Question routing: raise immediately. Artefacts: .tmp/exec-wt/.
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
+- State "STARTED" from "TODO" [2026-11-11 Wed 12:07]
 :END:
 #+IMPORT: [[plan:2026-11-11-herdr-orch-worktree-integration.org]]
 Herdr models a Git worktree as a workspace (`herdr worktree create|open|list|remove`; API `WorkspaceInfo.worktree`, events `worktree_created|opened|removed`), and the herdr-app `spaces` mod nests worktree spaces under their main checkout. `oh task run|start --worktree new` creates its own checkout under `.tmp/herdr-orch/worktrees/<task>` but places the child in a tab or split of the caller workspace, so Herdr worktree views do not apply to it. `herdr worktree list` already reports `oh` checkouts (with no `open_workspace_id`). The Herdr TUI has the same model natively: sidebar `New worktree`, `Open worktree...` and `Delete worktree checkout...` actions, `[worktrees] directory`, and grouped Spaces rows. Subtask tags give the surface: `herdr_app` (herdr-app mods), `herdr_tui` (Herdr TUI or the herdr-orch Herdr plugin), both tags for shared `oh` work.

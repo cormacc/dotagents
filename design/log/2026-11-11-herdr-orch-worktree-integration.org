@@ -135,13 +135,19 @@ Consolidated ideal-state checklist, confirmed by the user on 2026-11-11.
 - Workspace placement under the `hc` runtime, only if the `hc` new-space test (task 05686844) decides to implement it.
 
 * Plan
-** TODO Lock managed checkouts against removal outside oh :herdr_tui:herdr_app:
+** DONE Lock managed checkouts against removal outside oh :herdr_tui:herdr_app:
+CLOSED: [2026-11-11 Wed 13:21]
 :PROPERTIES:
 :CUSTOM_ID: b06d302e-b089-4ab6-9e60-8f9db151059b
 :CREATED: [2026-11-11 Wed 10:18]
+:STARTED: [2026-11-11 Wed 12:07]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 10:18]
+- State "STARTED" from "TODO" [2026-11-11 Wed 12:07]
+- State "TODO" from "STARTED" [2026-11-11 Wed 12:07]
+- State "STARTED" from "TODO" [2026-11-11 Wed 12:26]
+- State "DONE" from "STARTED" [2026-11-11 Wed 13:21]
 :END:
 Acceptance criteria:
 - After `--worktree new`, `git worktree list --porcelain` shows the checkout as `locked`, with a reason that names `oh worktree remove`.
@@ -235,13 +241,19 @@ Acceptance criteria:
 
 Edit `desired`, `set-args`, `clear-args` and `reconcile!` in `herdr/plugins/herdr-orch/src/orch_tree.clj`. Resolve `oh` in the order of `plugin_oh` in `herdr/plugins/herdr-orch/lib.sh`. The join is the one that `match-agent` in `skills/herdr-orch/scripts/src/herdr_orch/tree.clj` uses. Tests: `scripts/test-herdr-orch-tree.bb`.
 
-** TODO Fix linked-worktree detection for submodule checkouts in orch-spaces :herdr_app:
+** DONE Fix linked-worktree detection for submodule checkouts in orch-spaces :herdr_app:
+CLOSED: [2026-11-11 Wed 12:28]
 :PROPERTIES:
 :CUSTOM_ID: b24a5cfe-e85a-442f-89bd-0283dda1f314
 :CREATED: [2026-11-11 Wed 08:07]
+:STARTED: [2026-11-11 Wed 12:07]
 :END:
 :LOGBOOK:
 - Created [2026-11-11 Wed 08:07]
+- State "STARTED" from "TODO" [2026-11-11 Wed 12:07]
+- State "TODO" from "STARTED" [2026-11-11 Wed 12:07]
+- State "STARTED" from "TODO" [2026-11-11 Wed 12:26]
+- State "DONE" from "STARTED" [2026-11-11 Wed 12:28]
 :END:
 Acceptance criteria:
 - When `git rev-parse --absolute-git-dir` equals the common dir, `check` sets `linked` to false. This includes a common dir of the form `<super>/.git/modules/<name>`.
