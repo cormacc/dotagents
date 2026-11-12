@@ -28,6 +28,13 @@ enabled = false
 [ui.toast]
 delivery = "system"
 
+# Next/previous agent in sidebar order; the cormacc.herdr-orch agent tree sets
+# that order. Herdr 0.9.5 leaves both unbound, and its defaults already use
+# prefix+j/k for pane focus, so these take the shifted letters.
+[keys]
+next_agent = "prefix+shift+j"
+previous_agent = "prefix+shift+k"
+
 # Open the herdr-orch quota pane. A keys.command cannot open a plugin pane
 # directly, so a detached shell asks the CLI to open it.
 [[keys.command]]
