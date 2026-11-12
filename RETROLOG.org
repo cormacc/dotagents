@@ -5,6 +5,16 @@ Historic evidence for the rules in [[file:home/AGENTS.md][home/AGENTS.md]] and [
 
 The [[file:skills/retro/SKILL.md][retro]] skill appends to this file. Group each entry under the rule heading that the evidence supports, and use the rule's own instruction-file heading text so a reader can find the rule.
 
+* 2026-11-12 Thu -- trait probe backlog closure
+
+** Replies
+
+The agent asked the owner to choose between two probe instruments named only by their CLI forms. The owner had to ask what each one did, and the next reply still did not explain them.
+
+** Verification discipline
+
+The agent offered to remove an inherited trait from one persona before checking persona composition. Composition only adds traits, so the offer could not be carried out as stated, and the owner had to choose again between three alternatives.
+
 * 2026-11-05 Thu -- AXI CLI consumer migration
 
 ** Workflows

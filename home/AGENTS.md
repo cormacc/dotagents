@@ -8,6 +8,7 @@
 - Number the steps that the user must do.
 - In multi-turn work, report progress as "step N of M".
 - Ask one decision in each question. Do not combine two independent choices in one option set: the answer can confirm one and leave the other unconfirmed.
+- In a question that offers options, state for each option what it does and its main cost, in terms that the user can judge without prior context.
 - End a reply with at most one question.
 
 ## Prose
@@ -38,6 +39,7 @@
 - Parse machine-readable JSON with `jq` or a JSON parser, not the Clojure reader.
 - Do not put an assertion and its verification command in the same invocation. Read the verification output first, then write the claim.
 - When a matched skill owns a domain, read that skill before you probe the domain.
+- Before you offer an action, confirm that the mechanism supports it: read its contract or run a dry check.
 - Do not cite a green suite as coverage until you confirm that it executes the changed file. Confirm which namespaces the test task runs before you attribute its total to one component.
 - Run `date` before you write a new timestamp into a file. Do not infer the date from context.
 - Do not trust a guard or ad-hoc verifier that you have seen only pass. Establish the passing baseline, then trigger it with known-bad input.
