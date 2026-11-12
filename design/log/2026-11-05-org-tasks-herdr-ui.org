@@ -49,7 +49,7 @@ Reversed on 2026-11-07 with the user: expand/collapse, the right-aligned memory 
 - [X] Terminal Herdr: the compact pane opens in every tab while display is on; selection opens in a popup and Esc restores focus.
 - [X] Desktop: the widget renders `ot compact`, opens `ot tui` in a dialog that closes with Esc, and toggles with `layout.toggle`.
 - [X] Pi prompt helpers and agent access to `ot` work without the visual entrypoint; the legacy UI can still load.
-- [ ] Native Linux validation of both hosts and the desktop restart check: follow-up [[task:2b49d0fd-413d-47a3-a5da-61e655dea4a1]].
+- [X] Native Linux validation of both hosts and the desktop restart check: passed 2026-11-12 on Linux and on macOS after darwin-rebuild; results are in the archived task [[archive:2b49d0fd-413d-47a3-a5da-61e655dea4a1]]. One fault found: restored Tasks panes ([[task:7b95f3fa-14b1-4d94-8143-88ee35469d33]]).
 *** Anti-criteria
 - [X] Must not: use a remote working directory as a local task root.
 - [X] Must not: initialise missing task memory because host focus changes.

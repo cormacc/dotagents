@@ -24,7 +24,6 @@
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
   - [[#add-read-only-native-os-store-quota-reporting][Add read-only native OS-store quota reporting]]
   - [[#add-workspace-pinning-to-the-herdr-org-tasks-adapters][Add workspace pinning to the Herdr org-tasks adapters]]
-  - [[#validate-the-org-tasks-herdr-uis-natively-on-linux-and-after-installation][Validate the org-tasks Herdr UIs natively on Linux and after installation]]
   - [[#herdr-orch-evaluate-oh-assisted-integration-of-worktree-branches][herdr-orch: evaluate oh-assisted integration of worktree branches]]
   - [[#herdr-orch-show-the-current-delegation-tree-without-sidebar-changes][herdr-orch: show the current delegation tree without sidebar changes]]
 - [[#fixes][Fixes]]
@@ -165,28 +164,6 @@ Deferred by the owner from the owned quota collector delivery. Support native Cl
 - Created [2026-11-06 Fri 08:34]
 :END:
 Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. Design focus-independent workspace-root pinning for terminal Herdr and the desktop adapter. Establish an authoritative configured directory source before implementation; Herdr 0.9.5 PluginInvocationContext.workspace_cwd prefers focused pane cwd and is not sufficient. Consider an explicitly configured plugin-owned directory map only after agreement. Preserve active-agent following as the default, reject missing or remote roots, and test that task-pane and agent-pane focus changes cannot change a pinned root. Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
-
-** TODO Validate the org-tasks Herdr UIs natively on Linux and after installation
-:PROPERTIES:
-:CUSTOM_ID: 2b49d0fd-413d-47a3-a5da-61e655dea4a1
-:CREATED: [2026-11-07 Sat 20:47]
-:STARTED: [2026-11-12 Thu 12:26]
-:HANDOFF: Linux checks complete 2026-11-12 (see body). Remaining: macOS after darwin-rebuild only.
-:END:
-:LOGBOOK:
-- Created [2026-11-07 Sat 20:47]
-- State "STARTED" from "TODO" [2026-11-12 Thu 12:26]
-- State "TODO" from "STARTED" [2026-11-12 Thu 16:22]
-:END:
-The terminal plugin and the herdr-app widget were checked live on macOS only (2026-11-07). On xps15: (1) terminal plugin: startup and tab.created display, global prefix+ctrl+o toggle (moved from prefix+shift+o by task 9777d1ec), prefix+t popup selection with Esc and focus return, label title; (2) herdr-app widget: install via the parent HM switch, project follow, refresh, selection dialog, toggle, block fitting, and the keys.json spelling (cmd-shift-t / cmd-shift-o, else ctrl-shift-). On macOS after darwin-rebuild: confirm the herdr-app widget loads from the installed leaf and survives an app restart. Record: [[archive:82126d8e-eb54-45b8-abbe-9e76451b3963]].
-
-Linux results 2026-11-12 (xps15, Herdr 0.9.5, scratch session lincheck; evidence in .tmp/linux-herdr-checks-20261112/):
-- Pass (owner): terminal plugin startup and new-tab display, `prefix+ctrl+o` toggle, `prefix+t` popup with Esc and focus return, label title.
-- Pass: Home Manager install links `mods/{herdr-orch,system,org-tasks,orch-spaces}`, `layouts/herdr-orch.json`, `settings.json` and `keys.json` -> `keys.linux.json`, plus both plugin leaves, to this checkout. The Linux key table binds `ctrl-alt-t` / `ctrl-alt-shift-t`, as herdr-app/README.md states (not `ctrl-shift-`, which the app's Linux defaults bind to `tab.new` and `pane.split:right`).
-- Pass (owner): desktop widget project follow, key-hint title and block fitting. The owner found the project switch laggy: task:2e7057ce-ed02-4d29-99f6-74f0766e2406.
-- Fail: after a session restore, restored Tasks panes stay as plain shells: task:7b95f3fa-14b1-4d94-8143-88ee35469d33.
-- Pass (owner): desktop selection dialog with Esc, `ctrl-alt-shift-t` toggle, refresh on a task-memory change, and widget reload with saved block state after an app restart.
-- Linux is complete. Open only for the macOS check after darwin-rebuild (widget loads from the installed leaf and survives an app restart).
 
 ** TODO herdr-orch: evaluate oh-assisted integration of worktree branches :herdr_orch:
 :PROPERTIES:

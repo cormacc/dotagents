@@ -5795,3 +5795,28 @@ CLOSED: [2026-11-12 Thu 16:21]
 The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tree.org]]) was checked live on macOS only (2026-11-08, plan task 076c6a03). On xps15, repeat that live check in a scratch session: marks and the U+2800 depth-2 indent, next/previous order, child close, `prefix+ctrl+t` toggle, and the startup hook after a scratch-session restart. Check the per-session state key (`HERDR_SESSION`) and the `server` identity in `tree-state.json`, which uses the socket file creation time (unverified on Linux).
 
 Pre-check 2026-11-12 (xps15, ext4 home, bb on Java 25.0.4), with a regular file in .tmp/sid-probe/probe.clj: `creationTime` stayed the same after a write, so it is the birth time and not the modification time. A deleted and re-created file got the same inode, so the `fileKey` part of `server-id` (`herdr/plugins/herdr-orch/src/orch_tree.clj`) alone does not identify a restart, but the creation time did change (1794486357268 to 1794486358474 ms). Live 2026-11-12 (scratch session lincheck): pass for marks and depth-2 indent, child close, `prefix+ctrl+t` off/on, and marks restored by the startup hook after `herdr session stop` and re-attach. The restarted server's socket reused inode 86566625, and `server` in tree-state.json changed from `@1794488377499` to `@1794488782872` with the socket's creation time. Next/previous agent order also passes, with `next_agent` / `previous_agent` bound to `prefix+shift+j` / `prefix+shift+k` in the tracked config. The per-session state key holds: the plugin kept this session's state in `session-lincheck/`, beside `session-default/`.
+
+** DONE Validate the org-tasks Herdr UIs natively on Linux and after installation
+CLOSED: [2026-11-12 Thu 16:43]
+:PROPERTIES:
+:CUSTOM_ID: 2b49d0fd-413d-47a3-a5da-61e655dea4a1
+:CREATED: [2026-11-07 Sat 20:47]
+:STARTED: [2026-11-12 Thu 12:26]
+:ARCHIVED: [2026-11-12 Thu 16:43]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-07 Sat 20:47]
+- State "STARTED" from "TODO" [2026-11-12 Thu 12:26]
+- State "TODO" from "STARTED" [2026-11-12 Thu 16:22]
+- State "DONE" from "TODO" [2026-11-12 Thu 16:43]
+:END:
+The terminal plugin and the herdr-app widget were checked live on macOS only (2026-11-07). On xps15: (1) terminal plugin: startup and tab.created display, global prefix+ctrl+o toggle (moved from prefix+shift+o by task 9777d1ec), prefix+t popup selection with Esc and focus return, label title; (2) herdr-app widget: install via the parent HM switch, project follow, refresh, selection dialog, toggle, block fitting, and the keys.json spelling (cmd-shift-t / cmd-shift-o, else ctrl-shift-). On macOS after darwin-rebuild: confirm the herdr-app widget loads from the installed leaf and survives an app restart. Record: [[archive:82126d8e-eb54-45b8-abbe-9e76451b3963]].
+
+Linux results 2026-11-12 (xps15, Herdr 0.9.5, scratch session lincheck; evidence in .tmp/linux-herdr-checks-20261112/):
+- Pass (owner): terminal plugin startup and new-tab display, `prefix+ctrl+o` toggle, `prefix+t` popup with Esc and focus return, label title.
+- Pass: Home Manager install links `mods/{herdr-orch,system,org-tasks,orch-spaces}`, `layouts/herdr-orch.json`, `settings.json` and `keys.json` -> `keys.linux.json`, plus both plugin leaves, to this checkout. The Linux key table binds `ctrl-alt-t` / `ctrl-alt-shift-t`, as herdr-app/README.md states (not `ctrl-shift-`, which the app's Linux defaults bind to `tab.new` and `pane.split:right`).
+- Pass (owner): desktop widget project follow, key-hint title and block fitting. The owner found the project switch laggy: task:2e7057ce-ed02-4d29-99f6-74f0766e2406.
+- Fail: after a session restore, restored Tasks panes stay as plain shells: task:7b95f3fa-14b1-4d94-8143-88ee35469d33.
+- Pass (owner): desktop selection dialog with Esc, `ctrl-alt-shift-t` toggle, refresh on a task-memory change, and widget reload with saved block state after an app restart.
+- Pass (owner, 2026-11-12, macOS after darwin-rebuild): the herdr-app widget loads from the installed leaf and survives an app restart. Reported by the owner; no agent evidence.
