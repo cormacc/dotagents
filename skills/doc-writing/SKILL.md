@@ -47,6 +47,7 @@ Write the candidate to a scratch file, read its diff, then replace the original.
 ### Org
 
 - Align tables with Org, not by hand: `emacs --batch -Q FILE --eval "(progn (org-mode) (org-table-map-tables #'org-table-align t) (save-buffer))"`. If the file is open in a running Emacs, align it there, so that the buffer and the file stay the same.
+- Regenerate a toc-org table of contents (a heading tagged `:TOC_<n>_gh:` or similar) with toc-org, after any heading change. Turn on `toc-org-mode` first: the table that adds `-1`, `-2` to repeated anchors exists only while the mode is on, so a plain `toc-org-insert-toc` gives duplicate headings identical, broken links. In a temporary buffer: `(with-temp-buffer (insert-file-contents F) (delay-mode-hooks (org-mode)) (toc-org-mode 1) (toc-org-insert-toc) (write-region nil nil F))`. `emacs -Q` does not load toc-org; use an Emacs that has it.
 - Mark code as `~code~` or `=verbatim=`. Use a description list (`- Term :: detail`) for definitions.
 - Write source blocks as `#+BEGIN_SRC <language>` and `#+END_SRC`, with the language, so that renderers highlight it.
 - Write relative file links: `[[../src/foo.clj][foo.clj]]`. GitLab and Emacs resolve them the same way.
