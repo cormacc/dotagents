@@ -5777,3 +5777,21 @@ CLOSED: [2026-11-12 Thu 11:42]
 herdr-orch assumes that Pi and each native CLI log in to one subscription per provider, and `oh` does not verify identity ([[proj:skills/herdr-orch/scripts/docs/contract.md]] section Usage). On 2026-11-05 the Linux Codex CLI login (`~/.codex/auth.json`) was a free ChatGPT account while Pi `openai-codex` used a `self_serve_business_prolite` account, so the status line showed a 30-day window and routing read the wrong quota, with no warning. Add a check (for example in `oh usage`, `oh doctor` or the status line) that compares the account quota-axi reads with the Pi login for each provider: Codex `chatgpt_account_id` or plan type in the token claims, and the Claude equivalent. Report a mismatch without printing tokens or identities, and treat it as unknown evidence for routing. Consider how this interacts with task:4d770990-2725-4b7d-905a-888db5d9c2a7 (a Babashka collector could read the Pi credential directly).
 
 Review 2026-11-12: task 4d770990 is DONE, and its owned collector removes the routing half of this problem. Launch routing calls `usage-for` with `:harness (keyword kind)` (`skills/herdr-orch/scripts/src/herdr_orch/cli.clj`), so a native Codex child is routed on the native Codex credential, and Pi routing (`oh route`) on the Pi credential. What remains is the operator view: `oh usage` and the status line default to Pi, so a different native login is still silent. Codex can be compared offline (Pi `openai-codex.accountId` against native `tokens.account_id`, both read in `herdr-orch.quota-credentials`). Claude cannot be compared offline: the Pi `anthropic` entry has only `access`, `expires`, `refresh` and `type`, and native `.credentials.json` has a plan type (`subscriptionType`, `rateLimitTier`) but no account identity, so a Claude comparison needs an HTTP profile call. Before implementing, confirm (1) whether a Codex-only warning is still wanted, and (2) whether "treat it as unknown evidence for routing" should be dropped, because routing no longer reads the other harness's quota.
+
+** DONE Validate the Herdr TUI sidebar agent tree on Linux
+CLOSED: [2026-11-12 Thu 16:21]
+:PROPERTIES:
+:CUSTOM_ID: cbbdb783-5947-4900-bb63-c67865a52098
+:CREATED: [2026-11-08 Sun 14:41]
+:STARTED: [2026-11-12 Thu 12:26]
+:ARCHIVED: [2026-11-12 Thu 16:21]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-08 Sun 14:41]
+- State "STARTED" from "TODO" [2026-11-12 Thu 12:26]
+- State "DONE" from "STARTED" [2026-11-12 Thu 16:21]
+:END:
+The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tree.org]]) was checked live on macOS only (2026-11-08, plan task 076c6a03). On xps15, repeat that live check in a scratch session: marks and the U+2800 depth-2 indent, next/previous order, child close, `prefix+ctrl+t` toggle, and the startup hook after a scratch-session restart. Check the per-session state key (`HERDR_SESSION`) and the `server` identity in `tree-state.json`, which uses the socket file creation time (unverified on Linux).
+
+Pre-check 2026-11-12 (xps15, ext4 home, bb on Java 25.0.4), with a regular file in .tmp/sid-probe/probe.clj: `creationTime` stayed the same after a write, so it is the birth time and not the modification time. A deleted and re-created file got the same inode, so the `fileKey` part of `server-id` (`herdr/plugins/herdr-orch/src/orch_tree.clj`) alone does not identify a restart, but the creation time did change (1794486357268 to 1794486358474 ms). Live 2026-11-12 (scratch session lincheck): pass for marks and depth-2 indent, child close, `prefix+ctrl+t` off/on, and marks restored by the startup hook after `herdr session stop` and re-attach. The restarted server's socket reused inode 86566625, and `server` in tree-state.json changed from `@1794488377499` to `@1794488782872` with the socket's creation time. Next/previous agent order also passes, with `next_agent` / `previous_agent` bound to `prefix+shift+j` / `prefix+shift+k` in the tracked config. The per-session state key holds: the plugin kept this session's state in `session-lincheck/`, beside `session-default/`.

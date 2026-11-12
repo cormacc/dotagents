@@ -25,7 +25,6 @@
   - [[#add-read-only-native-os-store-quota-reporting][Add read-only native OS-store quota reporting]]
   - [[#add-workspace-pinning-to-the-herdr-org-tasks-adapters][Add workspace pinning to the Herdr org-tasks adapters]]
   - [[#validate-the-org-tasks-herdr-uis-natively-on-linux-and-after-installation][Validate the org-tasks Herdr UIs natively on Linux and after installation]]
-  - [[#validate-the-herdr-tui-sidebar-agent-tree-on-linux][Validate the Herdr TUI sidebar agent tree on Linux]]
   - [[#herdr-orch-evaluate-oh-assisted-integration-of-worktree-branches][herdr-orch: evaluate oh-assisted integration of worktree branches]]
   - [[#herdr-orch-show-the-current-delegation-tree-without-sidebar-changes][herdr-orch: show the current delegation tree without sidebar changes]]
 - [[#fixes][Fixes]]
@@ -171,21 +170,23 @@ Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. De
 :PROPERTIES:
 :CUSTOM_ID: 2b49d0fd-413d-47a3-a5da-61e655dea4a1
 :CREATED: [2026-11-07 Sat 20:47]
+:STARTED: [2026-11-12 Thu 12:26]
+:HANDOFF: Linux checks complete 2026-11-12 (see body). Remaining: macOS after darwin-rebuild only.
 :END:
 :LOGBOOK:
 - Created [2026-11-07 Sat 20:47]
+- State "STARTED" from "TODO" [2026-11-12 Thu 12:26]
+- State "TODO" from "STARTED" [2026-11-12 Thu 16:22]
 :END:
 The terminal plugin and the herdr-app widget were checked live on macOS only (2026-11-07). On xps15: (1) terminal plugin: startup and tab.created display, global prefix+ctrl+o toggle (moved from prefix+shift+o by task 9777d1ec), prefix+t popup selection with Esc and focus return, label title; (2) herdr-app widget: install via the parent HM switch, project follow, refresh, selection dialog, toggle, block fitting, and the keys.json spelling (cmd-shift-t / cmd-shift-o, else ctrl-shift-). On macOS after darwin-rebuild: confirm the herdr-app widget loads from the installed leaf and survives an app restart. Record: [[archive:82126d8e-eb54-45b8-abbe-9e76451b3963]].
 
-** TODO Validate the Herdr TUI sidebar agent tree on Linux
-:PROPERTIES:
-:CUSTOM_ID: cbbdb783-5947-4900-bb63-c67865a52098
-:CREATED: [2026-11-08 Sun 14:41]
-:END:
-:LOGBOOK:
-- Created [2026-11-08 Sun 14:41]
-:END:
-The sidebar agent tree (task 9777d1ec, [[plan:2026-11-08-herdr-tui-orch-agent-tree.org]]) was checked live on macOS only (2026-11-08, plan task 076c6a03). On xps15, repeat that live check in a scratch session: marks and the U+2800 depth-2 indent, next/previous order, child close, `prefix+ctrl+t` toggle, and the startup hook after a scratch-session restart. Check the per-session state key (`HERDR_SESSION`) and the `server` identity in `tree-state.json`, which uses the socket file creation time (unverified on Linux).
+Linux results 2026-11-12 (xps15, Herdr 0.9.5, scratch session lincheck; evidence in .tmp/linux-herdr-checks-20261112/):
+- Pass (owner): terminal plugin startup and new-tab display, `prefix+ctrl+o` toggle, `prefix+t` popup with Esc and focus return, label title.
+- Pass: Home Manager install links `mods/{herdr-orch,system,org-tasks,orch-spaces}`, `layouts/herdr-orch.json`, `settings.json` and `keys.json` -> `keys.linux.json`, plus both plugin leaves, to this checkout. The Linux key table binds `ctrl-alt-t` / `ctrl-alt-shift-t`, as herdr-app/README.md states (not `ctrl-shift-`, which the app's Linux defaults bind to `tab.new` and `pane.split:right`).
+- Pass (owner): desktop widget project follow, key-hint title and block fitting. The owner found the project switch laggy: task:2e7057ce-ed02-4d29-99f6-74f0766e2406.
+- Fail: after a session restore, restored Tasks panes stay as plain shells: task:7b95f3fa-14b1-4d94-8143-88ee35469d33.
+- Pass (owner): desktop selection dialog with Esc, `ctrl-alt-shift-t` toggle, refresh on a task-memory change, and widget reload with saved block state after an app restart.
+- Linux is complete. Open only for the macOS check after darwin-rebuild (widget loads from the installed leaf and survives an app restart).
 
 ** TODO herdr-orch: evaluate oh-assisted integration of worktree branches :herdr_orch:
 :PROPERTIES:
@@ -207,6 +208,16 @@ Reopens the parent-owned-integration decision of `design/log/2026-08-13-herdr-or
 :END:
 Give a user one view of the current delegation tree (parent, children, persona, status, worktree state) that does not depend on sidebar nesting. Options (not ranked): better `oh.label` and space/tab names, so that the existing Herdr TUI and herdr-app views already read correctly; or an `oh` CLI command (for example a tree renderer that a Herdr or herdr-app popup can run). Constraint: minimise complexity for display only; do not change bundled herdr-app mods, and do not add workspace placement. Origin: the hc new-space test ([[proj:design/log/2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]) showed that a space from `hc run` labels does not nest under the main checkout, and the child agent row stays under its parent space.
 
+** TODO Make the herdr-app org-tasks widget follow focus without lag
+:PROPERTIES:
+:CUSTOM_ID: 2e7057ce-ed02-4d29-99f6-74f0766e2406
+:CREATED: [2026-11-12 Thu 14:21]
+:END:
+:LOGBOOK:
+- Created [2026-11-12 Thu 14:21]
+:END:
+The owner found the project switch laggy in the Linux check (task:2b49d0fd-413d-47a3-a5da-61e655dea4a1, 2026-11-12). `herdr-app/mods/org-tasks/main.js` polls `focused()` every `FOCUS_MS` (1000 ms) and switches only after a new project holds for `STABLE_POLLS` (2) polls (`settle` in `state.js`), then runs `ot compact`. The hold protects against an agent tool command that moves the pane foreground folder for a moment; it is not a performance measure. The herdr-app mod guide (~/.config/herdr-app/AGENTS.md, Rules) says `render` re-runs when focus, terminals or agents change, and "Don't poll those". Acceptance: a change of focused pane or terminal switches at once; only a folder change inside the same pane keeps a hold; focus is read from live data, not a 1 s poll; `state.js` tests cover both cases.
+
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:
@@ -217,6 +228,16 @@ Give a user one view of the current delegation tree (parent, children, persona, 
 - Created [2026-11-05 Thu 20:50]
 :END:
 Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the owner accepted this as a known limit on 2026-11-09 (herdr-app/README.md). Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
+
+** TODO Clean up org-tasks panes that Herdr restores as plain shells
+:PROPERTIES:
+:CUSTOM_ID: 7b95f3fa-14b1-4d94-8143-88ee35469d33
+:CREATED: [2026-11-12 Thu 13:09]
+:END:
+:LOGBOOK:
+- Created [2026-11-12 Thu 13:09]
+:END:
+Found in the Linux restart check (task:2b49d0fd-413d-47a3-a5da-61e655dea4a1, 2026-11-12, Herdr 0.9.5, scratch session lincheck). After `herdr session stop` and re-attach, Herdr restored the earlier compact panes w1:p6 and w1:p7 as `/bin/sh` in the plugin root (`herdr/plugins/org-tasks`) with their `Tasks ...` labels and an empty `launch_argv` in session.json. The startup `ensure` found no owned live instance and opened w1:p8, so the restored tab shows extra Tasks panes that do not follow focus. Evidence: .tmp/linux-herdr-checks-20261112/session-after-restart.json and the process list in that session. Acceptance: after a session restore, exactly one Tasks pane exists; the cleanup closes only panes that the plugin can prove it opened (the anti-criterion "Must not: close, replace or send input into an unowned pane" in design/log/2026-11-05-org-tasks-herdr-ui.org still holds, so the cwd-only `plugin-pane?` heuristic is not sufficient); a regression test covers restore. First check whether the Herdr snapshot reports plugin ownership for a restored pane, and whether macOS behaves the same.
 
 * Upstream issues
 

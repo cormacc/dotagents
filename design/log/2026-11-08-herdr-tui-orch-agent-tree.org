@@ -93,7 +93,7 @@ From live check 076c6a03 (macOS, Herdr 0.9.5; evidence files named in ** Accepta
 - With a separate `$tree` token a row renders as `└ · scout-1-light` (the reason the mark moved into the display name); a depth-2 mark `⠀ └` renders as indentation, because Herdr keeps U+2800.
 - A scratch client for live checks needs `env -i` plus `HERDR_CONFIG_PATH`, so that no `HERDR_*` or `HC_*` variable leaks; `HERDR_SOCKET_PATH=~/.config/herdr/sessions/<name>/herdr.sock` addresses its CLI.
 - An `oh` child started from a herdr-app pane runs in herdr-app. To get TUI children, prompt a pi agent in a TUI pane to run `oh`.
-- `next_agent` and `previous_agent` have no default binding, and the tracked config binds neither; the live check used a temporary `prefix+j`/`prefix+k`.
+- `next_agent` and `previous_agent` have no default binding. The tracked config binds them to `prefix+shift+j`/`prefix+shift+k`, because the defaults use `prefix+j`/`prefix+k` for pane focus; the macOS live check used those unshifted keys temporarily.
 - After `herdr session stop` and a fresh `herdr --session <name>`, pi agents resume with the same session path, so the ledger join holds and the `startup` hook (first plugin log entry) restores the marks.
 - `display.json` is global to the machine: a toggle in any session reaches every session.
 - Clearing a closed pane gets `pane_not_found` from Herdr; the reconcile treats that answer as success and logs nothing.
