@@ -134,7 +134,9 @@ Priority lowered from A to B [2026-10-20 Tue] to match the plugin wrapper, its o
 - Created [2026-10-20 Tue 12:25]
 - State "STARTED" from "TODO" [2026-11-04 Wed 00:46]
 :END:
-Aggregate for outstanding trait probe work under the admission bar in skills/herdr-orch/references/traits.md: synthetic, non-decaying probes for the surviving flat fragments, and further attempts at fragments whose recorded probes did not discriminate. Probe records live in the repository user layer at traits/<name>/gate.md; the runner is scripts/run-trait-gate.bb.
+Aggregate for outstanding trait probe work under the admission bar in skills/herdr-orch/references/traits.md. Probe records live in the repository user layer at traits/<name>/gate.md; the runner is scripts/run-trait-gate.bb.
+
+Roster state [2026-11-12 Thu] (`oh roster --section traits`): all 9 traits (compact, focused, grounded, investigate, migration, prune, read-only, refactor, simple) are in directory form and have a synthetic gate.md; no flat fragment remains. compact, focused, investigate, migration, prune, read-only and refactor each record at least one discriminating run. grounded (1 run) and simple (5 runs) record no discriminating run. Every discriminating run used `gpt-5.6-terra`; the only other models recorded are `gpt-6-luna` (simple run 5) and `openai-codex/gpt-6.1-sol` (two investigate supplied-evidence assessments, which did not discriminate). The `light` tier and `gpt-terra` alias now resolve to `openai-codex/gpt-6.1-terra` (skills/herdr-orch/subagents/config.edn). Open work: the deployed Pi baseline (child d669edf5, plan task 03e5eab6), further grounded and simple attempts, and a re-probe on the current tier.
 *** STARTED [#B] traits: re-probe every fragment against synthetic, non-decaying scenarios
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
@@ -146,7 +148,9 @@ Aggregate for outstanding trait probe work under the admission bar in skills/her
 - State "STARTED" from "TODO" [2026-11-04 Wed 01:05]
 :END:
 #+IMPORT: [[plan:2026-11-04-synthetic-trait-probes.org]]
-No trait fragment holds a probe result valid for the current repository state. Every scenario written so far takes this repository as its subject, so each decays as the repository documents itself: =read-only= baited a typo fix in our worktree, =focused= baited an audit of our =pi/extensions=, =no-bullshit= reviewed our own clean git range, and =%prune= asked about our own trait store. =%prune= is simply the one that was re-run and watched lapse (2026-08-11), which is how the decay was discovered.
+Superseded [2026-11-12 Thu]: the next two paragraphs record the state when this task was written. All three fragments now have synthetic records; see the parent's roster state and the Unblocked paragraph below.
+
+When written, no trait fragment held a probe result valid for the repository state. Every scenario written up to then took this repository as its subject, so each decayed as the repository documented itself: =read-only= baited a typo fix in our worktree, =focused= baited an audit of our =pi/extensions=, =no-bullshit= reviewed our own clean git range, and =%prune= asked about our own trait store. =%prune= is simply the one that was re-run and watched lapse (2026-08-11), which is how the decay was discovered.
 
 Requiring a passing probe was abandoned the same day precisely because of this, so nothing is blocked on this task. It is the durable fix rather than the workaround: a synthetic subject does not decay, and observations may then be stored beside the scaffold without becoming an answer key for the next control arm.
 
@@ -176,6 +180,46 @@ CLOSED: [2026-11-04 Wed 00:47]
 Path corrected [2026-10-20 Tue]: the probe record is the repository user-layer file traits/simple/gate.md, not skills/herdr-orch/traits/simple/gate.md. It now records four non-discriminating runs: the two described here, plus two from the ponytail v5 review, all at one tier.
 
 traits/simple/gate.md records two %simple probe runs at gpt-5.6-terra (matching base-analyst's read-only tier) against a low-temptation two-flag CLI task; both runs were non-discriminating (treated and control converged on the same minimal shape). Not retried at a lower tier within [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]'s probe budget. Retry at a lower tier (or a higher-temptation scenario) and record the outcome in the same gate.md, per the honest-attempt admission bar in skills/herdr-orch/references/traits.md.
+
+*** TODO [#C] traits: further probe attempts for grounded and simple :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 5338bedc-193e-4abe-94a0-6b08d7180907
+:CREATED: [2026-11-12 Thu 01:44]
+:END:
+:LOGBOOK:
+- Created [2026-11-12 Thu 01:44]
+:END:
+grounded has one non-discriminating native Codex scaffold run (traits/grounded/gate.md); simple has five non-discriminating runs (traits/simple/gate.md), all at gpt-5.6-terra. Both gates triage probe design as the first suspect. Acceptance criteria:
+- Design each new scenario to be synthetic and tempting enough that a capable control takes the shortcut the fragment forbids (the simple gate records that earlier scenarios were not); pre-register the condition before the run.
+- For grounded, triage redundancy first: home/AGENTS.md already carries adjacent evidence rules. A fragment with no marginal effect over that baseline is a deletion candidate, not a rewording candidate.
+- Record each outcome in the same gate.md, including did not discriminate, with the reason.
+Must not: weaken a recorded condition, reuse a repo-referential subject, or treat a pass as an admission prerequisite.
+
+*** TODO [#C] traits: re-probe the admitted traits at the current light tier :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 1bc00e38-fe27-4cea-a5ab-d749abaa6223
+:CREATED: [2026-11-12 Thu 01:44]
+:END:
+:LOGBOOK:
+- Created [2026-11-12 Thu 01:44]
+:END:
+Every discriminating trait run used gpt-5.6-terra; simple run 5 used gpt-6-luna and the investigate supplied-evidence assessments used gpt-6.1-sol. The light tier and gpt-terra alias now resolve to openai-codex/gpt-6.1-terra, and light can also route to anthropic/claude-sonnet-5-5 (skills/herdr-orch/subagents/config.edn). skills/herdr-orch/references/traits.md calls re-probing after a model change ordinary maintenance. Acceptance criteria:
+- Re-run each existing synthetic scaffold unchanged (treated and control, same persona shape) at the current tier with scripts/run-trait-gate.bb, and append the dated outcome to its gate.md.
+- State the exact model/provider for each run, and record a discriminating fragment that no longer discriminates as a finding, not a failure.
+Must not: edit a recorded condition or scaffold to fit the new model; claim admission depends on the result.
+
+*** DONE [#D] traits: reconcile the read-only gate status with its packaged admission :skill:herdr_orch:
+CLOSED: [2026-11-12 Thu 01:48]
+:PROPERTIES:
+:CUSTOM_ID: a3b0bc4d-5a2e-4f39-a5d5-980b27320f48
+:CREATED: [2026-11-12 Thu 01:44]
+:END:
+:LOGBOOK:
+- Created [2026-11-12 Thu 01:44]
+- State "DONE" from "TODO" [2026-11-12 Thu 01:48]
+:END:
+traits/read-only/gate.md has no Status line and says its valid round two does not admit the trait, while read-only is packaged at skills/herdr-orch/traits/read-only/prompt.md and selected by seven personas (oh roster --section traits). Every other gate.md opens with a Status line under the admission bar in skills/herdr-orch/references/traits.md. Acceptance criteria:
+- Add a Status line that states the admission basis (named consumers plus the recorded attempt) and the limits of the round-two observation, without changing the recorded conditions or outcomes.
 
 ** TODO pi-clojure: structural edit tool for Clojure forms :pi:clojure:
 :PROPERTIES:
