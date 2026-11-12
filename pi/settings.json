@@ -21,5 +21,8 @@
   "extensions": [
     "-./extensions/tasks/index.ts",
     "./extensions/tasks/agent.ts"
+  ],
+  "skills": [
+    "~/.agents/skill-roots"
   ]
 }

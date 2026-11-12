@@ -118,6 +118,42 @@ Changes in out-of-store links take effect after pi `/reload`; no Home Manager sw
 
 The `simple` trait (`skills/herdr-orch/traits/simple/`), the `prune` trait (repository-root `traits/prune/`), and the `simplify` skill provide lean-code review adapted from the third-party `git:github.com/DietrichGebert/ponytail` package, which this setup does not install. `simple` records its ponytail source in `adapted-from:` metadata, and `simplify` records its ponytail sources in its Provenance section. To compare against upstream, run `pi install git:github.com/DietrichGebert/ponytail`, and `pi remove` the same source afterwards.
 
+## Additional skill roots
+
+Skills from another source, such as an organisation's process repository or a shared submodule, stay in that source. Link the whole skills directory, not individual skills, so that a new skill in the source is visible after pi `/reload` with no change here.
+
+Both strategies use two pi behaviours (pi 1.5.2, `dist/core/skills.js`):
+
+- Discovery recurses below a skill root until it finds `SKILL.md`, and follows directory symlinks. It skips entries whose names start with `.`, entries that a `.gitignore`, `.ignore` or `.fdignore` in the scanned tree excludes, and broken symlinks, with no diagnostic.
+- Two skills with the same name: the first discovered one loads, and pi shows a collision warning.
+
+Claude Code reads only `~/.claude/skills/<name>/SKILL.md` and `<project>/.claude/skills/<name>/SKILL.md`, one level deep (see the Claude Code link comment in the dotfiles `agents.nix`), so neither strategy reaches it.
+
+### Global: `~/.agents/skill-roots`
+
+The `skills` entry in `pi/settings.json` adds `~/.agents/skill-roots` as a pi skill root. Each child of that directory is a symlink to an external skills directory. The host configuration that owns the external source creates the link, so this repository holds no organisation-specific path. For example, with Home Manager:
+
+```nix
+home.file.".agents/skill-roots/<source-name>".source =
+  config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/<path>/.agents/skills";
+```
+
+Do not put the link in `~/.agents/skills`. That directory is this repository's `skills/` working tree, so the link becomes untracked content, and a `.gitignore` rule that hides it also hides it from pi.
+
+known-limit: a host with no `~/.agents/skill-roots` directory shows a pi startup warning (`skill path does not exist`). Create the directory on that host, or remove the setting, if the warning matters.
+
+### Project: skills in a submodule
+
+Pi discovers `.agents/skills` in the working directory and in each ancestor up to the Git repository root. A submodule's `.agents/skills` is not an ancestor, so pi does not see it from the parent repository. Commit a relative symlink in the parent:
+
+```bash
+ln -s ../../<submodule-path>/.agents/skills .agents/skills/<submodule-name>
+```
+
+The link target is relative to `.agents/skills/`, so `../../` is the parent repository root. The link works from every subdirectory of the parent. If the submodule is not initialised, the link is broken and pi skips it. A Windows checkout without symlink support gets a plain file instead, and the submodule skills are silently absent.
+
+The alternative is a `skills` entry in the parent's `.pi/settings.json`, which resolves relative to `.pi/`. It does not need symlinks, but pi reads `.pi/settings.json` only from the working directory, after project trust, so a session that starts in a subdirectory does not see it.
+
 ## Runtime requirements
 
 - **Node.js >= 22.19.0**, the highest `engines` floor of the locked dependencies in `package-lock.json`.
