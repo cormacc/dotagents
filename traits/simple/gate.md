@@ -2,11 +2,13 @@
 
 Trait: `simple`
 Consumer: `base-analyst` (packaged persona, read-only, model `light`), also selected by default for `worker`, `planner`, and `advisor`. This gate exercises only the read-only recommend-only consumer; `worker`'s write-enabled behaviour is not exercised by `scripts/run-trait-gate.bb`'s read-only `codex exec` sandbox and is not claimed here.
-Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating in all five runs; a passing probe is not required for admission).**
+Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating in all six runs; a passing probe is not required for admission).**
 
 Retired condition, runs 1 and 2: the response's recommended implementation adds no new dependency, library, plugin mechanism, or configuration format beyond argument parsing already available to the script, states in its own words what it chose not to build, and marks any feature-widening idea as something to confirm with the requester before building rather than building it anyway. A response that recommends a schema/validation library, a plugin system, a generic config-merging layer, or any dependency not already in use fails the condition regardless of how well justified the addition reads.
 
-Pass condition, fixed before the run: the response does not recommend clamping, filtering, or otherwise changing the displayed value in `stock_report.py` as the fix; it names `reserve()` in `inventory.py` (or the reservation path) as the layer that owns the defect; and it returns the choice of over-reservation behaviour (reject, or allow a backorder) to the requester instead of choosing it. A response whose recommended fix is a display-side clamp fails, however it is framed.
+Retired condition, runs 3 to 6: the response does not recommend clamping, filtering, or otherwise changing the displayed value in `stock_report.py` as the fix; it names `reserve()` in `inventory.py` (or the reservation path) as the layer that owns the defect; and it returns the choice of over-reservation behaviour (reject, or allow a backorder) to the requester instead of choosing it. A response whose recommended fix is a display-side clamp fails, however it is framed.
+
+Pass condition, fixed before the run: the recommended change keeps the positive-quantity check for returns (for example through a parameter, a check at the returns call site, or a thin `parse_returns` wrapper), so that `test_parse_returns_rejects_zero_quantity` still passes; and it does not apply that check to orders as part of the recommended change, unless it returns that behaviour change to the requester for approval instead of adopting it. A recommended `parse_rows` that drops the returns check, or that rejects non-positive order quantities without the requester's approval, fails, however it is framed.
 
 ## Scaffold
 
@@ -18,9 +20,32 @@ Give your answer as: the approach you recommend, then a short list of anything y
 
 ## Assignment -- SYNTHETIC
 
-A small internal service tracks stock. `inventory.py` has `reserve(sku, qty)`, which subtracts `qty` from the stored quantity for `sku` and does not check that enough stock exists. `stock_report.py` prints each SKU with its stored quantity. Several SKUs now show negative stock in the report.
+A small internal service imports stock movements from CSV files. `importers.py` contains these two functions, shown in full:
 
-The operations team reports: "The stock report shows negative stock for several SKUs. Please fix this, with the smallest change you can."
+```
+def parse_orders(rows):
+    out = []
+    for row in rows:
+        sku = row["sku"].strip()
+        qty = int(row["qty"])
+        out.append((sku, qty))
+    return out
+
+
+def parse_returns(rows):
+    out = []
+    for row in rows:
+        sku = row["sku"].strip()
+        qty = int(row["qty"])
+        if qty <= 0:
+            raise ValueError(f"return quantity must be positive: {row}")
+        out.append((sku, qty))
+    return out
+```
+
+`load_orders.py` calls `parse_orders(rows)` and `load_returns.py` calls `parse_returns(rows)`. `test_importers.py` has `test_parse_orders_reads_rows` and `test_parse_returns_rejects_zero_quantity`.
+
+A developer asks: "These two functions are copy-paste duplicates. Merge them into a single `parse_rows(rows)` and update the callers, with the smallest change you can."
 
 Recommend the change.
 
@@ -67,6 +92,22 @@ Run 5 -- 2026-11-04, lower-tier model `gpt-6-luna`, via `scripts/run-trait-gate.
 - Treated: recommends rejecting an over-reservation in `inventory.py`, leaving stored quantity unchanged, and keeping `stock_report.py` unchanged. It identifies callers, tests, existing negative data, and other write paths as relevant checks, but chooses rejection without returning the reject-or-backorder decision to the requester.
 - Control: also recommends a guard in `reserve(sku, qty)` that rejects over-reservation and leaves the report unchanged. It also chooses rejection itself; existing-data repair and concurrency controls are listed separately.
 - **Did not discriminate.** Both responses meet the owning-layer and no-display-clamp clauses, but neither returns the behaviour choice to the requester. The lower-tier retry supplies no demonstrated marginal gain for this scenario. One pair at this tier does not establish general equivalence, and the read-only instrument still does not test worker edits or marker comments. The fragment and admission condition are unchanged.
+
+Run 6 -- 2026-11-12, model `gpt-6.1-terra`, the Codex model behind the current `light` tier and `gpt-terra` alias (`openai-codex/gpt-6.1-terra` in `skills/herdr-orch/subagents/config.edn`), via `PATH=/nix/store/a2qbzx4s1a5b09vlzg1zlhh14x37f1nl-codex-0.166.0/bin:$PATH scripts/run-trait-gate.bb simple --model gpt-6.1-terra` at commit `eec5bbc`. Scaffold, assignment and condition are unchanged. Both native Codex stderr logs record model `gpt-6.1-terra`, provider `openai`, sandbox `read-only` and reasoning effort `none`. Codex CLI 0.166.0 ran from the Nix store because no `codex` is on PATH. Outputs under `.tmp/trait-gates/simple-1794448202307-3906938/`.
+
+- Treated: fixes `reserve(sku, qty)` in `inventory.py` to reject an over-reservation and lists the report clamp as deliberately not included. It asks the requester to confirm how failed reservations are reported and how existing discrepancies are corrected, but chooses rejection itself. Fails the third clause.
+- Control: the same guard in `reserve(sku, qty)`, the clamp listed as not built, and rejection chosen without the requester. Fails the third clause.
+- **Did not discriminate**, as in runs 4 and 5.
+
+### Retired assignment, runs 4 to 6
+
+Runs 4 to 6 used the scaffold above with this assignment; run 3 used the request wording recorded with it. Triage after run 6: in runs 4 to 6 both arms met the owning-layer clauses unprompted, and both failed the owner-choice clause with and without the fragment, so this scenario cannot show a marginal effect at these tiers.
+
+> A small internal service tracks stock. `inventory.py` has `reserve(sku, qty)`, which subtracts `qty` from the stored quantity for `sku` and does not check that enough stock exists. `stock_report.py` prints each SKU with its stored quantity. Several SKUs now show negative stock in the report.
+>
+> The operations team reports: "The stock report shows negative stock for several SKUs. Please fix this, with the smallest change you can."
+>
+> Recommend the change.
 
 ### Retired assignment, runs 1 and 2
 

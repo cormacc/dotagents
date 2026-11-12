@@ -2,7 +2,7 @@
 
 Trait: `investigate`
 Consumer: `worker` on a debugging assignment and `advisor` on a debugging consult, both selected per spawn with `--trait investigate`, and interactive `%investigate` use. This gate exercises a read-only diagnosis scaffold, not a write-enabled `worker`.
-Status: **ADMITTED on named consumers plus one discriminating run (one tier, one scenario; not a general proof).**
+Status: **ADMITTED on named consumers plus two discriminating runs (two tiers, one scenario; not a general proof).**
 
 Pass condition, fixed before the run: the response states the observed symptom separately from the inferred cause; it names a leading mechanism that is consistent with the size evidence (a limit on the size of a single upload request) and gives the evidence for it; it names at least one cheap check that could disprove that mechanism; and it does not recommend retries, longer timeouts, or network changes as the fix. A response that recommends a change without a falsifying check, or that recommends retries or timeouts, fails.
 
@@ -34,6 +34,12 @@ Run 1 -- 2026-10-15, model `gpt-5.6-terra`, via `scripts/run-trait-gate.bb inves
 - Treated: labels the observed symptom and the inferred cause separately; names a single-request size limit near 5 GB as the mechanism, with the size split, the failed retries, and the absent packet loss as evidence; tells the reader to confirm the store's documented single-request limit, which is a cheap check that could disprove the mechanism; recommends a multipart upload and no retries or timeouts. Meets the condition.
 - Control: reaches the same size-limit explanation without labelling symptom and cause, gives no check that could disprove it, and recommends per-part retries, longer upload and read timeouts, and raised intermediary timeout limits. Fails the condition.
 - **Discriminated.** Scoring note: the control's per-part retries sit inside a multipart upload and are reasonable engineering, but the condition registered before the run excludes retries and timeouts as part of the fix, so the control fails on that clause as well as on the missing falsifying check.
+
+Run 2 -- 2026-11-12, model `gpt-6.1-terra`, the Codex model behind the current `light` tier and `gpt-terra` alias (`openai-codex/gpt-6.1-terra` in `skills/herdr-orch/subagents/config.edn`), via `PATH=/nix/store/a2qbzx4s1a5b09vlzg1zlhh14x37f1nl-codex-0.166.0/bin:$PATH scripts/run-trait-gate.bb investigate --model gpt-6.1-terra` at commit `eec5bbc`. Scaffold, assignment and condition are unchanged. Both native Codex stderr logs record model `gpt-6.1-terra`, provider `openai`, sandbox `read-only` and reasoning effort `none`. Codex CLI 0.166.0 ran from the Nix store because no `codex` is on PATH. Outputs under `.tmp/trait-gates/investigate-1794448170002-3904213/`.
+
+- Treated: labels the observed symptom and the likely cause separately; names a single-request size limit as the leading hypothesis, with the size split and the failed retries as evidence; names cheap checks that could disprove it (compare the store's and proxy's single-request limits with the file sizes, and a bounded upload on each side of the boundary); recommends no retries or timeouts and makes multipart upload conditional on confirmation. It also lists a request-duration timeout as an alternative that the evidence does not exclude. It read `skills/herdr-orch/references/debugging.md` through the fragment's pointer. Meets the condition.
+- Control: no separate statement of the symptom; names "a size- or upload-duration-related failure" rather than one leading mechanism; recommends multipart upload, citing per-part retry as a benefit. It does give checks (logs, size and timeout limits, a validation upload of at least 6.1 GB) and does not recommend longer timeouts. Fails the first two clauses.
+- **Discriminated**, more narrowly than run 1. Scoring note: the control met the falsifying-check clause and did not recommend timeouts, so at this tier the difference rests on symptom/cause separation and one leading mechanism. The condition is applied as written.
 
 ## Workflow-reference assessment -- 2026-11-03
 

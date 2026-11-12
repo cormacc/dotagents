@@ -137,6 +137,8 @@ Priority lowered from A to B [2026-10-20 Tue] to match the plugin wrapper, its o
 Aggregate for outstanding trait probe work under the admission bar in skills/herdr-orch/references/traits.md. Probe records live in the repository user layer at traits/<name>/gate.md; the runner is scripts/run-trait-gate.bb.
 
 Roster state [2026-11-12 Thu] (`oh roster --section traits`): all 9 traits (compact, focused, grounded, investigate, migration, prune, read-only, refactor, simple) are in directory form and have a synthetic gate.md; no flat fragment remains. compact, focused, investigate, migration, prune, read-only and refactor each record at least one discriminating run. grounded (1 run) and simple (5 runs) record no discriminating run. Every discriminating run used `gpt-5.6-terra`; the only other models recorded are `gpt-6-luna` (simple run 5) and `openai-codex/gpt-6.1-sol` (two investigate supplied-evidence assessments, which did not discriminate). The `light` tier and `gpt-terra` alias now resolve to `openai-codex/gpt-6.1-terra` (skills/herdr-orch/subagents/config.edn). Open work: the deployed Pi baseline (child d669edf5, plan task 03e5eab6), further grounded and simple attempts, and a re-probe on the current tier.
+
+Re-probe [2026-11-12 Thu] (child 1bc00e38): the eight runner scaffolds ran unchanged at `gpt-6.1-terra` (provider `openai`). compact, focused, investigate, migration, prune and refactor discriminated again; investigate and refactor more narrowly than at `gpt-5.6-terra`. grounded and simple did not discriminate. read-only has no runner scaffold and was not re-probed; the Claude route of the `light` tier was not probed.
 *** STARTED [#B] traits: re-probe every fragment against synthetic, non-decaying scenarios
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
@@ -195,13 +197,15 @@ grounded has one non-discriminating native Codex scaffold run (traits/grounded/g
 - Record each outcome in the same gate.md, including did not discriminate, with the reason.
 Must not: weaken a recorded condition, reuse a repo-referential subject, or treat a pass as an admission prerequisite.
 
-*** TODO [#C] traits: re-probe the admitted traits at the current light tier :skill:herdr_orch:
+*** DONE [#C] traits: re-probe the admitted traits at the current light tier :skill:herdr_orch:
+CLOSED: [2026-11-12 Thu 01:53]
 :PROPERTIES:
 :CUSTOM_ID: 1bc00e38-fe27-4cea-a5ab-d749abaa6223
 :CREATED: [2026-11-12 Thu 01:44]
 :END:
 :LOGBOOK:
 - Created [2026-11-12 Thu 01:44]
+- State "DONE" from "TODO" [2026-11-12 Thu 01:53]
 :END:
 Every discriminating trait run used gpt-5.6-terra; simple run 5 used gpt-6-luna and the investigate supplied-evidence assessments used gpt-6.1-sol. The light tier and gpt-terra alias now resolve to openai-codex/gpt-6.1-terra, and light can also route to anthropic/claude-sonnet-5-5 (skills/herdr-orch/subagents/config.edn). skills/herdr-orch/references/traits.md calls re-probing after a model change ordinary maintenance. Acceptance criteria:
 - Re-run each existing synthetic scaffold unchanged (treated and control, same persona shape) at the current tier with scripts/run-trait-gate.bb, and append the dated outcome to its gate.md.
@@ -220,6 +224,19 @@ CLOSED: [2026-11-12 Thu 01:48]
 :END:
 traits/read-only/gate.md has no Status line and says its valid round two does not admit the trait, while read-only is packaged at skills/herdr-orch/traits/read-only/prompt.md and selected by seven personas (oh roster --section traits). Every other gate.md opens with a Status line under the admission bar in skills/herdr-orch/references/traits.md. Acceptance criteria:
 - Add a Status line that states the admission basis (named consumers plus the recorded attempt) and the limits of the round-two observation, without changing the recorded conditions or outcomes.
+
+*** TODO [#D] traits: probe the light tier's Claude route :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: bc3495ce-b10e-4faf-8201-bef8d31b1d76
+:CREATED: [2026-11-12 Thu 01:53]
+:END:
+:LOGBOOK:
+- Created [2026-11-12 Thu 01:53]
+:END:
+The light tier ranks anthropic/claude-sonnet-5-5 equal with openai-codex/gpt-6.1-terra (skills/herdr-orch/subagents/config.edn), but scripts/run-trait-gate.bb runs only `codex exec`, so no trait gate has a Claude observation. The 2026-11-12 re-probe (child 1bc00e38) covered only the Codex route. Acceptance criteria:
+- Decide whether the runner gains a Claude arm with an equivalent read-only boundary, or whether Claude probes run through the Pi runner of plan task 03e5eab6.
+- Run each runner scaffold unchanged on the Claude route and append the dated outcome, with exact model/provider, to its gate.md.
+Must not: edit a recorded condition or scaffold to fit the model; claim admission depends on the result.
 
 ** TODO pi-clojure: structural edit tool for Clojure forms :pi:clojure:
 :PROPERTIES:
