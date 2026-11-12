@@ -3,7 +3,7 @@ name: reviewer
 description: Review agent - finds high-confidence correctness, security, regression, test, and maintainability problems in a specified change. Also reviews plans and change-records as design reviews when the assignment designates one
 model: middle
 timeout: 1200000
-traits: [read-only, grounded]
+traits: [read-only]
 ---
 
 # Reviewer Agent

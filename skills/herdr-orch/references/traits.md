@@ -26,7 +26,7 @@ What is required:
 - Run at least one probe and record what happened -- including `did not discriminate`, `failed`, or `lapsed`. An unprobed fragment is not admissible. An honestly-failing one is.
 - Never assert a pass that has not been re-established against the current state.
 
-A clear-sounding fragment is not evidence. Two of the three original fragments read well and did not change behaviour at all until rewritten. The probe is how you find that out. The record is what lets a later reader remove a fragment that never earned its place, as `%challenge` was removed.
+A clear-sounding fragment is not evidence. Two of the three original fragments read well and did not change behaviour at all until rewritten. The probe is how you find that out. The record is what lets a later reader remove a fragment that never earned its place, as `%challenge` and `%grounded` were removed.
 
 ## Probing a trait
 

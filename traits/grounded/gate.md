@@ -2,7 +2,7 @@
 
 Trait: `grounded`
 Consumer: the packaged `reviewer` persona; also explicit `--trait grounded` and interactive `%grounded` use.
-Status: **Admitted on named consumers plus three recorded synthetic reviewer/analyst-shaped scaffold attempts over two scenarios, none discriminating.** This is not an exact packaged persona run.
+Status: **REMOVED 2026-11-12 by owner decision.** Three recorded synthetic reviewer/analyst-shaped scaffold attempts over two scenarios and two tiers showed no marginal effect; the `reviewer` persona body and the code-review skill already carry the range and clean-result rules (run 3 triage below). The fragment `skills/herdr-orch/traits/grounded/prompt.md` is deleted and `reviewer` no longer selects it. This record stays as the evidence for the removal; it is not runnable, because no fragment resolves at `%grounded`.
 
 Retired condition, runs 1 and 2: the final response contains the exact sentence `No issues found.` and the standalone word `APPROVED`, and contains no finding about `continueUrl`, URL validation, or code outside the named difference. A broader finding or either missing required result fails.
 

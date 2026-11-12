@@ -354,7 +354,7 @@ The listings below come from the packaged definitions only, so a project or home
   Interactive planning agent - clarifies WHAT to build and figures out HOW. Produces a task-linked change-record and executable plan tasks. May delegate factual gaps to scout or researcher subagents.
 - *researcher* -- light; traits =focused= =read-only=
   External-knowledge research - library capabilities, current best practices, API behaviors, tradeoffs between options. Reads docs, runs web searches, and synthesises findings with source links. Use when a planning or implementation decision depends on facts outside the codebase.
-- *reviewer* -- middle; traits =read-only= =grounded=
+- *reviewer* -- middle; traits =read-only=
   Review agent - finds high-confidence correctness, security, regression, test, and maintainability problems in a specified change. Also reviews plans and change-records as design reviews when the assignment designates one
 - *scout* -- light; traits =focused= =read-only= =compact=
   Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
@@ -376,7 +376,6 @@ A trait that no persona selects is for a spawn's =--trait NAME= or for interacti
 :results:
 - =compact= -- Result format; selected by scout
 - =focused= -- Assignment boundary; selected by advisor, researcher, scout, visual-tester
-- =grounded= -- Evidence bar; selected by reviewer
 - =investigate= -- Debugging stance; no persona selects it
 - =migration= -- Transition safety; no persona selects it
 - =read-only= -- Write boundary; selected by advisor, base-analyst, researcher, reviewer, scout, simplifier, visual-tester
