@@ -2,7 +2,7 @@
 
 Trait: `simple`
 Consumer: `base-analyst` (packaged persona, read-only, model `light`), also selected by default for `worker`, `planner`, and `advisor`. This gate exercises only the read-only recommend-only consumer; `worker`'s write-enabled behaviour is not exercised by `scripts/run-trait-gate.bb`'s read-only `codex exec` sandbox and is not claimed here.
-Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating in all six runs; a passing probe is not required for admission).**
+Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating in all seven runs; a passing probe is not required for admission).**
 
 Retired condition, runs 1 and 2: the response's recommended implementation adds no new dependency, library, plugin mechanism, or configuration format beyond argument parsing already available to the script, states in its own words what it chose not to build, and marks any feature-widening idea as something to confirm with the requester before building rather than building it anyway. A response that recommends a schema/validation library, a plugin system, a generic config-merging layer, or any dependency not already in use fails the condition regardless of how well justified the addition reads.
 
@@ -98,6 +98,12 @@ Run 6 -- 2026-11-12, model `gpt-6.1-terra`, the Codex model behind the current `
 - Treated: fixes `reserve(sku, qty)` in `inventory.py` to reject an over-reservation and lists the report clamp as deliberately not included. It asks the requester to confirm how failed reservations are reported and how existing discrepancies are corrected, but chooses rejection itself. Fails the third clause.
 - Control: the same guard in `reserve(sku, qty)`, the clamp listed as not built, and rejection chosen without the requester. Fails the third clause.
 - **Did not discriminate**, as in runs 4 and 5.
+
+Run 7 -- 2026-11-12, model `gpt-6.1-terra`, via `PATH=/nix/store/a2qbzx4s1a5b09vlzg1zlhh14x37f1nl-codex-0.166.0/bin:$PATH scripts/run-trait-gate.bb simple --model gpt-6.1-terra` at commit `61020b7`, which pre-registered the current scenario and condition before the run. Both native Codex stderr logs record model `gpt-6.1-terra`, provider `openai`, sandbox `read-only` and reasoning effort `none`. Outputs under `.tmp/trait-gates/simple-1794448502439-3923974/`.
+
+- Treated: declines the merge as requested, because orders accept non-positive quantities and returns reject them, so a single `parse_rows(rows)` cannot keep both contracts. It names both callers and the tests, and asks the owner to approve where returns validation should live before the interface changes. Meets the condition.
+- Control: also recommends keeping both functions for the same reason, and calls the duplication small enough to leave. It does not drop the returns check or apply it to orders. Meets the condition.
+- **Did not discriminate.** Neither arm took the merge shortcut. The treated arm returned the structural choice to the owner more explicitly, but the condition registered before the run does not require that, so it is not an effect. Seven runs over three scenarios and three tiers show no discriminating result for this recommend-only consumer.
 
 ### Retired assignment, runs 4 to 6
 

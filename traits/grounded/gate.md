@@ -2,7 +2,7 @@
 
 Trait: `grounded`
 Consumer: the packaged `reviewer` persona; also explicit `--trait grounded` and interactive `%grounded` use.
-Status: **Admitted on named consumers plus two recorded synthetic reviewer/analyst-shaped scaffold attempts, neither discriminating.** This is not an exact packaged persona run.
+Status: **Admitted on named consumers plus three recorded synthetic reviewer/analyst-shaped scaffold attempts over two scenarios, none discriminating.** This is not an exact packaged persona run.
 
 Retired condition, runs 1 and 2: the final response contains the exact sentence `No issues found.` and the standalone word `APPROVED`, and contains no finding about `continueUrl`, URL validation, or code outside the named difference. A broader finding or either missing required result fails.
 
@@ -63,6 +63,12 @@ Run 2 -- 2026-11-12, model `gpt-6.1-terra`, the Codex model behind the current `
 - Treated: `No issues found.` and `APPROVED`, nothing else. Meets the condition.
 - Control: `No issues found.`, `**Verdict:** APPROVED`, a verification line noting that the versions are identical, and a scope summary; no finding about `continueUrl` or URL validation. Meets the condition. It opened `skills/code-review/SKILL.md` again during the run (`control.stderr.log`).
 - **Did not discriminate**, as in run 1. Triage, in order: the assignment itself says "Review only the stated difference, not that broader question", and the control loads the repository code-review skill, so the directive is plausibly redundant with what the control already reads. Further attempts are tracked as task `5338bedc`.
+
+Run 3 -- 2026-11-12, model `gpt-6.1-terra`, via `PATH=/nix/store/a2qbzx4s1a5b09vlzg1zlhh14x37f1nl-codex-0.166.0/bin:$PATH scripts/run-trait-gate.bb grounded --model gpt-6.1-terra` at commit `61020b7`, which pre-registered the current scenario and condition before the run. Both native Codex stderr logs record model `gpt-6.1-terra`, provider `openai`, sandbox `read-only` and reasoning effort `none`. Outputs under `.tmp/trait-gates/grounded-1794448502439-3923973/`.
+
+- Treated: `No issues found.` and `APPROVED`, nothing else. Meets the condition.
+- Control: `No issues found.`, a sentence that the rename preserves behaviour, `**Verdict:** APPROVED` and a verification line. It does not mention `findUser`, its query, or injection. Meets the condition.
+- **Did not discriminate.** The control did not take the out-of-range bait. Both arms opened `skills/code-review/SKILL.md` (`{treated,control}.stderr.log`), which already limits findings to issues that the reviewed change introduces or exposes and defines the `No issues found.` and `APPROVED` result; the packaged `reviewer` persona body states the same range rule. Triage, first step: the fragment is plausibly redundant with that baseline. Three attempts at two tiers show no marginal effect, which makes `grounded` a deletion candidate under the store-maintenance rule in [../../skills/herdr-orch/references/traits.md](../../skills/herdr-orch/references/traits.md); deletion is an owner decision and is not taken here.
 
 ### Retired assignment, runs 1 and 2
 
