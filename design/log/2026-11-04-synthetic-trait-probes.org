@@ -1,6 +1,6 @@
 #+TITLE: traits: re-probe every fragment against synthetic, non-decaying scenarios
 #+DATE: 2026-11-04 Wed
-#+PARENT: [[task:d669edf5-7f99-4645-81dc-597c01af98a8][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
+#+PARENT: [[archive:d669edf5-7f99-4645-81dc-597c01af98a8][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/references/traits.md]]
