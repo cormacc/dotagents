@@ -6,6 +6,8 @@ The scripts in this directory are repository-level development checks and runner
 
 The root `bb test` task loads `isolated-test-run.bb` and calls `run-suites` with the org-tasks and herdr-orch Clojure suites and the script test suites. It runs each suite as `bb -Djava.io.tmpdir=<root>` with `TMPDIR=<root>`, where `<root>` is one new `/tmp/dotagents-test-*` directory for the run. Babashka's `fs/create-temp-dir` reads `java.io.tmpdir` and ignores `TMPDIR`; Node's `os.tmpdir()` reads `TMPDIR`. The root is outside the checkout because several tests need a directory outside any git repository. The task deletes the root afterwards; set `DOTAGENTS_KEEP_TEST_TMP=1` to keep it for debugging. It also removes the caller's session variables (`HC_*`, `HERDR_*` and the Pi session variables listed in `caller-session-env`) from each suite's environment, because `oh` selects its runtime from them: without this, a run inside herdr-app, Herdr or Pi gives different results from a run in a plain terminal.
 
+Every suite runs even when an earlier one fails, and the task then lists each failed command with its exit code, so one failing suite cannot hide the results of the others. `scripts/test-isolated-test-run.bb` checks this.
+
 The task also fails when the run adds or removes a git worktree or a `refs/heads/orch/*` branch in this repository, and it prints the cleanup command. Such a change means that a test ran `oh` with this checkout as its working directory. A real orchestration that starts during the run can also cause this failure.
 
 ## Trait gate runner

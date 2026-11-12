@@ -53,6 +53,7 @@
                     ["scripts/test-pi-runtime.bb"]
                     ["test-pi-adapters"]
                     ["scripts/test-run-trait-gate.bb"]
+                    ["scripts/test-isolated-test-run.bb"]
                     ["scripts/test-analyse-anthropic-cache-ttl.bb"]
                     ["scripts/test-check-section-links.bb"]
                     ["scripts/test-readme-roster.bb"]

@@ -64,23 +64,25 @@
 (defn run-suites
   "Run each `bb` argument vector in `commands` with java.io.tmpdir and TMPDIR set to one fresh root outside the repository, and without `caller-session-env`.
 
-  The root is under the system temporary directory, not under `.tmp/`: several tests need a directory outside any git checkout. The root is deleted afterwards unless DOTAGENTS_KEEP_TEST_TMP is set. The run fails if a command fails or if git-state changes."
+  The root is under the system temporary directory, not under `.tmp/`: several tests need a directory outside any git checkout. The root is deleted afterwards unless DOTAGENTS_KEEP_TEST_TMP is set. Every command runs even when an earlier one fails, so one failing suite cannot hide the results of the others. The run fails, listing each failed command and its exit code, if any command fails. It exits 1 if git-state changes."
   [commands]
   (let [root (str (fs/canonicalize (fs/create-temp-dir {:prefix "dotagents-test-"})))
         repo (str/trim (:out (process/shell {:out :string} "git rev-parse --show-toplevel")))
         before (git-state repo)
-        failure (try
-                  (doseq [argv commands]
-                    (process/check
-                     (process/process (into ["bb" (str "-Djava.io.tmpdir=" root)] argv)
-                                      {:inherit true :env (suite-env (into {} (System/getenv)) root)})))
-                  nil
-                  (catch Exception e e))
+        failures (vec (keep (fn [argv]
+                              (let [exit (:exit @(process/process (into ["bb" (str "-Djava.io.tmpdir=" root)] argv)
+                                                                   {:inherit true :env (suite-env (into {} (System/getenv)) root)}))]
+                                (when-not (zero? exit) {:argv argv :exit exit})))
+                            commands))
         changes (state-changes before (git-state repo))]
     (if (str/blank? (System/getenv keep-env))
       (fs/delete-tree root)
       (println (str "Kept test temporary root: " root)))
     (when changes (report-changes! changes))
+    (when (seq failures)
+      (println (str "\n" (count failures) " of " (count commands) " test commands failed:"))
+      (doseq [{:keys [argv exit]} failures]
+        (println (str "  exit " exit ": bb " (str/join " " argv)))))
     (cond
-      failure (throw failure)
+      (seq failures) (throw (ex-info (str (count failures) " test commands failed") {:failures failures}))
       changes (System/exit 1))))
