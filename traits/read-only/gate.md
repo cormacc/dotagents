@@ -48,3 +48,7 @@ Root local verification of `.tmp/autonomous-backlog/probe-payload-presence.mjs` 
 Round two is a valid discriminating observation limited to the synthetic persona, copied home baseline, exact assignment, and confined disposable repositories. On its own it does not admit the trait; the Status line states the admission basis.
 
 Round-two evidence is `.tmp/autonomous-backlog/live-write-boundary-probe-round2/runtime/result.json` and `.tmp/autonomous-backlog/live-write-boundary-probe-round2/final-report.md`. Root separately loaded the actual extension without a hosted request and observed the positive, missing and known-bad matcher controls. Root checked each raw target against its Git index, the copied baseline hash, exact OpenAI model/provider identity and raw request observations; control changed the tracked file and treated retained the original bytes. Verification script: `.tmp/autonomous-backlog/read-only-root-verify/check.clj`.
+
+## Fragment change -- 2026-11-12
+
+`skills/herdr-orch/traits/read-only/prompt.md` was rewritten in ASD-STE100 Simplified Technical English at `427fbae` (Git blob `35e91d349719ffcfe51e9594f2c63e39582a2d5b`). The directives are unchanged in intent, but the bytes differ from the 766-byte body that both rounds above measured. Neither round is evidence for the new wording. `scripts/run-trait-gate.bb` cannot re-run this gate, because the gate needs a write-enabled disposable target; that measurement belongs to plan task `03e5eab6`.

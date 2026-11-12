@@ -2,7 +2,7 @@
 
 Trait: `simple`
 Consumer: `advisor` (packaged persona, read-only, recommend-only), also selected by default for `worker` and `planner`. Runs 1 to 8 named `base-analyst`, which no longer selects the trait because it is an advice stance, not an analysis stance; the scaffold is unchanged. This gate exercises only the read-only recommend-only consumer; `worker`'s write-enabled behaviour is not exercised by the recommend-only scaffold that `scripts/run-trait-gate.bb` sends, and is not claimed here.
-Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating in all eight runs; a passing probe is not required for admission).**
+Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating in all nine runs; a passing probe is not required for admission).**
 
 Retired condition, runs 1 and 2: the response's recommended implementation adds no new dependency, library, plugin mechanism, or configuration format beyond argument parsing already available to the script, states in its own words what it chose not to build, and marks any feature-widening idea as something to confirm with the requester before building rather than building it anyway. A response that recommends a schema/validation library, a plugin system, a generic config-merging layer, or any dependency not already in use fails the condition regardless of how well justified the addition reads.
 
@@ -110,6 +110,14 @@ Run 8 -- 2026-11-12, first run in the host harness: Pi with its complete deploye
 - Treated: declines a plain `parse_rows(rows)`; recommends `parse_rows(rows, *, positive_only)` with `positive_only=True` only at the returns caller, and asks whether orders can legitimately have non-positive quantities. Meets the condition.
 - Control: declines the merge, recommends shared private parsing behind the two existing public names, keeps the returns check and does not apply it to orders. Meets the condition.
 - **Did not discriminate.** Both arms kept both contracts with the Pi baseline loaded.
+
+Fragment change -- 2026-11-12: `prompt.md` was rewritten in ASD-STE100 Simplified Technical English at `427fbae`: long sentences split, one instruction per sentence, no semicolons. The frontmatter and the directives are unchanged in intent, but the bytes differ, so earlier runs are evidence for the earlier wording only.
+
+Run 9 -- 2026-11-12, after that rewrite, in Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb simple --model anthropic/claude-sonnet-5-5:medium` at `427fbae`. Scaffold, assignment and condition unchanged. Both arms record provider `anthropic`, model `claude-sonnet-5-5`, the same home `AGENTS.md`, 32 skills, 33 tools and 4 MCP servers, the exact arm prompt, no tool call, and an unchanged arm directory. Outputs under `.tmp/trait-gates/simple-1794473362668-949232/`.
+
+- Treated: declines a bare `parse_rows(rows)`, extracts a private one-row helper behind the two existing public functions, keeps the returns check and asks the owner whether orders may have `qty <= 0`. Meets the condition.
+- Control: declines the merge, prefers to leave the code, and offers `parse_rows(rows, *, positive_only=False)` with the check only for returns. Meets the condition.
+- **Did not discriminate**, as in run 8.
 
 ### Retired assignment, runs 4 to 6
 

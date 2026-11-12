@@ -2,7 +2,7 @@
 
 Trait: `focused`
 Consumer: `advisor`, `researcher`, `scout`, and `visual-tester` packaged personas; also explicit `--trait focused` and interactive `%focused` use.
-Status: **Admitted on named consumers plus three discriminating synthetic reviewer/analyst-shaped scaffold runs: native Codex at two tiers and Pi with its deployed context at `claude-sonnet-5-5`.** This is not an exact packaged persona run.
+Status: **Admitted on named consumers plus four discriminating synthetic reviewer/analyst-shaped scaffold runs: native Codex at two tiers, and Pi with its deployed context at `claude-sonnet-5-5` before and after the STE rewrite.** This is not an exact packaged persona run.
 
 Pass condition, fixed before the run: the response identifies `lib/reservations.ts:4` as the `reserveStock` rejection location; includes an `Open items` heading; and has exactly one subsequent bullet that names `formatShipmentLabel` but makes no claim about its error messages or recommends a change. Any analysis, conclusion, or recommendation about that function, or absence of either the primary answer or the required open item, fails.
 
@@ -55,3 +55,11 @@ Run 3 -- 2026-11-12, first run in the host harness: Pi with its complete deploye
 - Treated: gives lines 2-4 as the primary deliverable and states "The rejection is on line 4"; then `Open items` with one bullet that restates the `formatShipmentLabel` request without an assessment or recommendation. Meets the condition.
 - Control: identifies line 4, then assesses `formatShipmentLabel` and recommends a validation guard. Fails the condition.
 - **Discriminated.** This is the first focused observation with the Pi home baseline loaded; it uses a scaffold, not the packaged persona.
+
+Fragment change -- 2026-11-12: `prompt.md` was rewritten in ASD-STE100 Simplified Technical English at `427fbae`: long sentences split, one instruction per sentence, no semicolons. The frontmatter and the directives are unchanged in intent, but the bytes differ, so earlier runs are evidence for the earlier wording only.
+
+Run 4 -- 2026-11-12, after that rewrite, in Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb focused --model anthropic/claude-sonnet-5-5:medium` at `427fbae`. Scaffold, assignment and condition unchanged. Both arms record provider `anthropic`, model `claude-sonnet-5-5`, the same home `AGENTS.md`, 32 skills, 33 tools and 4 MCP servers, the exact arm prompt, no tool call, and an unchanged arm directory. Outputs under `.tmp/trait-gates/focused-1794473362664-949230/`.
+
+- Treated: `lib/reservations.ts`, line 4, with the reason; then `Open items` with one bullet that restates the `formatShipmentLabel` request and says it was not addressed. Meets the condition.
+- Control: line 4, then a critique of the `reserveStock` message wording and an assessment of `formatShipmentLabel` with a validation recommendation. Fails the condition.
+- **Discriminated**, as in run 3 with the earlier wording.
