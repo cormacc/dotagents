@@ -206,7 +206,7 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
     ["roster", "--format", "markdown", "--detail"],
     ["usage", "--format", "markdown"],
     ["usage", "--format", "markdown", "--detail"],
-  ], "TUI: bare oh appends compact and detailed usage after roster defaults");
+  ], "TUI: bare oh appends compact and detailed usage after the roster");
   same(
     execCalls.slice(before).map((args, index) => [args.join(" "), execOptions[before + index]?.timeout]).sort(),
     [
@@ -282,8 +282,8 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   const help = composeHelp("help", "## Personas\n\n- x\n", true);
   ok(help.startsWith("Herdr: this pane can delegate"), "help leads with the pane's Herdr status");
   ok(help.includes("## Personas\n\n- x\n\n## Usage"), "help keeps the oh listing verbatim before the usage notes");
-  const helpWithUsage = composeHelp("help", "## Spawn defaults\n\n- tab-split\n", true, "- **anthropic** -- unknown; remaining unknown; reason: missing\n");
-  ok(helpWithUsage.includes("## Spawn defaults\n\n- tab-split\n\n## Subscription usage\n\n- **anthropic** -- unknown; remaining unknown; reason: missing\n\n## Usage"), "help appends the same usage block after spawn defaults before its instructions");
+  const helpWithUsage = composeHelp("help", "## Workflows\n\n- flow\n", true, "- **anthropic** -- unknown; remaining unknown; reason: missing\n");
+  ok(helpWithUsage.includes("## Workflows\n\n- flow\n\n## Subscription usage\n\n- **anthropic** -- unknown; remaining unknown; reason: missing\n\n## Usage"), "help appends the same usage block after the roster before its instructions");
   ok(composeHelp("help", "", false).includes("not detected"), "help reports missing Herdr");
   ok(/Spawn a subagent\* starts a fresh context.*fork a subagent\* inherits your completed earlier turns, not the current one/.test(help), "usage routes spawn to fresh and fork to forked context");
   ok(/--context measurement --measurement-config PATH`: a headless Pi sample with no pane/.test(help), "usage describes headless measurement apart from its optional monitor");

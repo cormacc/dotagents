@@ -32,15 +32,12 @@
 ;; `:harnesses <kind> :providers` is the set of providers that kind can run; a kind without
 ;; it accepts every provider.
 ;;
-;; `:defaults :placement` is :tab. Each delegated child receives its own tab.
-;;
 ;; Override chain (project wins): this file (default) ← ~/.agents/subagents/config.edn
-;; ← <assignment-root>/.agents/subagents/config.edn. `:models` rows, `:harnesses`
-;; entries and `:providers` rows replace wholesale; `:aliases` and `:defaults` merge per key.
-{:defaults {:placement :tab}
- :harnesses {:pi     {:model-flag "--model" :effort-flag "--thinking"}
-             :claude {:model-flag "--model" :effort-flag "--effort" :providers #{"anthropic"}}
-             :codex  {:model-flag "--model" :effort-flag "-c model_reasoning_effort={}" :providers #{"openai-codex"}}}
+;; ← <assignment-root>/.agents/subagents/config.edn. scripts/docs/contract.md section
+;; 'Model resolution' gives the merge rules.
+{:harnesses {:pi     {:model-flag "--model" :effort-flag "--thinking"}
+            :claude {:model-flag "--model" :effort-flag "--effort" :providers #{"anthropic"}}
+            :codex  {:model-flag "--model" :effort-flag "-c model_reasoning_effort={}" :providers #{"openai-codex"}}}
  :providers
  {"anthropic"    {:quota-provider "claude"}
   "openai-codex" {:quota-provider "codex"}

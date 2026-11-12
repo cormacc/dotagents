@@ -29,7 +29,10 @@
     {:frontmatter frontmatter :yaml yaml :body body}
     {:frontmatter nil :yaml nil :body (str text)}))
 
-(defn- parse-yaml [yaml]
+(defn parse-yaml
+  "Parses flat `key: value` frontmatter lines into a keyword map. It is not a YAML parser:
+  persona and trait frontmatter are deliberately one level deep."
+  [yaml]
   (into {}
         (keep (fn [line]
                 (when-let [[_ k v] (re-matches #"\s*([A-Za-z][\w-]*)\s*:\s*(.*?)\s*" line)]
@@ -180,7 +183,6 @@
   [{:keys [text directories exists? read-text]}]
   (let [{:keys [frontmatter body]} (split-frontmatter text)
         cache (atom {})
-        seen (atom #{})
         unknown-seen (atom #{})
         repeat-seen (atom #{})
         resolved (atom [])
@@ -205,12 +207,12 @@
                                              :resolution resolution))]
                        (when-not cached?
                          (swap! cache assoc trait fragment))
-                       (if (contains? @seen trait)
+                       ;; A resolved trait is cached on first use, so `cached?` marks a repeat.
+                       (if cached?
                          (when-not (contains? @repeat-seen trait)
                            (swap! repeat-seen conj trait)
                            (swap! repeats conj trait))
-                         (do (swap! seen conj trait)
-                             (swap! resolved conj resolution)))
+                         (swap! resolved conj resolution))
                        (:content fragment)))))
         transformed-body (str/join (scan-body body expand))]
     {:text (str (or frontmatter "") transformed-body)

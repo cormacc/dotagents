@@ -346,7 +346,7 @@
     (with-redefs [ledger/assignment-root (constantly project)
                   cli/home-directory (constantly home)
                   cli/launcher-bin (constantly (str (fs/path skill "scripts" "oh")))]
-      (let [{:keys [personas traits models defaults layers]} (cli/roster-listing)
+      (let [{:keys [personas traits models layers] :as listing} (cli/roster-listing)
             by-name (fn [items] (into {} (map (juxt :name identity)) items))
             p (by-name personas)
             t (by-name traits)
@@ -366,7 +366,7 @@
         (is (= {:source "packaged" :description "packaged gamma" :selected-by []}
                (select-keys (t "gamma") [:source :description :selected-by])))
         (is (some #{"sonnet"} (:aliases (first (filter #(= light (:canonical %)) models)))))
-        (is (= :tab (:placement defaults)))
+        (is (not (contains? listing :defaults)))
         (is (= ["project" "home" "packaged"] (mapv :source (:personas layers)) (mapv :source (:traits layers))))
         (testing "one renderer serves markdown and org"
           (let [listing (cli/roster-listing)
@@ -388,9 +388,9 @@
                 (is (not (str/includes? (cli/roster-text listing "markdown" "all" false) "Resolution layers")))))
             (testing "a single section has no heading; all has one per section"
               (is (not (str/includes? org-traits "Traits")))
-              (is (= ["## Personas" "## Traits" "## Models" "## Workflows" "## Spawn defaults"]
+              (is (= ["## Personas" "## Traits" "## Models" "## Workflows"]
                      (re-seq #"(?m)^## .*$" (cli/roster-text listing "markdown" "all" false))))
-              (is (= ["*Personas*" "*Traits*" "*Models*" "*Workflows*" "*Spawn defaults*"]
+              (is (= ["*Personas*" "*Traits*" "*Models*" "*Workflows*"]
                      (re-seq #"(?m)^\*[A-Z][^*]*\*$" (cli/roster-text listing "org" "all" false)))))
             (testing "tables are padded the way each format aligns them"
               ;; Only the table rows align; a ranked-alias list may follow the table.
@@ -1270,34 +1270,18 @@
         (is (= expected (get-in (result proc) [:result :placement])) (str flag))
         (is (not (contains? (get-in (result proc) [:result]) :focus)))))))
 
-(deftest configured-placement-defaults-flow-through-cli
-  (let [{:keys [env log dir]} (fake-env {})
-        project-config (fs/path dir ".agents" "subagents" "config.edn")
-        preview (fn [env & flags]
-                  (let [proc (apply call! env (concat ["task" "run" "worker"] flags ["--task" "configured placement" "--print-prompt"]))]
-                    (is (zero? (:exit proc)) (:err proc))
-                    (get-in (result proc) [:result :placement])))]
-    (fs/create-dirs (fs/parent project-config))
-    (spit (str project-config) "{:defaults {:placement :tab}}")
-    (is (= "tab" (preview env)))
-    (is (= "tab" (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
-    (let [proc (call! env "task" "start" "worker" "--task" "configured tab placement")
-          task (get-in (result proc) [:result :task])
-          entry (ledger-entry* dir task)]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (= "tab" (:placement entry)))
-      (is (some #(= ["tab" "create"] (vec (take 2 %))) (calls log))))
-    (doseq [placement [":split" ":tab-split"]]
-      (let [{bad-env :env bad-log :log bad-dir :dir} (fake-env {})
-            bad-config (fs/path bad-dir ".agents" "subagents" "config.edn")]
-        (fs/create-dirs (fs/parent bad-config))
-        (spit (str bad-config) (str "{:defaults {:placement " placement "}}"))
-        (let [proc (call! bad-env "task" "start" "worker" "--task" "invalid placement")]
-          (is (not (zero? (:exit proc))))
-          (is (str/includes? (:out proc) "placement must be :tab"))
-          (is (str/includes? (:out proc) (str bad-config)))
-          (is (not-any? mutating? (calls bad-log)))
-          (is (not (fs/exists? (fs/path bad-dir ".tmp" "herdr-orch" "ledger")))))))))
+(deftest a-defaults-config-key-is-refused-before-mutation
+  (doseq [placement [":tab" ":split" ":tab-split"]]
+    (let [{bad-env :env bad-log :log bad-dir :dir} (fake-env {})
+          bad-config (fs/path bad-dir ".agents" "subagents" "config.edn")]
+      (fs/create-dirs (fs/parent bad-config))
+      (spit (str bad-config) (str "{:defaults {:placement " placement "}}"))
+      (let [proc (call! bad-env "task" "start" "worker" "--task" "refused defaults")]
+        (is (not (zero? (:exit proc))) placement)
+        (is (str/includes? (:out proc) "config :defaults is not supported") placement)
+        (is (str/includes? (:out proc) (str bad-config)) placement)
+        (is (not-any? mutating? (calls bad-log)) placement)
+        (is (not (fs/exists? (fs/path bad-dir ".tmp" "herdr-orch" "ledger"))) placement)))))
 
 (deftest configured-harness-extra-args-reach-agent-start
   ;; A permission bypass is opt-in configuration, never a shipped default: the same spawn
@@ -5654,8 +5638,8 @@
       (is (= "--thinking" (get-in harnesses [:pi :effort-flag])))
       (is (= "--effort" (get-in harnesses [:claude :effort-flag])))
       (is (= "-c model_reasoning_effort={}" (get-in harnesses [:codex :effort-flag]))))
-    (testing "the usage text names the shipped placement default"
-      (is (str/includes? cli/usage (str "ships as " (get-in config [:defaults :placement])))))
+    (testing "the shipped config has no :defaults key, which parse-config refuses"
+      (is (not (contains? config :defaults))))
     (testing "native kinds run only their own provider; pi has no provider filter"
       (is (= #{"anthropic"} (get-in harnesses [:claude :providers])))
       (is (= #{"openai-codex"} (get-in harnesses [:codex :providers])))
@@ -6041,7 +6025,7 @@
           (is (str/includes? (.getMessage e) project-config))))
       (testing "a bad home-only definition names the home file, not the project file"
         (write! home-config {:providers {"fixture" {}} :aliases {"fixture-r" [{:model "elsewhere/m" :rank 1}]}})
-        (write! project-config {:defaults {:placement :tab}})
+        (write! project-config {:harnesses {:pi {:model-flag "--model" :effort-flag "--thinking"}}})
         (let [e (failure)]
           (is (= home-config (:path (ex-data e))))
           (is (not (str/includes? (.getMessage e) project-config)))))

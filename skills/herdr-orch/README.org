@@ -166,15 +166,7 @@ At spawn, the CLI substitutes each token, writes the composed persona beside the
 
 Traits resolve like personas: =<git-root>/.agents/traits/=, then =~/.agents/traits/=, then =<skill>/traits/=. The first match wins, so a project can override a packaged trait by name.
 
-Rules:
-
-- An unknown token of three or more characters fails the spawn and names the searched layers, so a typo cannot ship a persona without its directive. An unresolved one- or two-character token stays as text, so =%s= and =%h= in prose are safe.
-- A repeated inline token fails, because it doubles the child's context. A repeated metadata selection is deduplicated.
-- Code spans, fenced blocks, indented blocks, and YAML frontmatter are not scanned.
-- Substitution is single-pass: inserted text is not scanned again, so one fragment cannot reference another.
-- A persona with no trait and no =extends:= passes through unchanged, with no composed file.
-
-Selections combine in this order: the base's =traits:= (with =extends:=), the persona's own =traits:=, then each =--trait NAME= on the spawn. A name already used inline is not appended again. A selected name outside the =%<name>= grammar is refused before any ledger or pane change. [[file:scripts/docs/contract.md]] section 'Trait composition' gives the rules. [[file:references/traits.md][references/traits.md]] gives the admission bar for a new trait.
+Selections combine in this order: the base's =traits:= (with =extends:=), the persona's own =traits:=, then each =--trait NAME= on the spawn. Before you write a trait selection or an inline token, read [[file:scripts/docs/contract.md]] section 'Trait composition'. It owns the rules for unknown, short and repeated tokens, the regions that are not scanned, single-pass substitution and pass-through. [[file:references/traits.md][references/traits.md]] gives the admission bar for a new trait.
 
 A trait has a cost: every child that carries it reads all of it. Add one only for a directive that two or more personas share, and test that it changes behaviour. Two of the three traits that predate =simple= failed an adversarial check at first. They worked only after a rewrite that removed the cause of the unwanted behaviour, instead of restating the prohibition.
 
@@ -187,30 +179,26 @@ The idea comes from [[https://github.com/xificurC/ai-behaviors][ai-behaviors]] (
 
 ** Model configuration
 
-=config.edn= has two model levels, plus provider allowance settings (=:providers=), harness invocation (=:harnesses=) and spawn defaults (=:defaults=):
+=config.edn= has two model levels, plus provider allowance settings (=:providers=), and harness invocation (=:harnesses=):
 
 - =:aliases= maps a short name to a canonical model ID, or a weight name to a vector of ranked candidates =[{:model ".." :rank n} ..]=.
 - =:models= maps a canonical ID to the native name that its own provider's harness wants.
 - =:providers= maps a provider prefix to =:quota-provider= and optional =:reserve=. Legacy =:usage=, =:credentials= and =:cache-ttl-s= settings fail with a migration error. A kind's =:harnesses :providers= set lists the providers it can run.
 
-Canonical IDs use pi's =<provider>/<model>= form. The packaged config covers the models on Anthropic and OpenAI subscriptions, and a local fallback. =heavy=, =middle=, =light=, and =feather= are the portable weight aliases. Each is a vector alias: at spawn, =oh= picks the lowest-ranked candidate whose subscription still has allowance, so a spawn does not land on an exhausted subscription. An explicit string alias or canonical ID is never routed and makes no usage query. =oh usage= shows the allowance that routing reads. [[*Packaged models]] lists the current mapping. [[file:scripts/docs/contract.md]] section 'Model resolution' gives the resolution rules.
+Canonical IDs use pi's =<provider>/<model>= form. The packaged config covers the models on Anthropic and OpenAI subscriptions, and a local fallback. =heavy=, =middle=, =light=, and =feather= are the portable weight aliases. Each is a vector alias: at spawn, =oh= picks the lowest-ranked candidate whose subscription still has allowance, so a spawn does not land on an exhausted subscription. For pi, an explicit string alias or base canonical ID keeps that model, but =oh= routes it across the authenticated accounts for that model and queries their usage. Other kinds do not route it. =oh usage= shows the allowance that routing reads. [[*Packaged models]] lists the current mapping. [[file:scripts/docs/contract.md]] section 'Model resolution' gives the resolution rules.
 
 *** The merge rule that catches people
 
-=merge-config= is =merge-with merge=, so the merge is two levels deep:
-
-- Top-level keys (=:aliases=, =:models=, =:harnesses=, =:providers=, =:defaults=) merge across files.
-- One level down, an entry replaces its counterpart. An override =:models= row for ="anthropic/claude-opus-5-5"= replaces the whole row: its columns do not merge. An override =:providers= row replaces the packaged row wholesale, so it must restate every setting it keeps. An override =:harnesses :claude= entry replaces the packaged entry, so it must restate =:model-flag= (or validation rejects the file), =:effort-flag= (or that kind gets no effort args) and =:providers= (or that kind accepts every provider).
-- =:aliases= and =:defaults= merge per key. A vector alias is one value: an override replaces all its candidates and never merges them. Retargeting ="heavy"= takes one line and changes no other alias and no =:models= row.
+An override row does not merge with the row it replaces. An override =:models= row replaces the whole packaged row, and an override =:harnesses= entry must restate =:model-flag=, =:effort-flag= and =:providers=. =:aliases= merges per key, so retargeting ="heavy"= takes one line. Read [[file:scripts/docs/contract.md]] section 'Model resolution' for the merge rules, and section 'Harness `:extra-args`' for the fields that an override entry must restate.
 
 A weight name is an =:aliases= key, never a =:models= key. A key in both maps fails after the merge, with the key and the files that define it named. You see this error when you migrate an old override that has a full ="heavy"= row. A candidate that resolves to a vector alias, a candidate whose provider is absent from =:providers=, and a =:harnesses :providers= member absent from =:providers= fail the same way.
 
 *** Worked example
 
-A home override that pins =heavy= to one Claude release, lets claude-kind and codex-kind children run unattended, and gives every child its own tab:
+A home override that pins =heavy= to one Claude release, and lets claude-kind and codex-kind children run unattended:
 
 #+begin_src clojure
-  {:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; a string alias: no routing, no usage query
+  {:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; a string alias: no vector routing
    :models   {"anthropic/claude-fable-5-20260714"
               {:claude "claude-fable-5-20260714"}}           ; pinned, not the floating alias; own provider only
    ;; Override the default permissions for more autonomous operation
@@ -221,8 +209,7 @@ A home override that pins =heavy= to one Claude release, lets claude-kind and co
                :codex {:model-flag "--model"
                         :providers #{"openai-codex"}
                         :extra-args ["--ask-for-approval" "never"
-                                     "--sandbox" "workspace-write"]}}
-   :defaults  {:placement :tab}}
+                                     "--sandbox" "workspace-write"]}}}
 #+end_src
 
 The new canonical ID needs a row only because it is new. To point ="heavy"= at a packaged canonical ID, add only the =:aliases= entry.
@@ -252,7 +239,7 @@ Publication and capture can work without agent recognition, but never bypass a r
 
 ** Child placement
 
-Each delegated child gets a new tab in the caller's workspace or space, including below root. =:defaults :placement= accepts only =:tab=, which is also the fallback when the key is absent. =--tab= is optional.
+Each delegated child gets a new tab in the caller's workspace or space, including below root. There is no other placement, so =--tab= is optional and a config =:defaults= key is refused.
 
 In both runtimes a child's own tab carries its label, such as =worker-1-light=. When the root first delegates, =oh= names the root's tab =orch-0= (or the next free =orch-<n>= in that workspace or space), unless someone already named it. [[file:scripts/docs/contract.md]] section 'Labels and geometry' gives the rules.
 
@@ -260,7 +247,7 @@ The tab stays in the parent's workspace or herdr-app space and preserves focus. 
 
 ** Verifying a configuration change
 
-=oh= parses and validates config before it allocates a ledger entry or touches a pane, and each failure names the file, so a bad override costs nothing billable. =:defaults= is a closed map (=:placement= only, with =:tab=), so a typo fails instead of being ignored.
+=oh= parses and validates config before it allocates a ledger entry or touches a pane, and each failure names the file, so a bad override costs nothing billable. Closed maps such as =:providers= rows fail on an unknown key instead of ignoring it.
 
 Preview a spawn without running it:
 
@@ -315,7 +302,6 @@ Routing needs the shared CLI and writable system temporary storage. Warning and 
 - each trait with its description and the personas that select it
 - each model alias with the model name that each harness receives
 - each ordinary skill that declares itself a workflow, with its name and description
-- the spawn defaults
 
 Outside either runtime, it only reads files. Inside a host, the ancestry and mismatch gate still applies.
 

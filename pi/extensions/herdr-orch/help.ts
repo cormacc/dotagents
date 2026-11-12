@@ -8,7 +8,7 @@ export const SECTIONS = ["help", "personas", "traits", "models", "usage", "workf
 export type Section = (typeof SECTIONS)[number];
 
 export const SECTION_DESCRIPTIONS: Record<Section, string> = {
-  help: "Personas, traits, models, workflows, defaults, and usage",
+  help: "Personas, traits, models, workflows, and usage",
   personas: "Subagent personas and their defaults",
   traits: "Traits and the personas that select them",
   models: "Model aliases and per-harness spellings",

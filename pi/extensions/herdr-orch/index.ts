@@ -15,7 +15,7 @@ import { completeArguments, composeHelp, parseAction, parseSection, rosterArgs, 
 const HELP_ENTRY = "herdr-orch-help";
 // `compact` and `detail` are the CLI's Markdown renderings; the tool-output expand state
 // chooses one. The help overview keeps usage separate so its renderer can insert it after
-// roster's spawn defaults without putting either rendering in model context.
+// the roster sections without putting either rendering in model context.
 type HelpEntry = { section: Section; herdr: boolean; compact: string; detail: string; usage?: { compact: string; detail: string } };
 
 const USAGE_TIMEOUT_MS = 30_000;

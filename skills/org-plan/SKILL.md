@@ -235,9 +235,7 @@ To add a task inside an existing change-record, use `ot create <summary> --paren
 
 ## Subtask migration from TASKS.org
 
-When a TASKS.org task already has subtasks and a new proactive change-record is created, `ot record create` moves those child task trees into the record under `* Plan`, preserving their `:CUSTOM_ID:` values and nesting. The parent task keeps the `#+IMPORT:` link and loses the local child task trees, so the graph has one canonical writable node per UUID.
-
-Existing record files are not modified for migration. If subtasks remain duplicated after a record already exists, move them manually into `* Plan`, remove the parent-local copies, and run `ot doctor`.
+Before you migrate existing subtasks into a change-record, read [references/change-record-format.md#Subtask migration](references/change-record-format.md#subtask-migration). `ot record create` does the migration for a new record. The reference gives the manual steps for an existing record.
 
 New plan-only work units that have no TASKS.org analogue also get fresh UUIDs and `:CREATED:` properties.
 

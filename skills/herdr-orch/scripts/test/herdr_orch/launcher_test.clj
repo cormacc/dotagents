@@ -22,9 +22,9 @@
 
 (defn- calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
 (defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
-;; The placement command -- `pane split` or `tab create`, whichever the shipped
-;; `:defaults :placement` selects. These tests are about the cwd the launcher hands the
-;; child, which both commands carry as `--cwd`, so they must not pin a placement.
+;; The placement command, `tab create` for a delegated child. These tests are about the cwd
+;; the launcher hands the child, which every placement command carries as `--cwd`, so they
+;; do not pin the command.
 (defn- placement-argv [log]
   (first (filter #(#{["pane" "split"] ["tab" "create"]} (vec (take 2 %))) (calls log))))
 (defn- injected [env-file]

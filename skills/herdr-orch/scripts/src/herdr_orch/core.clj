@@ -2,7 +2,8 @@
   "Pure protocol helpers for the oh CLI."
   (:require [clojure.string :as str]
             [clojure.edn :as edn]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [herdr-orch.traits :as traits]))
 
 (def worktree-mark "⑂")
 (defn worktree-display
@@ -43,10 +44,7 @@
 (defn parse-frontmatter [text]
   (let [[_ yaml] (re-find #"(?s)\A---\s*\n(.*?)\n---" text)]
     (when-not yaml (throw (ex-info "persona has no YAML frontmatter" {})))
-    (into {} (keep (fn [line]
-                     (when-let [[_ k v] (re-matches #"\s*([A-Za-z][\w-]*)\s*:\s*(.*?)\s*" line)]
-                       [(keyword k) (str/replace v #"^['\"]|['\"]$" "")]))
-                   (str/split-lines yaml)))))
+    (traits/parse-yaml yaml)))
 
 ;; Persona definitions resolve project > home > packaged. `packaged-dir` is supplied by
 ;; the launcher-relative CLI boundary, never inferred from the assignment root or cwd.
@@ -332,8 +330,8 @@
   (vec (get-in config [:harnesses (keyword kind) :extra-args])))
 (def quota-providers #{"claude" "codex" "kimi" "zai"})
 ;; config.edn shape validation: sparse model rows and harness keywords absent from
-;; `:harnesses` are allowed (the kind set is open by contract). `:defaults` is closed
-;; so placement typos fail loudly. Every failure carries the offending file path.
+;; `:harnesses` are allowed (the kind set is open by contract). Every failure carries the
+;; offending file path.
 (defn- validate-config-shape! [path config]
   (when-not (map? config) (throw (ex-info "config must be an EDN map" {:path path :value config})))
   (let [harnesses (get config :harnesses {}) models (get config :models {})]
@@ -417,15 +415,11 @@
         (when (and (contains? row :reserve) (not (and (number? (:reserve row)) (<= 0 (:reserve row) 1))))
           (throw (ex-info "config :providers entry :reserve must be a number from 0 to 1"
                           {:path path :provider name :reserve (:reserve row)})))))
+    ;; `:defaults` has no supported key. Refuse it, so that an override that asks for
+    ;; another placement fails loudly instead of being ignored.
     (when (contains? config :defaults)
-      (let [defaults (:defaults config)]
-        (when-not (map? defaults) (throw (ex-info "config :defaults must be a map" {:path path :value defaults})))
-        (when-not (every? #{:placement} (keys defaults))
-          (throw (ex-info "config :defaults has unknown key" {:path path :defaults defaults})))
-        (when (contains? defaults :placement)
-          (when-not (= :tab (:placement defaults))
-            (throw (ex-info "config :defaults :placement must be :tab"
-                            {:path path :placement (:placement defaults)})))))))
+      (throw (ex-info "config :defaults is not supported: every delegated child opens in a tab; remove the key"
+                      {:path path :defaults (:defaults config)}))))
   config)
 ;; Parse is pure given text: `parse-config` never touches disk (file IO — `fs/exists?`,
 ;; `slurp` — stays at the cli.clj boundary), mirroring `parse-frontmatter`.
@@ -435,7 +429,7 @@
          (catch Exception e (throw (ex-info (str "config is invalid EDN: " path) {:path path} e))))))
 ;; Per-file validation guarantees the map-valued known top-level keys are safe to merge.
 ;; `merge-with merge` therefore preserves row replacement at level two while allowing
-;; `:defaults` to merge its keys across the override chain.
+;; `:aliases` to merge its keys across the override chain.
 (defn merge-config [& configs]
   (apply merge-with merge configs))
 ;; Per-file validation only constrains shape within one file; a key can legally be a

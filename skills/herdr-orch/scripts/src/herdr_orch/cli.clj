@@ -22,45 +22,38 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list [--all] [--format json]\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-<N> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\nDelegated children use a new tab in the caller's workspace; --tab is optional. :defaults :placement ships as :tab.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout, Git-locked so that only `oh worktree remove` removes it. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\nworktree list --all lists every worktree round under the assignment root with its reconciliation and display string. It needs no caller session and writes neither the ledger nor Git.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list [--all] [--format json]\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and workflow skills for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-<N> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\nDelegated children use a new tab in the caller's workspace; --tab is optional.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout, Git-locked so that only `oh worktree remove` removes it. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\nworktree list --all lists every worktree round under the assignment root with its reconciliation and display string. It needs no caller session and writes neither the ledger nor Git.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn usage-error [message data]
   (throw (ex-info message (assoc data :error-kind :usage))))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
-;; strictly positive parse overrides the default.
-(defn parse-poll-interval [raw]
+;; strictly positive parse overrides the default. Every millisecond and count knob below
+;; shares this non-positive/unparseable/blank -> default discipline.
+(defn- parse-positive [raw default]
   (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n 1000)))
+    (if (and n (pos? n)) n default)))
+(defn parse-poll-interval [raw] (parse-positive raw 1000))
 (defn poll-interval-ms [] (parse-poll-interval (System/getenv "ORCH_POLL_INTERVAL_MS")))
-;; Bounds the settle wait before the advisory parent push only; same non-positive/
-;; unparseable discipline as parse-poll-interval.
+;; Bounds the settle wait before the advisory parent push only.
 (def default-notify-timeout-ms 30000)
-(defn parse-notify-timeout [raw]
-  (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n default-notify-timeout-ms)))
-;; Throttle floor for WAITING result items; same non-positive/unparseable/blank ->
-;; default discipline as parse-poll-interval/parse-notify-timeout.
+(defn parse-notify-timeout [raw] (parse-positive raw default-notify-timeout-ms))
+;; Throttle floor for WAITING result items.
 (def default-waiting-interval-min-ms 60000)
-(defn parse-waiting-interval-min [raw]
-  (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n default-waiting-interval-min-ms)))
+(defn parse-waiting-interval-min [raw] (parse-positive raw default-waiting-interval-min-ms))
 (defn waiting-interval-min-ms []
   (parse-waiting-interval-min (System/getenv "ORCH_WAITING_INTERVAL_MIN_MS")))
 ;; Each stream snapshot reads at most this many immutable item files and this many bytes per
 ;; file. Over-limit streams refuse rather than treating an unseen terminal as unsealed.
 (def default-max-stream-items 1000)
-(defn parse-max-stream-items [raw]
-  (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n default-max-stream-items)))
+(defn parse-max-stream-items [raw] (parse-positive raw default-max-stream-items))
 (defn max-stream-items []
   (parse-max-stream-items (System/getenv "ORCH_MAX_STREAM_ITEMS")))
 ;; Fixed, not an env knob: an over-limit envelope refuses, and no operator has ever
 ;; needed a different ceiling. Make it configurable when one does.
 (def max-envelope-bytes 65536)
 ;; Bounds the settle wait `close` and `continue` make before reading liveness (see
-;; `settle-and-list!`); same non-positive/unparseable/blank -> default discipline as
-;; parse-poll-interval/parse-notify-timeout. Capture makes no such
+;; `settle-and-list!`). Capture makes no such
 ;; wait at all any more, so this budget is spent only by a verb an operator invoked.
 ;; The default is deliberately larger than `default-notify-timeout-ms`: a non-blocking
 ;; child publishing while its parent sits inside a collect reads `working` for that entire
@@ -68,9 +61,7 @@
 ;; instant its collect returns still meets a `working` child, and a budget at or below
 ;; 30 000 ms would miss it.
 (def default-settle-close-ms 45000)
-(defn parse-settle-close [raw]
-  (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n default-settle-close-ms)))
+(defn parse-settle-close [raw] (parse-positive raw default-settle-close-ms))
 (defn settle-close-ms [] (parse-settle-close (System/getenv "ORCH_SETTLE_CLOSE_MS")))
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create and
 ;; pane split `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both
@@ -3816,7 +3807,6 @@
      :routes (roster-routes merged)
      :workflows (workflows/discover skill-roots)
      :harnesses (vec (sort (map name (keys (:harnesses merged)))))
-     :defaults (:defaults merged {})
      :layers {:personas (mapv (fn [s d] {:source s :directory (str d)}) layer-names directories)
               :traits (mapv #(select-keys % [:source :directory]) (trait-directories))
               :workflows skill-roots}}))
@@ -3905,10 +3895,6 @@
       (into (conj table "" "Ranked aliases (lowest rank is preferred):" "")
             (route-lines (roster-markup format) routes detail?))
       table)))
-(defn- default-lines [defaults]
-  (if (seq defaults)
-    (mapv (fn [[k v]] (str "- " (name k) ": " (if (keyword? v) (name v) v))) (sort-by key defaults))
-    ["- none"]))
 (defn- layer-lines [{:keys [code]} layers]
   (let [chain (fn [entries] (str/join " > " (map #(str (:source %) " " (code (:directory %))) entries)))]
     [(str "- Personas: " (chain (:personas layers)))
@@ -3922,13 +3908,12 @@
                   "traits" ["Traits" (trait-lines markup (:traits listing) detail?)]
                   "models" ["Models" (model-lines format listing detail?)]
                   "workflows" ["Workflows" (workflow-lines markup (:workflows listing) detail?)]
-                  "defaults" ["Spawn defaults" (default-lines (:defaults listing))]
                   "layers" ["Resolution layers (highest first)" (layer-lines markup (:layers listing))]))]
     (if (= section "all")
       (str/join "\n\n" (map (fn [part]
                               (let [[title lines] (block part)]
                                 (str ((:heading markup) title) "\n\n" (str/join "\n" lines))))
-                            (cond-> ["personas" "traits" "models" "workflows" "defaults"] detail? (conj "layers"))))
+                            (cond-> ["personas" "traits" "models" "workflows"] detail? (conj "layers"))))
       (str/join "\n" (second (block section))))))
 (defn roster! [opts positional]
   (require-positionals positional 0 "roster")

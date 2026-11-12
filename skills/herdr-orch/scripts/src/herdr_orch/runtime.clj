@@ -46,11 +46,7 @@
   (launch! [_ {:keys [name kind pane native-args]}] (herdr/start! name kind pane native-args))
   (prompt-runtime! [_ target text opts]
     (if (seq opts) (herdr/prompt! target text opts) (herdr/prompt! target text)))
-  (wait-runtime! [_ target timeout until]
-    (cond
-      (empty? until) (herdr/wait! target timeout)
-      (= ["idle" "done"] until) (herdr/wait-settled! target timeout)
-      :else (herdr/agent-wait! target timeout until)))
+  (wait-runtime! [_ target timeout until] (herdr/agent-wait! target timeout until))
   (read-runtime! [_ target opts] (herdr/agent-read! target opts))
   (status! [_ {:keys [scope target]}]
     (case scope

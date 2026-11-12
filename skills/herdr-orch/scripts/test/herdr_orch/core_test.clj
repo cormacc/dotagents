@@ -217,13 +217,11 @@
       (is (try (core/parse-config "/tmp/shape.edn" text) false
                (catch clojure.lang.ExceptionInfo e (= "/tmp/shape.edn" (:path (ex-data e)))))
           label)))
-  (testing "invalid defaults fail in parse-config with their path, before merge-with can run"
-    (doseq [[label text message] [["non-map defaults" "{:defaults :split}" #"defaults must be a map"]
-                                  ["unknown defaults key" "{:defaults {:unknown :split}}" #"defaults has unknown key"]
-                                  ["unknown placement" "{:defaults {:placement :sideways}}" #"placement must be" ]
-                                  ["removed split" "{:defaults {:placement :split}}" #"placement must be :tab"]
-                                  ["removed tab-split" "{:defaults {:placement :tab-split}}" #"placement must be :tab"]
-                                  ["removed focus default" "{:defaults {:focus true}}" #"defaults has unknown key"]]]
+  (testing "any :defaults key fails in parse-config with its path, before merge-with can run"
+    (doseq [[label text message] [["non-map defaults" "{:defaults :split}" #"defaults is not supported"]
+                                  ["former tab default" "{:defaults {:placement :tab}}" #"defaults is not supported"]
+                                  ["removed split" "{:defaults {:placement :split}}" #"defaults is not supported"]
+                                  ["removed focus default" "{:defaults {:focus true}}" #"defaults is not supported"]]]
       (is (try
             (core/parse-config "/tmp/defaults.edn" text)
             false
@@ -232,24 +230,22 @@
                    (re-find message (.getMessage e))))
             (catch Throwable _ false))
           label)))
-  (testing "merge is row-level replacement, defaults merge per key, and later configs win"
-    ;; `parse-config` admits only :placement in :defaults; synthetic keys isolate the
-    ;; generic merge primitive's per-key behavior from the closed input schema.
+  (testing "merge is row-level replacement, aliases merge per key, and later configs win"
     (let [default {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"}}
                    :models {"a" {:pi "pa" :claude "ca"} "b" {:pi "pb"}}
-                   :defaults {:placement :split :preserved :default}
+                   :aliases {"heavy" "a" "preserved" "b"}
                    :extension {:enabled true}}
           home {:models {"a" {:pi "pa-home"}} ;; replaces the whole "a" row, dropping :claude
-                :defaults {:placement :tab}}
+                :aliases {"heavy" "b"}}
           project {:harnesses {:claude {:model-flag "--model2"}}
                    :models {"b" {:pi "pb-project"}}
-                   :defaults {:placement :tab-split :project true}}
+                   :aliases {"heavy" "c" "project" "a"}}
           merged (core/merge-config default home project)]
       (is (= {:pi "pa-home"} (get-in merged [:models "a"])))
       (is (= {:pi "pb-project"} (get-in merged [:models "b"])))
       (is (= {:model-flag "--model"} (get-in merged [:harnesses :pi])))
       (is (= {:model-flag "--model2"} (get-in merged [:harnesses :claude])))
-      (is (= {:placement :tab-split :preserved :default :project true} (:defaults merged)))
+      (is (= {"heavy" "c" "preserved" "b" "project" "a"} (:aliases merged)))
       (is (= {:enabled true} (:extension merged)))))
   (testing "a solitary :aliases override retargets an alias across every kind without restating :models or :harnesses"
     (let [default {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"} :codex {:model-flag "--model"}}
