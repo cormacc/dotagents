@@ -23,13 +23,19 @@ export function project(focus, panes, spaces) {
 const projectKey = (dir, machine, reason) => dir ? JSON.stringify([machine ?? null, dir]) : `!${reason}`;
 
 // Should the widget switch to project `p`? `memo` keeps the shown project
-// (`dir`, `reason`) and a pending candidate between polls. The first project
-// switches at once; later changes must hold for `polls` polls.
-export function settle(memo, p, polls) {
+// (`dir`, `reason`), the terminal it last saw (`source`) and a pending
+// candidate between polls. The first project switches at once. So does a
+// project in another terminal than the last one seen: that is the user moving
+// focus. Any other change holds for `polls` polls, because a terminal's live
+// folder is its foreground process's and a tool command moves it for a moment;
+// a reason, such as a mod pane, is held the same way.
+export function settle(memo, p, polls, source = null) {
   const key = projectKey(p.dir, p.machine, p.reason);
   const shown = memo.dir || memo.reason != null ? projectKey(memo.dir, memo.machine, memo.reason) : null;
+  const moved = source !== (memo.source ?? null);
+  memo.source = source;
   if (key === shown) { memo.candidate = null; return false; }
-  if (shown !== null) {
+  if (shown !== null && !(moved && p.dir)) {
     if (memo.candidate !== key) { memo.candidate = key; memo.seen = 1; return polls <= 1; }
     if (++memo.seen < polls) return false;
   }

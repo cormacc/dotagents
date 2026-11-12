@@ -352,3 +352,24 @@ test("a slower earlier run never replaces a later result", async () => {
   await new Promise(r => setImmediate(r));
   assert.equal(a.view.model.title, "new");
 });
+
+test("focusing another terminal loads its project on the first poll; a folder change inside one terminal waits for a second", async () => {
+  const dirs = [project(PARENT), project(PARENT), project(PARENT)];
+  try {
+    let focus = { space: "s1", pane: "p1", cwd: dirs[0] };
+    const cwds = { p1: dirs[0], p2: dirs[1] };
+    const a = await app({ focus: () => focus, panes: () => Object.entries(cwds).map(([pane, cwd]) => ({ pane, status: "idle", cwd })) });
+    await a.settle();
+    const loaded = () => a.execCalls.filter(c => c[2].cwd !== dirs[0]).map(c => c[2].cwd);
+    assert.deepEqual(loaded(), [], "control: only the first project has loaded");
+    focus = { space: "s1", pane: "p2", cwd: dirs[1] };
+    a.tick(); await a.settle();
+    assert.deepEqual(loaded(), [dirs[1]], "another terminal: loaded on the first poll");
+    cwds.p2 = dirs[2];
+    focus = { space: "s1", pane: "p2", cwd: dirs[2] };
+    a.tick(); await a.settle();
+    assert.deepEqual(loaded(), [dirs[1]], "the same terminal moved folder: held on the first poll");
+    a.tick(); await a.settle();
+    assert.deepEqual(loaded(), [dirs[1], dirs[2]], "held for a second poll");
+  } finally { for (const d of dirs) rmSync(d, { recursive: true, force: true }); }
+});

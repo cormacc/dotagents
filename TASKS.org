@@ -155,16 +155,6 @@ Acceptance criteria:
 :END:
 Deferred by the owner from the owned quota collector delivery. Support native Claude Code on macOS and Codex OS credential stores only when credentials can be read non-interactively, without refresh, credential writes, prompts or cross-harness fallback. Verify host-specific behaviour on macOS; Linux file fixtures do not establish Keychain support. Pi file-store subscription reporting does not depend on this work. Contract: skills/herdr-orch/scripts/docs/contract.md section Owned credential boundary. Origin: design/log/2026-11-05-owned-quota-collector.org.
 
-** TODO Add workspace pinning to the Herdr org-tasks adapters
-:PROPERTIES:
-:CUSTOM_ID: 16358bea-c42f-4342-883b-6409d14c7281
-:CREATED: [2026-11-06 Fri 08:34]
-:END:
-:LOGBOOK:
-- Created [2026-11-06 Fri 08:34]
-:END:
-Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. Design focus-independent workspace-root pinning for terminal Herdr and the desktop adapter. Establish an authoritative configured directory source before implementation; Herdr 0.9.5 PluginInvocationContext.workspace_cwd prefers focused pane cwd and is not sufficient. Consider an explicitly configured plugin-owned directory map only after agreement. Preserve active-agent following as the default, reject missing or remote roots, and test that task-pane and agent-pane focus changes cannot change a pinned root. Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
-
 ** TODO herdr-orch: evaluate oh-assisted integration of worktree branches :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: e88e718e-09b1-4dc0-a0df-dc176f1e451f
@@ -185,16 +175,6 @@ Reopens the parent-owned-integration decision of `design/log/2026-08-13-herdr-or
 :END:
 Give a user one view of the current delegation tree (parent, children, persona, status, worktree state) that does not depend on sidebar nesting. Options (not ranked): better `oh.label` and space/tab names, so that the existing Herdr TUI and herdr-app views already read correctly; or an `oh` CLI command (for example a tree renderer that a Herdr or herdr-app popup can run). Constraint: minimise complexity for display only; do not change bundled herdr-app mods, and do not add workspace placement. Origin: the hc new-space test ([[proj:design/log/2026-11-11-herdr-orch-worktree-integration/hc-new-space.md]]) showed that a space from `hc run` labels does not nest under the main checkout, and the child agent row stays under its parent space.
 
-** TODO Make the herdr-app org-tasks widget follow focus without lag
-:PROPERTIES:
-:CUSTOM_ID: 2e7057ce-ed02-4d29-99f6-74f0766e2406
-:CREATED: [2026-11-12 Thu 14:21]
-:END:
-:LOGBOOK:
-- Created [2026-11-12 Thu 14:21]
-:END:
-The owner found the project switch laggy in the Linux check (task:2b49d0fd-413d-47a3-a5da-61e655dea4a1, 2026-11-12). `herdr-app/mods/org-tasks/main.js` polls `focused()` every `FOCUS_MS` (1000 ms) and switches only after a new project holds for `STABLE_POLLS` (2) polls (`settle` in `state.js`), then runs `ot compact`. The hold protects against an agent tool command that moves the pane foreground folder for a moment; it is not a performance measure. The herdr-app mod guide (~/.config/herdr-app/AGENTS.md, Rules) says `render` re-runs when focus, terminals or agents change, and "Don't poll those". Acceptance: a change of focused pane or terminal switches at once; only a folder change inside the same pane keeps a hold; focus is read from live data, not a 1 s poll; `state.js` tests cover both cases.
-
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:
@@ -206,7 +186,19 @@ The owner found the project switch laggy in the Linux check (task:2b49d0fd-413d-
 :END:
 Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the owner accepted this as a known limit on 2026-11-09 (herdr-app/README.md). Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
 
-** TODO Clean up org-tasks panes that Herdr restores as plain shells
+** STARTED Herdr UI housekeeping 2026-11-12
+:PROPERTIES:
+:CUSTOM_ID: b64ef6cd-b200-49f1-983e-c974aae57976
+:CREATED: [2026-11-12 Thu 20:09]
+:STARTED: [2026-11-12 Thu 20:13]
+:END:
+:LOGBOOK:
+- Created [2026-11-12 Thu 20:09]
+- State "STARTED" from "TODO" [2026-11-12 Thu 20:13]
+:END:
+Groups the org-tasks Herdr adapter follow-ups that came from the Linux validation of 2026-11-12 (archived task 2b49d0fd-413d-47a3-a5da-61e655dea4a1) and its deferred design work. Close and archive this parent when every child is DONE or CANCELLED.
+
+*** TODO Clean up org-tasks panes that Herdr restores as plain shells
 :PROPERTIES:
 :CUSTOM_ID: 7b95f3fa-14b1-4d94-8143-88ee35469d33
 :CREATED: [2026-11-12 Thu 13:09]
@@ -215,6 +207,28 @@ Observed after first selecting the installed herdr-orch layout: shared herdr-orc
 - Created [2026-11-12 Thu 13:09]
 :END:
 Found in the Linux restart check (task:2b49d0fd-413d-47a3-a5da-61e655dea4a1, 2026-11-12, Herdr 0.9.5, scratch session lincheck). After `herdr session stop` and re-attach, Herdr restored the earlier compact panes w1:p6 and w1:p7 as `/bin/sh` in the plugin root (`herdr/plugins/org-tasks`) with their `Tasks ...` labels and an empty `launch_argv` in session.json. The startup `ensure` found no owned live instance and opened w1:p8, so the restored tab shows extra Tasks panes that do not follow focus. Evidence: .tmp/linux-herdr-checks-20261112/session-after-restart.json and the process list in that session. Acceptance: after a session restore, exactly one Tasks pane exists; the cleanup closes only panes that the plugin can prove it opened (the anti-criterion "Must not: close, replace or send input into an unowned pane" in design/log/2026-11-05-org-tasks-herdr-ui.org still holds, so the cwd-only `plugin-pane?` heuristic is not sufficient); a regression test covers restore. First check whether the Herdr snapshot reports plugin ownership for a restored pane, and whether macOS behaves the same.
+
+*** STARTED Make the herdr-app org-tasks widget follow focus without lag
+:PROPERTIES:
+:CUSTOM_ID: 2e7057ce-ed02-4d29-99f6-74f0766e2406
+:CREATED: [2026-11-12 Thu 14:21]
+:STARTED: [2026-11-12 Thu 20:13]
+:END:
+:LOGBOOK:
+- Created [2026-11-12 Thu 14:21]
+- State "STARTED" from "TODO" [2026-11-12 Thu 20:13]
+:END:
+The owner found the project switch laggy in the Linux check (task:2b49d0fd-413d-47a3-a5da-61e655dea4a1, 2026-11-12). `herdr-app/mods/org-tasks/main.js` polls `focused()` every `FOCUS_MS` (1000 ms) and switches only after a new project holds for `STABLE_POLLS` (2) polls (`settle` in `state.js`), then runs `ot compact`. The hold protects against an agent tool command that moves the pane foreground folder for a moment; it is not a performance measure. The herdr-app mod guide (~/.config/herdr-app/AGENTS.md, Rules) says `render` re-runs when focus, terminals or agents change, and "Don't poll those". Delivered 2026-11-12 (not yet checked live): `settle` takes the focused pane or terminal as `source`; a project with a folder in another terminal switches on the next poll, and the 2-poll hold stays for a folder change inside the same terminal and for reasons such as a mod pane. Tests: herdr-app/tests/org-tasks-state.test.mjs and org-tasks-ui.test.mjs (both new tests fail on the old code). Not done: the 1 s poll remains, so a switch can still take up to 1 s; the mod guide says render re-runs on focus change, so a poll-free design is a possible follow-up. Close after the owner confirms the widget feels responsive in the desktop app.
+
+*** TODO Add workspace pinning to the Herdr org-tasks adapters
+:PROPERTIES:
+:CUSTOM_ID: 16358bea-c42f-4342-883b-6409d14c7281
+:CREATED: [2026-11-06 Fri 08:34]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 08:34]
+:END:
+Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. Design focus-independent workspace-root pinning for terminal Herdr and the desktop adapter. Establish an authoritative configured directory source before implementation; Herdr 0.9.5 PluginInvocationContext.workspace_cwd prefers focused pane cwd and is not sufficient. Consider an explicitly configured plugin-owned directory map only after agreement. Preserve active-agent following as the default, reject missing or remote roots, and test that task-pane and agent-pane focus changes cannot change a pinned root. Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
 
 * Upstream issues
 

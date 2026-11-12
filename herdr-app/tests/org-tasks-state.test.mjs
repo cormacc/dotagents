@@ -40,6 +40,19 @@ test("a project switch waits until the new folder holds", () => {
   assert.equal(settle(memo, { reason: "Focus a terminal" }, 2), true);
 });
 
+test("focusing another terminal switches at once; a folder change inside the same terminal still holds", () => {
+  const memo = { dir: null, reason: null };
+  assert.equal(settle(memo, { dir: "/a" }, 2, "p1"), true);
+  memo.dir = "/a";
+  assert.equal(settle(memo, { dir: "/tmp/x" }, 2, "p1"), false, "control: same terminal, a tool command moved its folder");
+  assert.equal(settle(memo, { dir: "/b" }, 2, "p2"), true, "another terminal with a project: no wait");
+  memo.dir = "/b";
+  assert.equal(settle(memo, { dir: "/b" }, 2, "p3"), false, "another terminal, same project: nothing to switch");
+  assert.equal(settle(memo, { dir: "/tmp/y" }, 2, "p3"), false, "the hold follows the terminal that is now focused");
+  assert.equal(settle(memo, { reason: "Focus a terminal" }, 2, "m1"), false, "a mod pane gives a reason: still held");
+  assert.equal(settle(memo, { reason: "Focus a terminal" }, 2, "m1"), true);
+});
+
 test("the same folder on another machine is another project", () => {
   const memo = { dir: "/a", machine: null, reason: null };
   assert.equal(settle(memo, { dir: "/a" }, 1), false, "control: the shown project");

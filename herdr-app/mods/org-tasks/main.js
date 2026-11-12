@@ -24,7 +24,8 @@ const REFRESH_MS = 30000;
 // stacks runs up to exec's 30 s limit.
 const REMOTE_MS = 5000;
 // A pane's live folder is its foreground process's, so an agent's tool commands
-// move it for a moment. Switch only once a new project holds for this many polls.
+// move it for a moment. Within one terminal, switch only once a new project
+// holds for this many polls; focusing another terminal switches at once.
 const STABLE_POLLS = 2;
 
 const COMPACT = ["compact", "--format", "json"];
@@ -73,8 +74,9 @@ export default class OrgTasks extends View {
 
   // Re-read the project when the focused agent's folder changes.
   follow(cx) {
-    const p = project(focused(), panes(), spaces());
-    const next = settle(this, p, STABLE_POLLS);
+    const focus = focused();
+    const p = project(focus, panes(), spaces());
+    const next = settle(this, p, STABLE_POLLS, focus?.pane ?? focus?.terminal ?? null);
     if (!next) return;
     this.dir = p.dir ?? null;
     this.machine = p.machine ?? null;
