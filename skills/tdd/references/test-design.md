@@ -35,5 +35,3 @@ Before replacing lower-level tests with an interface-level test, list the assert
 - Is the expected value independent of the implementation?
 - Does a deliberately broken condition make the focused check fail?
 - Does the same test remain valid after an internal restructuring that preserves the contract?
-
-This reference is part of the adaptation described in [../SKILL.md#Provenance](../SKILL.md#provenance), under [../LICENSE](../LICENSE).

@@ -78,7 +78,3 @@ Lead with the setup result or audit verdict. Give:
 - concrete findings, or an explicit no-issues result.
 
 Stop when the requested setup or audit is complete. Pipeline construction belongs to the project's CI workflow; ordinary code review remains with its existing owner. Do not commit, deploy or add a second lifecycle router.
-
-## Provenance
-
-Adapted from Addy Osmani's [constraint-driven-development](https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/skills/constraint-driven-development/SKILL.md), MIT License; see [LICENSE](LICENSE). Retains discovery before questions, lifecycle placement, verified enforcement, exceptions, ratchets and review of a weakened bar. Omits mandatory document names, tool installations, numerical defaults and the copied floor-guard implementation. Test-translation evidence follows the existing [worker](../herdr-orch/subagents/worker.md) contract.

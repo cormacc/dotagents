@@ -33,7 +33,3 @@ For example, separate “What load is expected at launch?” from “Who can app
 Map each required outcome to at least one question. Remove compound, leading, duplicate and already-answered questions. Check that the recipient can understand the context without reading this conversation, and distinguish an unknown from an assumed fact.
 
 Save only to the agreed path, report that path and flag unresolved coverage. Drafting does not authorise sending mail, uploading a document, contacting the recipient, or changing task state. Feed returned answers into the existing plan or contract rather than treating the questionnaire as a second specification.
-
-## Provenance
-
-Adapted from Matt Pocock's [to-questionnaire](https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/productivity/to-questionnaire/SKILL.md) at that revision (MIT; [LICENSE](LICENSE)). Retains sender/recipient separation, outcome coverage and single-idea questions; uses local interaction, output-location and approval rules instead of a fixed current-directory Markdown target.

@@ -18,9 +18,3 @@ Read this guide when creating or reviewing a CLI that a skill uses. Read the [ve
 - Bare `oh` returns a bounded read-only dashboard, not an agent launch. Pending delegation may suggest collection; a final result does not.
 
 The living contracts remain authoritative: [ot](../../org-tasks/scripts/docs/contract.md) and [oh](../../herdr-orch/scripts/docs/contract.md).
-
-## Provenance and updates
-
-`axi-upstream.md` is an unchanged copy of [kunchenguid/axi .agents/skills/axi/SKILL.md](https://github.com/kunchenguid/axi/blob/a8a320cc426a5f136a797a5ad138b84cb88bd172/.agents/skills/axi/SKILL.md) at revision `a8a320cc426a5f136a797a5ad138b84cb88bd172`. Its [MIT licence](axi-LICENSE), copyright 2026 Kun Chen, is retained alongside it.
-
-Update the document and licence together from an explicitly reviewed revision, compare their bytes against the source, and review these local exceptions. Do not reflow or otherwise edit the vendored document. Its `.md` reference filename deliberately avoids skill discovery; its frontmatter is preserved as source material, not local routing policy.

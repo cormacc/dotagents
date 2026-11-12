@@ -61,7 +61,3 @@ Lead with the bottleneck and disposition, or `Unresolved` with the blocking fact
 - kept or rejected attempts, unavailable checks and the proposed regression guard.
 
 Stop when the assigned question is answered or a specific missing fact prevents it. Do not add a web audit persona, claim visual QA proves performance, commit changes or deploy.
-
-## Provenance
-
-Adapted from Addy Osmani's [performance-optimization](https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/skills/performance-optimization/SKILL.md) and [web-performance-auditor](https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/agents/web-performance-auditor.md), MIT License; see [LICENSE](LICENSE). Retains measure/identify/fix/verify/guard, keep-or-revert decisions, rejected-attempt records and metric provenance. Omits fixed budgets, tool inventories and a mandatory web role. Alternating comparisons follow this repository's existing performance-verification rules.

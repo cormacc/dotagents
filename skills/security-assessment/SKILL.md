@@ -58,7 +58,3 @@ Use the project's review severity and evidence rules; in this repository, [code-
 Lead with the assessment verdict, then the threat-boundary summary, severity-ranked findings, checks and limitations. State `No issues found.` when no candidate meets the evidence bar; this is not a claim that the system is secure. Report missing evidence as an unknown, not an invented finding or a clean bill of health.
 
 If delegation is explicitly requested and available, use `reviewer` for a diff and `base-analyst` for a scoped system assessment. Keep orchestration and permission decisions with the root; do not add a specialist persona merely to repeat this skill. Stop after the assessment. Do not change controls, install packages, commit or deploy.
-
-## Provenance
-
-Adapted from Addy Osmani's [security-and-hardening](https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/skills/security-and-hardening/SKILL.md) and [security-auditor](https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/agents/security-auditor.md), MIT License; see [LICENSE](LICENSE). Retains trust-boundary-led STRIDE, abuse cases, dependency and LLM risks, and exploitable-path evidence. Omits blanket web controls, storage prescriptions, numerical defaults, mandatory praise and a separate severity taxonomy. This adaptation is read-only by default and uses existing local personas.

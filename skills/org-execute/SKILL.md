@@ -81,7 +81,3 @@ Apply `herdr-orch`'s independent Class C validation to the integrated result. An
 The root checks the whole acceptance set, anti-criteria and relevant specs, and runs each `cmd:` evidence command on the integrated tree, then performs [org-plan's closure-time refresh and prune](../org-plan/SKILL.md#closure-time-refresh-and-prune) before closing the parent task. Workers do not close the parent or prune the record. Preserve required evidence and use only the existing ownership-checked child and checkout cleanup paths. Integration, push, merge and authored commits keep their separate approval requirements.
 
 Report accepted tasks, delivered behaviour, verification and its limits, pending integration or decisions, and any remaining owned children/checkouts requiring action.
-
-## Provenance
-
-Adapts task briefs, same-shaped batching, interface preflight and scoped re-review from [Superpowers subagent-driven-development](https://github.com/obra/superpowers/tree/2ce8aa15d05bd57213e6f746f953aafb7ded7a8b/skills/subagent-driven-development), MIT License; see [LICENSE](LICENSE). Retains the local Org record, `oh` ledger and existing personas rather than upstream's plan format, separate progress ledger, automatic commits, mandatory per-task reviews or autonomous scope rulings.

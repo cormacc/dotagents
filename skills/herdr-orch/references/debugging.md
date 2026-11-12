@@ -26,7 +26,3 @@ Stop a diagnosis-only assignment when the mechanism and proof are established, o
 Turn the reduced reproduction into a regression test at the interface that reaches the real call pattern. Use the `tdd` skill when choosing assertions or the test surface. Observe the intended failure before the fix, apply the smallest coherent repair, then rerun both the reduced test and the original scenario.
 
 Run the relevant existing checks and account for replaced coverage. Remove temporary instrumentation and scratch resources that you created, without deleting another actor's work. Report the cause, evidence, fix status, exact verification results and untested surfaces. A green reduced test alone does not establish that the original symptom is fixed.
-
-## Provenance
-
-Adapted from Matt Pocock's [diagnosing-bugs](https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/engineering/diagnosing-bugs/SKILL.md) at that revision (MIT; [matt-pocock-LICENSE](matt-pocock-LICENSE)). Retains executable symptom detection, minimisation and original-scenario verification; adds local controls, bounded probes and diagnosis/fix authority, without a fixed hypothesis quota or a ban on source inspection before reproduction.

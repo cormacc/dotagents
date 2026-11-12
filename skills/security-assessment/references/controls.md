@@ -39,7 +39,3 @@ Use these questions only for boundaries in the assigned scope. A missing control
 - Treat retrieved content and model output as untrusted. Trace them into tool arguments, generated code, paths, SQL and HTML.
 - Check code-enforced permissions, argument validation, tenant separation, data minimisation, destructive-action approval, token or request bounds and recursion limits.
 - A system prompt, a delimiter or a model's instruction-following is not an access-control boundary. Assess the enforcement code and the actual tool reach.
-
-## Provenance
-
-Adapted from the same source revision as [../SKILL.md#Provenance](../SKILL.md#provenance); the sibling [../LICENSE](../LICENSE) carries the MIT notice. These are assessment questions, not copied implementation examples or universal hardening requirements.

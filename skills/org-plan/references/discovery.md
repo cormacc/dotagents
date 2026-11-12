@@ -40,7 +40,3 @@ Apply the deletion test: would removing the proposed layer remove unnecessary co
 Compare two materially different designs against the same contract. If independent exploration is worth its cost and delegation is authorised, the root may give fresh `base-analyst` children different bounded objectives, such as minimal interface versus simplest common caller. The planner must not spawn beyond its existing allow-list. Use the existing orchestration concurrency, evidence, capture and close rules; do not launch a mandatory panel.
 
 Each design supplies an interface contract, a caller example, hidden implementation responsibility, dependency strategy and trade-offs. Compare where required complexity and future changes live, then recommend an option for user approval. Keep safety and failure-path tests; an interface-level test does not justify deleting lower-level coverage without accounting for its assertions.
-
-## Provenance
-
-Adapted from Matt Pocock's `triage`, `prototype`, `domain-modeling`, `wayfinder` and `codebase-design` (including `DESIGN-IT-TWICE.md`) under [skills/engineering](https://github.com/mattpocock/skills/tree/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/engineering) at that revision (MIT; [matt-pocock-LICENSE](matt-pocock-LICENSE)). Retains active terminology checks, decision-first discovery and alternative interfaces; uses existing Org memory and role permissions rather than tracker maps, compulsory document trees or fixed agent/session quotas.

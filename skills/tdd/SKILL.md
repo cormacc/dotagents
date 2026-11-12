@@ -33,7 +33,3 @@ Use the installation's worker and review rules for baseline failure evidence, mu
 - Use `quality-gates` for project-wide thresholds and enforcement policy, and `code-review` for a broad change review.
 - A diagnosis-only request does not authorise implementation. Do not install a runner, change infrastructure, commit or spawn an agent merely because this skill is loaded.
 - Report the tested interface, independent oracle, observed red/green evidence, relevant regression results and remaining untested behaviour. If tests could not run, say so; a proposed test is not executed coverage.
-
-## Provenance
-
-Adapted from Matt Pocock's [tdd](https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/engineering/tdd/SKILL.md), including its `tests.md` and `mocking.md` references, at that revision (MIT; [LICENSE](LICENSE)). Retains independent expected values, observable interfaces and vertical slices; replaces compulsory interface approval and categorical internal-test/mock bans with contract-based choices, and permits behaviour-preserving refactoring during the loop.

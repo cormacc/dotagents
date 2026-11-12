@@ -9,7 +9,3 @@ Use these checks when a skill, persona or instruction document does not reliably
 5. **Safe compression:** preserve identifiers, negation, authorisation and explicit anti-criteria. A shorter positive instruction is not a substitute for a safety boundary unless it withstands a tempting violation under the actual consumer.
 
 Use the existing evaluation loop, not a second runner or an automatic rewrite of all instruction files. Claims about particular words or negation effects are hypotheses to test on the target model, not universal laws.
-
-## Provenance
-
-Adapted from Matt Pocock's [writing-for-agents](https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/productivity/writing-for-agents/SKILL.md) at that revision (MIT; [matt-pocock-LICENSE](matt-pocock-LICENSE)). Retains pointer, disclosure, completion and no-op diagnostics while preserving explicit guardrails and local evaluation ownership.

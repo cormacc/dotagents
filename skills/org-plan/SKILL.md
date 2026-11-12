@@ -202,7 +202,7 @@ A criterion may instead, or also, cite a runnable evidence command as `cmd:` fol
 - be read-only and self-contained: no tree mutation, no network, no state outside the repository;
 - be able to pass without a person, a paired device or another manual step.
 
-Use no `cmd:` when only a person can observe the outcome. A command that fails before implementation is expected. Closure verification runs each `cmd:`; see [#Closure-time refresh and prune](#closure-time-refresh-and-prune). For `ot doctor`, a `cmd:` counts as evidence in the same way as a `test:`. These rules adapt the `acceptance` skill from [rpiv-mono](https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-pi/skills/acceptance/SKILL.md) at that revision (MIT License).
+Use no `cmd:` when only a person can observe the outcome. A command that fails before implementation is expected. Closure verification runs each `cmd:`; see [#Closure-time refresh and prune](#closure-time-refresh-and-prune). For `ot doctor`, a `cmd:` counts as evidence in the same way as a `test:`.
 
 See [references/change-record-format.md#Acceptance criteria citation](references/change-record-format.md#acceptance-criteria-citation) for a worked example, and [../org-tasks/references/ot-cli.md#Spec keyword and checks](../org-tasks/references/ot-cli.md#spec-keyword-and-checks) for the `ot doctor` finding this feeds.
 

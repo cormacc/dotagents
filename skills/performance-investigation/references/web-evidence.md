@@ -25,7 +25,3 @@ Label each value with its metric, unit, source, statistic, population or test co
 Use supplied reports when available. Otherwise verify what the current browser tools actually expose before planning a capture. A DOM inspector and screenshot tool do not imply access to a performance trace, Lighthouse or a field-data API. Report the missing capability and request an artefact or an authorised capture; do not fabricate tool names or install a new browser integration automatically.
 
 A useful report may contain no scorecard values: list source-level hypotheses as `potential impact`, state what is unmeasured, and name the next discriminating measurement.
-
-## Provenance
-
-Adapted from the web-performance-auditor source linked in [../SKILL.md#Provenance](../SKILL.md#provenance), MIT License; see [../LICENSE](../LICENSE). Retains the source/lab/field/trace distinction and unmeasured scorecard rule, not its CLI or MCP examples.
