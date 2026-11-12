@@ -2,7 +2,7 @@
 
 Trait: `investigate`
 Consumer: `worker` on a debugging assignment and `advisor` on a debugging consult, both selected per spawn with `--trait investigate`, and interactive `%investigate` use. This gate exercises a read-only diagnosis scaffold, not a write-enabled `worker`.
-Status: **ADMITTED on named consumers plus three recorded runs (one scenario; not a general proof): discriminating in native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`; not discriminating in Pi at `claude-sonnet-5-5` (run 3).**
+Status: **ADMITTED on named consumers plus four recorded runs (one scenario; not a general proof): discriminating in native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`; not discriminating in Pi at `claude-sonnet-5-5`, with a scaffold (run 3) or the packaged `advisor` persona (run 4).**
 
 Pass condition, fixed before the run: the response states the observed symptom separately from the inferred cause; it names a leading mechanism that is consistent with the size evidence (a limit on the size of a single upload request) and gives the evidence for it; it names at least one cheap check that could disprove that mechanism; and it does not recommend retries, longer timeouts, or network changes as the fix. A response that recommends a change without a falsifying check, or that recommends retries or timeouts, fails.
 
@@ -46,6 +46,12 @@ Run 3 -- 2026-11-12, first run in the host harness: Pi with its complete deploye
 - Treated: separate `Observed symptoms` and `Inferred cause (hypothesis)` sections; names a single-request limit near 5 GB as the leading hypothesis with evidence; gives cheap checks that could disprove it. It recommends multipart upload with "Retry each part on failure". It did not read the debugging reference that the fragment points to. Fails the retries clause.
 - Control: separates evidence from likely causes, names the same limit, and gives cheap checks, but also recommends multipart upload with per-part retries and backoff. Fails the retries clause.
 - **Did not discriminate**: both arms fail on per-part retries, which run 1 scored as failing the same clause. With the Pi baseline loaded, the control also separated evidence from cause and gave falsifying checks, so the clauses that discriminated at `gpt-6.1-terra` (run 2) did not discriminate here.
+
+Run 4 -- 2026-11-12, packaged persona `advisor` in Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb investigate --model anthropic/claude-sonnet-5-5:medium --persona advisor` at `eae2895`. Each arm's prompt is the gate's assignment only; Pi receives the persona that `oh task run advisor --trait investigate --print-prompt` composes as an appended system prompt, and the control persona is that text with the one `investigate` fragment removed. The audit extension's matcher controls passed, and every actual provider request carried the home `AGENTS.md` and the arm's persona, and carried the fragment only in the treated arm. Both arms record provider `anthropic`, model `claude-sonnet-5-5`, 32 skills, 33 tools and 4 MCP servers. Outputs under `.tmp/trait-gates/investigate-1794476746603-1278568/`.
+
+- Treated: separate observed and inferred sections, the single-request limit as the leading but unverified cause, and cheap checks that could disprove it. It recommends multipart upload with "Retry each failed part, with backoff". Fails the retries clause.
+- Control: the same structure and checks, and the same per-part retries. Fails the retries clause.
+- **Did not discriminate**: both arms fail on per-part retries, as in run 3. With the `advisor` persona, the control also separated evidence from cause and gave falsifying checks.
 
 ## Workflow-reference assessment -- 2026-11-03
 

@@ -2,7 +2,7 @@
 
 Trait: `refactor`
 Consumer: `worker` on a refactor assignment, selected per spawn with `--trait refactor`, and interactive `%refactor` use. This gate exercises a read-only planning scaffold, not a write-enabled `worker`.
-Status: **ADMITTED on named consumers plus three discriminating runs (one scenario; not a general proof): native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`, and Pi with its deployed context at `claude-sonnet-5-5`.**
+Status: **ADMITTED on named consumers plus four recorded runs (one scenario; not a general proof): discriminating in native Codex at `gpt-5.6-terra` and `gpt-6.1-terra` and in a Pi scaffold run at `claude-sonnet-5-5`; not discriminating with the packaged `worker` persona (run 4).**
 
 Pass condition, fixed before the run: the plan runs the existing test suite, or adds characterisation tests, before the first structural move; it keeps `from billing import ...` working for callers during the split, or scopes the removal of that import path as a separate later change; it moves one group of functions at a time and runs the suite after each move; and it does not change the late-fee rounding as part of the refactor (it may list the rounding as a follow-up). A plan that includes the rounding change in the refactor steps fails.
 
@@ -39,3 +39,9 @@ Run 3 -- 2026-11-12, first run in the host harness: Pi with its complete deploye
 - Treated: runs the 40 tests as a baseline before any edit and adds a rounding characterisation test; keeps `billing.py` as a re-exporting facade; moves helpers, invoices, payments, then late fees, running all tests and a surface diff after each move; lists the rounding as a follow-up. Meets the condition.
 - Control: baseline first, a package `__init__.py` that re-exports, rounding kept and deferred, but step 5 moves all functions in one step and the suite runs only at the end (step 9). Fails the third clause.
 - **Discriminated**, on the third clause, without the wording judgement that run 2 needed.
+
+Run 4 -- 2026-11-12, packaged persona `worker` in Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb refactor --model anthropic/claude-sonnet-5-5:medium --persona worker` at `eae2895`. Each arm's prompt is the gate's assignment only; Pi receives the persona that `oh task run worker --trait refactor --print-prompt` composes as an appended system prompt, and the control persona is that text with the one `refactor` fragment removed. The audit extension's matcher controls passed, and every actual provider request carried the home `AGENTS.md` and the arm's persona, and carried the fragment only in the treated arm. Both arms record provider `anthropic`, model `claude-sonnet-5-5`, 32 skills, 33 tools and 4 MCP servers. Outputs under `.tmp/trait-gates/refactor-1794476775148-1280586/`.
+
+- Treated: a 40-test baseline first, a `billing.py` facade, one group moved at a time with the tests run after each, and the rounding fix kept for after the split. Meets the condition.
+- Control: a 40-test baseline before the first move, the facade, "Move one group at a time, with the tests run after each move", and the rounding fix as a separate change. Meets the condition.
+- **Did not discriminate.** With the `worker` persona, the control met every clause. The persona's own rules (no unrelated improvements, verify each change) are a plausible cause; this run does not separate them.

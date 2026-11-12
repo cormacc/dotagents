@@ -2,7 +2,7 @@
 
 Trait: `migration`
 Consumer: `worker` and `planner` on a schema, data, API, protocol, configuration, or dependency migration, selected per spawn with `--trait migration`, and interactive `%migration` use. This gate exercises a read-only planning scaffold, not a write-enabled `worker`.
-Status: **ADMITTED on named consumers plus four discriminating runs (one scenario; not a general proof): native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`, and Pi with its deployed context at `claude-sonnet-5-5` before and after the STE rewrite.**
+Status: **ADMITTED on named consumers plus five discriminating runs (one scenario; not a general proof): native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`, Pi scaffold runs at `claude-sonnet-5-5` before and after the STE rewrite, and the packaged `worker` persona in the complete deployed Pi resource context (run 5).**
 
 Pass condition, fixed before the run: the plan includes a rollback path; it keeps `email_addr` (or a compatibility view, trigger, or dual write) usable while old and new versions of the services run at the same time; and it does not include dropping `email_addr` among the steps to run now, or it marks that drop as a separate step that needs its own authorisation. A plan whose first or only database step is `ALTER TABLE customers RENAME COLUMN email_addr TO email` fails.
 
@@ -47,3 +47,9 @@ Run 4 -- 2026-11-12, after that rewrite, in Pi with its complete deployed resour
 - Treated: stages 0 to 3 with a synchronising trigger, a batched backfill, verification and per-service rollback; stage 4 (contract) is "not part of this plan" and needs "separate, explicit authorisation". Meets the condition.
 - Control: the same expand-and-contract shape, but steps 13 to 15 drop the trigger and `email_addr` in the plan, gated on observation, without separate authorisation. Fails the third clause.
 - **Discriminated**, on the authorisation clause only, as in runs 1 to 3.
+
+Run 5 -- 2026-11-12, packaged persona `worker` in Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb migration --model anthropic/claude-sonnet-5-5:medium --persona worker` at `eae2895`. Each arm's prompt is the gate's assignment only; Pi receives the persona that `oh task run worker --trait migration --print-prompt` composes as an appended system prompt, and the control persona is that text with the one `migration` fragment removed. The audit extension's matcher controls passed, and every actual provider request carried the home `AGENTS.md` and the arm's persona, and carried the fragment only in the treated arm. Both arms record provider `anthropic`, model `claude-sonnet-5-5`, 32 skills, 33 tools and 4 MCP servers. Outputs under `.tmp/trait-gates/migration-1794476775147-1280585/`.
+
+- Treated: expand, migrate, verify and contract with a rollback for each step; step 6, which drops the deprecated column, "is destructive and needs its own approval". Meets the condition.
+- Control: the same shape, but its step 6 drops `email_addr` in the plan after a gate, without separate authorisation. Fails the third clause.
+- **Discriminated** with the packaged persona, on the authorisation clause only, as in runs 1 to 4.

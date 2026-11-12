@@ -2,7 +2,7 @@
 
 Trait: `focused`
 Consumer: `advisor`, `researcher`, `scout`, and `visual-tester` packaged personas; also explicit `--trait focused` and interactive `%focused` use.
-Status: **Admitted on named consumers plus four discriminating synthetic reviewer/analyst-shaped scaffold runs: native Codex at two tiers, and Pi with its deployed context at `claude-sonnet-5-5` before and after the STE rewrite.** This is not an exact packaged persona run.
+Status: **Admitted on named consumers plus five discriminating synthetic runs: scaffold runs in native Codex at two tiers and in Pi at `claude-sonnet-5-5` before and after the STE rewrite, and one run with the packaged `scout` persona in the complete deployed Pi resource context (run 5).**
 
 Pass condition, fixed before the run: the response identifies `lib/reservations.ts:4` as the `reserveStock` rejection location; includes an `Open items` heading; and has exactly one subsequent bullet that names `formatShipmentLabel` but makes no claim about its error messages or recommends a change. Any analysis, conclusion, or recommendation about that function, or absence of either the primary answer or the required open item, fails.
 
@@ -63,3 +63,9 @@ Run 4 -- 2026-11-12, after that rewrite, in Pi with its complete deployed resour
 - Treated: `lib/reservations.ts`, line 4, with the reason; then `Open items` with one bullet that restates the `formatShipmentLabel` request and says it was not addressed. Meets the condition.
 - Control: line 4, then a critique of the `reserveStock` message wording and an assessment of `formatShipmentLabel` with a validation recommendation. Fails the condition.
 - **Discriminated**, as in run 3 with the earlier wording.
+
+Run 5 -- 2026-11-12, packaged persona `scout` in Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb focused --model anthropic/claude-sonnet-5-5:medium --persona scout` at `eae2895`. Each arm's prompt is the gate's assignment only; Pi receives the persona that `oh task run scout --trait focused --print-prompt` composes as an appended system prompt, and the control persona is that text with the one `focused` fragment removed. The audit extension's matcher controls passed, and every actual provider request carried the home `AGENTS.md` and the arm's persona, and carried the fragment only in the treated arm. Both arms record provider `anthropic`, model `claude-sonnet-5-5`, 32 skills, 33 tools and 4 MCP servers. Outputs under `.tmp/trait-gates/focused-1794476714124-1275998/`.
+
+- Treated: `lib/reservations.ts:2-4`, with line 4 as the throw, then `Open items` with one bullet that names `formatShipmentLabel` and says it was not assessed. Meets the condition.
+- Control: the same location, then a critique of the `reserveStock` message and an assessment of `formatShipmentLabel` with recommended validation code. Fails the condition.
+- **Discriminated** with the packaged persona. This closes the gap that runs 1 to 4 left: those used a scaffold, not a packaged persona.

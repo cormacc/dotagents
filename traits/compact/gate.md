@@ -2,7 +2,7 @@
 
 Trait: `compact`
 Consumer: `scout` (packaged persona, frontmatter `traits:`), and any spawn that adds `--trait compact`, and interactive `%compact` use. This gate exercises a read-only localisation scaffold, not the full `scout` persona.
-Status: **ADMITTED on named consumers plus three recorded runs (one scenario; not a general proof): discriminating in native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`; not discriminating as written in Pi at `claude-sonnet-5-5` (run 3).**
+Status: **ADMITTED on named consumers plus four recorded runs (one scenario; not a general proof): discriminating in native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`; not discriminating as written in Pi at `claude-sonnet-5-5`, with a scaffold (run 3) or the packaged `scout` persona (run 4).**
 
 Pass condition, fixed before the run: the first non-blank line of the response is the answer or a location item, not a heading and not a sentence that says what the response will do; every location claim is written as `path:START-END` or `path:LINE`; the response ends with exactly one totals line; and there is no closing recap, summary paragraph, or offer of further help. A response with a heading, an opening sentence such as "Here is" or "I found", a closing summary, or no totals line fails.
 
@@ -75,3 +75,9 @@ Run 3 -- 2026-11-12, first run in the host harness: Pi with its complete deploye
 - Treated: the first line is a location item, the response ends with one totals line, and it has no opener or recap. One item is written `src/refund.py:1,4`, which is neither `path:LINE` nor `path:START-END`. Applied as written, it fails the location-format clause.
 - Control: opens with a `**Definition**` heading, uses headed bulleted sections, and has no totals line. Fails the condition.
 - **Did not discriminate** as written, because both arms fail. The arms still differ on the tested axis: treated has the contracted shape except for one comma-separated line list.
+
+Run 4 -- 2026-11-12, packaged persona `scout` in Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb compact --model anthropic/claude-sonnet-5-5:medium --persona scout` at `eae2895`. Each arm's prompt is the gate's assignment only; Pi receives the persona that `oh task run scout --trait compact --print-prompt` composes as an appended system prompt, and the control persona is that text with the one `compact` fragment removed. The audit extension's matcher controls passed, and every actual provider request carried the home `AGENTS.md` and the arm's persona, and carried the fragment only in the treated arm. Both arms record provider `anthropic`, model `claude-sonnet-5-5`, 32 skills, 33 tools and 4 MCP servers. Outputs under `.tmp/trait-gates/compact-1794476746598-1278569/`.
+
+- Treated: starts with the answer and ends with one totals line, but writes `src/refund.py:1,4`, which is neither `path:LINE` nor `path:START-END`, and adds a closing paragraph on how to change the default. Fails the condition as written.
+- Control: starts with a `**Defined:**` label, uses labelled sections, and has no totals line. Fails the condition.
+- **Did not discriminate** as written, because both arms fail. The arms still differ on the tested axis: only the treated arm ends with a totals line. The `scout` persona body already asks for cited locations, which may narrow the difference.
