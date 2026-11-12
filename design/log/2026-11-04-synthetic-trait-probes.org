@@ -2,44 +2,58 @@
 #+DATE: 2026-11-04 Wed
 #+PARENT: [[task:d669edf5-7f99-4645-81dc-597c01af98a8][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Active
+#+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/references/traits.md]]
 
 * Intent
 Replace repository-dependent trait scenarios with synthetic subjects and record marginal effects honestly. Separate a fragment's write-boundary behaviour from restrictions imposed by the probe harness.
 
+
 * Summary
 *Level:* prototype · *Tests:* thorough · *Docs:* inline
 
-Focused and grounded synthetic scaffold pairs are recorded: focused produced the required treated/control response difference; grounded did not discriminate. Read-only discriminated in one disposable write-enabled Pi SDK pair with a synthetic persona and copied home baseline verified in actual provider payloads. The complete deployed Pi resource context and packaged-persona baseline remain unmeasured. A no-write outcome from the existing native Codex read-only sandbox cannot by itself demonstrate the read-only fragment's effect.
+Every packaged trait and ~%prune~ has a synthetic, self-contained gate under ~traits/<name>/gate.md~. ~scripts/run-trait-gate.bb~ runs a gate in the host harness, Pi, with the complete deployed resource context: home ~AGENTS.md~, every installed skill and extension, and MCP servers. In scaffold mode each arm's prompt is the gate's scaffold; with ~--persona NAME~ each arm gets the packaged persona that ~oh~ composes, as an appended system prompt, and the control removes only the trait fragment. An audit extension checks every actual provider request for the baseline, the persona and the fragment, with matcher controls, and a gate's ~## Fixture~ gives each arm a committed Git repository so that a write shows in ~git status~. ~grounded~ is deleted: three attempts showed no marginal effect over the ~reviewer~ body and the ~code-review~ skill.
 
 ** Scope
 *** In scope
-- Synthetic focused and grounded scenarios, pre-registered conditions and one treated/control pair per scenario.
-- Directory-form fragments with byte-identical prompt contents and user-layer gate records.
-- A disposable write-enabled read-only probe design and explicit baseline verification.
+- Synthetic scenarios, pre-registered conditions and treated/control pairs for every trait.
+- Directory-form fragments with gate records in the repository user layer.
+- A reusable Pi runner with packaged-persona composition, payload audit and write fixtures.
 *** Out of scope
 - Weakening a recorded condition, claiming general equivalence from one pair, or treating a pass as an admission prerequisite.
-- Rewriting or deleting a fragment based only on the current limited harness.
-- Letting a write-boundary probe mutate the real checkout or external state.
+- ~oh~'s launcher text (delegation and publication instructions) in the arm prompt: an arm has no ledger to publish to.
+
+** Shipped
+- ADDED ~scripts/run-trait-gate.bb~ Pi runner: scaffold and ~--persona~ modes, per-arm provenance from the Pi JSON event stream, fixture status.
+- ADDED ~scripts/trait-gate-audit.ts~: per-request presence of baseline, persona and fragment, with positive, missing and known-bad matcher controls.
+- MODIFIED [[proj:skills/herdr-orch/references/traits.md]]: probes run in the host harness; packaged-persona results; ~grounded~ removal.
+- REMOVED the ~grounded~ trait.
 
 ** Acceptance
 *** Core functionality
 - [X] Focused and grounded have synthetic gates and honestly stated paired results.
 - [X] Prompt moves preserve the fragment bytes and resolution behaviour.
 - [X] Read-only has a positive mutation control on a disposable target, followed by a paired write-enabled probe.
+- Reversed 2026-11-12: ~grounded~ was not probed with a packaged persona, because it was deleted.
+- [X] Focused and read-only are probed with the actual packaged persona and the complete deployed Pi resource context (~--persona scout~, ~--persona base-analyst~; both discriminated).
+- [X] The read-only gate keeps an enabled mutation control in the reusable runner: the control arm's fixture changed and the treated arm's did not. test: ~a-fixture-is-committed-in-each-arm-and-a-write-is-reported~
+- [X] Each actual provider request is audited for baseline and treatment presence with positive and known-bad controls; a failed audit makes the pair invalid. test: ~a-request-without-the-baseline-is-an-invalid-observation~
 *** Edge cases
-- [X] Exact persona, model/provider and baseline instruction loading are stated for each observation.
+- [X] Exact persona, model/provider and baseline loading are stated for each observation.
 - [X] Non-discriminating results remain explicit; no condition is relaxed after the run.
 *** Anti-criteria
 - [X] Must not: infer a trait effect from sandbox-enforced refusal.
 - [X] Must not: use this repository as the reviewed subject or expose a recorded answer key as task context.
+- Reversed 2026-11-12 by owner decision: ~grounded~ was removed on scaffold evidence and redundancy triage, without a packaged-persona run, against the plan-task rule "do not remove a fragment on that evidence alone".
 
 ** Decisions
-- Use the existing read-only runner for recommendation/review scaffold observations only :: focused and grounded have observable response boundaries. Rejected:
-  - Treat the same runner as a read-only mutation test: both arms have an independent prohibition on writes.
-  - Claim exact Pi deployment coverage from native Codex: instruction loading and persona composition differ.
-- Keep the whole task open until the deployed Pi baseline and runner boundary are measured :: read-only has a valid synthetic SDK observation, but the native runner cannot provide its write-enabled control. The current observations do not establish the marginal effect for packaged personas in the complete deployed Pi resource context.
+- Probe in the host harness with the complete deployed resource context :: that is where a trait must earn its place. Rejected: native Codex scaffolds, whose results now stand only as history; an isolated ~oh --context measurement~ subject, which loads only configured extensions.
+- Control persona is the composed treated persona minus the one fragment occurrence :: ~oh~ has no way to remove an inherited trait, and the substituted fragment text is exact. The runner fails when the fragment does not occur exactly once.
+- Delete ~grounded~ :: three attempts at two models showed no marginal effect; the ~reviewer~ body and the ~code-review~ skill already carry the range and clean-result rules.
+
+** Gotchas
+- Pi has no read-only sandbox. The runner reports writes; it does not prevent them.
+- A search of the serialised JSON payload misses present multiline text. Match decoded strings; the audit's known-bad control guards this.
 
 * Plan
 ** DONE Record focused and grounded synthetic scaffold observations
@@ -54,11 +68,7 @@ CLOSED: [2026-11-04 Wed 01:20]
 - State "STARTED" from "TODO" [2026-11-04 Wed 01:08]
 - State "DONE" from "STARTED" [2026-11-04 Wed 01:20]
 :END:
-Acceptance criteria:
-- Each condition is fixed before one paired run.
-- Both native logs identify an OpenAI provider and the same model tier.
-- Prompt moves preserve content and resolution.
-- Gate records name the scaffold-only and Pi-baseline limits.
+Native Codex scaffold pairs for focused and grounded; results are in the two gate records.
 
 ** DONE Build a valid disposable write-boundary and Pi-baseline probe
 CLOSED: [2026-11-04 Wed 01:54]
@@ -72,33 +82,19 @@ CLOSED: [2026-11-04 Wed 01:54]
 - State "STARTED" from "TODO" [2026-11-04 Wed 01:19]
 - State "DONE" from "STARTED" [2026-11-04 Wed 01:54]
 :END:
-Acceptance criteria:
-- An isolated synthetic repository permits a known control edit without exposing the real checkout to writes.
-- Treated and control differ only by the fragment at the same persona/model tier.
-- The inherited instruction baseline is recorded and its loading verified.
-- The write-boundary outcome is measured from target state, not only model prose.
-- External requests and arbitrary shell effects remain explicitly bounded.
+Disposable write-enabled Pi SDK pair for read-only (round two in ~traits/read-only/gate.md~).
 
-** TODO Measure the complete packaged-persona Pi baseline for synthetic gates
+** DONE Measure the complete packaged-persona Pi baseline for synthetic gates
+CLOSED: [2026-11-12 Thu 09:49]
 :PROPERTIES:
 :CUSTOM_ID: 03e5eab6-e91e-43bd-91ca-089ca92f4187
 :CREATED: [2026-11-04 Wed 01:55]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 01:55]
+- State "DONE" from "TODO" [2026-11-12 Thu 09:49]
 :END:
-Acceptance criteria:
-- Focused and grounded are probed with the actual packaged persona and explicit deployed instruction resources, not the native Codex scaffold alone.
-- The read-only gate retains an enabled confined mutation control when integrated with a reusable Pi runner.
-- The actual provider payload records baseline and treatment presence with positive and known-bad controls.
-- Fixed conditions, exact model/provider, resource scope and non-discriminating results remain explicit.
-The existing synthetic SDK observation does not establish the complete deployment baseline; do not remove a fragment on that evidence alone.
-
+~scripts/run-trait-gate.bb --persona~, the audit extension and gate fixtures; results are in each gate record.
 * Implementation
-- Current runner: ~scripts/run-trait-gate.bb~ uses ~codex exec --sandbox read-only --ignore-user-config --ephemeral~, the caller's Codex home for authentication and no subagent persona. It derives the control from the treated scaffold by removing one trait token line.
-- One focused pair and one grounded pair ran at ~gpt-5.6-terra~; all four native logs identify provider ~openai~. Root inspected the final outputs and prompt Git object hashes. The directory moves preserve the prompt bytes; the persona resolution test uses the directory path.
-- Focused: treated named ~lib/reservations.ts:4~ and one unassessed ~Open items~ bullet; control analysed the adjacent function. Grounded: both returned ~No issues found.~ and ~APPROVED~ without a broader finding. Neither result establishes the marginal effect over the deployed Pi baseline; the grounded control also loaded the repository code-review skill.
-- The combined root ~bb test~ run passed after updating the focused persona path assertion. Local fake-model controls independently proved the Pi write-boundary harness could edit its disposable target and reject an escaping path; these establish harness wiring, not trait efficacy.
-- The first live canary was invalid because its payload matcher searched JSON-escaped text for an unescaped multiline baseline. Root reproduced that verifier defect with positive and missing controls; actual baseline presence in the first round is unknown.
-- A separately authorised fresh round used the corrected decoded-string matcher in the actual SDK hook. Positive canary and control changed tracked ~notes.md~ from ~teh~ to ~the~; treated left the original bytes and returned analysis. All three SDK sessions used ~openai-codex/gpt-5.6-terra~. All eight observed provider payloads contained the copied home baseline; only treated contained the fragment. No automatic retry occurred. Root checked raw target/index states, baseline hashes and request observations, and independently loaded the extension's positive, missing and known-bad matcher controls without a hosted request.
-- The read-only fragment moved byte-for-byte to ~skills/herdr-orch/traits/read-only/prompt.md~. The exact persona, assignment, initial file and limits are in [[file:../../traits/read-only/gate.md]]. Scratch evidence is ~.tmp/autonomous-backlog/live-write-boundary-probe-round2/runtime/result.json~ and ~.tmp/autonomous-backlog/read-only-root-verify/check.clj~.
+- Results are in each ~traits/<name>/gate.md~. With the packaged persona at ~anthropic/claude-sonnet-5-5~: ~read-only~ (~base-analyst~), ~focused~ (~scout~) and ~migration~ (~worker~) discriminated; ~compact~ (~scout~), ~investigate~ (~advisor~), ~refactor~ (~worker~) and ~simple~ (~advisor~) did not.
+- ~%prune~ has no persona consumer; its interactive use expands into the prompt, which scaffold mode already models.
