@@ -1,8 +1,8 @@
 #+TITLE: Stop parallel claude trigger evals picking another worker's candidate
 #+DATE: 2026-11-04 Wed
-#+PARENT: [[task:c99fabd6-fef3-41b4-9db9-5c4177c0cfd1][Stop parallel claude trigger evals picking another worker's candidate]]
+#+PARENT: [[archive:c99fabd6-fef3-41b4-9db9-5c4177c0cfd1][Stop parallel claude trigger evals picking another worker's candidate]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Draft
+#+STATUS: Archived
 #+SPEC: [[proj:skills/skill-creator/references/eval-workflow.md]]
 
 * Intent
@@ -11,7 +11,7 @@ Prevent concurrent Claude trigger evaluations from discovering another worker's 
 * Summary
 *Level:* MVP · *Tests:* thorough · *Docs:* inline
 
-A serial workaround is documented. The concurrent runner remains unchanged; this task is not complete.
+Cancelled on 2026-11-12: the owner uses only the Pi harness for trigger evaluation, and the Pi path is not affected. The serial workaround stays documented. The concurrent Claude runner remains unchanged, and the upstream report draft below was not published.
 
 ** Scope
 *** In scope
@@ -67,13 +67,15 @@ Acceptance criteria:
 - An issue draft includes the source cause, observed visibility and serial workaround.
 - No real Claude invocation or remote publication occurs.
 
-** TODO Select upstream delivery or approve a local isolation patch
+** CANCELLED Select upstream delivery or approve a local isolation patch
+CLOSED: [2026-11-12 Thu 01:39]
 :PROPERTIES:
 :CUSTOM_ID: 7c012ad8-d95b-40a3-a26c-018e82e4c6d1
 :CREATED: [2026-11-04 Wed 00:40]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 00:40]
+- State "CANCELLED" from "TODO" [2026-11-12 Thu 01:39]
 :END:
 Acceptance criteria:
 - The vendored ownership decision is explicit.

@@ -37,7 +37,6 @@
   - [[#validate-axi-cli-changes-on-linux-without-measurement-exclusions][Validate AXI CLI changes on Linux without measurement exclusions]]
 - [[#agent-feedback][Agent feedback]]
   - [[#started-guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][STARTED Guard against a parallel tool batch that writes and reads the same path]]
-  - [[#started-stop-parallel-claude-trigger-evals-picking-another-workers-candidate][STARTED Stop parallel claude trigger evals picking another worker's candidate]]
 
 * Explorations
 
@@ -340,16 +339,3 @@ Evidence:
 - 2026-10-14: four batches paired an Edit with a grep or sed of the same file; each check read the pre-edit content, and one led the agent to report a remaining match that the edit had already removed.
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
-
-** STARTED Stop parallel claude trigger evals picking another worker's candidate :skill:skill_creator:
-:PROPERTIES:
-:CUSTOM_ID: c99fabd6-fef3-41b4-9db9-5c4177c0cfd1
-:CREATED: [2026-10-19 Mon 13:34]
-:STARTED: [2026-11-04 Wed 00:38]
-:END:
-:LOGBOOK:
-- Created [2026-10-19 Mon 13:34]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:38]
-:END:
-#+IMPORT: [[plan:2026-11-04-trigger-eval-isolation.org]]
-With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.

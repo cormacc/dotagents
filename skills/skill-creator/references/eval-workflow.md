@@ -12,7 +12,7 @@ Within the workspace, organise by iteration (`iteration-1/`, `iteration-2/`,
 
 ## Claude trigger-eval isolation
 
-The vendored `scripts/run_eval.py` Claude path writes each candidate into the same project `.claude/commands/` directory. Unique filenames do not isolate discovery: concurrent queries can see another query's candidate. Until the runner provides isolated discovery roots, pass `--num-workers 1` to `scripts.run_eval` or `scripts.run_loop`, and run only one trigger-eval process per project root. This is a serial workaround, not a fix for concurrent processes or unrelated candidate files already in that directory. It does not change the paired task-output evaluation below.
+This applies only to `--harness claude`; the default pi harness is not affected. The vendored `scripts/run_eval.py` Claude path writes each candidate into the same project `.claude/commands/` directory. Unique filenames do not isolate discovery: concurrent queries can see another query's candidate. Until the runner provides isolated discovery roots, pass `--num-workers 1` to `scripts.run_eval` or `scripts.run_loop`, and run only one trigger-eval process per project root. This is a serial workaround, not a fix for concurrent processes or unrelated candidate files already in that directory. It does not change the paired task-output evaluation below.
 
 ## Step 1: Spawn all runs in the same turn
 

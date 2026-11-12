@@ -5592,3 +5592,22 @@ Acceptance criteria:
 - Maintainer instructions use the supported regeneration path without manual result edits.
 
 Outcome [2026-11-11 Wed]: commit 4fbf768 had already wrapped the roster results in `:results output drawer replace`, which makes the whole mixed output one replaceable result. Commit ad81791 adds scripts/test-readme-roster.bb to `bb test`: it runs `bb readme-roster` four times in a disposable copy, with a ranked-alias change, and checks byte-identical reruns and one ranked list. It skips when Emacs is absent, and it depends on the current packaged `heavy` ranks.
+
+** CANCELLED Stop parallel claude trigger evals picking another worker's candidate :skill:skill_creator:
+CLOSED: [2026-11-12 Thu 01:39]
+:PROPERTIES:
+:CUSTOM_ID: c99fabd6-fef3-41b4-9db9-5c4177c0cfd1
+:CREATED: [2026-10-19 Mon 13:34]
+:STARTED: [2026-11-04 Wed 00:38]
+:ARCHIVED: [2026-11-12 Thu 01:39]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-10-19 Mon 13:34]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:38]
+- State "CANCELLED" from "STARTED" [2026-11-12 Thu 01:39]
+:END:
+#+IMPORT: [[plan:2026-11-04-trigger-eval-isolation.org]]
+With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
+
+Cancelled [2026-11-12 Thu]: the owner uses only the Pi harness for trigger evaluation, which this fault does not affect. The serial-run workaround in skills/skill-creator/references/eval-workflow.md stays as documentation of the Claude limit. No upstream report was published.

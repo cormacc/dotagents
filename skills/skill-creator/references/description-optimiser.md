@@ -68,9 +68,7 @@ python -m scripts.run_loop \
   --verbose
 ```
 
-Use the model the current session is running on so triggering matches the
-user's experience. Give it in the harness's own syntax: for pi,
-`provider/id` with an optional `:<thinking>` suffix.
+Use the model the current session is running on so triggering matches the user's experience. Give it in the harness's own syntax: for pi, `provider/id` with an optional `:<thinking>` suffix. A pi session exposes its model as `PI_PROVIDER` and `PI_MODEL`, so pass `--model "$PI_PROVIDER/$PI_MODEL"`.
 
 Set `--cwd` to a project where the skill is used. The scripts run from the
 skill-creator directory, so without it the runs get that repository's
@@ -80,9 +78,7 @@ before it reads the skill.
 
 ### Harness
 
-`--harness pi` (default) runs each query through `pi --mode json`; `--harness
-claude` uses `claude -p`. Pick the harness whose triggering you want to tune;
-the improver runs on the same harness and model.
+Use the host harness: the agent CLI that runs the current session. A pi session sets `PI_CODING_AGENT`; use the default `--harness pi`, which runs each query through `pi --mode json`. Pass `--harness claude` (`claude -p`) only when the session runs in Claude Code, or when the user explicitly asks to tune Claude Code triggering. Triggering differs between harnesses, so a score from another harness does not measure the user's experience. The improver runs on the same harness and model.
 
 The pi harness measures triggering in the context of use. Each run is a
 normal pi session with every discovered skill, extension, MCP server, and

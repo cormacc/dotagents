@@ -1,7 +1,7 @@
 ---
 name: skill-creator
 description: Create, edit, review, audit, or benchmark skills, including SKILL.md frontmatter/description tuning and diagnosing why a skill isn't triggering. Use for 'create a skill', 'review this skill', 'audit the SKILL.md', 'why isn't my skill loading', 'tune the description'.
-compatibility: Requires Python 3 and PyYAML 6.0.2 for bundled validation and packaging scripts. The description optimiser also needs the pi or claude CLI.
+compatibility: Requires Python 3 and PyYAML 6.0.2 for bundled validation and packaging scripts. The description optimiser also needs the host harness CLI (pi or claude).
 ---
 
 # Skill Creator
@@ -212,9 +212,7 @@ in [`references/description-optimiser.md`](references/description-optimiser.md).
   subagents exist but timeouts are a problem, run in series.
 - **No display / headless** — pass `--static <output_path>` to
   `generate_review.py` instead of running a server.
-- **No agent CLI for the description optimiser** — `scripts/run_loop.py`
-  requires `pi` (default) or `claude` (`--harness claude`) to run queries
-  and the improver. Skip if neither is available.
+- **Description optimiser harness** — `scripts/run_loop.py` runs queries and the improver through the host harness's CLI: `pi` (default) in a pi session, `claude` (`--harness claude`) only in a Claude Code session or on explicit request. Skip if the host harness has no supported CLI.
 - **No `present_files` tool** — skip the packaging step.
 - **Editing an installed (read-only) skill** — copy to a writable location
   (e.g. `/tmp/<skill-name>/`) before editing; package from the copy.
