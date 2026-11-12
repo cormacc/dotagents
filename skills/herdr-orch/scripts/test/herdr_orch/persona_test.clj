@@ -62,9 +62,10 @@
       (is (= 1 (count (re-seq #"[Mm]ake the smallest coherent change" persona-text))))
       (is (str/includes? persona-text "return `BLOCKED` and state what the larger change needs."))))
   (testing "base and derived analysts inherit the write boundary without restating it"
+    ;; simple is an advice stance, so analysis personas do not select it.
     (doseq [name ["base-analyst" "simplifier"]]
       (let [{:keys [persona-text traits]} (packaged-persona name)]
-        (is (= ["read-only" "simple"] traits))
+        (is (= ["read-only"] traits))
         (is (= 1 (count (re-seq #"caller-provided artifact" persona-text)))))))
   (testing "leaf permission comes from generated launch guidance"
     (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance [])))))

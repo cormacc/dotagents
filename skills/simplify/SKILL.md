@@ -7,15 +7,15 @@ metadata:
 
 # Simplify
 
-Review the declared range for unneeded complexity and report concrete, evidence-backed simplifications. Do not apply fixes, do not broaden the range, and do not touch correctness, security, or performance -- route those to the `code-review` skill instead.
+Review the declared range for unneeded complexity, and report concrete simplifications with evidence. Do not apply fixes, and do not broaden the range. Do not assess correctness, security, or performance. Send those to the `code-review` skill.
 
-This workflow is read-only and scope-bound, the same boundaries `herdr-orch`'s `reviewer` and `advisor` roles hold: it proposes replacements and reports evidence, it does not edit the reviewed range, and it does not decide or expand scope on the caller's behalf. Stay inside the declared range; a wider audit only runs when the caller's assignment explicitly names that wider scope.
+This workflow is read-only and limited to its scope. It holds the same boundaries as the `reviewer` and `advisor` roles of `herdr-orch`. It proposes replacements and reports evidence. It does not edit the reviewed range, and it does not decide or expand scope for the caller. Stay inside the declared range. Do a wider audit only when the caller's assignment explicitly names that wider scope.
 
 ## 1. Establish the range
 
-Determine the exact range before reading code: an unstaged/staged diff, a commit range, a branch, or an explicitly named set of files. If the assignment does not name a range, ask once rather than defaulting to the whole repository.
+Find the exact range before you read code. The range is an unstaged or staged diff, a commit range, a branch, or an explicitly named set of files. If the assignment does not name a range, ask once. Do not use the whole repository as the default.
 
-For working-tree reviews, including an "unstaged diff", include non-ignored untracked files within the requested paths by default and review each new file in full. `git diff` alone omits them. Exclude new files only when the user explicitly requests tracked files only or otherwise excludes them. Staged-only and commit/ref reviews retain their requested boundaries; do not attach unrelated working-tree files. State which files are in scope before reviewing.
+For a working-tree review, including an "unstaged diff", include by default the non-ignored untracked files in the requested paths. Review each new file in full. `git diff` alone does not show them. Exclude new files only when the user explicitly asks for tracked files only, or otherwise excludes them. A staged-only review and a commit or ref review keep their requested boundaries. Do not add unrelated working-tree files to them. State which files are in scope before you review.
 
 ```bash
 git diff
@@ -24,53 +24,59 @@ git diff --cached
 git diff <base>...HEAD
 ```
 
-A request to "audit this codebase" or "find bloat repo-wide" is a different, wider assignment. Only proceed at that scope when the caller's assignment says so explicitly.
+A request to "audit this codebase" or "find bloat repo-wide" is a different, wider assignment. Do it at that scope only when the caller's assignment says so explicitly.
 
 ## 2. Hunt for candidates
 
-For each candidate site, classify it with one tag:
+Give each candidate site one tag:
 
-- `delete` -- dead code, unused flexibility, or a speculative feature nothing calls. Replacement: nothing.
+- `delete` -- dead code, unused flexibility, or a speculative feature that nothing calls. Replacement: nothing.
 - `reuse` -- logic that the repository already has in a helper, component, or pattern. Name the path of the existing code.
-- `stdlib` -- hand-rolled logic that the language or an already-installed dependency already ships. Name the function.
-- `native` -- a dependency or custom code doing what the runtime or platform already does natively.
-- `yagni` -- an abstraction with one implementation, a config value nobody sets, or a layer with one caller.
-- `shrink` -- the same logic, expressible in less code, with no change in behaviour.
+- `stdlib` -- hand-written logic that the language or an already-installed dependency already supplies. Name the function.
+- `native` -- a dependency or custom code that does what the runtime or platform already does natively.
+- `yagni` -- an abstraction with one implementation, a configuration value that nobody sets, or a layer with one caller.
+- `shrink` -- the same logic in less code, with no change in behaviour.
 - `merge` -- near-copies that must change together. Name each copy and the one that stays.
 
-When a skill for the range's language supplies a review reference (for example, the `clojure` skill's `references/review.md`), read it for language-specific candidates. Its candidates need the same evidence as yours.
+When a skill for the range's language has a review reference (for example, `references/review.md` of the `clojure` skill), read it for language-specific candidates. Its candidates need the same evidence as yours.
 
-Reuse before you write, standard library before custom code, and native platform behaviour before a dependency: that ordering is the heuristic for finding candidates, not a licence to ship a replacement without evidence.
+Reuse before you write. Use the standard library before custom code, and native platform behaviour before a dependency. This order helps you find candidates. It does not let you ship a replacement without evidence.
 
 ## 3. Require evidence before you report a finding
 
-A finding is not "this looks shorter". A finding is a replacement plus evidence that every behaviour the original range requires still holds under the replacement: an existing test that still passes, a targeted probe across the inputs that matter (including edge cases: zero, empty, boundary, error path), or a trace showing the replacement is definitionally equivalent.
+"This looks shorter" is not a finding. A finding is a replacement plus evidence that every behaviour that the original range needs still holds under the replacement. The evidence is one of these:
 
-Before you call code unused, search the whole tree for references to it, including tests, fixtures, configuration, and string or dynamic references such as a registry key or a name built at runtime. Report the search and a positive control that shows the search finds a known reference.
+- An existing test that still passes.
+- A targeted probe across the inputs that matter, including edge cases such as zero, empty, a boundary, and the error path.
+- A trace that shows that the replacement is equivalent by definition.
 
-If you cannot produce that evidence, do not report a finding claiming safety. Report it as an unknown: name the candidate and what evidence is missing, and stop there. An unverified "looks equivalent" is exactly the failure mode this workflow exists to avoid; a shorter diff that silently drops input validation, an error path, or a required edge case is not a finding, it is a regression.
+Before you say that code is unused, search the whole tree for references to it. Include tests, fixtures, configuration, and string or dynamic references, such as a registry key or a name built at runtime. Report the search, and a positive control that shows that the search finds a known reference.
+
+If you cannot produce that evidence, do not report a finding that claims safety. Report it as an unknown: name the candidate and the missing evidence, and stop there. This workflow exists to prevent an unverified "looks equivalent". A shorter diff that silently drops input validation, an error path, or a necessary edge case is not a finding. It is a regression.
 
 ## 4. Report
 
-One item per finding:
+Write one item for each finding:
 
 ```
 <tag>: <file:line or range> -- <what to cut/replace>. Replacement: <concrete alternative>. Evidence: <test/probe/trace showing required behaviour survives>.
 ```
 
-A candidate without sufficient evidence is reported separately as `unknown: <file:line> -- <what looks replaceable>. Missing: <what would need to be shown>.` It is not counted as a finding and nothing is recommended for it.
+Report a candidate without sufficient evidence separately, as `unknown: <file:line> -- <what looks replaceable>. Missing: <what would need to be shown>.` It does not count as a finding, and you recommend nothing for it.
 
-End with a verdict: list of findings and unknowns, or **No findings.** when the range is already at the floor of the ladder. A clean range returning no findings is a valid, expected outcome, not a failed review.
+End with a verdict: the list of findings and unknowns, or **No findings.** when the range has nothing left to remove. A clean range with no findings is a valid and expected result, not a failed review.
 
 ## Boundaries
 
-- Scope: over-engineering and unneeded complexity only. Correctness bugs, security issues, and performance are out of scope; route them to `code-review`.
-- No line-count quota or target. A range with nothing to cut gets **No findings.**, not pressure to find something.
-- Applies nothing. This workflow produces a report or scratch output; the caller decides whether and how to act on it.
-- Does not replace the correctness-review workflow, and does not broaden `advisor`'s mid-task remit or grant it review authority it does not otherwise have.
+- Scope: over-engineering and unneeded complexity only. Correctness bugs, security issues, and performance are out of scope. Send them to `code-review`.
+- No line-count quota or target. When a range has nothing to cut, report **No findings.** Do not look for something to report.
+- Applies nothing. This workflow produces a report or scratch output. The caller decides whether to act on it, and how.
+- It does not replace the correctness-review workflow. It does not broaden the mid-task remit of `advisor`, and it does not give `advisor` review authority that it does not otherwise have.
 
 ## Provenance
 
 The tag taxonomy and range-scoped review shape are adapted from the `ponytail-review`/`ponytail-audit` skills in DietrichGebert/ponytail (MIT License, v4.10.0): https://github.com/DietrichGebert/ponytail/blob/v4.10.0/skills/ponytail-review/SKILL.md and https://github.com/DietrichGebert/ponytail/blob/v4.10.0/skills/ponytail-audit/SKILL.md. This adaptation drops the net-lines-removed scoring, persistent always-on mode, and paired good/bad example rhetoric of v4.10.0, and adds the evidence-and-unknown requirement in section 3, which v4.10.0 does not have.
 
 The `reuse` and `merge` tags and the whole-tree reference search before a `delete` finding are adapted from v5.3.2 of the same skills: https://github.com/DietrichGebert/ponytail/blob/v5.3.2/skills/ponytail-review/SKILL.md and https://github.com/DietrichGebert/ponytail/blob/v5.3.2/skills/ponytail-audit/SKILL.md. In v5, these skills are full quality reviews, with lean review as their last priority and a "no case, no finding" rule. This skill keeps lean review separate from `code-review`, and it does not adopt the v5 `split` tag, because readability findings belong to `code-review`.
+
+This skill states the adapted rules in ASD-STE100 Simplified Technical English. The wording does not change their meaning.

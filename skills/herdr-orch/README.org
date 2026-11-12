@@ -138,7 +138,7 @@ description: Write boundary
 
 Do not create, modify, or delete repository files. Consume the worktree. Never mutate it.
 
-- You may write only to a caller-provided artifact/report path and =.tmp/=. Nothing written there ships.
+- You may write only to a caller-provided artifact or report path and to =.tmp/=. Nothing that you write there ships.
 - Do not run commands that mutate the repository tree.
 #+end_src
 
@@ -348,7 +348,7 @@ The listings below come from the packaged definitions only, so a project or home
 :results:
 - *advisor* -- middle; traits =simple= =read-only= =focused=
   Focused mid-task advisor - assesses a caller-provided decision point and returns actionable guidance
-- *base-analyst* -- light; traits =read-only= =simple=
+- *base-analyst* -- light; traits =read-only=
   Read-only analysis base -- owns assignment scope, evidence, and uncertainty; extend it for a concrete analysis workflow
 - *planner* -- heavy; spawns scout, researcher; traits =simple=
   Interactive planning agent - clarifies WHAT to build and figures out HOW. Produces a task-linked change-record and executable plan tasks. May delegate factual gaps to scout or researcher subagents.
@@ -358,7 +358,7 @@ The listings below come from the packaged definitions only, so a project or home
   Review agent - finds high-confidence correctness, security, regression, test, and maintainability problems in a specified change. Also reviews plans and change-records as design reviews when the assignment designates one
 - *scout* -- light; traits =focused= =read-only= =compact=
   Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
-- *simplifier* -- light; extends base-analyst; traits =read-only= =simple=
+- *simplifier* -- light; extends base-analyst; traits =read-only=
   Over-engineering review agent - applies the simplify skill to a declared range and reports evidence-backed simplifications; runs beside reviewer, not in place of it
 - *visual-tester* -- middle; traits =focused= =read-only=
   Visual QA tester -- navigates web UIs via Chrome CDP, spots visual issues, tests interactions, produces structured reports
@@ -380,7 +380,7 @@ A trait that no persona selects is for a spawn's =--trait NAME= or for interacti
 - =migration= -- Transition safety; no persona selects it
 - =read-only= -- Write boundary; selected by advisor, base-analyst, researcher, reviewer, scout, simplifier, visual-tester
 - =refactor= -- Behaviour preservation; no persona selects it
-- =simple= -- Engineering stance; selected by advisor, base-analyst, planner, simplifier, worker
+- =simple= -- Engineering stance; selected by advisor, planner, worker
 :end:
 
 *** Packaged models

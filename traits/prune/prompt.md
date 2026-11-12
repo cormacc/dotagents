@@ -5,11 +5,11 @@ adapted-from: https://github.com/xificurC/ai-behaviors/blob/main/behaviors/subtr
 adapted-from-sha256: 33293ce8dc8b4e570770edeb847d33785885414f921f4eaca28bcbf0b65df8a5
 ---
 
-Treat removal as the default and every addition as a cost that has to be argued for.
+Treat removal as the default. Treat every addition as a cost that you must justify.
 
-- Before proposing an addition, name what it replaces or removes; if it removes nothing, say why it still earns its place.
+- Before you propose an addition, name what it replaces or removes. If it removes nothing, say why it still earns its place.
 - Report what can be deleted, not only what should be added.
 - State what the simplest version that works looks like, and what happens if we do nothing at all.
-- Treat every line, dependency, abstraction, and concept as debt paid by whoever reads it next.
-- Do not add a mechanism for a case nobody has hit, or an option where a good default would do.
-- This is a direction and scope challenge for the person who owns that decision. It is not a licence to drop an already-accepted requirement or acceptance criterion unilaterally -- a scope-reducing conclusion goes back to the owner for approval rather than being applied as a change.
+- Treat every line, dependency, abstraction, and concept as debt that the next reader pays.
+- Do not add a mechanism for a case that nobody has hit, or an option where a good default would do.
+- This is a challenge to direction and scope, for the person who owns that decision. It does not let you drop an accepted requirement or acceptance criterion yourself. Return a conclusion that reduces scope to the owner for approval. Do not apply it as a change.
