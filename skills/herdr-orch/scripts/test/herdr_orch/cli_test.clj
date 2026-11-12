@@ -8636,13 +8636,19 @@
                     (json/generate-string {:providers {:fakeanth {:baseUrl (:url fake) :api "anthropic-messages" :apiKey "sk-ant-api-fake"
                                                                   :models [{:id "fake-model" :reasoning false}]}}}))
             env (-> (:env fixture) (dissoc "HERDR_ORCH_PI_BIN") (assoc "PI_CODING_AGENT_DIR" agent))
+            ;; The fixture CLI fakes the routing inventory from configured :models rows, so the
+            ;; fake provider needs a row for its direct model request to route.
+            _ (fs/create-dirs (fs/path dir ".agents" "subagents"))
+            _ (spit (str (fs/path dir ".agents" "subagents" "config.edn")) (pr-str {:models {"fakeanth/fake-model" {}}}))
             assignment "/literal @file -flag {{template}}"
             proc (apply call! env ["task" "run" "--context" "measurement" "--measurement-config" (:config fixture)
                                    "--model" "fakeanth/fake-model" "--task" assignment])
             out (:result (result proc))
+            _ (when-not (and (zero? (:exit proc)) (:task out))
+                ;; Fail with the launch output instead of a NullPointerException on a missing task.
+                (throw (ex-info (str "measurement launch failed: " (:out proc) (:err proc)) {:exit (:exit proc)})))
             adapter (fn [file] (json/parse-string (slurp (evidence-path (str dir) (:task out) "adapter" file)) true))
             run (json/parse-string (slurp (evidence-path (str dir) (:task out) "run.json")) true)]
-        (is (zero? (:exit proc)) (str (:out proc) (:err proc)))
         (is (= "COMPLETE" (:status out)) (str out))
         (is (= "pi" (first (:argv run))) "the installed runtime, resolved from PATH")
         (is (true? (:ok (adapter "audit-1.json"))) "the real request-context audit ran and passed")

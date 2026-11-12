@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHarness, type Harness } from "../test/support/rpc.ts";
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, "../../..");
+// The installed runtime's own proper-lockfile. Pi packages place it under lib/pi (1.5) or the
+// earlier lib/node_modules/pi-monorepo layout; fail with both paths when neither exists.
+function installedLockfileModule(): string {
+  const bin = dirname(realpathSync(execFileSync("which", ["pi"], { encoding: "utf8" }).trim()));
+  const candidates = ["../lib/pi/node_modules/proper-lockfile/index.js", "../lib/node_modules/pi-monorepo/node_modules/proper-lockfile/index.js"].map((path) => resolve(bin, path));
+  const found = candidates.find((path) => existsSync(path));
+  if (!found) throw new Error(`installed Pi proper-lockfile not found; tried ${candidates.join(", ")}`);
+  return found;
+}
 const model = "claude-sonnet-4-5", work = "anthropic-2", personal = "anthropic-1";
 const isolated = Object.fromEntries(Object.keys(process.env).filter(k => k.startsWith("HERDR_ORCH_") || k === "HC_TERMINAL_ID" || k === "ORCH_ASSIGNMENT_ROOT").map(k => [k, undefined]));
 async function command(h: Harness, cmd: any) {
@@ -62,10 +71,9 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
     symlinkSync(here, join(agent, "extensions/herdr-orch"), "dir");
     writeFileSync(extension, "export default function() {}\n");
   }
-  const installed = resolve(dirname(realpathSync(execFileSync("which", ["pi"], { encoding: "utf8" }).trim())), "../lib/node_modules/pi-monorepo");
   const h = createHarness(mode === "boundaries" ? join(here, "recovery-boundaries-fixture.ts") : mode === "delayed" ? join(here, "recovery-runtime-fixture.ts") : mode === "resume" ? join(here, "recovery-session-fixture.ts") : extension, mode === "tier-nongit" ? "/" : cwd, { args: [...(mode === "discovery" ? [] : ["--no-extensions"]), "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", "--provider", work, "--model", model, "--thinking", mode === "reasoning" ? "high" : "off", "--tools", "read"],
     env: { ...isolated, HOME: cwd, ORCH_ASSIGNMENT_ROOT: cwd, HERDR_ORCH_BIN: join(root, "skills/herdr-orch/scripts/oh"), HERDR_ENV: "0", PI_CODING_AGENT_DIR: agent,
-      NODE_OPTIONS: `--require=${join(here, "account-fake-only.cjs")}`, HERDR_ORCH_FAKE_ORIGIN: origin, RECOVERY_TEST_ROOT: cwd, RECOVERY_LOCKFILE_MODULE: join(installed, "node_modules/proper-lockfile/index.js"), ...(mode === "pinned" ? { HERDR_ORCH_TASK: "fixture-child" } : {}) } });
+      NODE_OPTIONS: `--require=${join(here, "account-fake-only.cjs")}`, HERDR_ORCH_FAKE_ORIGIN: origin, RECOVERY_TEST_ROOT: cwd, RECOVERY_LOCKFILE_MODULE: installedLockfileModule(), ...(mode === "pinned" ? { HERDR_ORCH_TASK: "fixture-child" } : {}) } });
   try {
     await command(h, { type: "get_state" });
     if (mode === "discovery") {
