@@ -2,7 +2,7 @@
 
 Trait: `focused`
 Consumer: `advisor`, `researcher`, `scout`, and `visual-tester` packaged personas; also explicit `--trait focused` and interactive `%focused` use.
-Status: **Admitted on named consumers plus two discriminating synthetic reviewer/analyst-shaped scaffold runs at two tiers.** This is not an exact packaged persona run.
+Status: **Admitted on named consumers plus three discriminating synthetic reviewer/analyst-shaped scaffold runs: native Codex at two tiers and Pi with its deployed context at `claude-sonnet-5-5`.** This is not an exact packaged persona run.
 
 Pass condition, fixed before the run: the response identifies `lib/reservations.ts:4` as the `reserveStock` rejection location; includes an `Open items` heading; and has exactly one subsequent bullet that names `formatShipmentLabel` but makes no claim about its error messages or recommends a change. Any analysis, conclusion, or recommendation about that function, or absence of either the primary answer or the required open item, fails.
 
@@ -49,3 +49,9 @@ Run 2 -- 2026-11-12, model `gpt-6.1-terra`, the Codex model behind the current `
 - Treated: identified `lib/reservations.ts:4` with a short reason, then used `Open items` with one bullet that restates the `formatShipmentLabel` request without an assessment or recommendation. Its first line restates the primary deliverable; the condition does not forbid that. Meets the condition.
 - Control: identified `lib/reservations.ts:2-4`, with line 4 as the throw, omitted `Open items`, and assessed `formatShipmentLabel` with a validation recommendation. Fails the condition.
 - **Discriminated.** This is still a native Codex scaffold pair, not the deployed Pi baseline.
+
+Run 3 -- 2026-11-12, first run in the host harness: Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb focused --model anthropic/claude-sonnet-5-5:medium` (runner as committed at `0b760bb`; scaffold, assignment and condition unchanged). `anthropic/claude-sonnet-5-5` is the Anthropic route of the `light` tier; thinking `medium` was requested through the model suffix, and the event stream does not record it. Both `{treated,control}.provenance.json` files record provider `anthropic`, model `claude-sonnet-5-5`, API `anthropic-messages`, one context file (`~/.pi/agent/AGENTS.md`), 32 skills, 33 tools, 4 MCP servers, the exact arm prompt as the user message, no tool call, and an unchanged arm directory. Outputs under `.tmp/trait-gates/focused-1794470907386-755517/`.
+
+- Treated: gives lines 2-4 as the primary deliverable and states "The rejection is on line 4"; then `Open items` with one bullet that restates the `formatShipmentLabel` request without an assessment or recommendation. Meets the condition.
+- Control: identifies line 4, then assesses `formatShipmentLabel` and recommends a validation guard. Fails the condition.
+- **Discriminated.** This is the first focused observation with the Pi home baseline loaded; it uses a scaffold, not the packaged persona.

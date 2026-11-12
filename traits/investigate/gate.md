@@ -2,7 +2,7 @@
 
 Trait: `investigate`
 Consumer: `worker` on a debugging assignment and `advisor` on a debugging consult, both selected per spawn with `--trait investigate`, and interactive `%investigate` use. This gate exercises a read-only diagnosis scaffold, not a write-enabled `worker`.
-Status: **ADMITTED on named consumers plus two discriminating runs (two tiers, one scenario; not a general proof).**
+Status: **ADMITTED on named consumers plus three recorded runs (one scenario; not a general proof): discriminating in native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`; not discriminating in Pi at `claude-sonnet-5-5` (run 3).**
 
 Pass condition, fixed before the run: the response states the observed symptom separately from the inferred cause; it names a leading mechanism that is consistent with the size evidence (a limit on the size of a single upload request) and gives the evidence for it; it names at least one cheap check that could disprove that mechanism; and it does not recommend retries, longer timeouts, or network changes as the fix. A response that recommends a change without a falsifying check, or that recommends retries or timeouts, fails.
 
@@ -40,6 +40,12 @@ Run 2 -- 2026-11-12, model `gpt-6.1-terra`, the Codex model behind the current `
 - Treated: labels the observed symptom and the likely cause separately; names a single-request size limit as the leading hypothesis, with the size split and the failed retries as evidence; names cheap checks that could disprove it (compare the store's and proxy's single-request limits with the file sizes, and a bounded upload on each side of the boundary); recommends no retries or timeouts and makes multipart upload conditional on confirmation. It also lists a request-duration timeout as an alternative that the evidence does not exclude. It read `skills/herdr-orch/references/debugging.md` through the fragment's pointer. Meets the condition.
 - Control: no separate statement of the symptom; names "a size- or upload-duration-related failure" rather than one leading mechanism; recommends multipart upload, citing per-part retry as a benefit. It does give checks (logs, size and timeout limits, a validation upload of at least 6.1 GB) and does not recommend longer timeouts. Fails the first two clauses.
 - **Discriminated**, more narrowly than run 1. Scoring note: the control met the falsifying-check clause and did not recommend timeouts, so at this tier the difference rests on symptom/cause separation and one leading mechanism. The condition is applied as written.
+
+Run 3 -- 2026-11-12, first run in the host harness: Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb investigate --model anthropic/claude-sonnet-5-5:medium` (runner as committed at `0b760bb`; scaffold, assignment and condition unchanged). `anthropic/claude-sonnet-5-5` is the Anthropic route of the `light` tier; thinking `medium` was requested through the model suffix, and the event stream does not record it. Both `{treated,control}.provenance.json` files record provider `anthropic`, model `claude-sonnet-5-5`, API `anthropic-messages`, one context file (`~/.pi/agent/AGENTS.md`), 32 skills, 33 tools, 4 MCP servers, the exact arm prompt as the user message, no tool call, and an unchanged arm directory. Outputs under `.tmp/trait-gates/investigate-1794470907387-755515/`.
+
+- Treated: separate `Observed symptoms` and `Inferred cause (hypothesis)` sections; names a single-request limit near 5 GB as the leading hypothesis with evidence; gives cheap checks that could disprove it. It recommends multipart upload with "Retry each part on failure". It did not read the debugging reference that the fragment points to. Fails the retries clause.
+- Control: separates evidence from likely causes, names the same limit, and gives cheap checks, but also recommends multipart upload with per-part retries and backoff. Fails the retries clause.
+- **Did not discriminate**: both arms fail on per-part retries, which run 1 scored as failing the same clause. With the Pi baseline loaded, the control also separated evidence from cause and gave falsifying checks, so the clauses that discriminated at `gpt-6.1-terra` (run 2) did not discriminate here.
 
 ## Workflow-reference assessment -- 2026-11-03
 

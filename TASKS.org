@@ -139,12 +139,14 @@ Aggregate for outstanding trait probe work under the admission bar in skills/her
 Roster state [2026-11-12 Thu] (`oh roster --section traits`): all 9 traits (compact, focused, grounded, investigate, migration, prune, read-only, refactor, simple) are in directory form and have a synthetic gate.md; no flat fragment remains. compact, focused, investigate, migration, prune, read-only and refactor each record at least one discriminating run. grounded (1 run) and simple (5 runs) record no discriminating run. Every discriminating run used `gpt-5.6-terra`; the only other models recorded are `gpt-6-luna` (simple run 5) and `openai-codex/gpt-6.1-sol` (two investigate supplied-evidence assessments, which did not discriminate). The `light` tier and `gpt-terra` alias now resolve to `openai-codex/gpt-6.1-terra` (skills/herdr-orch/subagents/config.edn). Open work: the deployed Pi baseline (child d669edf5, plan task 03e5eab6), further grounded and simple attempts, and a re-probe on the current tier.
 
 Re-probe [2026-11-12 Thu] (child 1bc00e38): the eight runner scaffolds ran unchanged at `gpt-6.1-terra` (provider `openai`). compact, focused, investigate, migration, prune and refactor discriminated again; investigate and refactor more narrowly than at `gpt-5.6-terra`. grounded and simple did not discriminate. read-only has no runner scaffold and was not re-probed; the Claude route of the `light` tier was not probed. New pre-registered scenarios (child 5338bedc) for grounded (run 3) and simple (run 7) also did not discriminate; both arms of the grounded run loaded skills/code-review/SKILL.md, which already carries the range rule, so grounded is a deletion candidate pending an owner decision.
+
+Host harness [2026-11-12 Thu]: by owner decision, grounded is deleted (traits/grounded/gate.md keeps the record), and scripts/run-trait-gate.bb runs both arms through `pi -p` with the complete deployed resource context, from an empty directory outside the checkout. The seven runner gates ran at `anthropic/claude-sonnet-5-5:medium` (child bc3495ce): focused, migration and refactor discriminated; compact and prune did not discriminate as written (both arms fail, but they diverge on the tested axis); investigate and simple did not discriminate. Owner budget for hosted probes: 20% of one Anthropic subscription's five-hour window.
 *** STARTED [#B] traits: re-probe every fragment against synthetic, non-decaying scenarios
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
 :CREATED: [2026-08-11 Tue 12:23]
 :STARTED: [2026-11-04 Wed 01:05]
-:HANDOFF: 2026-11-12: plan task 03e5eab6 not started. Candidate instrument: oh task run --context measurement (contract.md section 'Pi measurement adapter'), which audits each actual provider request and supports tools and expectedOutputs, but refuses a positional persona and --trait, so the treatment must carry the composed packaged persona and deployed instruction resources explicitly. Open decisions for the owner: resource scope of 'complete deployed Pi resource context' (all home extensions/MCP or an explicit instruction-only set), whether the runner is the measurement path or an extension of scripts/run-trait-gate.bb, and the hosted-run budget. Runner gates were re-probed at gpt-6.1-terra; see parent body.
+:HANDOFF: 2026-11-12: plan task 03e5eab6 not started; awaiting the owner's choice of instrument for the packaged-persona baseline. scripts/run-trait-gate.bb now runs scaffold gates in Pi with the complete deployed resource context (all skills, extensions, MCP; home AGENTS.md) and records per-arm provenance from the Pi JSON event stream, but it sends a scaffold, not a packaged persona, and it does not audit the provider payload with known-bad controls. Candidate: oh task run --context measurement (contract.md section 'Pi measurement adapter'), which audits each actual provider request but runs an isolated subject with explicitly configured extensions. Owner budget: 20% of one Anthropic subscription's five-hour window.
 :END:
 :LOGBOOK:
 - Created [2026-08-11 Tue 12:23]
@@ -228,13 +230,15 @@ CLOSED: [2026-11-12 Thu 01:48]
 traits/read-only/gate.md has no Status line and says its valid round two does not admit the trait, while read-only is packaged at skills/herdr-orch/traits/read-only/prompt.md and selected by seven personas (oh roster --section traits). Every other gate.md opens with a Status line under the admission bar in skills/herdr-orch/references/traits.md. Acceptance criteria:
 - Add a Status line that states the admission basis (named consumers plus the recorded attempt) and the limits of the round-two observation, without changing the recorded conditions or outcomes.
 
-*** TODO [#D] traits: probe the light tier's Claude route :skill:herdr_orch:
+*** DONE [#D] traits: probe the light tier's Claude route :skill:herdr_orch:
+CLOSED: [2026-11-12 Thu 08:11]
 :PROPERTIES:
 :CUSTOM_ID: bc3495ce-b10e-4faf-8201-bef8d31b1d76
 :CREATED: [2026-11-12 Thu 01:53]
 :END:
 :LOGBOOK:
 - Created [2026-11-12 Thu 01:53]
+- State "DONE" from "TODO" [2026-11-12 Thu 08:11]
 :END:
 The light tier ranks anthropic/claude-sonnet-5-5 equal with openai-codex/gpt-6.1-terra (skills/herdr-orch/subagents/config.edn), but scripts/run-trait-gate.bb runs only `codex exec`, so no trait gate has a Claude observation. The 2026-11-12 re-probe (child 1bc00e38) covered only the Codex route. Acceptance criteria:
 - Decide whether the runner gains a Claude arm with an equivalent read-only boundary, or whether Claude probes run through the Pi runner of plan task 03e5eab6.

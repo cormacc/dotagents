@@ -2,7 +2,7 @@
 
 Trait: `compact`
 Consumer: `scout` (packaged persona, frontmatter `traits:`), and any spawn that adds `--trait compact`, and interactive `%compact` use. This gate exercises a read-only localisation scaffold, not the full `scout` persona.
-Status: **ADMITTED on named consumers plus two discriminating runs (two tiers, one scenario; not a general proof).**
+Status: **ADMITTED on named consumers plus three recorded runs (one scenario; not a general proof): discriminating in native Codex at `gpt-5.6-terra` and `gpt-6.1-terra`; not discriminating as written in Pi at `claude-sonnet-5-5` (run 3).**
 
 Pass condition, fixed before the run: the first non-blank line of the response is the answer or a location item, not a heading and not a sentence that says what the response will do; every location claim is written as `path:START-END` or `path:LINE`; the response ends with exactly one totals line; and there is no closing recap, summary paragraph, or offer of further help. A response with a heading, an opening sentence such as "Here is" or "I found", a closing summary, or no totals line fails.
 
@@ -69,3 +69,9 @@ Run 2 -- 2026-11-12, model `gpt-6.1-terra`, the Codex model behind the current `
 - Treated: the first line is a location item; all five items use `path:LINE` or `path:START-END`; the response ends with one totals line (`totals: 5 locations, 2 uses, 1 test.`) and has no opener or recap. Meets the condition.
 - Control: opens with a sentence, uses prose and a bulleted list, and has no totals line. Fails the condition.
 - **Discriminated.** The effect is format compliance again: both arms found the same locations.
+
+Run 3 -- 2026-11-12, first run in the host harness: Pi with its complete deployed resource context, via `scripts/run-trait-gate.bb compact --model anthropic/claude-sonnet-5-5:medium` (runner as committed at `0b760bb`; scaffold, assignment and condition unchanged). `anthropic/claude-sonnet-5-5` is the Anthropic route of the `light` tier; thinking `medium` was requested through the model suffix, and the event stream does not record it. Both `{treated,control}.provenance.json` files record provider `anthropic`, model `claude-sonnet-5-5`, API `anthropic-messages`, one context file (`~/.pi/agent/AGENTS.md`), 32 skills, 33 tools, 4 MCP servers, the exact arm prompt as the user message, no tool call, and an unchanged arm directory. Outputs under `.tmp/trait-gates/compact-1794470888371-754209/`.
+
+- Treated: the first line is a location item, the response ends with one totals line, and it has no opener or recap. One item is written `src/refund.py:1,4`, which is neither `path:LINE` nor `path:START-END`. Applied as written, it fails the location-format clause.
+- Control: opens with a `**Definition**` heading, uses headed bulleted sections, and has no totals line. Fails the condition.
+- **Did not discriminate** as written, because both arms fail. The arms still differ on the tested axis: treated has the contracted shape except for one comma-separated line list.
