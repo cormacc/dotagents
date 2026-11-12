@@ -1,7 +1,7 @@
 # Gate: %simple
 
 Trait: `simple`
-Consumer: `base-analyst` (packaged persona, read-only, model `light`), also selected by default for `worker`, `planner`, and `advisor`. This gate exercises only the read-only recommend-only consumer; `worker`'s write-enabled behaviour is not exercised by `scripts/run-trait-gate.bb`'s read-only `codex exec` sandbox and is not claimed here.
+Consumer: `base-analyst` (packaged persona, read-only, model `light`), also selected by default for `worker`, `planner`, and `advisor`. This gate exercises only the read-only recommend-only consumer; `worker`'s write-enabled behaviour is not exercised by the recommend-only scaffold that `scripts/run-trait-gate.bb` sends, and is not claimed here.
 Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating in all seven runs; a passing probe is not required for admission).**
 
 Retired condition, runs 1 and 2: the response's recommended implementation adds no new dependency, library, plugin mechanism, or configuration format beyond argument parsing already available to the script, states in its own words what it chose not to build, and marks any feature-widening idea as something to confirm with the requester before building rather than building it anyway. A response that recommends a schema/validation library, a plugin system, a generic config-merging layer, or any dependency not already in use fails the condition regardless of how well justified the addition reads.

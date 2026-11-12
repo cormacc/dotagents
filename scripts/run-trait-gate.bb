@@ -6,12 +6,14 @@
          '[clojure.string :as str])
 
 (def usage
-  (str "Usage: scripts/run-trait-gate.bb <trait> --model <codex-model>\n"
+  (str "Usage: scripts/run-trait-gate.bb <trait> --model <provider/id[:thinking]>\n"
        "\n"
-       "Runs the treated and control arms from traits/<trait>/gate.md with two\n"
-       "independent, ephemeral, read-only `codex exec` calls. Outputs are written\n"
-       "under .tmp/trait-gates/ and printed beside the pre-registered pass\n"
-       "condition. The runner reports no verdict; scoring remains human.\n"))
+       "Runs the treated and control arms from traits/<trait>/gate.md as two\n"
+       "independent `pi -p --no-session` calls in the host harness, each from an\n"
+       "empty directory outside the checkout, with every installed skill and\n"
+       "extension loaded. Outputs and per-arm provenance are written under\n"
+       ".tmp/trait-gates/ and printed beside the pre-registered pass condition.\n"
+       "The runner reports no verdict; scoring remains human.\n"))
 
 (defn fail! [gate message]
   (throw (ex-info message {:gate gate})))
@@ -122,30 +124,86 @@
                          "' with no unknowns or repeats")))
       (get-in envelope [:result :text]))))
 
-(defn caller-codex-home []
-  (or (System/getenv "CODEX_HOME")
-      (str (fs/path (fs/home) ".codex"))))
+(def caller-session-env
+  "Variables that identify the session that started the runner. A child Pi inheriting them
+  could report itself to the caller's Herdr pane or session, so each arm runs without them."
+  {:prefixes ["HC_" "HERDR_" "ORCH_"]
+   :names #{"PI_CODING_AGENT" "PI_SESSION_FILE" "PI_SESSION_ID" "PI_MODEL" "PI_PROVIDER"
+            "PI_REASONING_LEVEL"}})
 
-(defn run-arm! [gate root model run-dir codex-home arm prompt]
-  (let [output (str (fs/path run-dir (str arm ".output.md")))
-        proc (run-process ["codex" "exec"
-                           "--model" model
-                           "--sandbox" "read-only"
-                           "--cd" root
-                           "--ephemeral"
-                           "--ignore-user-config"
-                           "--output-last-message" output
-                           "-"]
-                          {:dir root
-                           :env (assoc (into {} (System/getenv)) "CODEX_HOME" codex-home)
-                           :in prompt})]
-    (spit (str (fs/path run-dir (str arm ".stdout.log"))) (:out proc))
+(defn arm-env []
+  (let [{:keys [prefixes names]} caller-session-env]
+    (into {} (remove (fn [[k _]] (or (contains? names k)
+                                     (some #(str/starts-with? k %) prefixes))))
+          (System/getenv))))
+
+(defn parse-events [text]
+  (into [] (keep #(try (json/parse-string % true) (catch Exception _ nil)))
+        (str/split-lines text)))
+
+(defn message-text [message]
+  (->> (:content message)
+       (filter #(= "text" (:type %)))
+       (map :text)
+       (str/join "\n")))
+
+(defn provenance
+  "Records what the arm's session actually loaded, from the system and user messages that Pi
+  emits in JSON mode, so a scorer can confirm the deployed baseline rather than assume it."
+  [events prompt arm-dir]
+  (let [messages (keep #(when (= "message_end" (:type %)) (:message %)) events)
+        system (first (filter #(= "system" (:role %)) messages))
+        user (first (filter #(= "user" (:role %)) messages))
+        assistant (last (filter #(= "assistant" (:role %)) messages))
+        sections (:sections system)]
+    {:provider (:provider assistant)
+     :model (:model assistant)
+     :api (:api assistant)
+     :stop-reason (:stopReason assistant)
+     :assistant-messages (count (filter #(= "assistant" (:role %)) messages))
+     :context-files (vec (map second (re-seq #"<project_instructions path=\"([^\"]+)\">"
+                                             (str (:project_context sections)))))
+     :skills (count (re-seq #"<skill>" (str (:skills sections))))
+     :tools (vec (keep :name (:toolsAdded system)))
+     :mcp-servers (vec (map second (re-seq #"(?m)^- (mcp__[^ ]+)" (str (:mcp_servers sections)))))
+     :prompt-sent (= (str/trim prompt) (str/trim (message-text user)))
+     :cwd arm-dir
+     :cwd-files-after (vec (sort (map #(str (fs/relativize arm-dir %))
+                                      (fs/glob arm-dir "**" {:hidden true}))))}))
+
+(defn run-arm! [gate model run-dir arm prompt]
+  (let [arm-dir (str (fs/canonicalize (fs/create-temp-dir {:prefix (str "trait-gate-" arm "-")})))
+        proc (run-process ["pi" "-p" "--no-session" "--mode" "json" "--model" model "--" prompt]
+                          {:dir arm-dir :env (arm-env) :in ""})
+        events (parse-events (:out proc))
+        record (provenance events prompt arm-dir)
+        output (str (fs/path run-dir (str arm ".output.md")))]
+    (spit (str (fs/path run-dir (str arm ".events.jsonl"))) (:out proc))
     (spit (str (fs/path run-dir (str arm ".stderr.log"))) (:err proc))
+    (spit (str (fs/path run-dir (str arm ".provenance.json")))
+          (json/generate-string record {:pretty true}))
     (when-not (zero? (:exit proc))
       (fail! gate (str arm " agent run failed; see " run-dir "/" arm ".stderr.log")))
-    (when-not (and (fs/regular-file? output) (pos? (fs/size output)))
-      (fail! gate (str arm " agent run produced no final response")))
-    (slurp output)))
+    (when-not (:prompt-sent record)
+      (fail! gate (str arm " session did not record the exact arm prompt as its user message")))
+    (when (contains? #{"error" "aborted"} (:stop-reason record))
+      (fail! gate (str arm " agent run stopped with " (:stop-reason record))))
+    (let [text (some->> events
+                        (keep #(when (= "message_end" (:type %)) (:message %)))
+                        (filter #(= "assistant" (:role %)))
+                        last
+                        message-text)]
+      (when (str/blank? text)
+        (fail! gate (str arm " agent run produced no final response")))
+      (spit output text)
+      {:text text :provenance record})))
+
+(defn provenance-line [arm {:keys [provider model context-files skills tools mcp-servers cwd-files-after]}]
+  (str arm ": " provider "/" model "; " (count context-files) " context files " (pr-str context-files)
+       "; " skills " skills; " (count tools) " tools; " (count mcp-servers) " MCP servers; "
+       (if (empty? cwd-files-after)
+         "arm directory unchanged"
+         (str "WARNING: arm directory now holds " (pr-str cwd-files-after)))))
 
 (defn run! [{:keys [trait model]}]
   (when-not (re-matches #"[a-z][a-z0-9-]*" (or trait ""))
@@ -161,8 +219,8 @@
           {:keys [treated control]} (arm-sources parsed gate)
           _traits-check (when-not (fs/executable? traits-bin)
                           (fail! gate (str "trait interpolator is not executable: " traits-bin)))
-          _codex-check (when-not (fs/which "codex")
-                         (fail! gate "codex is not available on PATH"))
+          _pi-check (when-not (fs/which "pi")
+                      (fail! gate "pi is not available on PATH"))
           run-dir (str (fs/path root ".tmp" "trait-gates"
                                 (str trait "-" (System/currentTimeMillis) "-"
                                      (.pid (java.lang.ProcessHandle/current)))))
@@ -176,18 +234,23 @@
       (spit treated-source treated)
       (spit control-prompt control)
       (let [treated-text (interpolate-treated! gate root trait traits-bin treated-source interpolation)
-            codex-home (caller-codex-home)]
+            status-before (:out (run-process ["git" "status" "--porcelain"] {:dir root}))]
         (spit treated-prompt treated-text)
-        (let [treated-output (run-arm! gate root model run-dir codex-home "treated" treated-text)
-              control-output (run-arm! gate root model run-dir codex-home "control" control)]
+        (let [treated (run-arm! gate model run-dir "treated" treated-text)
+              control (run-arm! gate model run-dir "control" control)
+              status-after (:out (run-process ["git" "status" "--porcelain"] {:dir root}))]
           (println (str "Gate: %" trait))
           (println (str "Model: " model))
+          (println (provenance-line "Treated" (:provenance treated)))
+          (println (provenance-line "Control" (:provenance control)))
+          (when-not (= status-before status-after)
+            (println "WARNING: the checkout's git status changed during the run; inspect it before scoring."))
           (println "Pass condition:")
           (println (:pass-condition parsed))
           (println "\n=== TREATED ===")
-          (println treated-output)
+          (println (:text treated))
           (println "\n=== CONTROL ===")
-          (println control-output)
+          (println (:text control))
           (println (str "\nOutputs: " run-dir))
           (println "No verdict emitted; compare both outputs against the pass condition."))))))
 

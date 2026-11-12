@@ -16,16 +16,30 @@
 (defn call! [argv options]
   @(process/process argv (merge {:out :string :err :string} options)))
 
-(defn write-fake-codex! [directory log-path]
-  (let [path (fs/path directory "codex")]
+(defn write-fake-pi!
+  "A fake `pi` that logs its argv, cwd and selected environment, then emits the JSON-mode
+  messages the runner reads. FAKE_PI_MODE=silent emits no assistant message."
+  [directory log-path]
+  (let [path (fs/path directory "pi")]
     (spit (str path)
           (str "#!/usr/bin/env bb\n"
-               "(require '[clojure.string :as str])\n"
+               "(require '[cheshire.core :as json])\n"
                "(let [args *command-line-args*\n"
-               "      output (second (drop-while #(not= \"--output-last-message\" %) args))\n"
-               "      prompt (slurp *in*)]\n"
-               "  (spit \"" log-path "\" (str (pr-str {:args args :codex-home (System/getenv \"CODEX_HOME\")}) \"\\n\") :append true)\n"
-               "  (spit output (str \"FAKE RESPONSE\\n\" prompt)))\n"))
+               "      prompt (last args)\n"
+               "      cwd (System/getProperty \"user.dir\")\n"
+               "      emit (fn [m] (println (json/generate-string {:type \"message_end\" :message m})))]\n"
+               "  (spit \"" log-path "\" (str (pr-str {:args (vec args) :cwd cwd\n"
+               "                                         :herdr (System/getenv \"HERDR_ENV\")\n"
+               "                                         :session (System/getenv \"PI_SESSION_ID\")\n"
+               "                                         :keep (System/getenv \"TRAIT_GATE_KEEP\")}) \"\\n\") :append true)\n"
+               "  (emit {:role \"system\" :toolsAdded [{:name \"read\"} {:name \"bash\"}]\n"
+               "         :sections {:project_context \"<project_instructions path=\\\"/home/AGENTS.md\\\">x\"\n"
+               "                    :skills \"<skill>a</skill><skill>b</skill>\"\n"
+               "                    :mcp_servers \"- mcp__one (codemode)\\n- mcp__two\"}})\n"
+               "  (emit {:role \"user\" :content [{:type \"text\" :text prompt}]})\n"
+               "  (when-not (= \"silent\" (System/getenv \"FAKE_PI_MODE\"))\n"
+               "    (emit {:role \"assistant\" :provider \"fake\" :model \"fake-model\" :api \"fake-api\"\n"
+               "           :stopReason \"stop\" :content [{:type \"text\" :text (str \"FAKE RESPONSE\\n\" prompt)}]})))\n"))
     (fs/set-posix-file-permissions path "rwxr-xr-x")
     (str path)))
 
@@ -43,20 +57,21 @@
 (deftest prune-gate-derives-and-runs-two-direct-prompt-arms
   (let [temp (str (fs/create-temp-dir {:dir (str (fs/path root ".tmp"))
                                        :prefix "trait-gate-test-"}))
-        log-path (str (fs/path temp "codex.log"))
-        _ (write-fake-codex! temp log-path)
+        log-path (str (fs/path temp "pi.log"))
+        _ (write-fake-pi! temp log-path)
         agents-path (fs/path root ".agents")
         agents-before (file-tree agents-path)
-        fake-codex-home (str (fs/path temp "fake-codex-home"))
-        _ (fs/create-dirs fake-codex-home)
-        proc (call! [runner "prune" "--model" "gpt-5.6-terra"]
+        proc (call! [runner "prune" "--model" "anthropic/fake-model"]
                     {:dir root :env (assoc (into {} (System/getenv))
                                            "PATH" (prep-fake-path! temp)
-                                           "CODEX_HOME" fake-codex-home)})
+                                           "HERDR_ENV" "1"
+                                           "PI_SESSION_ID" "caller-session"
+                                           "TRAIT_GATE_KEEP" "kept")})
         output (:out proc)
         required-markers ["Pass condition, fixed before the run:"
                           "=== TREATED ==="
                           "=== CONTROL ==="
+                          "Treated: fake/fake-model; 1 context files"
                           "Outputs: "]]
     (is (zero? (:exit proc)) (:err proc))
     (doseq [marker required-markers]
@@ -71,6 +86,8 @@
             treated-prompt (slurp (str (fs/path run-dir "treated.prompt.md")))
             interpolation (json/parse-string
                            (slurp (str (fs/path run-dir "treated.interpolation.json"))) true)
+            provenance (json/parse-string
+                        (slurp (str (fs/path run-dir "treated.provenance.json"))) true)
             invocations (mapv read-string (str/split-lines (slurp log-path)))
             token-line "%prune"]
         (is (some? run-dir) output)
@@ -85,41 +102,41 @@
         (is (= treated-prompt (get-in interpolation [:result :text])))
         (is (= ["prune"] (mapv :trait (get-in interpolation [:result :resolved]))))
         (is (not (str/includes? treated-prompt token-line)))
-        (is (not (str/includes? treated-prompt "## Observed")))
         (is (not (str/includes? output "Verdict: **PASS")))
         (is (= 2 (count invocations)))
-        (doseq [{:keys [args codex-home]} invocations]
-          (is (some #{"gpt-5.6-terra"} args))
-          (is (some #{"--ephemeral"} args))
-          (is (some #{"--ignore-user-config"} args))
-          (is (= "read-only" (second (drop-while #(not= "--sandbox" %) args))))
-          (is (= fake-codex-home codex-home)
-              "the caller's CODEX_HOME is passed straight through, not an isolated copy"))
-        (is (fs/exists? fake-codex-home)
-            "the caller's CODEX_HOME is left in place after the run")
-        (is (not (some #(= "codex-home" (fs/file-name %)) (fs/list-dir run-dir)))
-            "no per-run codex-home copy is created under the run directory")
-        (is (empty? (fs/glob run-dir "**/auth.json"))
-            "no auth.json copy is made anywhere under the run directory")
+        (is (= [treated-prompt control-prompt] (mapv (comp last :args) invocations))
+            "each arm sends its exact prompt as the final argument")
+        (doseq [{:keys [args cwd herdr session keep]} invocations]
+          (is (= ["-p" "--no-session" "--mode" "json" "--model" "anthropic/fake-model" "--"]
+                 (butlast args)))
+          (is (not (str/starts-with? cwd root)) "each arm runs outside the checkout")
+          (is (nil? herdr) "the caller's Herdr variables are removed")
+          (is (nil? session) "the caller's Pi session variables are removed")
+          (is (= "kept" keep) "other environment passes through"))
+        (is (not= (:cwd (first invocations)) (:cwd (second invocations)))
+            "each arm gets its own directory")
+        (is (= {:provider "fake" :model "fake-model" :api "fake-api"
+                :context-files ["/home/AGENTS.md"] :skills 2 :tools ["read" "bash"]
+                :mcp-servers ["mcp__one" "mcp__two"] :prompt-sent true :cwd-files-after []}
+               (select-keys provenance [:provider :model :api :context-files :skills :tools
+                                        :mcp-servers :prompt-sent :cwd-files-after])))
+        (is (str/starts-with? (slurp (str (fs/path run-dir "treated.output.md"))) "FAKE RESPONSE"))
         (is (= agents-before (file-tree agents-path))
             "the runner does not write durable .agents configuration")))))
 
-(deftest codex-home-defaults-to-the-real-dot-codex-when-unset
+(deftest an-arm-without-a-final-response-fails
   (let [temp (str (fs/create-temp-dir {:dir (str (fs/path root ".tmp"))
                                        :prefix "trait-gate-test-"}))
-        log-path (str (fs/path temp "codex.log"))
-        _ (write-fake-codex! temp log-path)
-        expected-default (str (fs/path (fs/home) ".codex"))
-        proc (call! [runner "prune" "--model" "gpt-5.6-terra"]
-                    {:dir root :env (dissoc (assoc (into {} (System/getenv))
-                                                   "PATH" (prep-fake-path! temp))
-                                            "CODEX_HOME")})]
-    (is (zero? (:exit proc)) (:err proc))
-    (let [invocations (mapv read-string (str/split-lines (slurp log-path)))]
-      (is (= 2 (count invocations)))
-      (doseq [{:keys [codex-home]} invocations]
-        (is (= expected-default codex-home)
-            "an unset CODEX_HOME defaults to the caller's real ~/.codex, not an isolated copy")))))
+        log-path (str (fs/path temp "pi.log"))
+        _ (write-fake-pi! temp log-path)
+        proc (call! [runner "prune" "--model" "anthropic/fake-model"]
+                    {:dir root :env (assoc (into {} (System/getenv))
+                                           "PATH" (prep-fake-path! temp)
+                                           "FAKE_PI_MODE" "silent")})]
+    (is (= 1 (:exit proc)))
+    (is (str/includes? (:err proc) "treated agent run produced no final response"))
+    (is (= 1 (count (str/split-lines (slurp log-path))))
+        "the control arm does not run after the treated arm fails")))
 
 (deftest malformed-gate-fails-with-its-full-path-before-running-an-arm
   (let [temp (str (fs/create-temp-dir {:dir (str (fs/path root ".tmp"))
@@ -127,7 +144,7 @@
         gate (fs/path temp "traits" "broken" "gate.md")
         temp-runner (fs/path temp "scripts" "run-trait-gate.bb")
         traits-bin (fs/path temp "skills" "herdr-orch" "scripts" "traits")
-        codex-log (str (fs/path temp "codex.log"))]
+        pi-log (str (fs/path temp "pi.log"))]
     (fs/create-dirs (fs/parent gate))
     (fs/create-dirs (fs/parent temp-runner))
     (fs/create-dirs (fs/parent traits-bin))
@@ -137,7 +154,7 @@
     (fs/set-posix-file-permissions temp-runner "rwxr-xr-x")
     (spit (str traits-bin) "#!/usr/bin/env bb\n")
     (fs/set-posix-file-permissions traits-bin "rwxr-xr-x")
-    (write-fake-codex! temp codex-log)
+    (write-fake-pi! temp pi-log)
     (is (zero? (:exit (call! ["git" "init" "--quiet"] {:dir temp}))))
     (let [proc (call! [(str temp-runner) "broken" "--model" "fake-model"]
                       {:dir temp :env (assoc (into {} (System/getenv))
@@ -145,7 +162,7 @@
       (is (= 1 (:exit proc)))
       (is (str/includes? (:err proc) (str gate)))
       (is (str/includes? (:err proc) "expected exactly one ## Assignment section"))
-      (is (not (fs/exists? codex-log))
+      (is (not (fs/exists? pi-log))
           "malformed input fails before either direct agent arm runs"))))
 
 (deftest missing-pass-marker-fails-with-its-full-path-before-running-an-arm
@@ -154,7 +171,7 @@
         gate (fs/path temp "traits" "broken" "gate.md")
         temp-runner (fs/path temp "scripts" "run-trait-gate.bb")
         traits-bin (fs/path temp "skills" "herdr-orch" "scripts" "traits")
-        codex-log (str (fs/path temp "codex.log"))]
+        pi-log (str (fs/path temp "pi.log"))]
     (fs/create-dirs (fs/parent gate))
     (fs/create-dirs (fs/parent temp-runner))
     (fs/create-dirs (fs/parent traits-bin))
@@ -164,7 +181,7 @@
     (fs/set-posix-file-permissions temp-runner "rwxr-xr-x")
     (spit (str traits-bin) "#!/usr/bin/env bb\n")
     (fs/set-posix-file-permissions traits-bin "rwxr-xr-x")
-    (write-fake-codex! temp codex-log)
+    (write-fake-pi! temp pi-log)
     (is (zero? (:exit (call! ["git" "init" "--quiet"] {:dir temp}))))
     (let [proc (call! [(str temp-runner) "broken" "--model" "fake-model"]
                       {:dir temp :env (assoc (into {} (System/getenv))
@@ -173,7 +190,7 @@
       (is (str/includes? (:err proc) (str gate)))
       (is (str/includes? (:err proc)
                          "expected exactly one 'Pass condition, fixed before the run:' paragraph"))
-      (is (not (fs/exists? codex-log))
+      (is (not (fs/exists? pi-log))
           "malformed input fails before either direct agent arm runs"))))
 
 (let [{:keys [fail error]} (run-tests)]

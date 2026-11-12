@@ -10,15 +10,17 @@ The task also fails when the run adds or removes a git worktree or a `refs/heads
 
 ## Trait gate runner
 
-Run a trait's adversarial gate with a native Codex model ID:
+Run a trait's adversarial gate in the host harness, with a Pi model ID (`provider/id`, optionally `:<thinking>`):
 
 ```sh
-scripts/run-trait-gate.bb prune --model gpt-5.6-terra
+scripts/run-trait-gate.bb prune --model anthropic/claude-sonnet-5-5
 ```
 
-`run-trait-gate.bb` reads `traits/<name>/gate.md`, derives both arm sources from its one scaffold, and asserts that removing one exact `%<name>` token line is their only source difference. It calls the existing `skills/herdr-orch/scripts/traits` CLI with the repository trait store (`traits/`) and the packaged skill store (`skills/herdr-orch/traits/`) as layers to interpolate the treated arm, so a gate-only fragment at repository root and a real packaged fragment resolve alike; it does not implement interpolation or extend that CLI. Each arm is sent as a direct prompt to a separate `codex exec --ephemeral --sandbox read-only --ignore-user-config` process, so no subagent persona or durable configuration fixture is created. The runner uses the caller's `CODEX_HOME`, or `~/.codex` when unset. `--ignore-user-config` skips that home's `config.toml`, but authentication still uses that home; the runner does not copy credentials or create an isolated Codex home. `--ephemeral` disables session-file persistence, not all possible runtime writes.
+`run-trait-gate.bb` reads `traits/<name>/gate.md`, derives both arm sources from its one scaffold, and asserts that removing one exact `%<name>` token line is their only source difference. It calls the existing `skills/herdr-orch/scripts/traits` CLI with the repository trait store (`traits/`) and the packaged skill store (`skills/herdr-orch/traits/`) as layers to interpolate the treated arm, so a gate-only fragment at repository root and a real packaged fragment resolve alike; it does not implement interpolation or extend that CLI. A probe measures a trait's marginal effect in the environment where the trait is used, so each arm runs in the host harness, Pi, with its complete deployed resource context: home `AGENTS.md`, every installed skill and extension, and MCP servers. Each arm is sent as a direct prompt to a separate `pi -p --no-session --mode json --model <id>` process, so no subagent persona or durable configuration fixture is created. Each arm starts in its own new empty directory outside the checkout, so no project `AGENTS.md` loads and no `gate.md` is in the working tree. The arm runs without the caller's `HC_*`, `HERDR_*`, `ORCH_*` and Pi session variables, so the child does not report itself to the caller's Herdr pane or session. Authentication is the caller's normal Pi authentication; the runner does not copy credentials.
 
-Run artifacts are transient under `.tmp/trait-gates/`. The runner prints the treated and control final responses beside the pre-registered pass condition and stops without a verdict; a human applies the condition.
+Pi has no read-only sandbox. The scaffolds are recommend-only, and the runner reports a write rather than preventing one: it records each arm directory's contents after the run and warns when it is not empty, and warns when the checkout's `git status` changes during the run.
+
+Run artifacts are transient under `.tmp/trait-gates/`. Each arm writes `<arm>.events.jsonl` (the Pi JSON event stream), `<arm>.output.md` (the final assistant text) and `<arm>.provenance.json`: provider, model and API of the final response, the context files and skill count from the session's system message, active tools, MCP servers, whether the session's user message is the exact arm prompt, and the arm directory's contents. The runner fails when an arm exits non-zero, records a different prompt, stops with an error, or has no final response. It prints a provenance line per arm and both final responses beside the pre-registered pass condition, and stops without a verdict; a human applies the condition.
 
 ### `gate.md` grammar
 
