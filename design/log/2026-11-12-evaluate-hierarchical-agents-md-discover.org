@@ -1,0 +1,45 @@
+#+TITLE: Evaluate hierarchical AGENTS.md discovery for Pi
+#+DATE: 2026-11-12 Thu
+#+PARENT: [[task:2ed2d031-aa15-4701-9608-2cf565ddc75e][Evaluate hierarchical AGENTS.md discovery for Pi]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Draft
+#+NO_SPEC: true
+
+* Intent
+Decide how a Pi session gets the rules of a nested AGENTS.md when it works below that file: an on-touch extension, manual pointers, or nothing. Do not install rpiv-pi.
+
+* Summary
+*Level:* prototype · *Tests:* smoke · *Docs:* inline
+
+Initial research is complete (2026-11-12, installed Pi 1.5.2). Pi core declines this feature and leaves it to extensions. At least five published Pi packages implement it. rpiv-pi's implementation has defects that this repository must not copy. No decision, trial or installation has been made.
+
+** Findings
+- Pi 1.5.2 loads one context file per directory, from the agent directory and from the working directory up to the filesystem root. Per-directory precedence is ~AGENTS.override.md~, ~AGENTS.md~, ~AGENTS.MD~, ~CLAUDE.md~, ~CLAUDE.MD~ (~dist/core/resource-loader.js~, ~loadContextFileFromDir~ and ~loadProjectContextFiles~). Context-file discovery does not require project trust (~docs/configuration.md~ section 'Context files').
+- In a linked worktree nested inside its main checkout, Pi skips the main checkout's root context file, because the worktree's own copy shadows it (~findShadowedContextFile~). herdr-orch managed worktrees are at ~<assignment-root>/.tmp/herdr-orch/worktrees/<task>~ (~managed-worktree-root~ in ~skills/herdr-orch/scripts/src/herdr_orch/cli.clj~), so a child gets the worktree's root AGENTS.md once. Context files above the main checkout, such as ~~/dotfiles/AGENTS.md~, still load.
+- Upstream position: badlogic closed [[https://github.com/earendil-works/pi/issues/4834][pi#4834]] on 2026-05-21. He said that on-touch loading is "likely not what you want as default behaviour" and is "easy enough to do as an extension". He also said that additions to the system prompt invalidate the provider prompt cache, and that injection as a user message keeps the cache but gives lower adherence.
+- Other harnesses: Claude Code loads a subdirectory CLAUDE.md on demand when it reads files in that subdirectory ([[https://code.claude.com/docs/en/claude-md][Claude Code docs]]). It does not do this for AGENTS.md. Codex concatenates the files from the project root to the working directory at start-up only ([[https://github.com/openai/codex/blob/main/codex-rs/core/src/agents_md.rs][codex-rs agents_md.rs]]).
+- This repository has two nested files: ~skills/herdr-orch/scripts/AGENTS.md~ (84 lines) and ~skills/org-tasks/scripts/AGENTS.md~ (28 lines). Neither directory has a CLAUDE.md, so Claude Code children do not load them on demand either. The root ~AGENTS.md~ points to the org-tasks file only. The herdr-orch file is reachable only through the ~skills/herdr-orch/README.org~ file table and task records.
+- rpiv-pi (~rpiv-mono@46dbdfd~, ~packages/rpiv-pi/extensions/rpiv-core/guidance.ts~) has these defects:
+  - It reacts on ~tool_call~ and sends the guidance with ~pi.sendMessage~, using the default steer delivery. The guidance therefore arrives after the tool batch, so an ~edit~ or ~write~ runs before the agent sees the nested rules.
+  - Its deduplication set is module-global. In a process with more than one session, an injection in one session suppresses the same file in another. The set is cleared only through the exported ~clearInjectionState~; its callers were not inspected.
+  - It handles ~read~, ~edit~ and ~write~ only. Its precedence ladder omits ~AGENTS.override.md~ and the upper-case variants that Pi accepts.
+- Published alternatives (from the package pages, not inspected or run):
+  - ~pi-agents-autoload~ 0.1.3 (sk-ilya, published 2026-11-11, "Tested with Pi 1.5.2"). It uses Pi's precedence ladder and blocks an ~edit~ or ~write~ until the agent has seen new or changed instructions. It delivers the instructions as a mid-conversation system message on supported models, else in the tool result. It keeps frequently used files through compaction, within a 50 KiB limit. It manages only files inside the working directory, and only for the built-in ~read~, ~edit~ and ~write~ tools.
+  - ~pi-subdir-context~ 1.1.7 (akuzmenko, about 2,100 downloads a week). It appends the files to the ~read~ tool result only, once per session.
+  - Other packages: ~@zeldrisho/pi-nested-agent-md~, ~@vanillagreen/pi-nested-agents-md~, ~@howaboua/pi-subdir-agents~ and ~pi-auto-context-files~.
+- Pi extension surface for a local implementation (~docs/extensions.md~): ~tool_result~ can append text to a result before the model sees it. ~tool_call~ can block a call. ~before_agent_start~ can add a message. ~session_compact~ marks the point where deduplication must reset.
+
+** Risks
+- Trust: Pi loads context files without trust. On-touch injection extends the same posture to every nested file in a checkout, including vendored or cloned content below the working directory. An ignore list or a trust gate decides whether this is acceptable.
+- Cache and adherence: a system-prompt addition invalidates the prompt cache. A tool-result or user-message injection keeps the cache but can be followed less strictly.
+- Bash, ~ffgrep~, ~fffind~ and codemode access are not covered by any surveyed package. An agent that edits through bash would bypass the guard.
+
+* Plan
+
+* Implementation
+
+* Open questions
+** OPEN Which option: trial pi-agents-autoload, write a local extension, add manual pointers, or reject?
+Manual pointers cost nothing and cover only this repository: add the herdr-orch pointer to root ~AGENTS.md~, and add ~CLAUDE.md~ links for Claude Code children. A trial of ~pi-agents-autoload~ needs a source review, a project-local install (~pi install -l~) and a session in a disposable checkout. A local extension costs an implementation and its tests, but it can cover the bash and codemode gaps.
+** OPEN Should nested files load in herdr-orch children, and with which ignore list?
+** OPEN Is trust-free loading of nested files acceptable, or must injection require project trust?

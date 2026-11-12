@@ -22,10 +22,8 @@
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#started-b-traits-probe-backlog][STARTED [#B] traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
-  - [[#warn-when-native-cli-and-pi-logins-use-different-subscriptions][Warn when native CLI and Pi logins use different subscriptions]]
   - [[#add-read-only-native-os-store-quota-reporting][Add read-only native OS-store quota reporting]]
   - [[#add-workspace-pinning-to-the-herdr-org-tasks-adapters][Add workspace pinning to the Herdr org-tasks adapters]]
-  - [[#plan-accepted-pi-recovery-selection-limits][Plan accepted Pi recovery selection limits]]
   - [[#validate-the-org-tasks-herdr-uis-natively-on-linux-and-after-installation][Validate the org-tasks Herdr UIs natively on Linux and after installation]]
   - [[#validate-the-herdr-tui-sidebar-agent-tree-on-linux][Validate the Herdr TUI sidebar agent tree on Linux]]
   - [[#herdr-orch-evaluate-oh-assisted-integration-of-worktree-branches][herdr-orch: evaluate oh-assisted integration of worktree branches]]
@@ -34,7 +32,6 @@
   - [[#diagnose-intermittent-herdr-app-quota-loading-stall][Diagnose intermittent herdr-app quota loading stall]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
-  - [[#validate-axi-cli-changes-on-linux-without-measurement-exclusions][Validate AXI CLI changes on Linux without measurement exclusions]]
 - [[#agent-feedback][Agent feedback]]
   - [[#started-guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][STARTED Guard against a parallel tool batch that writes and reads the same path]]
 
@@ -72,14 +69,18 @@ https://github.com/TencentCloud/TencentDB-Agent-Memory/blob/feat/server_team/INS
 :END:
 pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) after a one-session trial on 2026-11-03. Trial session 2026-11-03T17-10-13 (gpt-6.1-sol, 311 requests, 3 compactions) had mean context per request 103k against 210k-216k for baseline sessions 2026-11-03T00-22 and 2026-11-03T08-28. To revisit: run the analyze:session tool from a checkout of github.com/ttttmr/pi-context on sessions from the following week, in several projects, and compare mean context per request, peak context, total tokens, compaction count, and re-reads after compaction. Baseline and trial reports and the comparison script are in .tmp/pi-context-trial/ and .tmp/pi-context-compare.clj (scratch; regenerate if gone). The context-mode alternative was rejected because its Pi adapter does not intercept read, bash, or codemode output. In orchestrator sessions (root sessions that spawn through oh), also check each compaction made while a round was uncaptured: the summary must keep the round UUID, the reason for dispatch, and the acceptance criteria. If summaries drop them, add a rule to the herdr-orch Lifecycle bullet (deferred on 2026-11-03 because pi-context's summary contract already asks for running processes and the next step). Undeclared packages context-mode 1.0.146, @ogulcancelik/pi-herdr 0.4.0 and pi-zellij-tools 0.1.4 were removed from ~/.pi/agent/npm on 2026-11-03.
 
-** TODO Evaluate hierarchical AGENTS.md discovery for Pi :pi:
+** STARTED Evaluate hierarchical AGENTS.md discovery for Pi :pi:
 :PROPERTIES:
 :CUSTOM_ID: 2ed2d031-aa15-4701-9608-2cf565ddc75e
 :CREATED: [2026-11-05 Thu 14:49]
+:STARTED: [2026-11-12 Thu 11:35]
+:HANDOFF: Initial research done 2026-11-12; findings and three OPEN questions in the linked record. Next: owner picks an option (first open question).
 :END:
 :LOGBOOK:
 - Created [2026-11-05 Thu 14:49]
+- State "STARTED" from "TODO" [2026-11-12 Thu 11:35]
 :END:
+#+IMPORT: [[plan:2026-11-12-evaluate-hierarchical-agents-md-discover.org]]
 Pi loads context files from the agent directory, the working directory and its ancestors only (Pi docs/configuration.md, "Context files"). A nested AGENTS.md below the working directory is not loaded: this repository works around that by hand for skills/herdr-orch/scripts/AGENTS.md and skills/org-tasks/scripts/AGENTS.md.
 rpiv-pi injects the nearest AGENTS.md, CLAUDE.md or .rpiv/guidance/<sub>/architecture.md at each depth when a read, edit or write tool call touches a file, once per session, as a hidden custom message; compaction defers re-injection to the next user turn. Source: rpiv-mono@46dbdfd packages/rpiv-pi/extensions/rpiv-core/guidance.ts and docs/architecture.md section "Guidance injection". Origin: [[task:95649700-252c-46d1-92fd-584f8b3b6237][rpiv absorption review]].
 Acceptance criteria:
@@ -146,16 +147,6 @@ Acceptance criteria:
 - Require exactly one match; on no match or several matches, report each candidate location and change nothing.
 - Report the file location of the replacement, and add the tool to the pi-clojure README and to skills/clojure/SKILL.md.
 
-** TODO Warn when native CLI and Pi logins use different subscriptions :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 159d1d5f-878c-44c6-a842-c92bbc600ad8
-:CREATED: [2026-11-05 Thu 09:55]
-:END:
-:LOGBOOK:
-- Created [2026-11-05 Thu 09:55]
-:END:
-herdr-orch assumes that Pi and each native CLI log in to one subscription per provider, and `oh` does not verify identity ([[proj:skills/herdr-orch/scripts/docs/contract.md]] section Usage). On 2026-11-05 the Linux Codex CLI login (`~/.codex/auth.json`) was a free ChatGPT account while Pi `openai-codex` used a `self_serve_business_prolite` account, so the status line showed a 30-day window and routing read the wrong quota, with no warning. Add a check (for example in `oh usage`, `oh doctor` or the status line) that compares the account quota-axi reads with the Pi login for each provider: Codex `chatgpt_account_id` or plan type in the token claims, and the Claude equivalent. Report a mismatch without printing tokens or identities, and treat it as unknown evidence for routing. Consider how this interacts with task:4d770990-2725-4b7d-905a-888db5d9c2a7 (a Babashka collector could read the Pi credential directly).
-
 ** TODO Add read-only native OS-store quota reporting :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 5bc40e83-4ac3-40c7-9209-9d6a6091fae3
@@ -175,20 +166,6 @@ Deferred by the owner from the owned quota collector delivery. Support native Cl
 - Created [2026-11-06 Fri 08:34]
 :END:
 Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. Design focus-independent workspace-root pinning for terminal Herdr and the desktop adapter. Establish an authoritative configured directory source before implementation; Herdr 0.9.5 PluginInvocationContext.workspace_cwd prefers focused pane cwd and is not sufficient. Consider an explicitly configured plugin-owned directory map only after agreement. Preserve active-agent following as the default, reject missing or remote roots, and test that task-pane and agent-pane focus changes cannot change a pinned root. Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
-
-** TODO Plan accepted Pi recovery selection limits
-:PROPERTIES:
-:CUSTOM_ID: 29fef88e-1331-4c1f-82c2-64905aca3ef2
-:CREATED: [2026-11-06 Fri 17:21]
-:HANDOFF: Accepted planning deliverable design/log/2026-pi-recovery-selection-limits.org published by planner0c063b4c-d8bc-4759-9f42-f6301b6ecd4f, captured COMPLETE and closed. User rejected native-fork prerequisite in planner interaction and approved extension-only warning/result contract; no native fix required. Root read records/report, discharged administrative blocker and resumed existing task4. Coordination record implementation checkboxes remain pending task4; do not close as feature delivery. Active implementation round85200f11-e2ab-48de-9a07-1c6bf9c8fab7 t17 owns revised task4, see feature parent handoff.
-:END:
-:LOGBOOK:
-- Created [2026-11-06 Fri 17:21]
-:END:
-#+IMPORT: [[plan:2026-pi-recovery-selection-limits.org]]
-Coordinate the accepted recovery contract for multi-subscription task b0170667-85ba-4062-9bef-6ce3d6ae94aa. The owner chose automatic concrete-account recovery with a pending-auth warning and post-cancellation selection report, accepting stale native selection after abort or an intervening manual selection. No native fix/fork, monkey-patch, virtual dispatch, UI lock or startup auth gate is required.
-
-The linked record owns the decision and evidence. Existing task 4 owns implementation and regression tests; task 5 owns integrated acceptance. Planning is approved; leave this coordination task and the feature parent open for root review, with task 4 WAITING until root-owned resumption. No production code, release, installation, commit or live inference was authorised by this planning session.
 
 ** TODO Validate the org-tasks Herdr UIs natively on Linux and after installation
 :PROPERTIES:
@@ -244,23 +221,6 @@ Observed after first selecting the installed herdr-orch layout: shared herdr-orc
 * Upstream issues
 
 * Chores
-** TODO Validate AXI CLI changes on Linux without measurement exclusions :test:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 4a0def2b-75d2-4995-8cf0-ecbf934263ca
-:CREATED: [2026-11-05 Thu 08:36]
-:END:
-:LOGBOOK:
-- Created [2026-11-05 Thu 08:36]
-:END:
-Complete the platform-specific validation deferred when closing [[archive:a88aea76-e767-4722-807c-2f91324d1b30][Apply the AXI guidelines to CLI tooling]]. The macOS run passed 737 selected Clojure tests (7,068 assertions), but excluded 28 tests from the measurement block; this is not a full Linux-suite result.
-
-Acceptance criteria:
-- Run bb test-clojure on Linux with the HERDR_ORCH_* environment variables unset and no test exclusions.
-- The measurement-block tests execute in their disposable fixtures.
-- Record the exit status and complete failure/error summary; fix failures or create scoped follow-ups before claiming a green suite.
-
-Evidence: design/log/2026-11-05-axi-cli-guidelines.org and .tmp/routing-plan-commits-1/tree-1-portable.out.
-
 * Agent feedback
 
 ** STARTED Guard against a parallel tool batch that writes and reads the same path :agents_md:

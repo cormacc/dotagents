@@ -5721,3 +5721,59 @@ The light tier ranks anthropic/claude-sonnet-5-5 equal with openai-codex/gpt-6.1
 - Decide whether the runner gains a Claude arm with an equivalent read-only boundary, or whether Claude probes run through the Pi runner of plan task 03e5eab6.
 - Run each runner scaffold unchanged on the Claude route and append the dated outcome, with exact model/provider, to its gate.md.
 Must not: edit a recorded condition or scaffold to fit the model; claim admission depends on the result.
+
+** DONE Plan accepted Pi recovery selection limits
+CLOSED: [2026-11-12 Thu 11:32]
+:PROPERTIES:
+:CUSTOM_ID: 29fef88e-1331-4c1f-82c2-64905aca3ef2
+:CREATED: [2026-11-06 Fri 17:21]
+:ARCHIVED: [2026-11-12 Thu 11:32]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 17:21]
+- State "DONE" from "TODO" [2026-11-12 Thu 11:32]
+:END:
+#+IMPORT: [[plan:2026-pi-recovery-selection-limits.org]]
+Coordinate the accepted recovery contract for multi-subscription task b0170667-85ba-4062-9bef-6ce3d6ae94aa. The owner chose automatic concrete-account recovery with a pending-auth warning and post-cancellation selection report, accepting stale native selection after abort or an intervening manual selection. No native fix/fork, monkey-patch, virtual dispatch, UI lock or startup auth gate is required.
+
+The linked record owns the decision and evidence. Existing task 4 owns implementation and regression tests; task 5 owns integrated acceptance. Planning is approved; leave this coordination task and the feature parent open for root review, with task 4 WAITING until root-owned resumption. No production code, release, installation, commit or live inference was authorised by this planning session.
+
+** DONE Validate AXI CLI changes on Linux without measurement exclusions :test:herdr_orch:
+CLOSED: [2026-11-12 Thu 11:33]
+:PROPERTIES:
+:CUSTOM_ID: 4a0def2b-75d2-4995-8cf0-ecbf934263ca
+:CREATED: [2026-11-05 Thu 08:36]
+:ARCHIVED: [2026-11-12 Thu 11:33]
+:ARCHIVE_OLPATH: Chores
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 08:36]
+- State "DONE" from "TODO" [2026-11-12 Thu 11:33]
+:END:
+Complete the platform-specific validation deferred when closing [[archive:a88aea76-e767-4722-807c-2f91324d1b30][Apply the AXI guidelines to CLI tooling]]. The macOS run passed 737 selected Clojure tests (7,068 assertions), but excluded 28 tests from the measurement block; this is not a full Linux-suite result.
+
+Acceptance criteria:
+- Run bb test-clojure on Linux with the HERDR_ORCH_* environment variables unset and no test exclusions.
+- The measurement-block tests execute in their disposable fixtures.
+- Record the exit status and complete failure/error summary; fix failures or create scoped follow-ups before claiming a green suite.
+
+Evidence: design/log/2026-11-05-axi-cli-guidelines.org and .tmp/routing-plan-commits-1/tree-1-portable.out.
+
+Result (2026-11-12, xps15, Linux, commit 3fea59e): `bb test-clojure` through `scripts/isolated-test-run.bb` `run-suites`, with no HERDR_ORCH_* variable set and no exclusions, exited 0: 978 tests, 9,560 assertions, 0 failures, 0 errors. The runner printed no `skipped ... Linux-only tests` line, so the 27 `^:linux-only` measurement tests in herdr_orch/cli_test.clj ran. The run left git worktrees and orch/* branches unchanged. Output: .tmp/linux-axi-run-20261112/test-clojure.out.
+
+** CANCELLED Warn when native CLI and Pi logins use different subscriptions :herdr_orch:
+CLOSED: [2026-11-12 Thu 11:42]
+:PROPERTIES:
+:CUSTOM_ID: 159d1d5f-878c-44c6-a842-c92bbc600ad8
+:CREATED: [2026-11-05 Thu 09:55]
+:ARCHIVED: [2026-11-12 Thu 11:42]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 09:55]
+- State "CANCELLED" from "TODO" [2026-11-12 Thu 11:42]
+:END:
+herdr-orch assumes that Pi and each native CLI log in to one subscription per provider, and `oh` does not verify identity ([[proj:skills/herdr-orch/scripts/docs/contract.md]] section Usage). On 2026-11-05 the Linux Codex CLI login (`~/.codex/auth.json`) was a free ChatGPT account while Pi `openai-codex` used a `self_serve_business_prolite` account, so the status line showed a 30-day window and routing read the wrong quota, with no warning. Add a check (for example in `oh usage`, `oh doctor` or the status line) that compares the account quota-axi reads with the Pi login for each provider: Codex `chatgpt_account_id` or plan type in the token claims, and the Claude equivalent. Report a mismatch without printing tokens or identities, and treat it as unknown evidence for routing. Consider how this interacts with task:4d770990-2725-4b7d-905a-888db5d9c2a7 (a Babashka collector could read the Pi credential directly).
+
+Review 2026-11-12: task 4d770990 is DONE, and its owned collector removes the routing half of this problem. Launch routing calls `usage-for` with `:harness (keyword kind)` (`skills/herdr-orch/scripts/src/herdr_orch/cli.clj`), so a native Codex child is routed on the native Codex credential, and Pi routing (`oh route`) on the Pi credential. What remains is the operator view: `oh usage` and the status line default to Pi, so a different native login is still silent. Codex can be compared offline (Pi `openai-codex.accountId` against native `tokens.account_id`, both read in `herdr-orch.quota-credentials`). Claude cannot be compared offline: the Pi `anthropic` entry has only `access`, `expires`, `refresh` and `type`, and native `.credentials.json` has a plan type (`subscriptionType`, `rateLimitTier`) but no account identity, so a Claude comparison needs an HTTP profile call. Before implementing, confirm (1) whether a Codex-only warning is still wanted, and (2) whether "treat it as unknown evidence for routing" should be dropped, because routing no longer reads the other harness's quota.
