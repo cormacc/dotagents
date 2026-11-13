@@ -53,6 +53,7 @@
 - Use `git mv`, not `mv`, to move files that Git controls.
 - Revert your own file changes with Git, not by manual edits.
 - Read a file at another ref with `git show <ref>:<path>`. `git checkout <ref>` without a pathspec switches branches, even with a trailing `--`.
+- Do single-threaded work in the primary checkout. Create a worktree only to isolate parallel subagents.
 
 # File operations
 
