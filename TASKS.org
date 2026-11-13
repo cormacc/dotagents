@@ -207,16 +207,6 @@ Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963. Scope revised by the own
 :END:
 Deadline: Atlassian removes the v1 endpoint on 2027-03-01 and then moves v1 users to the v2 tools, which breaks our renamed calls. pi/mcp.json uses `https://mcp.atlassian.com/v1/mcp/authv2`; the live server instructions mark it deprecated and name `https://mcp.atlassian.com/v2/mcp`. Sources (read 2026-11-13): support.atlassian.com/atlassian-ai-gateway/docs/how-to-upgrade-from-atlassian-mcp-v1-to-atlassian-mcp-v2/ and .../docs/supported-tools/. Changes found: (1) v2 lists only Primary tools by default; others go through `discover` and `executeRead`/`executeWrite`/`executeDestructive`, and `?tools=all` gives a flat list. The jira extension calls tools by fixed name, so `?tools=all` is the probable choice (decide). (2) Renamed tools that we call: `addCommentToJiraIssue` -> `addOrEditJiraIssueComment`, `getTransitionsForJiraIssue` -> `listJiraIssueTransitions`, `getJiraProjectIssueTypesMetadata` -> `listJiraProjectIssueTypesMetadata` (pi/extensions/jira/tools.ts, jira.test.ts, README.md, skills/org-jira/SKILL.md, references/protocol.md); `getConfluencePage` -> `getConfluenceContent` (skills/org-jira/references/atlassian-exploration.md, exploration.test.ts). Check argument and result shapes too, not only names. Unchanged names: getAccessibleAtlassianResources, getJiraIssue, editJiraIssue, createJiraIssue, transitionJiraIssue, search (Beta, uses Rovo credits), getTeamworkGraphContext, getTeamworkGraphObject. (3) v2 is a separate OAuth resource: re-authenticate after the URL change. Acceptance: pi/mcp.json on v2; no v1 tool names in tracked files; pi/extensions/jira/test.sh passes; one live read-only check and one sandbox write check (comment, transition) pass against v2.
 
-** TODO herdr-orch: tear down worktrees whose submodules are worktrees too :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 55cf3819-d749-41dc-bda4-6dbb8ace40fa
-:CREATED: [2026-11-13 Fri 16:16]
-:END:
-:LOGBOOK:
-- Created [2026-11-13 Fri 16:16]
-:END:
-Check what `oh worktree remove` does with a superproject worktree whose submodule checkouts are themselves worktrees of shared module repos (`.git/modules/<name>`), and document or fix it in `skills/herdr-orch/SKILL.md`. Evidence (CD repo, 2026-11-13): plain `git worktree remove` refused both levels without `--force` ("working trees containing submodules cannot be moved or removed"); the order that worked was the nested submodule's own submodule check, then the `neuromod` and `common` worktrees, then the CD worktree. A leftover worktree keeps its branch checked out and hides which checkout is current. herdr-orch does not mention submodules. The CD worktrees were hand-made, not `oh`-managed, so `oh` behaviour is untested.
-
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:
@@ -227,6 +217,74 @@ Check what `oh worktree remove` does with a superproject worktree whose submodul
 - Created [2026-11-05 Thu 20:50]
 :END:
 Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the owner accepted this as a known limit on 2026-11-09 (herdr-app/README.md). Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
+
+** TODO herdr-orch housekeeping 2026-11-13 :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: c532fc1e-488f-4960-86c4-d57736e7142d
+:CREATED: [2026-11-13 Fri 20:02]
+:END:
+:LOGBOOK:
+- Created [2026-11-13 Fri 20:02]
+:END:
+Groups small herdr-orch fixes from 2026-11-13 for one batched execution: submodule worktree teardown, ledger-less result re-delivery, and the expired-token usage state. Close and archive this parent when every child is DONE or CANCELLED.
+
+*** TODO herdr-orch: tear down worktrees whose submodules are worktrees too :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 55cf3819-d749-41dc-bda4-6dbb8ace40fa
+:CREATED: [2026-11-13 Fri 16:16]
+:END:
+:LOGBOOK:
+- Created [2026-11-13 Fri 16:16]
+:END:
+Check what `oh worktree remove` does with a superproject worktree whose submodule checkouts are themselves worktrees of shared module repos (`.git/modules/<name>`), and document or fix it in `skills/herdr-orch/SKILL.md`. Evidence (CD repo, 2026-11-13): plain `git worktree remove` refused both levels without `--force` ("working trees containing submodules cannot be moved or removed"); the order that worked was the nested submodule's own submodule check, then the `neuromod` and `common` worktrees, then the CD worktree. A leftover worktree keeps its branch checked out and hides which checkout is current. herdr-orch does not mention submodules. The CD worktrees were hand-made, not `oh`-managed, so `oh` behaviour is untested.
+
+*** TODO herdr-orch: stop re-delivering ledger-less result items in each new session :ext:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: ef08b4a6-97c8-45e8-ba19-0fee547e468f
+:CREATED: [2026-11-13 Fri 10:49]
+:END:
+:LOGBOOK:
+- Created [2026-11-13 Fri 10:49]
+:END:
+The herdr-orch Pi delivery watcher steers a result item that has no ledger entry into each new orchestrator session, not once. The delivered set is per session (`<session-file>.herdr-orch-delivered.json`), and `skipByLedger` in `pi/extensions/herdr-orch/delivery.ts` returns false when `.tmp/herdr-orch/ledger/<task>.json` does not exist. A ledger-less item therefore has no owner check and no captured check. Each new session gets the item as a steer that it cannot act on: `oh task collect` returns `unknown assignment task`, and the agent spends a turn on a stale notification.
+
+Desired outcome: an orphan item (no ledger entry) is not re-delivered in each new session. Possible approaches: skip ledger-less items older than the session start; record delivery of ledger-less items in a root-level store, not a per-session one; or report orphans once through `oh task orphans` or a status warning, not as a steer. Update `scripts/docs/contract.md#Delivery watcher` ("an item without a ledger entry is delivered once") in the same change.
+
+Origin:
+- cwd: /home/cormacc/dev/nix/nix-microchip
+- git: git@github.com:cormacc/nix-microchip @ master
+- timestamp: [2026-11-13 Fri 10:49]
+- sender: human
+
+Evidence:
+- `.tmp/herdr-orch/68deac3a-…-d11d41f3-….result` (planner-68deac3a, 2026-10-20) had no ledger entry; the ledger lists 44 other tasks. A new session on 2026-11-13 received it at once as a `herdr-orch-item` steer, and `oh task collect` failed with `unknown assignment task`. The cause of the missing ledger entry is not known.
+- Workaround: move the orphan `.result` out of `.tmp/herdr-orch/` (here to `.tmp/herdr-orch-orphans/`).
+
+*** TODO Distinguish refreshable expired tokens from auth_required in oh usage status :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: d20d04b8-9f0a-4ec6-956e-c535e7ae205a
+:CREATED: [2026-11-13 Fri 11:02]
+:END:
+:LOGBOOK:
+- Created [2026-11-13 Fri 11:02]
+:END:
+The oh usage status line shows `auth?` for a Pi account whose OAuth access token has expired but which still has a stored refresh token. This is the normal state of any account that Pi has not used for a request since expiry, so the status line cannot distinguish "idle, refreshable" from "no credential" or "refresh rejected". The collector must stay read-only (contract.md section Usage: reads never refresh tokens; normal harness operation owns refresh).
+
+Desired outcome (keep the collector read-only):
+1. Report an expired access token with a stored refresh token as a separate state and status token (e.g. `exp?`). Keep `auth?` for a missing credential or a refresh known to have failed. Update the status-format contract and cli_test.clj cases.
+2. Provide an on-demand refresh that goes through Pi's own credential path, so that Pi's refresh serialisation applies (e.g. `oh account refresh <id>` or a documented command). First verify whether `pi auth print-bearer-token --provider <id>` refreshes an expired token, uses Pi's lock, and works for extension-registered `anthropic-<N>` providers; discard its output.
+
+Open question: does Anthropic rotate refresh tokens on each refresh? If yes, any refresh outside Pi's lock risks a revoked token and a forced re-login, which is the main reason not to refresh in the collector.
+
+Origin:
+- cwd: /home/cormacc/nmd/process/nmd-dev
+- git: git@github.com:cormacc/dotagents.git @ main (target)
+- timestamp: [2026-11-13 Fri 11:02]
+- sender: human (requested), agent (drafted)
+
+Evidence:
+- Herdr tab bar showed `anthropic-1 auth?`. auth.json: anthropic-1 oauth access token expired 2026-11-13T00:32Z; refresh token present. The session used only `anthropic`, so nothing refreshed anthropic-1.
+- `auth?` maps from state auth_required (scripts/src/herdr_orch/cli.clj, status formatter; contract.md line ~292).
 
 * Upstream issues
 
@@ -256,51 +314,3 @@ Evidence:
 - 2026-10-14: four batches paired an Edit with a grep or sed of the same file; each check read the pre-edit content, and one led the agent to report a remaining match that the edit had already removed.
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
-
-** TODO herdr-orch: stop re-delivering ledger-less result items in each new session :ext:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: ef08b4a6-97c8-45e8-ba19-0fee547e468f
-:CREATED: [2026-11-13 Fri 10:49]
-:END:
-:LOGBOOK:
-- Created [2026-11-13 Fri 10:49]
-:END:
-The herdr-orch Pi delivery watcher steers a result item that has no ledger entry into each new orchestrator session, not once. The delivered set is per session (`<session-file>.herdr-orch-delivered.json`), and `skipByLedger` in `pi/extensions/herdr-orch/delivery.ts` returns false when `.tmp/herdr-orch/ledger/<task>.json` does not exist. A ledger-less item therefore has no owner check and no captured check. Each new session gets the item as a steer that it cannot act on: `oh task collect` returns `unknown assignment task`, and the agent spends a turn on a stale notification.
-
-Desired outcome: an orphan item (no ledger entry) is not re-delivered in each new session. Possible approaches: skip ledger-less items older than the session start; record delivery of ledger-less items in a root-level store, not a per-session one; or report orphans once through `oh task orphans` or a status warning, not as a steer. Update `scripts/docs/contract.md#Delivery watcher` ("an item without a ledger entry is delivered once") in the same change.
-
-Origin:
-- cwd: /home/cormacc/dev/nix/nix-microchip
-- git: git@github.com:cormacc/nix-microchip @ master
-- timestamp: [2026-11-13 Fri 10:49]
-- sender: human
-
-Evidence:
-- `.tmp/herdr-orch/68deac3a-…-d11d41f3-….result` (planner-68deac3a, 2026-10-20) had no ledger entry; the ledger lists 44 other tasks. A new session on 2026-11-13 received it at once as a `herdr-orch-item` steer, and `oh task collect` failed with `unknown assignment task`. The cause of the missing ledger entry is not known.
-- Workaround: move the orphan `.result` out of `.tmp/herdr-orch/` (here to `.tmp/herdr-orch-orphans/`).
-
-** TODO Distinguish refreshable expired tokens from auth_required in oh usage status :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: d20d04b8-9f0a-4ec6-956e-c535e7ae205a
-:CREATED: [2026-11-13 Fri 11:02]
-:END:
-:LOGBOOK:
-- Created [2026-11-13 Fri 11:02]
-:END:
-The oh usage status line shows `auth?` for a Pi account whose OAuth access token has expired but which still has a stored refresh token. This is the normal state of any account that Pi has not used for a request since expiry, so the status line cannot distinguish "idle, refreshable" from "no credential" or "refresh rejected". The collector must stay read-only (contract.md section Usage: reads never refresh tokens; normal harness operation owns refresh).
-
-Desired outcome (keep the collector read-only):
-1. Report an expired access token with a stored refresh token as a separate state and status token (e.g. `exp?`). Keep `auth?` for a missing credential or a refresh known to have failed. Update the status-format contract and cli_test.clj cases.
-2. Provide an on-demand refresh that goes through Pi's own credential path, so that Pi's refresh serialisation applies (e.g. `oh account refresh <id>` or a documented command). First verify whether `pi auth print-bearer-token --provider <id>` refreshes an expired token, uses Pi's lock, and works for extension-registered `anthropic-<N>` providers; discard its output.
-
-Open question: does Anthropic rotate refresh tokens on each refresh? If yes, any refresh outside Pi's lock risks a revoked token and a forced re-login, which is the main reason not to refresh in the collector.
-
-Origin:
-- cwd: /home/cormacc/nmd/process/nmd-dev
-- git: git@github.com:cormacc/dotagents.git @ main (target)
-- timestamp: [2026-11-13 Fri 11:02]
-- sender: human (requested), agent (drafted)
-
-Evidence:
-- Herdr tab bar showed `anthropic-1 auth?`. auth.json: anthropic-1 oauth access token expired 2026-11-13T00:32Z; refresh token present. The session used only `anthropic`, so nothing refreshed anthropic-1.
-- `auth?` maps from state auth_required (scripts/src/herdr_orch/cli.clj, status formatter; contract.md line ~292).
