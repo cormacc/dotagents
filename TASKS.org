@@ -185,6 +185,18 @@ Give a user one view of the current delegation tree (parent, children, persona, 
 :END:
 Backlog. `ot` resolves one task root: the nearest ancestor that has a TASKS.org (`--root` overrides). Discover every task root around the starting folder instead: continue upwards past the first TASKS.org, and search downwards through child folders, including Git submodules (a submodule has its own TASKS.org, such as agents/ inside dotfiles). Show the roots as a tree in the TUI, and let the user switch the displayed root. The TUI shows one root at a time; a combined super-tree of all roots is a possible later option, not part of this task. Open questions: the depth and ignore rules for the downward search (for example .gitignore, node_modules, .tmp/), how the selected root is stored, and how the compact view, the Herdr plugin and the herdr-app widget pick a root.
 
+** TODO Add workspace pinning to the Herdr org-tasks adapters
+:PROPERTIES:
+:CUSTOM_ID: 16358bea-c42f-4342-883b-6409d14c7281
+:CREATED: [2026-11-06 Fri 08:34]
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 08:34]
+- State "CANCELLED" from "TODO" [2026-11-13 Fri 09:45]
+- State "TODO" from "CANCELLED" [2026-11-13 Fri 09:57]
+:END:
+Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963. Scope revised by the owner on 2026-11-13. Default behaviour does not change: the task root follows the focused pane's folder. Add a pin key binding and a pinned/unpinned indicator to the terminal plugin's compact pane and to the herdr-app widget; in the widget the indicator should also be clickable. Pinning fixes the displayed task root for one Herdr workspace until the user unpins it. The adapters own the pin state (the terminal plugin in its session state, herdr-app in its mod state); org-tasks does not become workspace-aware. The adapter uses the pinned root as the working directory of each `ot` call. Open points: whether the pin key is handled by the TUI (which then needs a way to tell the adapter) or by an adapter action, and whether pins persist across a server or app restart. Constraints kept from the earlier design: reject missing or remote roots, and test that focus changes to the task pane or to an agent pane cannot change a pinned root. Herdr 0.9.5 `PluginInvocationContext.workspace_cwd` prefers the focused pane's folder, so it is not a pin source. Related: task:6ce22583-ba34-456d-a838-58bfa7b4c044 (nested task roots). Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
+
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:

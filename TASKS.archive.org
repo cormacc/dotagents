@@ -5864,17 +5864,6 @@ CLOSED: [2026-11-12 Thu 20:19]
 - State "DONE" from "STARTED" [2026-11-12 Thu 20:19]
 :END:
 The owner found the project switch laggy in the Linux check (task:2b49d0fd-413d-47a3-a5da-61e655dea4a1, 2026-11-12). `herdr-app/mods/org-tasks/main.js` polls `focused()` every `FOCUS_MS` (1000 ms) and switches only after a new project holds for `STABLE_POLLS` (2) polls (`settle` in `state.js`), then runs `ot compact`. The hold protects against an agent tool command that moves the pane foreground folder for a moment; it is not a performance measure. The herdr-app mod guide (~/.config/herdr-app/AGENTS.md, Rules) says `render` re-runs when focus, terminals or agents change, and "Don't poll those". Delivered 2026-11-12; the owner confirmed it works well in the desktop app: `settle` takes the focused pane or terminal as `source`; a project with a folder in another terminal switches on the next poll, and the 2-poll hold stays for a folder change inside the same terminal and for reasons such as a mod pane. Tests: herdr-app/tests/org-tasks-state.test.mjs and org-tasks-ui.test.mjs (both new tests fail on the old code). Not done: the 1 s poll remains, so a switch can still take up to 1 s; the mod guide says render re-runs on focus change, so a poll-free design is a possible follow-up.
-*** CANCELLED Add workspace pinning to the Herdr org-tasks adapters
-CLOSED: [2026-11-13 Fri 09:45]
-:PROPERTIES:
-:CUSTOM_ID: 16358bea-c42f-4342-883b-6409d14c7281
-:CREATED: [2026-11-06 Fri 08:34]
-:END:
-:LOGBOOK:
-- Created [2026-11-06 Fri 08:34]
-- State "CANCELLED" from "TODO" [2026-11-13 Fri 09:45]
-:END:
-Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. Design focus-independent workspace-root pinning for terminal Herdr and the desktop adapter. Establish an authoritative configured directory source before implementation; Herdr 0.9.5 PluginInvocationContext.workspace_cwd prefers focused pane cwd and is not sufficient. Consider an explicitly configured plugin-owned directory map only after agreement. Preserve active-agent following as the default, reject missing or remote roots, and test that task-pane and agent-pane focus changes cannot change a pinned root. Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
 *** DONE Check org-tasks restored-pane cleanup on macOS
 CLOSED: [2026-11-13 Fri 09:45]
 :PROPERTIES:
