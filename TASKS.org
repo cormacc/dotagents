@@ -198,15 +198,21 @@ Observed after first selecting the installed herdr-orch layout: shared herdr-orc
 :END:
 Groups the org-tasks Herdr adapter follow-ups that came from the Linux validation of 2026-11-12 (archived task 2b49d0fd-413d-47a3-a5da-61e655dea4a1) and its deferred design work. Close and archive this parent when every child is DONE or CANCELLED.
 
-*** TODO Clean up org-tasks panes that Herdr restores as plain shells
+*** DONE Clean up org-tasks panes that Herdr restores as plain shells
+CLOSED: [2026-11-13 Fri 09:32]
 :PROPERTIES:
 :CUSTOM_ID: 7b95f3fa-14b1-4d94-8143-88ee35469d33
 :CREATED: [2026-11-12 Thu 13:09]
+:STARTED: [2026-11-13 Fri 09:32]
 :END:
 :LOGBOOK:
 - Created [2026-11-12 Thu 13:09]
+- State "STARTED" from "TODO" [2026-11-13 Fri 09:32]
+- State "DONE" from "STARTED" [2026-11-13 Fri 09:32]
 :END:
 Found in the Linux restart check (task:2b49d0fd-413d-47a3-a5da-61e655dea4a1, 2026-11-12, Herdr 0.9.5, scratch session lincheck). After `herdr session stop` and re-attach, Herdr restored the earlier compact panes w1:p6 and w1:p7 as `/bin/sh` in the plugin root (`herdr/plugins/org-tasks`) with their `Tasks ...` labels and an empty `launch_argv` in session.json. The startup `ensure` found no owned live instance and opened w1:p8, so the restored tab shows extra Tasks panes that do not follow focus. Evidence: .tmp/linux-herdr-checks-20261112/session-after-restart.json and the process list in that session. Acceptance: after a session restore, exactly one Tasks pane exists; the cleanup closes only panes that the plugin can prove it opened (the anti-criterion "Must not: close, replace or send input into an unowned pane" in design/log/2026-11-05-org-tasks-herdr-ui.org still holds, so the cwd-only `plugin-pane?` heuristic is not sufficient); a regression test covers restore. First check whether the Herdr snapshot reports plugin ownership for a restored pane, and whether macOS behaves the same.
+
+Result 2026-11-13 (Linux, Herdr 0.9.5, disposable scratch sessions rcheck and rcheck2, both deleted; evidence in .tmp/restore-cleanup/): the snapshot does not report ownership (`PaneInfo` has no plugin field in `herdr api schema`), a restored pane keeps its pane ID and label but gets a new terminal, and `herdr plugin pane close` on it fails with `plugin_pane_not_found`. Fix in herdr/plugins/org-tasks/src/org_tasks_host.clj: the supervisor records its pane label in owner.json (`sync-label!` returns it; `instance-record` ignores `:label`), and `ensure!` runs `close-restored!` under the session lock, also while display is off. `restored?` requires a retained record of this session that names the pane and tab, a new terminal, the recorded label, the plugin root as folder, no agent, and the shell as the only foreground process; the pane then closes with `herdr pane close`. Records from before the change have no label, so panes they name stay open. Tests in scripts/test-herdr-org-tasks.bb (44 tests, 0 failures; the two ensure tests fail with the `close-restored!` call removed). Live: after two stop/restart cycles exactly one Tasks pane remained. Not checked: macOS restore behaviour.
 
 *** DONE Make the herdr-app org-tasks widget follow focus without lag
 CLOSED: [2026-11-12 Thu 20:19]
@@ -231,6 +237,16 @@ The owner found the project switch laggy in the Linux check (task:2b49d0fd-413d-
 - Created [2026-11-06 Fri 08:34]
 :END:
 Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963, deferred by the user. Design focus-independent workspace-root pinning for terminal Herdr and the desktop adapter. Establish an authoritative configured directory source before implementation; Herdr 0.9.5 PluginInvocationContext.workspace_cwd prefers focused pane cwd and is not sufficient. Consider an explicitly configured plugin-owned directory map only after agreement. Preserve active-agent following as the default, reject missing or remote roots, and test that task-pane and agent-pane focus changes cannot change a pinned root. Source evidence: .tmp/herdr-ui-execution/terminal-report.md; originating record design/log/2026-11-05-org-tasks-herdr-ui.org.
+
+*** TODO Check org-tasks restored-pane cleanup on macOS
+:PROPERTIES:
+:CUSTOM_ID: 7dae8e50-ddfd-46d1-bf61-f0099d331b43
+:CREATED: [2026-11-13 Fri 09:32]
+:END:
+:LOGBOOK:
+- Created [2026-11-13 Fri 09:32]
+:END:
+Follow-up to task:7b95f3fa-14b1-4d94-8143-88ee35469d33, which was verified on Linux only. On macOS with a disposable Herdr session: open the compact pane, wait for its label, run `herdr session stop`, re-attach, and confirm that exactly one Tasks pane exists. If macOS restores the pane in another shape (pane ID, label, folder or foreground process), adjust `restored?` in herdr/plugins/org-tasks/src/org_tasks_host.clj and its tests.
 
 * Upstream issues
 

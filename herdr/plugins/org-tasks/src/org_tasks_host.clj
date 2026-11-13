@@ -331,16 +331,20 @@
           (call! "pane" "resize" "--pane" (:pane record) "--direction" (if (pos? delta) "up" "down")
                  "--amount" (str (double (abs delta)))))))))
 
+(defn- instance-id? [s]
+  (try (= s (str (java.util.UUID/fromString s))) (catch Exception _ false)))
+
 (defn instance-record
   "The owner record that `index` points to, or nil. A pending index is a
-  reservation; otherwise the index must equal the record."
+  reservation; otherwise the index must equal the record. The supervisor
+  renews `:label` in the record only, so it is not compared."
   [root index]
   (when-let [instance (:instance index)]
-    (when (= instance (str (java.util.UUID/fromString instance)))
+    (when (instance-id? instance)
       (let [record (read-json (fs/path root instance "owner.json"))]
         (when (and (= instance (:instance record))
                    (or (:pending index)
-                       (= (dissoc index :updatedAt) (dissoc record :updatedAt))))
+                       (= (dissoc index :updatedAt :label) (dissoc record :updatedAt :label))))
           record)))))
 
 (defn record-owned? [record snapshot]
@@ -401,6 +405,58 @@
     (fn [] (when-let [record (session-record root (snapshot!))]
              (call! "plugin" "pane" "close" (:pane record))))))
 
+;; ── Restored panes ────────────────────────────────────────────────
+;; Herdr saves a plugin pane with its session and, after a restart, restores
+;; it with the same pane ID as a plain shell in the plugin root, with the
+;; saved label. The snapshot does not mark it as a plugin pane, and `plugin
+;; pane close` rejects it, so only the plugin's own records can identify it.
+
+(defn- canonical [path]
+  (when (string? path) (try (str (fs/canonicalize path)) (catch Exception _ nil))))
+
+(defn restored?
+  "Is `current` the pane that `record` names, restored by Herdr as an idle
+  shell? Pane IDs are not reused within a session, but a deleted session's
+  name can start again from `w1:p1`, so the pane must also have a new
+  terminal, the label that the supervisor last recorded, the plugin root
+  `plugin-root` as its folder, and only its shell in the foreground, so that
+  no user command can be lost."
+  [record current info plugin-root]
+  (let [processes (:foreground_processes info)]
+    (boolean
+     (and current plugin-root
+          (= (:pane record) (:pane_id current))
+          (= (:tab record) (:tab_id current))
+          (string? (:terminal record)) (not= (:terminal record) (:terminal_id current))
+          (string? (:label record)) (= (:label record) (:label current))
+          (not (:agent current))
+          (= plugin-root (canonical (:foreground_cwd current)))
+          (= 1 (count processes))
+          (some? (:shell_pid info)) (= (:shell_pid info) (:pid (first processes)))))))
+
+(defn owner-records
+  "Every instance record in the session state `root`, including those of
+  ended supervisors, which are kept for this purpose."
+  [root]
+  (keep (fn [dir]
+          (let [instance (str (fs/file-name dir))
+                record (when (instance-id? instance) (read-json (fs/path dir "owner.json")))]
+            (when (= instance (:instance record)) record)))
+        (fs/list-dir root fs/directory?)))
+
+(defn close-restored!
+  "Close each pane in `snapshot` that one of this session's records shows
+  Herdr restored from an earlier compact pane. Returns the closed pane IDs."
+  [root snapshot plugin-root]
+  (vec (for [record (owner-records root)
+             :let [current (pane snapshot (:pane record))]
+             ;; Only a pane with a new terminal needs its processes read.
+             :when (and current (not= (:terminal record) (:terminal_id current))
+                        (try (and (restored? record current (process! (:pane_id current)) plugin-root)
+                                  (call! "pane" "close" (:pane_id current)))
+                             (catch Exception _ false)))]
+         (:pane_id current))))
+
 (defn close-legacy!
   "Close compact panes of the earlier one-pane-per-tab design, whose
   supervisors can still run after an upgrade, and remove their index files."
@@ -414,12 +470,17 @@
               (try (call! "plugin" "pane" "close" (:pane record)) (catch Exception _ nil))))
           (fs/delete-if-exists index))))))
 
+(defn plugin-root []
+  (canonical (System/getenv "HERDR_PLUGIN_ROOT")))
+
 (defn ensure!
-  "Open the compact pane while display is enabled. The startup and tab.focused
-  hooks run this, so a lost supervisor comes back at the next tab switch."
+  "Close compact panes that Herdr restored as shells, and open the compact
+  pane while display is enabled. The startup and tab.focused hooks run this,
+  so a lost supervisor comes back at the next tab switch."
   [config]
-  (when (display-enabled?)
-    (let [root (state-root!)]
+  (let [root (state-root!)]
+    (session-lock root #(close-restored! root (snapshot!) (plugin-root)))
+    (when (display-enabled?)
       (close-legacy! root)
       (open-session! root config))))
 
@@ -467,12 +528,15 @@
 (defn sync-label!
   "Mirror the TUI's OSC 2 title into the manual pane label, which Herdr draws
   on the pane border. The label is display-only, so a failed rename must not
-  end the supervisor; the next poll retries it."
+  end the supervisor; the next poll retries it. Returns the label that the
+  pane has afterwards, which `restored?` later compares."
   [current]
   (let [title (:terminal_title current)]
-    (when (and (string? title) (not (str/blank? title)) (not= title (:label current)))
+    (if (and (string? title) (not (str/blank? title)) (not= title (:label current)))
       (try (call! "pane" "rename" (:pane_id current) title)
-           (catch Exception _ nil)))))
+           title
+           (catch Exception _ (:label current)))
+      (:label current))))
 
 (defn sole-pane?
   "Is pane `id` the only pane left in `tab`? Herdr closes a tab with its last
@@ -552,7 +616,8 @@
         index (index-path root)
         hint-lines (hints (herdr-config-text))
         roots (plugin-roots!)
-        record-of (fn [{:keys [id tab]}] (assoc owner :pane id :tab tab))
+        record-of (fn [{:keys [id tab label]}] (cond-> (assoc owner :pane id :tab tab)
+                                                 label (assoc :label label)))
         heartbeat! (fn [st]
                      (when (:context st) (atomic! file (assoc (:context st) :updatedAt (now))))
                      (atomic! owner-file (assoc (record-of st) :updatedAt (now))))]
@@ -571,7 +636,8 @@
         (when-not (= instance (:instance (read-json index)))
           (throw (ex-info "Task open reservation expired" {})))
         (atomic! file (context nil instance nil nil hint-lines (now)))
-        (atomic! owner-file (assoc (record-of {:id initial :tab (:tab_id start)}) :updatedAt (now)))
+        (atomic! owner-file (assoc (record-of {:id initial :tab (:tab_id start) :label (:label start)})
+                                   :updatedAt (now)))
         (let [queue (java.util.concurrent.LinkedBlockingQueue.)
               connection (subscribe! socket subscriptions)
               stream (future (try (events! connection #(.put queue %))
@@ -603,8 +669,8 @@
                            (do (call! "plugin" "pane" "close" (:id st)) ::closed)
 
                            :else
-                           (do (sync-label! current)
-                               (when-let [sampled (sample! snapshot (record-of (assoc st :tab (:tab_id current)))
+                           (let [st (assoc st :label (sync-label! current))]
+                             (when-let [sampled (sample! snapshot (record-of (assoc st :tab (:tab_id current)))
                                                            (:previous st) (:context st) (:pending st) roots hint-lines)]
                                  (atomic! file (:context sampled))
                                  (assoc st :tab (:tab_id current) :previous (:candidate sampled)
@@ -616,7 +682,7 @@
           (try
             (exit!
              (binding [*request-timeout-ms* 200]
-               (loop [st {:id initial :tab (:tab_id start) :due true :sampled-at 0}]
+               (loop [st {:id initial :tab (:tab_id start) :label (:label start) :due true :sampled-at 0}]
                  (if-let [ended (deref child 0 nil)]
                    {:reason "ot-exited" :exit (:exit ended)}
                    (let [events (take-events! queue (if (:due st) 0 heartbeat-ms))

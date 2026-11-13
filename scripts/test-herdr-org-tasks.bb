@@ -291,9 +291,11 @@
           (swap! calls conj (vec args))
           (case (vec (take 2 args))
             ["api" "snapshot"] {:snapshot @s}
-            ["pane" "process-info"] {:process_info (if (str/starts-with? (last args) "tasks")
-                                                    (if @live {:shell_pid 22} {:shell_pid 23})
-                                                    local-info)}
+            ["pane" "process-info"] {:process_info (or (:process (host/pane @s (last args)))
+                                                     (if (str/starts-with? (last args) "tasks")
+                                                       (if @live {:shell_pid 22} {:shell_pid 23})
+                                                       local-info))}
+            ["pane" "close"] (do (swap! s update :panes #(remove (fn [x] (= (nth args 2) (:pane_id x))) %)) {})
             ["pane" "resize"] (do (Double/parseDouble (last args)) {})
             ["pane" "layout"] {:layout {:panes [] :splits []}}
             ["plugin" "pane"]
@@ -319,6 +321,7 @@
       (f {:state s :calls calls :live live :time timestamp}))))
 
 (defn- opens [calls] (filter #(= ["plugin" "pane" "open"] (take 3 %)) @calls))
+(defn- pane-closes [calls] (filter #(= ["pane" "close"] (take 2 %)) @calls))
 (defn- closes [calls] (filter #(= ["plugin" "pane" "close"] (take 3 %)) @calls))
 (defn- task-panes [state] (sort (keep #(when (str/starts-with? (:pane_id %) "tasks") (:pane_id %)) (:panes @state))))
 
@@ -423,6 +426,92 @@
           (is (not (fs/exists? (fs/path dir (str tab2 ".json")))))
           (is (not (fs/exists? (fs/path dir "w1:t7.json"))) "a dead legacy index is removed too")
           (is (= [(str "tasks-" tab)] (task-panes state)) "the single pane opens")))))))
+
+;; ── Restored panes ────────────────────────────────────────────────
+;; The shape that Herdr 0.9.5 restored on Linux after `herdr session stop`:
+;; same pane ID and label, a new terminal, and only a shell in the plugin root.
+
+(def plugin-root (str (fs/canonicalize host-source-root)))
+(def old-record {:pane "w1:p2" :tab tab :terminal "term-old" :pid 22 :identity "start command"
+                 :label "Tasks :: ~/p" :updatedAt 1000})
+(def restored-pane {:pane_id "w1:p2" :tab_id tab :terminal_id "term-new" :label "Tasks :: ~/p"
+                    :foreground_cwd plugin-root
+                    :process {:shell_pid 77 :foreground_processes [{:pid 77 :name "zsh"}]}})
+
+(deftest a-restored-pane-is-recognised-only-by-its-full-shape
+  (let [info (:process restored-pane)]
+    (is (host/restored? old-record restored-pane info plugin-root) "positive control")
+    (doseq [[why record current info root]
+            [["another pane ID" old-record (assoc restored-pane :pane_id "w1:p3") info plugin-root]
+             ["another tab" old-record (assoc restored-pane :tab_id tab2) info plugin-root]
+             ["the same terminal: the live pane" old-record (assoc restored-pane :terminal_id "term-old") info plugin-root]
+             ["a renamed pane" old-record (assoc restored-pane :label "mine") info plugin-root]
+             ["a record without a label" (dissoc old-record :label) restored-pane info plugin-root]
+             ["another folder" old-record (assoc restored-pane :foreground_cwd (str (fs/cwd))) info plugin-root]
+             ["no plugin root" old-record restored-pane info nil]
+             ["an agent" old-record (assoc restored-pane :agent "pi") info plugin-root]
+             ["a running command" old-record restored-pane
+              (update info :foreground_processes conj {:pid 78 :name "vim"}) plugin-root]
+             ["a foreground process that is not the shell" old-record restored-pane
+              {:shell_pid 77 :foreground_processes [{:pid 78 :name "bb"}]} plugin-root]
+             ["no process information" old-record restored-pane nil plugin-root]]]
+      (is (not (host/restored? record current info root)) why))))
+
+(defn- add-record! [dir record]
+  (let [instance (host/uuid)]
+    (fs/create-dirs (fs/path dir instance))
+    (host/atomic! (fs/path dir instance "owner.json") (assoc record :instance instance))))
+
+(deftest ensure-closes-restored-panes-and-leaves-one-compact-pane
+  (temporary
+   (fn [dir]
+     (fake-host dir
+      (fn [{:keys [calls state]}]
+        (with-redefs [host/plugin-root (constantly plugin-root)]
+          (add-record! dir old-record)
+          (add-record! dir (assoc old-record :pane "w1:p3" :label "Tasks :: ~/q"))
+          (add-record! dir (assoc old-record :pane "w1:p4"))
+          (swap! state update :panes conj restored-pane
+                 (assoc restored-pane :pane_id "w1:p3" :label "Tasks :: ~/q")
+                 ;; A user's shell with the same shape but no record.
+                 (assoc restored-pane :pane_id "w1:p5")
+                 ;; A restored pane in which the user runs a command.
+                 (assoc restored-pane :pane_id "w1:p4"
+                        :process {:shell_pid 77 :foreground_processes [{:pid 77} {:pid 78}]}))
+          (host/ensure! host/defaults)
+          (is (= #{["pane" "close" "w1:p2"] ["pane" "close" "w1:p3"]} (set (pane-closes calls)))
+              "only the recorded, idle restored panes close")
+          (is (= [(str "tasks-" tab)] (task-panes state)) "one compact pane opens")
+          (is (= #{"w1:p4" "w1:p5"} (set (keep #(#{"w1:p2" "w1:p3" "w1:p4" "w1:p5"} (:pane_id %)) (:panes @state)))))
+          (reset! calls [])
+          (host/ensure! host/defaults)
+          (is (empty? (pane-closes calls)) "the live compact pane is not a restored pane")
+          (is (seq @calls) "control: the second ensure ran")))))))
+
+(deftest a-renewed-label-keeps-the-index-valid
+  (temporary
+   (fn [dir]
+     (let [instance (host/uuid)
+           record {:instance instance :pane "tasks" :tab tab :terminal "term-tasks" :pid 22}]
+       (fs/create-dirs (fs/path dir instance))
+       (host/atomic! (fs/path dir instance "owner.json") (assoc record :label "Tasks :: ~/a" :updatedAt 2))
+       (is (= "Tasks :: ~/a" (:label (host/instance-record dir (assoc record :updatedAt 1)))))
+       (is (nil? (host/instance-record dir (assoc record :pane "other")))
+           "control: another field still breaks the match")))))
+
+(deftest ensure-closes-restored-panes-while-display-is-off
+  (temporary
+   (fn [dir]
+     (fake-host dir
+      (fn [{:keys [calls state]}]
+        (with-redefs [host/plugin-root (constantly plugin-root)]
+          (host/toggle! host/defaults)
+          (is (false? (host/display-enabled?)) "control: display is off")
+          (add-record! dir old-record)
+          (swap! state update :panes conj restored-pane)
+          (host/ensure! host/defaults)
+          (is (= [["pane" "close" "w1:p2"]] (pane-closes calls)))
+          (is (empty? (opens calls)))))))))
 
 (deftest select-opens-a-popup-for-the-compact-pane-project
   (temporary
@@ -661,6 +750,7 @@
                       :moves @moves
                       :snapshots @snapshots
                       :index (host/read-json (host/index-path root))
+                      :owner (host/read-json (fs/path (System/getenv "OT_HOST_DIR") "owner.json"))
                       :error @error
                       :exit-record (host/read-json (fs/path (System/getenv "OT_HOST_DIR") host/exit-name))
                       :failed-infos @failed-infos}))))
@@ -713,6 +803,8 @@
        (is (= #{"compact"} (:modes out)))
        (is (= #{["ctrl+b t: select"]} (:hints out)))
        (is (= [["tasks" "Tasks :: ~/a"]] (take 1 (:renames out))) "the label follows the TUI title")
+       (is (= "Tasks :: ~/a" (:label (:owner out))) "the owner record keeps the label for restore checks")
+
        (is (= [] (:closes out)) "control: with other panes in the tab, the pane stays open")
        (is (= [] (:moves out)) "the focused tab already holds the pane")
        (is (nil? (:error out)))
