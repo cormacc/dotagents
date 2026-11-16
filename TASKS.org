@@ -217,6 +217,33 @@ Deadline: Atlassian removes the v1 endpoint on 2027-03-01 and then moves v1 user
 :END:
 Follow-up to task:d20d04b8-9f0a-4ec6-956e-c535e7ae205a. `oh usage --format status` shows `exp?` for an expired access token, and `pi auth check --provider <id>` refreshes a base provider through the locked Pi auth storage. Pi 1.5.2 does not load extensions for `pi auth`, so `pi auth check --provider anthropic-1 --no-refresh --json` returns `provider_not_found` (measured 2026-11-13): no Pi CLI route refreshes a named `anthropic-<N>` account. Options: ask upstream for extension loading in `pi auth`; or a documented one-request Pi session on that account. The collector stays read-only (contract.md section Owned credential boundary). Open question kept from the original task: does Anthropic rotate refresh tokens on each refresh?
 
+** TODO [#A] herdr-orch: give managed worktrees usable submodules :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: ed32d304-84a5-41c2-8a9c-41be3e848214
+:CREATED: [2026-11-16 Mon 13:38]
+:END:
+:LOGBOOK:
+- Created [2026-11-16 Mon 13:38]
+:END:
+A managed checkout from `--worktree new` (`create-worktree!` in `cli.clj`, plain `git worktree add`) leaves every submodule folder empty, and no persona, trait, reference or prompt text tells the child. A child in a superproject whose build or tests need its submodules (for example the CD repo with `neuromod` and `common`) cannot work effectively. If the child runs `git submodule update --init`, it gets private clones in the checkout module store (`git rev-parse --git-path modules`), fetched from the `.gitmodules` URL; submodule commits stay only there, and `oh worktree remove` refuses that checkout (commit 476483b).
+
+Desired outcome (owner, 2026-11-16): a robust solution. The child gets a complete, buildable tree with no manual step, and integration and teardown need no repetitive manual reconciliation across submodule branches.
+
+Requirements:
+- At checkout creation, `oh` makes every submodule (recursively) usable, at the commit that the superproject records, without a network fetch when the main checkout already has the module repository.
+- A submodule commit that the child makes is never lost at teardown and never needs hand-copying between repositories.
+- Integration and teardown handle submodule branches mechanically: `oh worktree remove` (and failed-launch cleanup) remove nested checkouts in the correct order and leave no stale registrations or occupied branches. Report, do not silently discard, submodule work that is not integrated.
+- Behaviour when the main checkout has an uninitialised submodule, or when a submodule has nested submodules, is defined and tested.
+- Contract (section Explicit teardown and worktree creation), SKILL.md Isolation bullet and worker guidance describe the result.
+
+Candidate designs (decide in a change-record):
+1. Each submodule is a linked worktree of the shared module repository (`git -C .git/modules/<name> worktree add`), on an `orch/*` branch per submodule. No clone; child commits land in the shared repository. Needs branch naming, deepest-first teardown, and a rule for how a child submodule commit joins its result and the parent integration.
+2. Private clones per checkout, seeded from the shared module repositories (`--reference` or alternates), with `oh` verifying before teardown that every submodule commit exists elsewhere, then deleting the store. Simpler topology; costs disk and a reachability check.
+
+Out of scope as an end state: only telling the child that submodules are empty. Acceptable as an interim warning if the design work is long.
+
+Evidence: git 2.56.0 scratch tests and reviewer 67d9d6c8 report (2026-11-13): `git worktree remove` refuses after `submodule deinit` while a module store exists; `submodule deinit` on a shared-module linked worktree deletes its folder but leaves its registration, so its branch stays checked out. Untested: how `oh --worktree new` behaves when started from inside a submodule checkout.
+
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:
