@@ -62,10 +62,12 @@ export function itemText(item: Item): string {
  * The ledger entry decides whether an item is this session's business: another parent's
  * round is not, and an item the parent already captured needs no delivery. Both matter at
  * first start, when the delivered set is empty and the directory holds every past item.
+ * An item without an entry is skipped too: `oh task collect` cannot capture it, and the
+ * delivered set is per session, so each new session would otherwise receive it again.
  */
 export function skipByLedger(root: string, task: string, itemNumber: number, sessionFile: string | undefined): boolean {
   const entry = join(root, ".tmp", "herdr-orch", "ledger", `${task}.json`);
-  if (!task || !existsSync(entry)) return false;
+  if (!task || !existsSync(entry)) return true;
   try {
     const data = JSON.parse(readFileSync(entry, "utf8")) as { "parent-session"?: unknown; items?: { item?: unknown; "captured-at"?: unknown }[] };
     const parent = data["parent-session"];

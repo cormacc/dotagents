@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DELIVERED_SUFFIX, ITEM_ENTRY, itemNumber, itemText, orchestratorSession, parseItem, skipByLedger, startDelivery } from "./delivery.ts";
@@ -21,8 +21,18 @@ function fixture() {
   const env = { HERDR_ENV: "1", ORCH_ASSIGNMENT_ROOT: root };
   const start = (overrides: Record<string, string | undefined> = {}) =>
     startDelivery(pi as any, ctx as any, { env: { ...env, ...overrides }, pollMs: 60_000, watchDir: (_d, cb) => { onChange = cb; return { close() {} } as any; } });
-  const publish = (task: string, status = "COMPLETE", name = `${task}.result`) => { writeFileSync(join(dir, name), envelope(task, status)); return join(dir, name); };
-  return { root, dir, sessionFile, sent, start, publish, change: () => onChange?.(), cleanup: () => rmSync(root, { recursive: true, force: true }) };
+  // An entry naming this session, unless the test wrote its own first, as `oh task start` does before any item exists.
+  const ledger = (task: string) => {
+    const entry = join(dir, "ledger", `${task}.json`);
+    mkdirSync(join(dir, "ledger"), { recursive: true });
+    if (!existsSync(entry)) writeFileSync(entry, JSON.stringify({ task, "parent-session": sessionFile }));
+  };
+  const publish = (task: string, status = "COMPLETE", name = `${task}.result`, withLedger = true) => {
+    if (withLedger) ledger(task);
+    writeFileSync(join(dir, name), envelope(task, status));
+    return join(dir, name);
+  };
+  return { root, dir, sessionFile, sent, start, publish, ledger, change: () => onChange?.(), cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 async function main() {
@@ -77,6 +87,7 @@ async function main() {
     // A partial file is retried, not recorded; delivered once after it completes.
     const f = fixture();
     const d = f.start()!;
+    f.ledger("partial");
     const p = join(f.dir, "partial.result");
     writeFileSync(p, "--- HERDR RESULT v1 ---\nCHILD: c\nTASK: partial\n");
     f.change();
@@ -91,7 +102,7 @@ async function main() {
     f.cleanup();
   }
   {
-    // A foreign parent's item is skipped; an item with no ledger entry and one recorded for this session are delivered.
+    // A foreign parent's item and an item with no ledger entry are skipped; one recorded for this session is delivered.
     const f = fixture();
     writeFileSync(join(f.dir, "ledger", "theirs.json"), JSON.stringify({ task: "theirs", "parent-session": "/elsewhere/session.jsonl" }));
     writeFileSync(join(f.dir, "ledger", "mine.json"), JSON.stringify({ task: "mine", "parent-session": f.sessionFile }));
@@ -99,17 +110,31 @@ async function main() {
     writeFileSync(join(f.dir, "ledger", "captured.json"), JSON.stringify({ task: "captured", "parent-session": f.sessionFile, items: [{ item: 1, "captured-at": "2026-11-07T00:00:00Z" }] }));
     assert.equal(skipByLedger(f.root, "theirs", 1, f.sessionFile), true);
     assert.equal(skipByLedger(f.root, "mine", 1, f.sessionFile), false);
-    assert.equal(skipByLedger(f.root, "none", 1, f.sessionFile), false);
+    assert.equal(skipByLedger(f.root, "none", 1, f.sessionFile), true, "collect cannot capture an item without an entry");
+    assert.equal(skipByLedger(f.root, "", 1, f.sessionFile), true, "an item without a TASK has no entry either");
     assert.equal(skipByLedger(f.root, "captured", 1, f.sessionFile), true);
     assert.equal(skipByLedger(f.root, "captured", 2, f.sessionFile), false, "a later uncaptured item of a captured round is still delivered");
     assert.equal(itemNumber("/x/t.result"), 1);
     assert.equal(itemNumber("/x/t.result.3"), 3);
-    f.publish("theirs"); f.publish("mine"); f.publish("none"); f.publish("captured"); f.publish("captured", "WAITING", "captured.result.2");
+    f.publish("theirs"); f.publish("mine"); f.publish("none", "COMPLETE", "none.result", false); f.publish("captured"); f.publish("captured", "WAITING", "captured.result.2");
     const d = f.start()!;
-    assert.deepEqual(f.sent.map((s) => /task (\S+):/.exec(s.content)?.[1]).sort(), ["captured", "mine", "none"]);
+    assert.deepEqual(f.sent.map((s) => /task (\S+):/.exec(s.content)?.[1]).sort(), ["captured", "mine"]);
     assert.equal(d.delivered().some((p) => p.endsWith("theirs.result")), false, "a skipped foreign item stays undelivered, not recorded");
-    assert.equal(d.delivered().some((p) => p.endsWith("captured.result")), false, "a captured item stays unrecorded too");
+    assert.equal(d.delivered().some((p) => p.endsWith("none.result")), false, "an item without an entry stays unrecorded");
+    // A new session (another session file) does not receive the orphan either.
     d.stop();
+    const sentBefore = f.sent.length;
+    const other = startDelivery({ sendMessage: (m: any) => { f.sent.push({ content: m.content, options: undefined }); } } as any,
+      { cwd: f.root, sessionManager: { getSessionFile: () => join(f.root, "other.jsonl") } } as any,
+      { env: { HERDR_ENV: "1", ORCH_ASSIGNMENT_ROOT: f.root }, pollMs: 60_000, watchDir: () => undefined })!;
+    assert.equal(f.sent.slice(sentBefore).some((s) => s.content.includes("task none:")), false, "a new session does not receive the orphan");
+    other.stop();
+    // An entry written after the item is honoured by the next scan, because the skip is not recorded.
+    f.ledger("none");
+    const d3 = f.start()!;
+    assert.equal(f.sent.some((s) => s.content.includes("task none:")), true, "a late entry makes the item deliverable");
+    d3.stop();
+    assert.equal(d.delivered().some((p) => p.endsWith("captured.result")), false, "a captured item stays unrecorded too");
     f.cleanup();
   }
   {
