@@ -225,6 +225,7 @@ Follow-up to task:d20d04b8-9f0a-4ec6-956e-c535e7ae205a. `oh usage --format statu
 :LOGBOOK:
 - Created [2026-11-16 Mon 13:38]
 :END:
+#+IMPORT: [[plan:2026-11-16-herdr-orch-submodules.org]]
 A managed checkout from `--worktree new` (`create-worktree!` in `cli.clj`, plain `git worktree add`) leaves every submodule folder empty, and no persona, trait, reference or prompt text tells the child. A child in a superproject whose build or tests need its submodules (for example the CD repo with `neuromod` and `common`) cannot work effectively. If the child runs `git submodule update --init`, it gets private clones in the checkout module store (`git rev-parse --git-path modules`), fetched from the `.gitmodules` URL; submodule commits stay only there, and `oh worktree remove` refuses that checkout (commit 476483b).
 
 Desired outcome (owner, 2026-11-16): a robust solution. The child gets a complete, buildable tree with no manual step, and integration and teardown need no repetitive manual reconciliation across submodule branches.
@@ -268,7 +269,6 @@ CLOSED: [2026-11-13 Fri 21:33]
 - State "DONE" from "STARTED" [2026-11-13 Fri 21:33]
 :END:
 Groups small herdr-orch fixes from 2026-11-13 for one batched execution: submodule worktree teardown, ledger-less result re-delivery, and the expired-token usage state. Close and archive this parent when every child is DONE or CANCELLED.
-
 *** DONE herdr-orch: tear down worktrees whose submodules are worktrees too :herdr_orch:
 CLOSED: [2026-11-13 Fri 21:21]
 :PROPERTIES:
@@ -280,7 +280,6 @@ CLOSED: [2026-11-13 Fri 21:21]
 - State "DONE" from "TODO" [2026-11-13 Fri 21:21]
 :END:
 Check what `oh worktree remove` does with a superproject worktree whose submodule checkouts are themselves worktrees of shared module repos (`.git/modules/<name>`), and document or fix it in `skills/herdr-orch/SKILL.md`. Evidence (CD repo, 2026-11-13): plain `git worktree remove` refused both levels without `--force` ("working trees containing submodules cannot be moved or removed"); the order that worked was the nested submodule's own submodule check, then the `neuromod` and `common` worktrees, then the CD worktree. A leftover worktree keeps its branch checked out and hides which checkout is current. herdr-orch does not mention submodules. The CD worktrees were hand-made, not `oh`-managed, so `oh` behaviour is untested.
-
 *** DONE herdr-orch: stop re-delivering ledger-less result items in each new session :ext:herdr_orch:
 CLOSED: [2026-11-13 Fri 21:10]
 :PROPERTIES:
@@ -304,7 +303,6 @@ Origin:
 Evidence:
 - `.tmp/herdr-orch/68deac3a-…-d11d41f3-….result` (planner-68deac3a, 2026-10-20) had no ledger entry; the ledger lists 44 other tasks. A new session on 2026-11-13 received it at once as a `herdr-orch-item` steer, and `oh task collect` failed with `unknown assignment task`. The cause of the missing ledger entry is not known.
 - Workaround: move the orphan `.result` out of `.tmp/herdr-orch/` (here to `.tmp/herdr-orch-orphans/`).
-
 *** DONE Distinguish refreshable expired tokens from auth_required in oh usage status :skill:herdr_orch:
 CLOSED: [2026-11-13 Fri 21:13]
 :PROPERTIES:

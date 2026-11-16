@@ -1,0 +1,184 @@
+#+TITLE: herdr-orch: give managed worktrees usable submodules
+#+DATE: 2026-11-16 Mon
+#+PARENT: [[task:ed32d304-84a5-41c2-8a9c-41be3e848214][herdr-orch: give managed worktrees usable submodules]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/README.md]]
+#+SPEC: [[proj:skills/herdr-orch/subagents/worker.md]]
+
+* Intent
+
+Give a managed child complete recursive Git content before launch, preserve its submodule commits, and remove its checkout without repetitive per-module reconciliation. The parent integrates one superproject result containing the module gitlinks; module main branches need not advance.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+Approved design: use linked module worktrees backed by shared module repositories. Prepare recursively, checkpoint deepest-first, retain commit-protecting refs, and remove owned checkouts deepest-first. This record specifies planned behaviour, not shipped implementation.
+
+** Scope
+
+*** In scope
+
+- Explicit and implicit managed checkout creation, interactive/fork and measurement callers, recursive content preparation, publication, continuation, reconciliation, explicit removal and failed-launch cleanup.
+- Existing local module repositories, locally missing commits, uninitialised modules, nested modules and launch from inside a submodule repository.
+- Ownership and recovery metadata in the existing ledger; real-Git fixtures and failure-path tests.
+- The four declared contracts, generated checkpoint guidance and relevant CLI help in =skills/herdr-orch/scripts/src/herdr_orch/cli.clj=.
+
+*** Out of scope
+
+- Dependency installation, direnv authorisation or Nix devshell entry; environment awareness is parked as separate scope.
+- Automatic merge, squash, rebase, push, conflict resolution or branch deletion. [[task:e88e718e-09b1-4dc0-a0df-dc176f1e451f][Guarded integration]] stays independent.
+- Automatic adoption or repair of unrecorded module repositories, module additions/removals/replacements during a child round, or legacy private stores.
+- UI changes, new dependencies, new configuration switches and changes to shared-tree publication or externally supplied checkout ownership.
+
+** Acceptance
+
+*** Core functionality
+
+- [ ] Explicit managed creation checks out each recorded gitlink at its recorded commit before child launch.
+- [ ] Implicit managed creation has the same recursive preparation behaviour.
+- [ ] Interactive/fork launches use the prepared tree.
+- [ ] Measurement launches use the prepared tree.
+- [ ] Locally available module commits cause no network access.
+- [ ] Missing module content is obtained non-interactively from the effective configured URL before launch.
+- [ ] Module ownership is recoverable when preparation stops part-way through.
+- [ ] Write-enabled publication checkpoints changed owned modules deepest-first.
+- [ ] Each containing checkpoint records its child modules' resulting gitlinks.
+- [ ] =CHECKPOINT= remains the top-level repository tip.
+- [ ] Published module commits remain reachable through retained refs after checkout removal.
+- [ ] Continuation preserves the owned module inventory.
+- [ ] Collect, status and worktree listing expose module paths, bases, tips, branches, dirt and recovery state through reconciliation.
+- [ ] Explicit teardown reports module results not present in the parent's recorded gitlinks.
+- [ ] Explicit teardown removes owned nested registrations without a manual per-module command.
+- [ ] Failed-launch cleanup removes pristine partial preparation safely.
+- [ ] Interrupted removal resumes without stale registrations or occupied child branches after success.
+- [ ] Contract, skill, README and worker guidance describe preparation, publication, retained refs and cleanup.
+
+*** Edge cases
+
+- [ ] An uninitialised source module can supply a managed checkout without populating the source working tree.
+- [ ] A locally present repository missing the required commit takes the fetch fallback.
+- [ ] Nested modules use their containing revision's gitlinks, not the source checkout's current module HEADs.
+- [ ] Relative module URLs resolve with Git-compatible parent-remote semantics.
+- [ ] Authentication, network or missing-object failure prevents child launch.
+- [ ] Launch from inside a submodule isolates that repository rather than its enclosing superproject.
+- [ ] Two children sharing module repositories have distinct checkout branches.
+- [ ] Removing one child leaves its sibling checkout usable.
+- [ ] Recursive read-only dirt refuses publication without committing.
+- [ ] Publication retry after a nested commit or envelope-write failure preserves the completed checkpoints.
+- [ ] Missing, detached, replaced, dirty, foreign-locked or unrecorded module state is reported without destructive repair.
+- [ ] Unexpected private module stores remain protected by refusal.
+- [ ] Ignored module paths are reported under the existing explicit-removal policy; failed-launch cleanup retains ignored data.
+- [ ] No-submodule and legacy ledger entries retain their existing supported behaviour.
+
+*** Anti-criteria
+
+- [ ] Must not: launch with incomplete recorded Git content.
+- [ ] Must not: stage, commit, reset or deinitialise the source module working trees.
+- [ ] Must not: change the source index or checkout configuration during normal lifecycle operations.
+- [ ] Must not: use force removal or delete shared module repositories or commit-protecting refs.
+- [ ] Must not: remove a dirty or foreign checkout after another module's preflight has passed.
+- [ ] Must not: weaken ownership, live-round, canonical-path, foreign-lock or read-only guards.
+- [ ] Must not: enable network protocol overrides or execute custom module update commands merely to make preparation succeed.
+- [ ] Must not: infer integration into module main branches from superproject gitlink integration.
+- [ ] Must not: turn close, prune, orphans or collect-close into checkout removal.
+
+** Decisions
+
+- Shared module repositories and linked worktrees :: child commits already live in the repositories the parent uses. Reject private clones with alternates/reference seeding: they add transfer, durable-ref and deletion-verification failure points without removing recursive lifecycle work. Warning-only behaviour is not completion.
+- Complete Git content, not an environment bootstrap :: the owner confirmed that project direnv/Nix devshells remain responsible for dependencies.
+- Local-first preparation with automatic fetch fallback :: reuse available objects; obtain only missing content without credential prompts. Preserve ordinary Git URL/protocol trust boundaries. An unavailable commit refuses launch, not completeness.
+- Gitlink integration, not module-branch integration :: the parent integrates one superproject checkpoint. A module result is present when the parent's recorded gitlink equals its result tip or is a descendant in that module repository; otherwise report it as not demonstrated integrated. Squashed or equivalent rewrites are not inferred. This report is informational: retained refs permit safe clean-checkout removal without integration.
+- Record ownership before mutation :: track canonical module path, parent path, repository identity, branch, base and preparation/removal progress in the existing ledger. Use deterministic collision-safe branch names scoped to child lineage and module path. Continuation carries this inventory forward. Keep the existing four-field top-level =:worktree= identity intact; module metadata is a separate ledger field.
+- Preserve published revisions :: retain module branches and protect any published tip that branch movement would otherwise leave unreachable. Superproject gitlinks alone are not module-repository retention refs. No automatic ref deletion is introduced.
+- Preflight before post-order mutation :: validate the complete inventory before checkpointing or teardown, then recheck identity at each mutation. Checkpoints commit deepest-first; removal unregisters deepest-first and restores empty gitlink directories before removing their containing checkout. Do not use =submodule deinit= in the normal shared-repository path.
+- Recovery is inspectable and repeatable :: preparation and cleanup record partial progress. Reconstruct a mutation completed before its ledger update from Git identity and registration, never from directory existence alone. Do not claim filesystem-wide atomicity. Unknown topology is retained for explicit recovery.
+- Preserve caller ownership :: source repository discovery remains relative to =source-cwd=; assignment-root relocation changes destination and ledger location only. Existing-target and shared-target paths do not acquire module teardown ownership.
+
+** Risks
+
+- Shared repository setup can race across assignments; serialise repository creation/ref reservation at the repository identity and test parallel children without serialising their whole working lifetime.
+- Missing-store creation and relative URL resolution need real-Git tests; the planning probe establishes linked topology, not the complete bootstrap implementation.
+- Git configuration is shared between checkouts; do not copy the existing deinit-based manual recovery sequence into managed teardown. Compare source config/index/worktree snapshots in tests.
+- External processes can alter a checkout after preflight; revalidate identities and refuse unexpected state, retain refs, and report partial cleanup rather than forcing success.
+- Local retention does not publish module commits remotely. Remote distribution and integration conflicts remain operator-owned.
+
+** Follow-ups
+
+- [[task:e88e718e-09b1-4dc0-a0df-dc176f1e451f][Evaluate guarded worktree integration]] remains independent; it must preserve this record's gitlink-based module result contract if implemented later.
+
+* Plan
+
+Keep the lifecycle implementation coherent: creation must not ship without its matching publication and removal handling. Independent acceptance/recovery validation follows implementation.
+
+** TODO [#A] Implement the managed submodule lifecycle :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 217cec43-12b3-4e3a-8284-36fc2764acd2
+:CREATED: [2026-11-16 Mon 20:20]
+:END:
+:LOGBOOK:
+- Created [2026-11-16 Mon 20:20]
+:END:
+Acceptance criteria:
+- Managed interactive launches prepare the recorded recursive Git content before starting a child.
+- Managed fork launches use the same prepared content.
+- Managed measurement launches use the same prepared content.
+- Local objects avoid fetching.
+- Missing objects use a non-interactive fetch.
+- Incomplete preparation prevents child launch.
+- Ledger-owned module identity survives partial preparation.
+- Continuation preserves the module inventory.
+- Recursive publication produces retained module checkpoints before containing gitlinks.
+- Reconciliation reports module state without mutating Git.
+- Explicit teardown removes owned nested registrations without per-module operator commands.
+- Failed-launch fixtures demonstrate safe recovery.
+- Interrupted-cleanup fixtures demonstrate safe retry.
+- Real-Git tests cover the Core functionality, Edge cases and Anti-criteria in the record's Acceptance section.
+- Contract, skill, README and worker guidance match the implemented lifecycle.
+- Must not: change shared-tree publication, acquire external-checkout ownership, use force removal, delete retained refs, or alter source checkout/index/configuration.
+
+Implementation reference and edit scope: `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` (`create-worktree!`, `checkpoint-worktree!`, `reconciliation`, `worktree-remove!`, `cleanup-failed-checkout!`, continuation whitelist and checkpoint guidance), its existing ledger facilities in `skills/herdr-orch/scripts/src/herdr_orch/ledger.clj`, `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` and directly affected fixtures, plus the four SPEC files in this record. Follow the record's Decisions and Implementation sections; update both creation and publication callers together. Use the existing `spawn-worktree!` fixture and preserve legacy private-store refusal assertions. No unrelated refactor or new dependency.
+
+** TODO [#A] Independently validate managed submodule acceptance and recovery :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 7354678c-9b2e-4a42-ae13-a51eaab7c97b
+:CREATED: [2026-11-16 Mon 20:20]
+:BLOCKED-BY: task:217cec43-12b3-4e3a-8284-36fc2764acd2
+:END:
+:LOGBOOK:
+- Created [2026-11-16 Mon 20:20]
+:END:
+Acceptance criteria:
+- A fresh validator maps each record Acceptance criterion to observed evidence or a precise unmet finding.
+- A disposable nested-module scenario completes launch, child edits, publication, parent gitlink integration and teardown without manual per-module reconciliation.
+- Published module commits remain reachable after checkout removal and a disposable garbage-collection check.
+- Injected preparation failure leaves recoverable state.
+- Injected checkpoint failure preserves completed checkpoints.
+- Injected removal failure leaves recoverable state.
+- Cleanup retry leaves no stale child registrations.
+- Concurrent-child checks demonstrate that removal leaves the sibling usable.
+- Source checkout, index and configuration snapshots remain unchanged by lifecycle operations.
+- Refusal probes include passing controls and known-bad topology, dirt and foreign-lock inputs.
+- The CLI namespace suite and repository checks have recorded exit statuses, with changed-file coverage verified.
+- The record distinguishes completed validation from untested surfaces; unresolved failures block acceptance.
+- Must not: close the parent task, prune the final record, weaken acceptance criteria, or repair production code as part of validation.
+
+Read-only implementation scope: the first task's changed files and this record's four SPEC files; permitted writes are isolated `.tmp/` evidence and validation notes in this record. Use `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` (`spawn-worktree!`, publication and cleanup fixtures) as the scenario reference. Run `bb test-clojure herdr-orch.cli-test` and the repository checks described under Implementation in disposable, bounded test environments. Report implementation fixes back to the owning task; no live child launch is required.
+
+* Implementation
+
+Planning baseline: =afba403c1be8c50e2c7d4f3e651b7be97d6bd611=. No production changes have been made.
+
+- Owning implementation: =skills/herdr-orch/scripts/src/herdr_orch/cli.clj=; creation via =create-worktree!= has interactive and measurement callers; =checkpoint-worktree!= has ordinary and supervisor publication callers; =reconciliation= feeds collect/status/list; =worktree-remove!= and =cleanup-failed-checkout!= own teardown. Update the continuation identity whitelist and =checkpoint-guidance= in the same change.
+- Tests: =skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj=, particularly =spawn-worktree!=, =worktree-remove-refuses-a-checkout-with-submodules-until-the-module-store-is-gone=, =continue-carries-worktree-identity-forward-and-drops-an-unlisted-field= and the publication/failed-launch fixtures. Preserve the legacy private-store guard assertions while replacing the managed-empty-submodule expectation.
+- Use the existing ledger read/write/update facilities in =skills/herdr-orch/scripts/src/herdr_orch/ledger.clj=. If protocol helpers or fixtures change, include their callers and tests in the lifecycle task; do not add another persistence system.
+- Implementation validation: =bb test-clojure herdr-orch.cli-test= exercises the owning CLI namespace. Run repository =bb test= and =scripts/check.sh= before acceptance; inspect the runner and changed-file coverage before attributing totals. Run destructive/concurrent fixtures under a bounded timeout in isolated temporary roots. Prove refusal tests with passing controls and known-bad input.
+
+* Validation
+
+Planning-only evidence on Git 2.56.0: =.tmp/submodule-plan-probe.clj= and =.tmp/submodule-plan-probe-output-2.txt=. Two nested linked module worktrees were removed deepest-first without deinit or force; recreating empty gitlink directories was necessary to avoid a missing-path dirt refusal. Parent config stayed byte-identical, and final module worktree listings contained only their primary registrations. The earlier failed probe is retained in =.tmp/submodule-plan-probe-output.txt= as the missing-directory control.
+
+The same disposable probe created a locked worktree from inside a submodule and confirmed that its common repository and HEAD were the module's, not the superproject's. Source inspection confirms both current =create-worktree!= callers pass =source-cwd=. A full =oh= launch from this topology remains an implementation acceptance test; no live child launch or feature suite was run during planning.
