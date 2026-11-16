@@ -2864,6 +2864,20 @@
                  (throw (ex-info "worktree removal and re-lock failed" {:path path :lock-error (ex-message lock-error)} e)))))
         (throw e)))))
 
+;; `git worktree remove` refuses a checkout with submodules and offers only `--force`,
+;; which would also delete submodule commits that exist only in the checkout's own
+;; module store. Refuse first, before the unlock, and name what the operator must check.
+;; The store keeps the refusal alive after `submodule deinit`, so both are reported.
+(defn- submodule-blockers [path]
+  (let [initialised (->> (str/split-lines (git! path "submodule" "status" "--recursive"))
+                         (remove #(or (str/blank? %) (str/starts-with? % "-")))
+                         (mapv str/trim))
+        raw (fs/path (git! path "rev-parse" "--git-path" "modules"))
+        store (if (fs/absolute? raw) raw (fs/path path raw))
+        store (when (fs/exists? store) (str (fs/canonicalize store)))]
+    (when (or (seq initialised) store)
+      (cond-> {:submodules initialised} store (assoc :module-store store)))))
+
 (defn worktree-remove! [task]
   (when-not task (usage-error "worktree remove requires a full task uuid" {}))
   (let [entry (ledger/read! task)]
@@ -2878,6 +2892,10 @@
         (let [dirty (dirty-paths path) ignored (ignored-paths path)]
           (when (seq dirty)
             (fail "worktree remove refused: checkout is dirty" {:task task :path path :dirty dirty :ignored ignored}))
+          (when-let [blockers (submodule-blockers path)]
+            (fail (str "worktree remove refused: checkout has submodules; keep any submodule commit that exists only here, "
+                       "then run `git -C <path> submodule deinit --all`, delete the module store, and remove again")
+                  (merge {:task task :path path} blockers)))
           (let [tip (head-sha path) ancestor? (ancestor-of-parent-head? (source-cwd) tip)]
             (remove-managed-worktree! (source-cwd) path)
             {:status "removed" :task task :child (:child entry) :path path :branch branch :base base

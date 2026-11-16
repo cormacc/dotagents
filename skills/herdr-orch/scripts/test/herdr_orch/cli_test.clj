@@ -2869,6 +2869,69 @@
       (is (fs/exists? path))
       (is (str/includes? (git-worktree-list dir) path)))))
 
+(deftest worktree-remove-refuses-a-checkout-with-submodules-until-the-module-store-is-gone
+  (let [{:keys [env dir]} (fake-env {})
+        sub (fixture-git-repo! "oh-submodule-")]
+    (git-in! dir "-c" "protocol.file.allow=always" "submodule" "add" "-q" sub "vendor/sub")
+    (git-in! dir "commit" "-q" "-m" "add submodule")
+    (testing "a managed checkout leaves submodules uninitialised, so removal proceeds"
+      (let [entry (spawn-worktree! env dir "uninitialised submodule")
+            path (get-in entry [:worktree :path])]
+        (publish-child! entry)
+        (let [proc (call! env "worktree" "remove" (:task entry))]
+          (is (zero? (:exit proc)) (:out proc))
+          (is (not (fs/exists? path))))))
+    (testing "a submodule checkout that is a linked worktree of the shared module repository is refused too"
+      (let [entry (spawn-worktree! env dir "shared-module submodule")
+            path (get-in entry [:worktree :path])
+            shared (str (fs/path dir ".git" "modules" "vendor" "sub"))
+            nested (str (fs/path path "vendor" "sub"))]
+        (publish-child! entry)
+        (fs/delete-tree nested)
+        (git-in! shared "worktree" "add" "-q" "-b" "shared-child" nested)
+        (let [proc (call! env "worktree" "remove" (:task entry))
+              data (get-in (result proc) [:error :data])]
+          (is (= 1 (:exit proc)) (:out proc))
+          (is (some #(str/includes? % "vendor/sub") (:submodules data)))
+          (is (nil? (:module-store data)) "no per-checkout store: the module repository is shared")
+          (is (fs/exists? nested)))
+        (testing "removing the nested worktree first, then deinit, lets removal succeed"
+          (git-in! shared "worktree" "remove" nested)
+          (git-in! path "submodule" "deinit" "-q" "--all")
+          (let [proc (call! env "worktree" "remove" (:task entry))]
+            (is (zero? (:exit proc)) (:out proc))
+            (is (not (str/includes? (git-in! shared "worktree" "list" "--porcelain") nested)))))))
+    (let [entry (spawn-worktree! env dir "initialised submodule")
+          path (get-in entry [:worktree :path])
+          store (git-in! path "rev-parse" "--git-path" "modules")
+          remove! #(call! env "worktree" "remove" (:task entry))
+          locked? #(str/includes? (git-in! dir "worktree" "list" "--porcelain") "locked Managed by oh; use oh worktree remove")]
+      (publish-child! entry)
+      (git-in! path "-c" "protocol.file.allow=always" "submodule" "update" "-q" "--init")
+      (testing "an initialised submodule is named, and the checkout and its lock stay"
+        (let [proc (remove!)
+              data (get-in (result proc) [:error :data])]
+          (is (= 1 (:exit proc)))
+          (is (str/includes? (:out proc) "checkout has submodules") (:out proc))
+          (is (some #(str/includes? % "vendor/sub") (:submodules data)))
+          (is (= (str (fs/canonicalize store)) (:module-store data)))
+          (is (fs/exists? path))
+          (is (locked?))))
+      (testing "after deinit the module store alone still refuses, as git would"
+        (git-in! path "submodule" "deinit" "-q" "--all")
+        (let [proc (remove!)
+              data (get-in (result proc) [:error :data])]
+          (is (= 1 (:exit proc)))
+          (is (= [] (:submodules data)))
+          (is (some? (:module-store data)))
+          (is (locked?))))
+      (testing "with the store deleted, removal succeeds"
+        (fs/delete-tree store)
+        (let [proc (remove!)]
+          (is (zero? (:exit proc)) (:out proc))
+          (is (= "removed" (get-in (result proc) [:result :status])))
+          (is (not (fs/exists? path))))))))
+
 ;; Deliberately triggered with known-bad input: a file matching the tracked fixture
 ;; `.gitignore` lives only in the checkout. It must be reported separately from dirty
 ;; paths, but is intentionally not a removal refusal.
