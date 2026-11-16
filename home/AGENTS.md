@@ -65,7 +65,7 @@
 - Never store transient state under `.agents/`. It holds durable agent configuration, and some harnesses mount it read-only so that an agent cannot change its own instructions.
 - Scope a repository reference sweep to tracked files with `git ls-files -z | xargs -0 grep`. A bare recursive grep also matches `.tmp/` copies and build output.
   - When the change adds files, also sweep `git ls-files -z --others --exclude-standard`, and put the positive control in one of those files. A tracked-only sweep misses a symbol in a new, untracked file.
-  - A parent-repository `git ls-files` lists a submodule only as its gitlink. Sweep each submodule with `git -C <submodule> ls-files` or `git submodule foreach`, with the positive control inside the submodule.
+  - A parent-repository `git ls-files` lists a submodule only as its gitlink. Sweep each submodule with `git -C <submodule> grep` or `git submodule foreach`, with the positive control inside the submodule. `git -C <submodule> ls-files` prints paths relative to the submodule, so piping it to `xargs grep` from the parent fails.
 - Do not reuse a scratch directory whose output you cite.
 - Search a gitignored scratch file by naming it directly, as in `rg <pattern> .tmp/<file>`. A path filter that names an unindexed file returns matches from unrelated tracked files.
 

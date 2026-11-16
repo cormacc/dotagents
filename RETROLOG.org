@@ -388,3 +388,13 @@ After archiving, the parent told the user the record might have open questions t
 ** Isolated Herdr investigations
 
 [[file:skills/herdr-orch/references/workflow-recipes.md]] section 'Isolated Herdr investigations': discovery chained with =&&= stopped at a command group's exit 2. The first disposable-server probe returned =workspace_not_found= because no workspace existed. After explicit workspace creation, a validator incorrectly rejected the exit-0 ={id,result}= response because it expected =oh='s =ok= field. Creating a workspace, passing its returned ID and checking the raw Herdr envelope allowed the corrected probe to complete; an occupied-pane control returned =agent_pane_busy= with exit 1. The verified run and cleanup are recorded in [[file:design/log/2026-11-04-failed-spawn-hygiene.org::*Validation]]. The recipe is local because [[file:skills/README.org::*Vendored]] prohibits editing the upstream Herdr skill. The separate Babashka =dir= collision already has guidance in the Clojure skill and needs no duplicate rule.
+
+* 2026-11-16 Mon -- MBT-619 delegated execution (CD firmware)
+
+** Temporary files: submodule sweeps
+
+In the CD repository, the root and one child both ran =git -C neuromod ls-files -z | xargs -0 grep= from the parent directory; grep reported "No such file or directory" for every path, because the listed paths are relative to the submodule. =git -C <submodule> grep= resolves paths inside the submodule. Task =8eb01e9b-e120-4979-ba67-1b4c8b3c63f5=.
+
+** herdr-orch: lifecycle verbs and continue
+
+=oh close <uuid>= and =oh harvest= failed with "unknown oh command"; =oh task close= and =oh task harvest= worked. =oh task continue= with a superseded round UUID returned =ok:false= with empty result and error fields; the latest round UUID (returned by the previous =continue=) worked. Task =fc4bb4d3-8c4c-41fa-b9a7-6532f9ab098c=.
