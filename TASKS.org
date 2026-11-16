@@ -359,3 +359,46 @@ Evidence:
 - 2026-10-14: four batches paired an Edit with a grep or sed of the same file; each check read the pre-edit content, and one led the agent to report a remaining match that the edit had already removed.
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
+
+** DONE AGENTS.md: sweep submodules with git -C <submodule> grep :agents_md:
+CLOSED: [2026-11-16 Mon 20:22]
+:PROPERTIES:
+:CUSTOM_ID: 8eb01e9b-e120-4979-ba67-1b4c8b3c63f5
+:CREATED: [2026-11-16 Mon 20:20]
+:END:
+:LOGBOOK:
+- Created [2026-11-16 Mon 20:20]
+- State "DONE" from "TODO" [2026-11-16 Mon 20:22]
+:END:
+The home AGENTS.md sweep rule recommends `git -C <submodule> ls-files` for submodules. Piped to `xargs grep` from the parent directory, every path fails because the listed paths are relative to the submodule. Replace the rule text with: Sweep each submodule with `git -C <submodule> grep` or `git submodule foreach`; `git -C <submodule> ls-files` prints paths relative to the submodule. Keep the positive-control requirement.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ file-get-incremental
+- timestamp: [2026-11-16 Mon 20:20]
+- sender: agent (retro, user-approved)
+
+Evidence:
+- Root and one child both ran `git -C neuromod ls-files -z | xargs -0 grep` from the CD root; grep reported 'No such file or directory' for every path. `git -C <sub> grep` resolves paths inside the submodule.
+
+** DONE herdr-orch: write oh lifecycle verbs as 'oh task <verb>'; continue takes the latest round UUID :skill:herdr_orch:
+CLOSED: [2026-11-16 Mon 20:22]
+:PROPERTIES:
+:CUSTOM_ID: fc4bb4d3-8c4c-41fa-b9a7-6532f9ab098c
+:CREATED: [2026-11-16 Mon 20:20]
+:END:
+:LOGBOOK:
+- Created [2026-11-16 Mon 20:20]
+- State "DONE" from "TODO" [2026-11-16 Mon 20:22]
+:END:
+SKILL.md names oh lifecycle verbs without their group (`close <full-task-uuid>`, `continue <full-task-uuid>`, `prune`, `compact`, `harvest`). The CLI requires `oh task close`, `oh task harvest` etc.; `oh close` and `oh harvest` fail with 'unknown oh command'. Also `oh task continue` must take the UUID of the child's latest round: a superseded round UUID failed (ok:false, no message) and the latest round UUID worked. Desired outcome: write the full `oh task <verb>` form in the Lifecycle and ledger lines, and state that continue takes the latest round UUID (consider a clearer error for a superseded UUID).
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ file-get-incremental
+- timestamp: [2026-11-16 Mon 20:20]
+- sender: agent (retro, user-approved)
+
+Evidence:
+- `oh close <uuid>` and `oh harvest` -> {"message":"unknown oh command"}; `oh task close` / `oh task harvest` worked.
+- `oh task continue 93a45f56-...` after round 8c437583 existed -> ok:false with null result/error fields; `oh task continue 8c437583-...` worked.
