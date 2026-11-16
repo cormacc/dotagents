@@ -3943,19 +3943,22 @@
   Local providers are omitted. A provider with session, weekly, monthly, or
   unknown-kind windows of known length shows each window's used percentage, as the
   vendors report it, labelled by kind or length, with `~` when stale;
-  otherwise it shows `auth?`, `rl?` or `err?` from its state, or `?` when fresh
-  evidence has no such window."
+  otherwise it shows `exp?`, `auth?`, `rl?` or `err?` from its state, or `?` when
+  fresh evidence has no such window. `exp?` separates an expired access token,
+  which the harness refreshes at its next use, from a credential that cannot work
+  without a new login; the collector itself never refreshes."
   [result]
   (let [rows (remove :local (:providers result))
         window-text (fn [{:keys [percentUsed] :as window} stale?]
                       (str (Math/round (double percentUsed)) "%" (status-window-label window) (when stale? "~")))
-        row-text (fn [{:keys [localProvider state windows]}]
+        row-text (fn [{:keys [localProvider state windows reason]}]
                    (let [stale? (or (:stale state) (= "stale" (:status state)))
                          shown (filter #(and (status-window-label %) (some? (:percentUsed %))) windows)]
                      (str localProvider " "
                           (cond
                             (and (seq shown) (#{"fresh" "stale"} (:status state)))
                             (str/join " " (map #(window-text % stale?) shown))
+                            (and (= "auth_required" (:status state)) (= "expired-credentials" reason)) "exp?"
                             (= "auth_required" (:status state)) "auth?"
                             (= "rate_limited" (:status state)) "rl?"
                             (#{"fresh" "stale"} (:status state)) "?"

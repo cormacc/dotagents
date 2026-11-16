@@ -64,7 +64,7 @@ The popup shows `oh usage --format text` and refreshes every 60 s. Press `q` to 
 
 ## Tab-bar status
 
-Herdr plugin v1 cannot add tab-bar or footer items. The status line is a `[ui] tab_bar_right` command entry in Herdr's own config that runs `oh usage --format status`, for example `anthropic 4%s 64%w | openai-codex 12%w`. Each number is the percentage of the window already used, as the vendors' usage pages show it. The suffix gives the window kind: `s` session, `w` weekly, `m` monthly; a window of unknown kind shows its length instead, for example `30d` or `5h`; `~` marks stale data. `auth?`, `rl?` and `err?` mark a provider without usable data, `?` a provider whose data has no window that the line can show.
+Herdr plugin v1 cannot add tab-bar or footer items. The status line is a `[ui] tab_bar_right` command entry in Herdr's own config that runs `oh usage --format status`, for example `anthropic 4%s 64%w | openai-codex 12%w`. Each number is the percentage of the window already used, as the vendors' usage pages show it. The suffix gives the window kind: `s` session, `w` weekly, `m` monthly; a window of unknown kind shows its length instead, for example `30d` or `5h`; `~` marks stale data. `exp?`, `auth?`, `rl?` and `err?` mark a provider without usable data (`exp?`: the access token has expired, and Pi refreshes it when a session next uses that account; `auth?`: the credential needs a new login or other action), `?` a provider whose data has no window that the line can show.
 
 To get the entry for this checkout:
 

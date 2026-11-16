@@ -9265,6 +9265,18 @@
       (let [p (status)]
         (is (zero? (:exit p)))
         (is (= "anthropic err? | openai-codex err?\n" (:out p)))))
+    (testing "an expired access token with a stored refresh token shows exp?, without HTTP or a refresh"
+      (let [path (str (fs/path dir "home/.pi/agent/auth.json"))
+            auth (json/parse-string (slurp path) true)
+            expired (assoc auth :anthropic (assoc (:anthropic auth) :expires 1000))]
+        (spit path (json/generate-string expired))
+        (clear-usage! dir)
+        (let [p (status "--provider" "anthropic")]
+          (is (zero? (:exit p)))
+          (is (= "anthropic exp?\n" (:out p)))
+          (is (not (made-usage-call? dir)))
+          (is (= expired (json/parse-string (slurp path) true)) "the collector writes no credential"))
+        (spit path (json/generate-string auth))))
     (testing "selected missing credentials produce authentication markers without HTTP"
       (fs/delete (fs/path dir "home/.pi/agent/auth.json"))
       (clear-usage! dir)
@@ -9287,6 +9299,11 @@
                                           (row "d" "fresh" false [{:kind "credits" :percentUsed 3}])
                                           {:localProvider "l" :local true :state {:status "fresh" :stale false} :windows []}]})))
     (is (= "quota: none" (cli/usage-status {:providers [{:localProvider "l" :local true}]})))
+    (is (= "a exp? | b auth? | c auth?"
+           (cli/usage-status {:providers [(assoc (row "a" "auth_required" false []) :reason "expired-credentials")
+                                          (assoc (row "b" "auth_required" false []) :reason "missing-credentials")
+                                          (assoc (row "c" "auth_required" false []) :reason "auth")]}))
+        "only an expired access token is exp?; a missing credential or a refused refresh stays auth?")
     (is (= "a err? | b err?" (cli/usage-status {:providers [(assoc (row "a" "unavailable" false []) :reason "unsupported-provider")
                                                             (assoc (row "b" "unavailable" false []) :reason "timeout")]})))))
 
