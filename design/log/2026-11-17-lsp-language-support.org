@@ -1,0 +1,233 @@
+#+TITLE: pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics
+#+DATE: 2026-11-17 Tue
+#+PARENT: [[task:98dafec7-07a5-43f7-a94e-b674b8e40a0c][pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:pi/extensions/lsp/README.md]]
+
+* Intent
+Extend the owned LSP extension for C/C++, reliable language selection and definition lookup, and a preview-then-apply rename. Consolidate duplicated language metadata without adding user configuration or weakening existing language support.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+Planning baseline: =ef33181cc959c41e93ad4a73108aeb8fd168f944=. The parent task's pi-lens evaluation is the requirements baseline; its measured results are attributed to that evaluation, not remeasured during planning.
+
+** Scope
+*** In scope
+- Built-in language catalogue, shared root discovery and progress tracking; retain server-specific exceptions.
+- C/C++ through clangd, file/language validation before startup, and best-ranked multi-match query definitions.
+- Preview-then-apply rename: a preview with a single-use plan identifier, then an apply step guarded by SHA-256 file fingerprints (amendment 2026-11-17, after the alternatives evaluation).
+- Callers and exports in =pi/extensions/lsp/languages/=, =pi/extensions/lsp/index.ts= and =pi/extensions/lsp/lsp-client.ts=; regression tests and fixtures through =pi/extensions/lsp/lsp.test.ts= and =pi/extensions/lsp/test.sh=; tool descriptions and =pi/extensions/lsp/README.md=.
+- Fixture and live-project validation, prompt-cost comparison and preserved mutation safeguards.
+*** Out of scope
+- Post-edit diagnostics (scope 4), declined by the user because the evaluation showed no task-outcome benefit.
+- User-configurable server JSON, additional language families, source fixes, automatic formatting, server installation and unrelated client hardening.
+- Changing query-based references from its existing single-target behaviour.
+
+** Acceptance
+*** Core functionality
+- [X] Existing Nix, Python, TypeScript, Go and Clojure launch commands retain their arguments and settings.
+- [X] Existing root selection retains its marker precedence and fallback behaviour.
+- [X] Existing document language IDs retain their mappings, including TypeScript =.cts= and =.cjs=.
+- [X] Shared progress tracking preserves the current Go, TypeScript and Clojure semantics.
+- [X] Python retains its server-specific indexing tracker.
+- [X] Extension validation and document language-ID selection derive from one extension mapping per server family.
+- [X] =language: "c"= supports clangd definition and reference requests.
+- [X] =language: "cpp"= supports clangd definition and reference requests.
+- [X] C and C++ reuse one clangd server for a shared workspace.
+- [X] A supplied file incompatible with the selected language fails before server startup.
+- [X] Query definitions return distinct locations in the best available tier: exact name, case-insensitive name, then partial name.
+- [X] The README documents supported extensions, header selection, root discovery and query-result limits.
+- [X] =rename= writes no file and returns every edit with a plan identifier; a separate apply step applies that plan through the pi file-mutation queues.
+- [X] Apply writes nothing when a target file changed since the preview, edits overlap, an edit leaves the workspace root, or the edit contains resource operations.
+*** Edge cases
+- [X] Explicit =c= and =cpp= requests accept =.h= with the selected document language ID.
+- [X] The C/C++ mapping preserves case-sensitive distinctions such as =.c= and =.C=.
+- [X] A parent-directory compilation database is discovered in the clangd smoke.
+- [X] A symlinked compilation database is discovered in the clangd smoke.
+- [X] Workspace-symbol failure falls back to ranked open-document matches rather than one silent winner.
+- [X] Fallback output identifies its bounded open-document coverage.
+- [X] Definition output reports truncation when the normal output bound removes content.
+- [X] Existing positional definition lookup remains covered by regression tests.
+- [X] Existing single-target query references remain covered by regression tests.
+- [X] Rename diff rendering and mutation-queue tests remain passing, adapted to preview-then-apply.
+- [X] A rename plan is single-use and is discarded at session shutdown.
+- [X] The firmware smoke distinguishes references to the two =current_index= struct fields recorded in the parent evaluation.
+- [X] The portal smoke exposes the three =create-client= definitions recorded in the parent evaluation, or reports source drift for owner resolution rather than weakening the criterion.
+*** Anti-criteria
+- [X] Must not: automatically format or organise imports.
+- [X] Must not: add post-edit hooks.
+- [X] Must not: reduce the 120-second request timeout.
+- [X] Must not: exceed the normal 50 KiB / 2,000-line model-output bounds.
+- [X] Must not: increase fixed prompt cost by more than 100 tokens versus the pinned baseline under the same harness and tokenizer.
+- [X] Must not: add a dependency or a user configuration surface.
+- [X] Must not: bypass rename mutation queues or discard existing validation/error handling during consolidation.
+- [X] Must not: mutate either validation project's source or compilation database.
+
+** Decisions
+- Keep the shared LSP client; replace duplicated ordinary language glue with a built-in data catalogue. Preserve specialised hooks only where existing behaviour needs them. Delete replaced modules and unused internal exports only after checking their consumers.
+  Rejected:
+  - Continue copying per-language modules: repeats root discovery and progress tracking and permits extension-map drift.
+  - User-configurable routing: adds trust, validation and migration work without solving the measured query-definition gap.
+- Keep explicit =language= selection; validate against the catalogue rather than infer silently. Shared headers use the selected language.
+- Use one clangd server identity per workspace, independent of the requested C/C++ document language. Use =clangd --background-index=; do not enable extra lint/fix behaviour by default.
+- Return every distinct best-ranked definition location available to the selected lookup path. Preserve server-result order within a tier; do not claim whole-workspace completeness from the bounded fallback. Reuse implementation rendering and location deduplication.
+- Retain the references consumer's single-target policy explicitly when changing shared lookup helpers; do not silently union references from unrelated symbols.
+- Reject =@narumitw/pi-lsp= 0.49.12 as a replacement: its published tools provide diagnostics/source fixes, not navigation, references or semantic rename. Its documented per-call startup, default 20-second timeout, unbounded output and non-queued fix writes are poorer fits for this task. Sources: [[https://cdn.jsdelivr.net/npm/@narumitw/pi-lsp@0.49.12/README.md][published README]], [[https://cdn.jsdelivr.net/npm/@narumitw/pi-lsp@0.49.12/docs/settings.md][settings]], [[https://cdn.jsdelivr.net/npm/@narumitw/pi-lsp@0.49.12/src/pi-lsp.ts][tool source]]. This was a source/document review, not a benchmark.
+- Adopt its extension-routing principle through the built-in catalogue. Source-fix preview and configurable diagnostic settling do not justify speculative tasks; revisit only if source fixes enter scope or stale/premature diagnostics are reproduced.
+- Reject supi-code-intelligence 13.0.0 and Serena 2.1.1.dev0 as replacements (controlled evaluation 2026-11-17, artefacts in the gitignored =.tmp/alt-eval/=). supi: +5,429 fixed prompt tokens, no built-in Clojure route, and 0/2 Clojure renames (document-version mismatch) with a custom route. Serena: 0/2 C field renames (declaration only, build broken), 0-based line numbers reported as 1-based by the model, and an orphaned clangd after exit. Adopt supi's plan/apply rename design, which gave an exact semantic C field rename in 2/2 runs.
+- Automatic formatting stays out of scope. Revisit after the MBT firmware and framework reformatting task (cd =TASKS.org=, =febdf388=) lands, because firmware non-conformance with =.clang-format= is the main reason for the rule.
+
+** Risks
+- Catalogue consolidation can change root and startup behaviour. Mitigation: characterise the five existing language families before replacing their modules; include marker precedence, missing-marker fallback and tracker lifecycle.
+- The firmware host-GCC database may not represent a target build. Mitigation: preserve the evaluation's host-database scope and verify the named semantic-reference case; do not claim target-build validation.
+- Shared clangd ownership can mix header IDs or duplicate processes. Mitigation: fixture tests for explicit header modes and mixed C/C++ reuse; keep language IDs document-specific.
+- Workspace-symbol results and the bounded source scan are not guaranteed exhaustive. Accepted limit: identify lookup provenance and truncation; add a =known-limit:= comment at the bounded fallback, with workspace-wide completeness as the revisit trigger.
+- Private validation projects or historical symbols may be unavailable. Treat this as blocked validation and return the decision to the owner; synthetic fixtures do not silently replace accepted live smokes.
+
+* Plan
+** DONE Consolidate built-in LSP language metadata without behaviour regressions :lsp:
+CLOSED: [2026-11-17 Tue 12:16]
+:PROPERTIES:
+:CUSTOM_ID: 16081a14-5757-4724-933e-4a7e4b2c2963
+:CREATED: [2026-11-17 Tue 11:18]
+:STARTED: [2026-11-17 Tue 12:13]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 11:18]
+- State "STARTED" from "TODO" [2026-11-17 Tue 12:13]
+- State "DONE" from "STARTED" [2026-11-17 Tue 12:16]
+:END:
+Acceptance criteria:
+- Existing Nix, Python, TypeScript, Go and Clojure command arguments/settings match the pinned baseline.
+- Root marker precedence and fallback match the pinned baseline.
+- The catalogue exposes one extension mapping for document IDs and subsequent validation.
+- TypeScript .cts and .cjs remain recognised.
+- Repeated root search and progress tracking have one shared implementation.
+- Python retains its special indexing tracker.
+- Characterisation tests run through pi/extensions/lsp/test.sh.
+- Must not: add dependencies or user configuration; discard existing validation/error handling; change the 120-second request timeout.
+Scope/reference: pi/extensions/lsp/languages/ (LanguagePlugin and language modules), pi/extensions/lsp/index.ts (getServer/getWorkspaceRoot/getLanguageForPath), pi/extensions/lsp/lsp-client.ts (languagePlugins), pi/extensions/lsp/lsp.test.ts and pi/extensions/lsp/README.md. Preserve consumer behaviour while deleting replaced internal exports/modules only after a caller sweep.
+
+** DONE Add clangd routing, pre-start validation and multi-match definitions :lsp:
+CLOSED: [2026-11-17 Tue 13:18]
+:PROPERTIES:
+:CUSTOM_ID: fa53bc2c-a4fb-424c-87b0-cfb7018efc90
+:CREATED: [2026-11-17 Tue 11:18]
+:BLOCKED-BY: task:16081a14-5757-4724-933e-4a7e4b2c2963
+:STARTED: [2026-11-17 Tue 12:53]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 11:18]
+- State "STARTED" from "TODO" [2026-11-17 Tue 12:53]
+- State "DONE" from "STARTED" [2026-11-17 Tue 13:18]
+:END:
+Acceptance criteria:
+- c requests use clangd --background-index.
+- cpp requests use clangd --background-index.
+- c and cpp reuse one server per workspace.
+- Explicit c/cpp header requests use the selected document language ID.
+- .c/.C retain distinct mappings.
+- Parent compilation databases work in disposable clangd fixtures.
+- Symlinked compilation databases work in disposable clangd fixtures.
+- Incompatible supplied files fail before server startup, including @-prefixed and relative paths.
+- Query definitions return deduplicated best-tier locations: exact, case-insensitive, then partial.
+- Workspace-symbol failure uses the ranked open-document fallback.
+- Fallback output states bounded coverage.
+- Output truncation is disclosed within existing byte/line bounds.
+- Positional definitions retain regression coverage.
+- Single-target query references retain regression coverage.
+- Rename safeguards retain regression coverage.
+- Focused tests exercise the new dispatch/resolution behaviour with controlled server responses.
+- README and tool descriptions describe the accepted interface.
+- Must not: add formatting, source-fix hints, edit hooks, dependencies or user configuration; lower the request timeout.
+Scope/reference: pi/extensions/lsp/index.ts (execute, resolveSymbolLocation, findBestSymbolMatch, findSymbolInOpenFiles, formatDefinitionWithImplementation, buildLspToolResult), pi/extensions/lsp/languages/index.ts, pi/extensions/lsp/lsp-client.ts, pi/extensions/lsp/lsp.test.ts, pi/extensions/lsp/test.sh and pi/extensions/lsp/README.md. Apply the accepted record's shared-server/document-ID distinction; preserve references policy explicitly rather than reusing a multi-target result accidentally.
+
+** DONE Add preview-then-apply rename with file fingerprint checks :lsp:
+CLOSED: [2026-11-17 Tue 15:40]
+:PROPERTIES:
+:CUSTOM_ID: 1ac6d56d-cf7b-4d2f-9abd-ea754134dd02
+:CREATED: [2026-11-17 Tue 12:12]
+:BLOCKED-BY: task:fa53bc2c-a4fb-424c-87b0-cfb7018efc90
+:STARTED: [2026-11-17 Tue 15:34]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 12:12]
+- State "STARTED" from "TODO" [2026-11-17 Tue 15:34]
+- State "DONE" from "STARTED" [2026-11-17 Tue 15:40]
+:END:
+Modelled on supi-code-intelligence 13.0.0, whose plan/apply rename gave the cleanest result in the 2026-11-17 alternatives evaluation (exact 6-line semantic C field rename, 2/2), while Serena applied a partial C rename that broke the build (2/2).
+Acceptance criteria:
+- `rename` returns a preview of every edit (files, ranges, counts) and a plan identifier, and writes no file.
+- A separate apply step accepts only a plan identifier from the current session and applies the stored edits through the existing pi file-mutation queues.
+- Apply refuses, and writes nothing, when any target file content differs from the content fingerprinted at preview time (SHA-256), when edits overlap, or when an edit targets a path outside the workspace root.
+- Apply refuses resource operations (create, rename, delete file) that the workspace edit contains, and reports them.
+- A plan is single-use and held in memory only; session shutdown discards it.
+- Expanded rendering keeps the existing before/after diffs.
+- Must not: format, organise imports, or apply server edits other than the rename workspace edit; bypass mutation queues; exceed the normal output bounds.
+Scope/reference: pi/extensions/lsp/index.ts (rename action and its workspace-edit application), pi/extensions/lsp/lsp.test.ts (rename diff and mutation-queue tests), pi/extensions/lsp/README.md. Reference design: supi-lsp README section "Refactor checks" (plan/apply, fingerprint, overlap and root checks).
+
+** DONE Verify LSP project behaviour, compatibility and prompt budget :lsp:
+CLOSED: [2026-11-17 Tue 15:44]
+:PROPERTIES:
+:CUSTOM_ID: 97737858-dcbb-4a22-9a45-f932ac90154c
+:CREATED: [2026-11-17 Tue 11:18]
+:BLOCKED-BY: task:fa53bc2c-a4fb-424c-87b0-cfb7018efc90
+:BLOCKED-BY+: task:1ac6d56d-cf7b-4d2f-9abd-ea754134dd02
+:STARTED: [2026-11-17 Tue 15:41]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 11:18]
+- State "STARTED" from "TODO" [2026-11-17 Tue 15:41]
+- State "DONE" from "STARTED" [2026-11-17 Tue 15:44]
+:END:
+Acceptance criteria:
+- The focused test entry point executes the changed-code regressions successfully.
+- A controlled delayed-initialisation regression protects the 120-second request allowance.
+- The read-only firmware smoke separates the recorded current_index field references using its existing compilation database.
+- The read-only portal smoke exposes the recorded three create-client definitions, or reports source drift as blocked validation.
+- Validation-project source and compilation database state remain unchanged.
+- Fixed prompt growth is at most 100 tokens against ef33181cc959c41e93ad4a73108aeb8fd168f944 under identical harness/tokenizer settings.
+- The record preserves exact smoke results, server versions, prompt counts and remaining validation gaps.
+- Must not: replace unavailable live smokes with synthetic evidence without owner approval; mark the parent DONE or waive an accepted criterion.
+Scope/reference: pi/extensions/lsp/test.sh, pi/extensions/lsp/lsp.test.ts, pi/extensions/lsp/README.md and this record's Validation section. Use repository .tmp/ for disposable fixtures and baseline exports; project paths and exact recorded cases are in the parent task.
+
+* Implementation
+- Catalogue consolidation (=16081a14=): =pi/extensions/lsp/languages/index.ts= holds one =CATALOGUE= table (command, args, settings, root markers, extension-to-language-ID map, tracker); the five per-language modules and their unused named re-exports are deleted. =languages.test.ts= pins launch commands, root selection, document IDs and tracker semantics to =ef33181=; =test.sh= runs it.
+- Consequence of the single extension map: TypeScript =.cts= and =.cjs= files, which already had document IDs, are now also opened by by-name symbol scans.
+- =tsc --noEmit= reports the same four pre-existing errors in =index.ts= before and after the change; none is in the changed files.
+- clangd routing (=fa53bc2c=): the catalogue adds =c= and =cpp= with a shared =serverId= (=clangd=); =getServer= keys servers by =serverId= and root. =LspClient= records the language ID of each open document; an explicit different ID reopens the document (=didClose=, =didOpen=). =execute= validates the language and the file extension, resolving relative and =@= paths against =ctx.cwd=, before any server starts. =/lsp-stop c= maps to the shared server.
+- By-name lookup: =rankSymbolMatches= replaces =findBestSymbolMatch= (which returned the first exact match, or else the server's first result). Exact tier also accepts =container::name=, =container.name= and =container/name=; partial matching uses the bare name. =collectOpenDocumentSymbols= replaces =findSymbolInOpenFiles= and carries a =known-limit:= comment. =buildLspToolResult= appends a truncation notice and reserves 2 lines and 200 bytes for it.
+- Additions found during implementation, both inside the accepted scope:
+  - Query =references= started at =location.range.start=. clojure-lsp gives a workspace symbol the range of its whole form, so the request position was the opening parenthesis and the portal query found no references (the =ef33181= code has the same defect). =symbolNamePosition= moves the position to the matching document symbol's selection range; the portal query then found 17 references in 5 files.
+  - clangd begins background indexing only after the first =didOpen=; the first firmware references request on a fresh server returned 1 reference, and the same request 5 seconds later returned 6. Probe (=.tmp/live-smoke/progress.out=): progress began 22 ms after =didOpen= and ended at 452 ms. The catalogue field =indexOnOpenGraceMs= (2000 ms, clangd only) makes a fresh server wait for indexing to begin, then up to 30 s for it to end (=LspClient.waitForIndexingAfterOpen=). Existing languages keep their indexing waits.
+- =tsc --noEmit= after =fa53bc2c= reports three of the four pre-existing =index.ts= errors (bodyRange null, renderCall argument, buildLspToolResult action); the error in the replaced =findSymbolInOpenFiles= is gone. The new test files type-check.
+- Tests: =dispatch.test.ts= (15 tests at =fa53bc2c=) uses an injected fake client (=LspExtensionOptions.createClient=) and the stdio fixture =fixtures/fake-lsp-server.mjs=; =test.sh= runs it after the two existing suites. Each new guard failed under a targeted mutation (validation disabled, server key by language, no reopen on ID change, no name-position lookup, no wait after open, wait on every open) and passed when restored.
+- Rename plans (=1ac6d56d=): =previewRename= replaces =applyWorkspaceEdit=; it fingerprints each target with SHA-256, lists edit counts and 1-based ranges, and computes the diffs without writing. =applyRenamePlan= re-runs every check (resource operations, workspace root, fingerprint, overlap) inside =withFileMutationQueues= and writes only when all pass. The tool adds the action =apply_rename= and the parameter =plan_id=; the plan identifier is 4 random bytes in hex. Plans live in a per-extension =Map=, which =session_shutdown= clears.
+  - Decision: the first =apply_rename= removes the plan even when it refuses, because every refusal reason needs a new preview (the files changed, or the edit cannot be applied).
+  - The workspace root is the root of the server that answered the rename, so a rename whose edits reach a sibling project outside that root is refused.
+  - =collectWorkspaceEditChanges= records resource operations for the refusal report instead of throwing. The client does not advertise =workspace.workspaceEdit.resourceOperations=, so clojure-lsp refuses a namespace rename itself (=LSP error -32602: Can't rename - client does not support file renames.=).
+  - Tests: =lsp.test.ts= routes the five existing edit tests through preview then apply and adds five plan tests (preview writes nothing; stale fingerprint, overlap, outside root and resource operation each refuse with no write and no refresh). =dispatch.test.ts= adds the tool flow (preview, apply, second apply refused, missing =plan_id=, shutdown discards a plan) and the empty-rename case. Mutations that removed the fingerprint check, plan removal, shutdown clearing, root check or resource-operation check each failed one test.
+
+* Validation
+- Run =pi/extensions/lsp/test.sh= for the focused regressions; confirm new test cases are executed by that entry point. The existing suite starts no language server, so it cannot stand in for live smokes.
+- Add controlled fake-server coverage for routing, startup ordering, duplicate symbol locations, fallback and mixed-language reuse. Keep temporary fixtures under the repository's =.tmp/= directory.
+- Exercise clangd against disposable C/C++ fixtures before read-only smokes in =~/nmd/products/mbt/cd/firmware= and =~/nmd/products/connect/portal=. Record server versions, roots, database resolution and exact result locations. Check project state before and after.
+- Compare fixed prompt tokens between exports of the pinned baseline and candidate using the same harness, tokenizer and unrelated extension set. Preserve both counts and the method; the historical +632-token result is contextual evidence, not the comparison denominator.
+- Verify the 120-second timeout structurally and with a controlled delayed-initialisation regression; do not rely on a busy live server to make the test deterministic.
+- Evidence from =fa53bc2c= (2026-11-17, clangd 21.1.8, clojure-lsp 2026.10.15-11.42.38; task =97737858= owns the final record):
+  - Disposable clangd fixtures (=.tmp/clangd-fixture/run.ts=, =out2.txt=): a field defined under =#ifdef FROM_DB=, with =-DFROM_DB= only in the compilation database. With a parent =compile_commands.json= and with a symlink to =build/compile_commands.json=, C references from the header found 2 references in 2 files and the server key was the fixture root. The control with no database found 1 reference and rooted at =src/sub=. Each fixture used one =clangd:<root>= server for its =c= and =cpp= requests. The fixture's =area= has no =extern "C"=, so its C++ references do not include the C definition; this is a fixture property, not a routing result.
+  - Firmware (read-only; cwd =~/nmd/products/mbt/cd/firmware=, root =~/nmd/products/mbt/cd=): =RenderableStatus.current_index= (=Renderable.h:71=) gave 6 references in =Renderable.h=, =Renderable.c= and =test/test_Renderable.c=; =LedEffectSet.current_index= (=LedSprite.h:67=) gave 7 references in =LedSprite.h= and =LedSprite.c=. =DisplayMgr.c:414= is absent because the host test database does not list =firmware/src/DisplayMgr.c=. Query =definition current_index= gave both fields (exact tier). =language: "clojure"= with =src/Renderable.c= failed before startup.
+  - Portal (read-only): query =definition create-client= gave =server/oidc.clj:80=, =server/storage/supabase.clj:21= and =server/grant.clj:92= (exact tier).
+  - Both projects: =git status --porcelain=, =HEAD= and the compilation-database =stat= were identical before and after the smokes.
+  - Rename (=1ac6d56d=), read-only preview: the firmware rename of =RenderableStatus.current_index= (=Renderable.h:71=) previewed 6 edits in 3 files (=Renderable.c= 66, 67, 74, 75; =Renderable.h= 71; =test/test_Renderable.c= 137), the same set as the references result. The portal rename of =server.oidc/create-client= previewed 17 edits in 5 files. Neither project changed (status, =HEAD=, diff checksum and database =stat=).
+  - Rename apply in disposable fixtures (=.tmp/rename-smoke/out.txt=): a C field rename changed only the =Shape= field and its use, not the same-named field of =Other=. A second plan was refused after another target file changed, and the header stayed unchanged. A clojure-lsp function rename applied 2 edits in 2 files, the case that failed for supi-code-intelligence because of a document-version mismatch.
+- Final validation (=97737858=, 2026-11-17, pi 1.5.2, clangd 21.1.8, clojure-lsp 2026.10.15-11.42.38; artefacts in the gitignored =.tmp/final-smoke/= and =.tmp/prompt-budget/=):
+  - Focused suite: =test.sh= ran =languages.test.ts= (34 passed), =lsp.test.ts= (12 passed) and =dispatch.test.ts= (18 passed), exit 0.
+  - Request allowance: =dispatch.test.ts= "a slow initialisation keeps the 120-second request allowance" runs the client's timers 1000 times faster against =fixtures/fake-lsp-server.mjs= with a delayed =initialize= reply. The initialize timer is 120000 ms, a 60 s-equivalent reply starts the server, and a 400 s-equivalent reply fails with =LSP request "initialize" timed out after 120s=. With the timeout changed to 20000 ms, the test failed.
+  - Firmware (cd =HEAD= =72dab04bcfa50d1c1cf517b78df2482cf4c4c017=, cwd =firmware=): =RenderableStatus.current_index= 6 references in 3 files and =LedEffectSet.current_index= 7 references in 2 files, with no overlap; query =definition current_index= gave =Renderable.h:71= and =LedSprite.h:67=; =rename= to =active_index= previewed 6 edits (=Renderable.c= 66:12, 67:66, 74:9, 75:16; =Renderable.h= 71:11; =test/test_Renderable.c= 137:23) and wrote nothing; =language: "clojure"= with =src/Renderable.c= failed before startup.
+  - Portal (=HEAD= =0dc4b09c599a164b2f390261f4907e7ba44c5d50=): query =definition create-client= gave =src/server/oidc.clj:80=, =src/server/storage/supabase.clj:21= and =src/server/grant.clj:92=; query =references= gave 17 references in 5 files for =oidc.clj:80= and named the 2 other matches; =rename= of =server.grant/create-client= previewed 3 edits in 2 files (=grant.clj= 92:7, 271:8; =test/src/server/grant_test.clj= 105:10). No source drift.
+  - Project state: portal and cd =HEAD=, =git status --porcelain= and =git diff= checksums were identical before and after. =build/artifacts/compile_commands.json= changed size and mtime during the smoke (2,572,629 to 2,572,574 bytes, then 2,572,698 at 15:43:28). A =ceedling test:all= in the cd repository, started at 15:39:32 by another process before the smoke began at 15:43:11, was compiling at that time; Ceedling writes that file, and clangd does not write compilation databases. The source tree stayed clean.
+  - Prompt budget: baseline = =git archive ef33181= of =pi/extensions/lsp=, candidate = a copy of the working tree, both loaded by path with =pi -ns -np -nc --no-session --no-themes -a --mode json --model anthropic/claude-sonnet-5-5 --thinking low -ne --no-mcp -e <index.ts> -p "Reply with the single word OK."= in the portal directory, rounds alternated base/candidate. First measurement: 3,102 and 3,242 (+140) in two rounds, over the budget; the new guideline line and longer description text were removed. Second measurement: 3,102 and 3,188 in both rounds (+86). No extension: 2,470. Stderr was empty in every run. Token counts are the provider-reported input + cache read + cache write of the single turn.
+  - Remaining validation gaps: no live check of =basedpyright=, =gopls=, =nil= or =typescript-language-server=; no target (XC16) compilation database; firmware files that the host test database does not list (for example =DisplayMgr.c=) are not in the clangd background index; C++ was checked only in disposable fixtures.

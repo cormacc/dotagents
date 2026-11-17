@@ -249,6 +249,25 @@ Out of scope as an end state: only telling the child that submodules are empty. 
 
 Evidence: git 2.56.0 scratch tests and reviewer 67d9d6c8 report (2026-11-13): `git worktree remove` refuses after `submodule deinit` while a module store exists; `submodule deinit` on a shared-module linked worktree deletes its folder but leaves its registration, so its branch stays checked out. Untested: how `oh --worktree new` behaves when started from inside a submodule checkout.
 
+** STARTED pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics :lsp:
+:PROPERTIES:
+:CUSTOM_ID: 98dafec7-07a5-43f7-a94e-b674b8e40a0c
+:CREATED: [2026-11-17 Tue 09:09]
+:STARTED: [2026-11-17 Tue 12:13]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 09:09]
+- State "STARTED" from "TODO" [2026-11-17 Tue 12:13]
+:END:
+#+IMPORT: [[plan:2026-11-17-lsp-language-support.org]]
+Option 2 from the 2026-11-17 pi-lens evaluation: keep the owned `pi/extensions/lsp/` extension instead of adopting pi-lens 4.5.1, and close the gaps that the evaluation measured. Evaluation artefacts (runs, checkers, aggregate table) are in the gitignored `.tmp/pilens-eval/` directory and can disappear; the findings below are the durable record.
+- Scope 1 -- C/C++ support through clangd :: the extension rejects `language: "c"` with "Unsupported language: c" (`index.ts`, plugin lookup). pi-lens launched `clangd --background-index` from the file directory and clangd found the parent `compile_commands.json` (cd firmware: ceedling host-gcc database at the cd repository root, symlink to `build/artifacts/compile_commands.json`). clangd `references` on a struct field correctly separated `RenderableStatus.current_index` from `LedEffectSet.current_index`; grep needed manual type tracing for this.
+- Scope 2 -- file/language validation :: a model called the tool with `language: "clojure"` on `Renderable.c` and received 225 meaningless clj-kondo diagnostics. Reject a file whose extension is not in the selected plugin `fileExtensions` (see `LanguagePlugin` in `languages/index.ts`), or infer the language from the file.
+- Scope 3 -- `definition` by `query` :: returns only the first of several same-named definitions (returned `server/storage/supabase.clj` for `create-client`, which is defined in 3 namespaces). Return all matches, or say that more exist.
+- Scope 4 (optional, decide in planning) -- post-edit diagnostics :: pi-lens appended blocking compile errors to the edit tool result (for example `No member named renderable in RenderableStatus`). This did not change task outcomes in the evaluation (all arms fixed the injected errors), so weigh it against cost.
+- Constraints from the evaluation :: never auto-format (291 of 294 cd `firmware/src` files do not conform to the repository `.clang-format`; pi-lens turned a 3-line edit into a 45-line diff with reordered includes -- an IEC 62304 change-control problem). Keep the fixed prompt cost small (owned extension +632 tokens per request against +5,083 for pi-lens). Keep the tolerant start-up timeout (owned 120 s request timeout; the pi-lens 15 s initialise timeout failed 4 of 4 times for clojure-lsp under load). Avoid misleading quick-fix hints.
+- Validation projects :: `~/nmd/products/mbt/cd/firmware` (C) and `~/nmd/products/connect/portal` (Clojure).
+
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
 :PROPERTIES:

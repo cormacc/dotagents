@@ -1,7 +1,15 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { generateDiffString } from "@earendil-works/pi-coding-agent";
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, extname, join, resolve } from "node:path";
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type {
   ExtensionAPI,
@@ -34,6 +42,7 @@ const ACTIONS = [
   "definition",
   "references",
   "rename",
+  "apply_rename",
   "document_symbols",
   "workspace_symbol",
   "completion",
@@ -100,6 +109,9 @@ const LspParams = Type.Object({
   ),
   new_name: Type.Optional(
     Type.String({ description: "New name for rename action" }),
+  ),
+  plan_id: Type.Optional(
+    Type.String({ description: "From rename, for apply_rename" }),
   ),
   query: Type.Optional(
     Type.String({
@@ -205,68 +217,155 @@ type SymbolInformation = {
   containerName?: string;
 };
 
-function findBestSymbolMatch(
-  symbols: unknown,
-  query: string,
-): SymbolInformation | null {
-  const items = Array.isArray(symbols) ? symbols : [];
-  if (items.length === 0) return null;
+export type MatchTier = "exact" | "case-insensitive" | "partial";
+const MATCH_TIERS: MatchTier[] = ["exact", "case-insensitive", "partial"];
 
-  const exact = items.filter((s: SymbolInformation) => s.name === query);
-  if (exact.length > 0) return exact[0] as SymbolInformation;
-
-  const lower = query.toLowerCase();
-  const caseMatch = items.filter(
-    (s: SymbolInformation) => s.name.toLowerCase() === lower,
-  );
-  if (caseMatch.length > 0) return caseMatch[0] as SymbolInformation;
-
-  return items[0] as SymbolInformation;
+export interface RankedSymbols {
+  tier: MatchTier;
+  /** Distinct locations in server order. */
+  matches: Array<SymbolInformation & { location: Location }>;
 }
 
-async function findSymbolInOpenFiles(
-  client: LspClient,
-  query: string,
-): Promise<SymbolInformation | null> {
-  const paths = client.getOpenDocumentPaths();
+function qualifiedNames(symbol: SymbolInformation): string[] {
+  const names = [symbol.name];
+  if (symbol.containerName) {
+    for (const sep of ["::", ".", "/"]) {
+      names.push(`${symbol.containerName}${sep}${symbol.name}`);
+    }
+  }
+  return names;
+}
+
+function matchTier(symbol: SymbolInformation, query: string): MatchTier | null {
+  const names = qualifiedNames(symbol);
+  if (names.includes(query)) return "exact";
   const lower = query.toLowerCase();
-  let best: SymbolInformation | null = null;
+  if (names.some((name) => name.toLowerCase() === lower)) {
+    return "case-insensitive";
+  }
+  // Partial matching uses the bare name, so a namespace query does not match every member.
+  if (symbol.name.toLowerCase().includes(lower)) return "partial";
+  return null;
+}
+
+function locationKey(location: Location): string {
+  const { start, end } = location.range;
+  return `${uriToPath(location.uri)}:${start.line}:${start.character}:${end.line}:${end.character}`;
+}
+
+/** Return every distinct located symbol in the best non-empty tier: exact, case-insensitive, then partial name. */
+export function rankSymbolMatches(
+  symbols: unknown,
+  query: string,
+): RankedSymbols | null {
+  const items = (Array.isArray(symbols) ? symbols : []) as SymbolInformation[];
+  const byTier = new Map<MatchTier, RankedSymbols["matches"]>();
+  const seen = new Set<string>();
+
+  for (const symbol of items) {
+    if (typeof symbol?.name !== "string" || !symbol.location?.range) continue;
+    const tier = matchTier(symbol, query);
+    if (!tier) continue;
+    const key = locationKey(symbol.location);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const tierMatches = byTier.get(tier) ?? [];
+    tierMatches.push(symbol as RankedSymbols["matches"][number]);
+    byTier.set(tier, tierMatches);
+  }
+
+  for (const tier of MATCH_TIERS) {
+    const matches = byTier.get(tier);
+    if (matches?.length) return { tier, matches };
+  }
+  return null;
+}
+
+/**
+ * Position of a symbol's name. Some servers (clojure-lsp) give a workspace
+ * symbol the range of its whole form, whose start is not on the name, and a
+ * references request there finds nothing.
+ */
+async function symbolNamePosition(
+  client: { documentSymbols(path: string, signal?: AbortSignal): Promise<unknown> },
+  path: string,
+  location: Location,
+  name: string,
+  signal?: AbortSignal,
+): Promise<Position> {
+  const start = location.range.start;
+  let raw: unknown;
+  try {
+    raw = await client.documentSymbols(path, signal);
+  } catch {
+    return start;
+  }
+  let best: { body: Range; selection: Range } | null = null;
+  const visit = (items: DocumentSymbol[]) => {
+    for (const sym of items) {
+      const body = sym.range ?? sym.location?.range;
+      const selection = sym.selectionRange ?? sym.location?.range;
+      if (
+        body &&
+        selection &&
+        sym.name === name &&
+        rangeContains(body, start) &&
+        (!best || rangeSize(body) < rangeSize(best.body))
+      ) {
+        best = { body, selection };
+      }
+      if (sym.children) visit(sym.children);
+    }
+  };
+  visit((Array.isArray(raw) ? raw : []) as DocumentSymbol[]);
+  return (best as { selection: Range } | null)?.selection.start ?? start;
+}
+
+interface DocumentSymbolSource {
+  getOpenDocumentPaths(): string[];
+  documentSymbols(path: string, signal?: AbortSignal): Promise<unknown>;
+}
+
+/** Flatten the symbols of every open document into located symbol information. */
+async function collectOpenDocumentSymbols(
+  client: DocumentSymbolSource,
+  signal?: AbortSignal,
+): Promise<{ symbols: SymbolInformation[]; documents: number }> {
+  const paths = client.getOpenDocumentPaths();
+  const symbols: SymbolInformation[] = [];
 
   for (const path of paths) {
+    if (signal?.aborted) throw new Error("Aborted");
     let rawSymbols: unknown;
     try {
-      rawSymbols = await client.documentSymbols(path);
+      rawSymbols = await client.documentSymbols(path, signal);
     } catch {
       continue;
     }
 
-    const symbols = Array.isArray(rawSymbols) ? rawSymbols : [];
-    const visit = (items: DocumentSymbol[]) => {
+    const visit = (items: DocumentSymbol[], containerName?: string) => {
       for (const sym of items) {
         const nameRange = sym.selectionRange ?? sym.range;
-        const loc: Location | undefined =
+        const location: Location | undefined =
           sym.location ??
           (nameRange
-            ? {
-                uri: pathToFileURL(path).href,
-                range: nameRange,
-              }
+            ? { uri: pathToFileURL(path).href, range: nameRange }
             : undefined);
-        if (sym.name === query && loc) {
-          best = { name: sym.name, kind: sym.kind, location: loc };
-          return;
+        if (location) {
+          symbols.push({
+            name: sym.name,
+            kind: sym.kind,
+            location,
+            ...(containerName ? { containerName } : {}),
+          });
         }
-        if (sym.name.toLowerCase() === lower && !best && loc) {
-          best = { name: sym.name, kind: sym.kind, location: loc };
-        }
-        if (sym.children) visit(sym.children);
+        if (sym.children) visit(sym.children, sym.name);
       }
     };
-    visit(symbols as DocumentSymbol[]);
-    if (best?.name === query) return best;
+    visit((Array.isArray(rawSymbols) ? rawSymbols : []) as DocumentSymbol[]);
   }
 
-  return best;
+  return { symbols, documents: paths.length };
 }
 
 function getLanguageForPath(path: string): string {
@@ -406,10 +505,14 @@ function applyTextEdits(
   return updated;
 }
 
-function collectWorkspaceEditChanges(
-  edit: WorkspaceEdit,
-): Map<string, TextEdit[]> {
+type ResourceOperation = { kind: string; uri?: string; oldUri?: string; newUri?: string };
+
+function collectWorkspaceEditChanges(edit: WorkspaceEdit): {
+  files: Map<string, TextEdit[]>;
+  resourceOperations: ResourceOperation[];
+} {
   const files = new Map<string, TextEdit[]>();
+  const resourceOperations: ResourceOperation[] = [];
 
   if (edit.changes) {
     for (const [uri, edits] of Object.entries(edit.changes)) {
@@ -419,7 +522,8 @@ function collectWorkspaceEditChanges(
 
   for (const change of edit.documentChanges ?? []) {
     if (!("edits" in change)) {
-      throw new Error(`Unsupported workspace edit operation: ${change.kind}`);
+      resourceOperations.push(change);
+      continue;
     }
     const path = uriToPath(change.textDocument.uri);
     const existing = files.get(path) ?? [];
@@ -427,7 +531,7 @@ function collectWorkspaceEditChanges(
     files.set(path, existing);
   }
 
-  return files;
+  return { files, resourceOperations };
 }
 
 async function withFileMutationQueues<T>(
@@ -444,10 +548,49 @@ async function withFileMutationQueues<T>(
   return run(0);
 }
 
+function sha256(content: string): string {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+function isInside(root: string, path: string): boolean {
+  const rel = relative(resolve(root), resolve(path));
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function describeResourceOperation(op: ResourceOperation): string {
+  const paths = [op.uri, op.oldUri, op.newUri]
+    .filter((uri): uri is string => Boolean(uri))
+    .map(uriToPath);
+  return [op.kind, paths.join(" -> ")].filter(Boolean).join(" ");
+}
+
+export interface RenamePlanFile {
+  path: string;
+  edits: TextEdit[];
+  /** SHA-256 of the file content that the preview read; null if it could not be read. */
+  fingerprint: string | null;
+}
+
+export interface RenamePlan {
+  id: string;
+  workspaceRoot: string;
+  files: RenamePlanFile[];
+  resourceOperations: ResourceOperation[];
+}
+
 export interface WorkspaceEditDiff {
   path: string;
   editCount: number;
   diff: string;
+}
+
+export interface RenamePreview {
+  plan: RenamePlan;
+  /** Reasons that apply will refuse the plan; empty when it can be applied. */
+  problems: string[];
+  summary: string;
+  text: string;
+  files: WorkspaceEditDiff[];
 }
 
 export interface AppliedWorkspaceEdit {
@@ -456,25 +599,112 @@ export interface AppliedWorkspaceEdit {
   files: WorkspaceEditDiff[];
 }
 
-export function buildLspToolResult(
-  resultText: string,
-  language: string,
-  action: Action,
-  summary: string,
-) {
-  const truncation = truncateHead(resultText, {
-    maxLines: DEFAULT_MAX_LINES,
-    maxBytes: DEFAULT_MAX_BYTES,
-  });
+function formatRange(range: Range): string {
+  return `${range.start.line + 1}:${range.start.character + 1}-${range.end.line + 1}:${range.end.character + 1}`;
+}
 
+/**
+ * Check a plan against the current file contents and compute each file's new
+ * content. Returns the refusal reasons; `next` is complete only when there are none.
+ */
+function checkRenamePlan(
+  plan: RenamePlan,
+  read: (path: string) => string | null,
+): {
+  problems: string[];
+  next: Map<string, { oldContent: string; newContent: string; editCount: number }>;
+} {
+  const problems: string[] = [];
+  const next = new Map<string, { oldContent: string; newContent: string; editCount: number }>();
+
+  for (const op of plan.resourceOperations) {
+    problems.push(`Resource operation not supported: ${describeResourceOperation(op)}`);
+  }
+
+  for (const file of plan.files) {
+    if (!isInside(plan.workspaceRoot, file.path)) {
+      problems.push(`Edit target is outside the workspace root ${plan.workspaceRoot}: ${file.path}`);
+      continue;
+    }
+    const content = read(file.path);
+    if (content === null || file.fingerprint === null) {
+      problems.push(`Cannot read ${file.path}`);
+      continue;
+    }
+    if (sha256(content) !== file.fingerprint) {
+      problems.push(`File changed since the preview: ${file.path}`);
+      continue;
+    }
+    try {
+      next.set(file.path, {
+        oldContent: content,
+        newContent: applyTextEdits(content, file.edits, file.path),
+        editCount: file.edits.length,
+      });
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  return { problems, next };
+}
+
+function readOrNull(path: string): string | null {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function diffsFor(
+  next: Map<string, { oldContent: string; newContent: string; editCount: number }>,
+): WorkspaceEditDiff[] {
+  return [...next.entries()]
+    .filter(([, c]) => c.oldContent !== c.newContent)
+    .map(([path, c]) => ({
+      path,
+      editCount: c.editCount,
+      diff: generateDiffString(c.oldContent, c.newContent).diff,
+    }));
+}
+
+/** Fingerprint the target files and describe every edit. Writes no file. */
+export function previewRename(
+  edit: WorkspaceEdit,
+  workspaceRoot: string,
+  id: string = randomBytes(4).toString("hex"),
+): RenamePreview {
+  const { files, resourceOperations } = collectWorkspaceEditChanges(edit);
+  const plan: RenamePlan = {
+    id,
+    workspaceRoot,
+    resourceOperations,
+    files: [...files.entries()].map(([path, edits]) => {
+      const content = readOrNull(path);
+      return { path, edits, fingerprint: content === null ? null : sha256(content) };
+    }),
+  };
+
+  const { problems, next } = checkRenamePlan(plan, readOrNull);
+  const diffs = diffsFor(next);
+  const editCount = plan.files.reduce((total, file) => total + file.edits.length, 0);
+  const summary = `Rename plan ${id}: ${editCount} edit(s) in ${plan.files.length} file(s); no file written.`;
+  const sections = plan.files.map((file) => {
+    const ranges = file.edits.map((e) => formatRange(e.range)).join(", ");
+    const diff = diffs.find((d) => d.path === file.path)?.diff;
+    return `${file.path} (${file.edits.length} edit(s): ${ranges}):${diff ? `\n${diff}` : ""}`;
+  });
+  const next_step =
+    problems.length === 0
+      ? `Apply with action "apply_rename" and plan_id "${id}". The plan is single-use and is refused if a target file changes first.`
+      : `apply_rename will refuse this plan:\n${problems.map((p) => `- ${p}`).join("\n")}`;
   return {
-    content: [{ type: "text" as const, text: truncation.content }],
-    details: {
-      language,
-      action,
-      summary,
-      ...(action === "rename" ? { diff: truncation.content } : {}),
-    },
+    plan,
+    problems,
+    summary,
+    text: [summary, next_step, ...sections].join("\n\n"),
+    files: diffs,
   };
 }
 
@@ -482,85 +712,87 @@ interface DocumentRefresher {
   refreshDocument(path: string): Promise<unknown>;
 }
 
-export async function applyWorkspaceEdit(
-  edit: WorkspaceEdit,
+/**
+ * Apply a previewed plan through the pi file-mutation queues. Re-checks every
+ * target inside the queues and writes nothing unless all checks pass.
+ */
+export async function applyRenamePlan(
+  plan: RenamePlan,
   client: DocumentRefresher,
 ): Promise<AppliedWorkspaceEdit> {
-  const fileEdits = collectWorkspaceEditChanges(edit);
-  const paths = [...fileEdits.keys()];
-  if (paths.length === 0) {
-    return {
-      summary: "No rename changes generated.",
-      diff: "No rename changes generated.",
-      files: [],
-    };
-  }
+  const paths = plan.files.map((file) => file.path);
 
   return withFileMutationQueues(paths, async () => {
-    const nextContents = new Map<
-      string,
-      { oldContent: string; newContent: string; editCount: number }
-    >();
-
-    for (const path of paths) {
-      const oldContent = readFileSync(path, "utf8");
-      const newContent = applyTextEdits(
-        oldContent,
-        fileEdits.get(path) ?? [],
-        path,
+    const { problems, next } = checkRenamePlan(plan, readOrNull);
+    if (problems.length > 0) {
+      throw new Error(
+        `Rename plan ${plan.id} refused; no file written:\n${problems.map((p) => `- ${p}`).join("\n")}`,
       );
-      nextContents.set(path, {
-        oldContent,
-        newContent,
-        editCount: fileEdits.get(path)?.length ?? 0,
-      });
     }
 
-    const changed = paths.filter((path) => {
-      const contents = nextContents.get(path);
-      return contents?.oldContent !== contents?.newContent;
-    });
-    const files = changed.map((path) => {
-      const contents = nextContents.get(path)!;
-      return {
-        path,
-        editCount: contents.editCount,
-        diff: generateDiffString(contents.oldContent, contents.newContent).diff,
-      };
-    });
-
-    for (const path of changed) {
-      writeFileSync(path, nextContents.get(path)!.newContent, "utf8");
-      invalidateFilePreview(path);
+    const files = diffsFor(next);
+    for (const file of files) {
+      writeFileSync(file.path, next.get(file.path)!.newContent, "utf8");
+      invalidateFilePreview(file.path);
     }
-
-    for (const path of changed) {
-      await client.refreshDocument(path);
+    for (const file of files) {
+      await client.refreshDocument(file.path);
     }
 
     if (files.length === 0) {
-      return {
-        summary: "No rename changes generated.",
-        diff: "No rename changes generated.",
-        files,
-      };
+      return { summary: "No rename changes generated.", diff: "No rename changes generated.", files };
     }
-
     const editCount = files.reduce((total, file) => total + file.editCount, 0);
     const summary = `Applied ${editCount} edit(s) in ${files.length} file(s).`;
     return {
       summary,
-      diff: `${summary}\n\n${files
-        .map((file) => `${file.path}:\n${file.diff}`)
-        .join("\n\n")}`,
+      diff: `${summary}\n\n${files.map((file) => `${file.path}:\n${file.diff}`).join("\n\n")}`,
       files,
     };
   });
 }
 
+export function buildLspToolResult(
+  resultText: string,
+  language: string,
+  action: Action,
+  summary: string,
+) {
+  let text = truncateHead(resultText, {
+    maxLines: DEFAULT_MAX_LINES,
+    maxBytes: DEFAULT_MAX_BYTES,
+  }).content;
+  if (text !== resultText) {
+    // Reserve room for the notice so that the disclosed output stays within the normal bounds.
+    const totalLines = resultText.split("\n").length;
+    const totalBytes = Buffer.byteLength(resultText, "utf8");
+    const kept = truncateHead(resultText, {
+      maxLines: DEFAULT_MAX_LINES - 2,
+      maxBytes: DEFAULT_MAX_BYTES - 200,
+    });
+    text = `${kept.content}\n\n[Output truncated: ${kept.outputLines} of ${totalLines} lines, ${kept.outputBytes} of ${totalBytes} bytes shown.]`;
+  }
+
+  return {
+    content: [{ type: "text" as const, text }],
+    details: {
+      language,
+      action,
+      summary,
+      ...(action === "rename" || action === "apply_rename"
+        ? { diff: text }
+        : {}),
+    },
+  };
+}
+
+type SymbolClientFor = (
+  path: string,
+) => Promise<{ documentSymbols(path: string): Promise<unknown> }>;
+
 async function formatDefinitionWithImplementation(
   result: unknown,
-  client: LspClient,
+  clientFor: SymbolClientFor,
 ): Promise<string> {
   if (!result) return "No definition found.";
 
@@ -588,6 +820,7 @@ async function formatDefinitionWithImplementation(
     if (!bodyRange) {
       let symbols = symbolCache.get(path);
       if (!symbols) {
+        const client = await clientFor(path);
         const rawSymbols = (await client.documentSymbols(
           path,
         )) as DocumentSymbol[];
@@ -615,8 +848,60 @@ async function formatDefinitionWithImplementation(
   return sections.join("\n\n");
 }
 
-export default function (pi: ExtensionAPI) {
+/** Scan bound for by-name lookups; see the known-limit note in resolveSymbolLocations. */
+const SOURCE_SCAN_MAX_FILES = 50;
+const SOURCE_SCAN_MAX_DEPTH = 5;
+
+export interface LspExtensionOptions {
+  /** Server factory; tests inject controlled clients. */
+  createClient?: (
+    language: string,
+    plugin: LanguagePlugin,
+    workspaceRoot: string,
+  ) => LspClient;
+}
+
+function requireLanguage(language: string): LanguagePlugin {
+  const plugin = languages[language];
+  if (!plugin) {
+    throw new Error(
+      `Unsupported language: ${language}. Supported: ${getSupportedLanguages().join(", ")}`,
+    );
+  }
+  return plugin;
+}
+
+/** Resolve a supplied file against the session cwd and reject it before any server starts if the language does not own its extension. */
+function resolveLanguageFile(
+  plugin: LanguagePlugin,
+  cwd: string,
+  file: string,
+): string {
+  const path = resolve(cwd, file.startsWith("@") ? file.slice(1) : file);
+  if (!plugin.languageIdForPath(path)) {
+    throw new Error(
+      `File ${file} does not match language ${plugin.languageId} (extensions: ${[...plugin.fileExtensions].join(", ")})`,
+    );
+  }
+  return path;
+}
+
+export default function (pi: ExtensionAPI, options: LspExtensionOptions = {}) {
   const servers = new Map<string, LspClient>();
+  /** Previewed renames, in memory for this session only; each is removed on its first apply attempt. */
+  const renamePlans = new Map<
+    string,
+    { plan: RenamePlan; language: string; serverKey: string }
+  >();
+  const createClient =
+    options.createClient ??
+    ((language, plugin, workspaceRoot) =>
+      new LspClient(
+        language,
+        plugin.getConfig(workspaceRoot),
+        languages,
+        plugin.createIndexingTracker?.(),
+      ));
 
   function getWorkspaceRoot(
     language: string,
@@ -636,68 +921,93 @@ export default function (pi: ExtensionAPI) {
     language: string,
     workspaceRoot: string,
   ): Promise<LspClient> {
-    const key = `${language}:${workspaceRoot}`;
+    const plugin = requireLanguage(language);
+    const key = `${plugin.serverId}:${workspaceRoot}`;
     let client = servers.get(key);
     if (client?.isRunning()) return client;
 
-    const plugin = languages[language];
-    if (!plugin) throw new Error(`Unsupported language: ${language}`);
-
-    client = new LspClient(
-      language,
-      plugin.getConfig(workspaceRoot),
-      languages,
-      plugin.createIndexingTracker?.(),
-    );
+    client = createClient(language, plugin, workspaceRoot);
     servers.set(key, client);
     await client.start();
     return client;
   }
 
-  async function resolveSymbolLocation(
+  async function awaitOpenIndexing(
+    client: LspClient,
+    plugin: LanguagePlugin,
+    fresh: boolean,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (fresh && plugin.indexOnOpenGraceMs) {
+      await client.waitForIndexingAfterOpen(plugin.indexOnOpenGraceMs, 30000, signal);
+    }
+  }
+
+  /** Open a bounded sample of the workspace once, so that servers without a project index can answer by-name lookups. */
+  async function openSourceSample(
+    client: LspClient,
+    plugin: LanguagePlugin,
+    workspaceRoot: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (client.openDocumentCount() > 0) return;
+    const files = findSourceFiles(
+      workspaceRoot,
+      plugin.fileExtensions,
+      SOURCE_SCAN_MAX_FILES,
+      SOURCE_SCAN_MAX_DEPTH,
+    );
+    for (const f of files) {
+      if (signal?.aborted) throw new Error("Aborted");
+      await client.ensureDocumentOpen(f, plugin.languageIdForPath(f) ?? undefined);
+    }
+    await awaitOpenIndexing(client, plugin, true, signal);
+  }
+
+  /** Server for the workspace that owns `path`, with the document open under the requested language's ID. */
+  async function clientForPath(
+    language: string,
+    ctx: ExtensionContext,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<LspClient> {
+    const plugin = requireLanguage(language);
+    const root = getWorkspaceRoot(language, ctx, path);
+    const client = await getServer(language, root);
+    await openSourceSample(client, plugin, root, signal);
+    await client.ensureDocumentOpen(path, plugin.languageIdForPath(path) ?? undefined);
+    return client;
+  }
+
+  async function resolveSymbolLocations(
     language: string,
     ctx: ExtensionContext,
     query: string,
     signal?: AbortSignal,
-  ): Promise<{ location: Location; client: LspClient }> {
-    const exts = languages[language]?.fileExtensions ?? new Set<string>();
+  ): Promise<{ ranked: RankedSymbols; note?: string }> {
+    const plugin = requireLanguage(language);
     const workspaceRoot = getWorkspaceRoot(language, ctx);
     const client = await getServer(language, workspaceRoot);
+    await openSourceSample(client, plugin, workspaceRoot, signal);
 
-    if (client.openDocumentCount() === 0) {
-      for (const f of findSourceFiles(workspaceRoot, exts)) {
-        if (signal?.aborted) throw new Error("Aborted");
-        await client.ensureDocumentOpen(f);
-      }
-    }
-
-    let match: SymbolInformation | null = null;
-
+    let ranked: RankedSymbols | null = null;
     try {
-      const symbols = await client.workspaceSymbol(query, signal);
-      match = findBestSymbolMatch(symbols, query);
+      ranked = rankSymbolMatches(await client.workspaceSymbol(query, signal), query);
     } catch {
       // workspace/symbol may fail without project config (e.g. tsserver)
     }
+    if (ranked) return { ranked };
 
-    if (!match) {
-      match = await findSymbolInOpenFiles(client, query);
-    }
-
-    if (!match?.location) throw new Error(`Symbol not found: ${query}`);
-
-    const symbolPath = uriToPath(match.location.uri);
-    const symbolRoot = getWorkspaceRoot(language, ctx, symbolPath);
-    const symbolClient = await getServer(language, symbolRoot);
-
-    if (symbolClient.openDocumentCount() === 0) {
-      for (const f of findSourceFiles(symbolRoot, exts)) {
-        if (signal?.aborted) throw new Error("Aborted");
-        await symbolClient.ensureDocumentOpen(f);
-      }
-    }
-
-    return { location: match.location, client: symbolClient };
+    // known-limit: the fallback sees only open documents, at most the bounded
+    // source sample plus files opened by earlier requests. Revisit if lookups
+    // must be workspace-complete without a server index.
+    const { symbols, documents } = await collectOpenDocumentSymbols(client, signal);
+    ranked = rankSymbolMatches(symbols, query);
+    if (!ranked) throw new Error(`Symbol not found: ${query}`);
+    return {
+      ranked,
+      note: `Workspace symbol search found no match; searched ${documents} open document(s) (scan limit ${SOURCE_SCAN_MAX_FILES} files, depth ${SOURCE_SCAN_MAX_DEPTH}). Other matches can exist.`,
+    };
   }
 
   pi.on("session_shutdown", async () => {
@@ -705,15 +1015,16 @@ export default function (pi: ExtensionAPI) {
       await client.stop().catch(() => {});
     }
     servers.clear();
+    renamePlans.clear();
     invalidateFilePreview();
   });
 
   pi.registerTool({
     name: "lsp",
     label: "LSP",
-    description: `Language Server Protocol tool. Starts LSP servers on demand and provides editor-like features: go-to-definition, find references, rename symbols, list document/workspace symbols, completions, and diagnostics. Supported languages: ${getSupportedLanguages().join(", ")}. Line and character numbers are 1-based. Both 'definition' and 'references' support 'query' to look up symbols by name without file/position.`,
+    description: `Language Server Protocol tool. Starts LSP servers on demand and provides editor-like features: go-to-definition, find references, rename symbols, list document/workspace symbols, completions, and diagnostics. Supported languages: ${getSupportedLanguages().join(", ")}. Line and character numbers are 1-based. Both 'definition' and 'references' support 'query' to look up symbols by name without file/position. rename previews edits; apply_rename applies them. Pass .h as c or cpp.`,
     promptSnippet:
-      "LSP operations (definition, references, rename, symbols, diagnostics) for nix, python, typescript, and go",
+      `LSP operations (definition, references, rename, symbols, diagnostics) for ${getSupportedLanguages().join(", ")}`,
     promptGuidelines: [
       "Use lsp for code-symbol lookup and rename instead of plain text search when language support is available.",
       "Use the 'query' parameter on definition/references to look up symbols by name without a file/position.",
@@ -747,7 +1058,35 @@ export default function (pi: ExtensionAPI) {
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const { language, action } = params;
-      const workspaceRoot = getWorkspaceRoot(language, ctx, params.file);
+
+      if (action === "apply_rename") {
+        if (!params.plan_id)
+          throw new Error("'plan_id' parameter is required for apply_rename");
+        const entry = renamePlans.get(params.plan_id);
+        if (!entry)
+          throw new Error(
+            `Unknown or already used rename plan: ${params.plan_id}. Run rename again to get a new plan.`,
+          );
+        renamePlans.delete(params.plan_id);
+        const applied = await applyRenamePlan(entry.plan, {
+          refreshDocument: async (path) => {
+            const server = servers.get(entry.serverKey);
+            if (server?.isRunning()) await server.refreshDocument(path);
+          },
+        });
+        return buildLspToolResult(
+          applied.diff,
+          entry.language,
+          "apply_rename",
+          applied.summary,
+        );
+      }
+
+      const plugin = requireLanguage(language);
+      const filePath = params.file
+        ? resolveLanguageFile(plugin, ctx.cwd, params.file)
+        : undefined;
+      const workspaceRoot = getWorkspaceRoot(language, ctx, filePath);
 
       onUpdate?.({
         content: [
@@ -769,6 +1108,14 @@ export default function (pi: ExtensionAPI) {
       }
 
       await client.waitForIndexing(30000, signal);
+      if (filePath) {
+        const fresh = client.openDocumentCount() === 0;
+        await client.ensureDocumentOpen(
+          filePath,
+          plugin.languageIdForPath(filePath) ?? undefined,
+        );
+        await awaitOpenIndexing(client, plugin, fresh, signal);
+      }
 
       onUpdate?.({
         content: [
@@ -786,7 +1133,7 @@ export default function (pi: ExtensionAPI) {
       switch (action as Action) {
         case "definition": {
           if (params.file) {
-            const file = requireFile(params.file);
+            const file = requireFile(filePath);
             const pos = requirePosition(params.line, params.character);
             const result = await client.definition(
               file,
@@ -796,26 +1143,36 @@ export default function (pi: ExtensionAPI) {
             );
             resultText = await formatDefinitionWithImplementation(
               result,
-              client,
+              async () => client,
             );
           } else {
             if (!params.query)
               throw new Error(
                 "'query' (symbol name) is required for definition when 'file' is not provided",
               );
-            const { location, client: symbolClient } =
-              await resolveSymbolLocation(language, ctx, params.query, signal);
-            resultText = await formatDefinitionWithImplementation(
-              [location],
-              symbolClient,
+            const { ranked, note } = await resolveSymbolLocations(
+              language,
+              ctx,
+              params.query,
+              signal,
             );
+            const body = await formatDefinitionWithImplementation(
+              ranked.matches.map((match) => match.location),
+              (path) => clientForPath(language, ctx, path, signal),
+            );
+            const count = ranked.matches.length;
+            const header =
+              count > 1
+                ? `${count} definitions match ${JSON.stringify(params.query)} (${ranked.tier} name):\n\n`
+                : "";
+            resultText = `${header}${body}${note ? `\n\n${note}` : ""}`;
           }
           break;
         }
 
         case "references": {
           if (params.file) {
-            const file = requireFile(params.file);
+            const file = requireFile(filePath);
             const pos = requirePosition(params.line, params.character);
             const result = await client.references(
               file,
@@ -830,26 +1187,51 @@ export default function (pi: ExtensionAPI) {
               throw new Error(
                 "'query' (symbol name) is required for references when 'file' is not provided",
               );
-            const { location, client: refClient } = await resolveSymbolLocation(
+            const { ranked, note } = await resolveSymbolLocations(
               language,
               ctx,
               params.query,
               signal,
             );
+            // Single-target policy: references follow the first best-ranked
+            // symbol only, so unrelated same-named symbols are never merged.
+            const { location } = ranked.matches[0];
+            const refClient = await clientForPath(
+              language,
+              ctx,
+              uriToPath(location.uri),
+              signal,
+            );
+            const namePos = await symbolNamePosition(
+              refClient,
+              uriToPath(location.uri),
+              location,
+              ranked.matches[0].name,
+              signal,
+            );
             const result = await refClient.references(
               uriToPath(location.uri),
-              location.range.start.line,
-              location.range.start.character,
+              namePos.line,
+              namePos.character,
               true,
               signal,
             );
-            resultText = formatReferences(result);
+            const others = ranked.matches.length - 1;
+            const notes = [
+              ...(others > 0
+                ? [
+                    `References are for ${uriToPath(location.uri)}:${location.range.start.line + 1}; ${others} other symbol(s) match. Give file, line and character to select one.`,
+                  ]
+                : []),
+              ...(note ? [note] : []),
+            ];
+            resultText = [formatReferences(result), ...notes].join("\n\n");
           }
           break;
         }
 
         case "rename": {
-          const file = requireFile(params.file);
+          const file = requireFile(filePath);
           const pos = requirePosition(params.line, params.character);
           if (!params.new_name)
             throw new Error("'new_name' parameter is required for rename");
@@ -860,24 +1242,29 @@ export default function (pi: ExtensionAPI) {
             params.new_name,
             signal,
           )) as WorkspaceEdit | null;
-          if (!result) {
+          const preview = result
+            ? previewRename(result, workspaceRoot)
+            : null;
+          if (
+            !preview ||
+            (preview.plan.files.length === 0 &&
+              preview.plan.resourceOperations.length === 0)
+          ) {
             resultText = "No rename changes generated.";
             break;
           }
-          try {
-            const applied = await applyWorkspaceEdit(result, client);
-            resultText = applied.diff;
-            renameSummary = applied.summary;
-          } catch (error) {
-            throw new Error(
-              `Failed to apply rename edits: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          }
+          renamePlans.set(preview.plan.id, {
+            plan: preview.plan,
+            language,
+            serverKey: `${plugin.serverId}:${workspaceRoot}`,
+          });
+          resultText = preview.text;
+          renameSummary = preview.summary;
           break;
         }
 
         case "document_symbols": {
-          const file = requireFile(params.file);
+          const file = requireFile(filePath);
           const result = await client.documentSymbols(file, signal);
           resultText = formatDocumentSymbols(result);
           break;
@@ -893,7 +1280,7 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "completion": {
-          const file = requireFile(params.file);
+          const file = requireFile(filePath);
           const pos = requirePosition(params.line, params.character);
           const result = await client.completion(
             file,
@@ -906,7 +1293,7 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "diagnostics": {
-          const file = requireFile(params.file);
+          const file = requireFile(filePath);
           const diags = await client.getDiagnostics(file, signal);
           resultText = formatDiagnostics(diags);
           break;
@@ -990,7 +1377,10 @@ export default function (pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       if (args) {
         const matching = [...servers.entries()].filter(
-          ([key]) => key === args || key.startsWith(`${args}:`),
+          ([key]) => {
+            const serverId = languages[args]?.serverId ?? args;
+            return key === serverId || key.startsWith(`${serverId}:`);
+          },
         );
         if (matching.length > 0) {
           for (const [key, client] of matching) {

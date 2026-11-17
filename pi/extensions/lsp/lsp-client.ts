@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { IndexingTracker } from "./languages";
 
 export interface LspServerConfig {
@@ -35,7 +35,8 @@ export class LspClient {
   private language: string;
   private configs: LspServerConfig[];
   private config: LspServerConfig | null = null;
-  private openDocuments = new Set<string>();
+  /** Open document URI to the language ID it was opened with. */
+  private openDocuments = new Map<string, string>();
   private languagePlugins: Record<
     string,
     { languageIdForPath: (filePath: string) => string | null }
@@ -46,9 +47,9 @@ export class LspClient {
   }
 
   getOpenDocumentPaths(): string[] {
-    return [...this.openDocuments].map((uri) => {
+    return [...this.openDocuments.keys()].map((uri) => {
       try {
-        return new URL(uri).pathname;
+        return fileURLToPath(uri);
       } catch {
         return uri;
       }
@@ -64,6 +65,8 @@ export class LspClient {
     }>
   >();
   private indexingDone = false;
+  /** Re-evaluated after each tracker update. */
+  private trackerListeners = new Set<() => void>();
   private indexingWaiters: Array<{
     resolve: () => void;
     timer: ReturnType<typeof setTimeout>;
@@ -259,6 +262,7 @@ export class LspClient {
         }
         this.indexingWaiters = [];
       }
+      for (const listener of [...this.trackerListeners]) listener();
     }
 
     if (msg.method === "textDocument/publishDiagnostics") {
@@ -358,32 +362,45 @@ export class LspClient {
     this.send({ jsonrpc: "2.0", method, params });
   }
 
-  async ensureDocumentOpen(filePath: string): Promise<string> {
+  /**
+   * Open a document once. An explicit `languageId` that differs from the ID the
+   * document was opened with reopens it, because a shared server (clangd) can
+   * receive one header as C in one request and as C++ in the next.
+   */
+  async ensureDocumentOpen(filePath: string, languageId?: string): Promise<string> {
     const absPath = resolve(filePath);
     const uri = pathToFileURL(absPath).href;
+    const openId = this.openDocuments.get(uri);
 
-    if (!this.openDocuments.has(uri)) {
-      const content = await readFile(absPath, "utf8");
-      const languageId = this.getLanguageId(absPath);
-      this.notify("textDocument/didOpen", {
-        textDocument: {
-          uri,
-          languageId,
-          version: 1,
-          text: content,
-        },
-      });
-      this.openDocuments.add(uri);
+    if (openId !== undefined && (languageId === undefined || languageId === openId)) {
+      return uri;
     }
+    if (openId !== undefined) return this.refreshDocument(absPath, languageId);
 
+    const content = await readFile(absPath, "utf8");
+    const id = languageId ?? this.getLanguageId(absPath);
+    this.notify("textDocument/didOpen", {
+      textDocument: {
+        uri,
+        languageId: id,
+        version: 1,
+        text: content,
+      },
+    });
+    this.openDocuments.set(uri, id);
     return uri;
   }
 
-  async refreshDocument(filePath: string): Promise<string> {
+  openDocumentLanguageId(filePath: string): string | undefined {
+    return this.openDocuments.get(pathToFileURL(resolve(filePath)).href);
+  }
+
+  async refreshDocument(filePath: string, languageId?: string): Promise<string> {
     const absPath = resolve(filePath);
     const uri = pathToFileURL(absPath).href;
     const content = await readFile(absPath, "utf8");
-    const languageId = this.getLanguageId(absPath);
+    const id =
+      languageId ?? this.openDocuments.get(uri) ?? this.getLanguageId(absPath);
 
     if (this.openDocuments.has(uri)) {
       this.notify("textDocument/didClose", {
@@ -394,17 +411,19 @@ export class LspClient {
     this.notify("textDocument/didOpen", {
       textDocument: {
         uri,
-        languageId,
+        languageId: id,
         version: Date.now(),
         text: content,
       },
     });
-    this.openDocuments.add(uri);
+    this.openDocuments.set(uri, id);
     return uri;
   }
 
   private getLanguageId(filePath: string): string {
-    for (const plugin of Object.values(this.languagePlugins)) {
+    const own = this.languagePlugins[this.language];
+    for (const plugin of [own, ...Object.values(this.languagePlugins)]) {
+      if (!plugin) continue;
       const id = plugin.languageIdForPath(filePath);
       if (id) return id;
     }
@@ -544,6 +563,47 @@ export class LspClient {
       signal?.addEventListener("abort", onAbort, { once: true });
       const timer = setTimeout(() => settle(resolve), timeoutMs);
       this.indexingWaiters.push({ resolve: () => settle(resolve), timer });
+    });
+  }
+
+  /**
+   * For servers that start indexing only when a document opens (clangd): wait
+   * up to `graceMs` for indexing to begin, then up to `timeoutMs` for it to
+   * finish. Returns at once without a tracker.
+   */
+  async waitForIndexingAfterOpen(
+    graceMs: number,
+    timeoutMs = 30000,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const tracker = this.indexingTracker;
+    if (!tracker) return;
+    const begun = await this.waitForTracker(() => !tracker.isDone(), graceMs, signal);
+    if (begun) await this.waitForTracker(() => tracker.isDone(), timeoutMs, signal);
+  }
+
+  /** Resolve true when `predicate` holds after a tracker update, false at the timeout. */
+  private waitForTracker(
+    predicate: () => boolean,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (signal?.aborted) return Promise.reject(new Error("Aborted"));
+    if (predicate()) return Promise.resolve(true);
+    return new Promise<boolean>((resolve, reject) => {
+      const finish = (fn: () => void) => {
+        clearTimeout(timer);
+        this.trackerListeners.delete(listener);
+        signal?.removeEventListener("abort", onAbort);
+        fn();
+      };
+      const listener = () => {
+        if (predicate()) finish(() => resolve(true));
+      };
+      const onAbort = () => finish(() => reject(new Error("Aborted")));
+      const timer = setTimeout(() => finish(() => resolve(false)), timeoutMs);
+      this.trackerListeners.add(listener);
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
 
