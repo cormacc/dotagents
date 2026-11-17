@@ -3314,6 +3314,10 @@
 (defn- assert-branch-retirable! [entry path branch base]
   (when-not (str/starts-with? (str branch) "orch/")
     (fail "worktree remove --branch refused: the recorded branch is not a managed orch/* branch" {:task (:task entry) :branch branch}))
+  ;; Inside the recorded checkout, HEAD is the branch tip, so any branch reads `ancestor`.
+  (when (fs/starts-with? (resolve-worktree-path (source-cwd)) (resolve-worktree-path path))
+    (fail "worktree remove --branch refused: the caller is inside the recorded checkout; run it from the checkout that integrates the branch"
+          {:task (:task entry) :cwd (source-cwd) :path path}))
   (let [{:keys [integration integration-tip] :as report} (branch-integration (source-cwd) branch base)]
     (when-not (retirable-integrations integration)
       (fail (str "worktree remove --branch refused: branch integration is " integration

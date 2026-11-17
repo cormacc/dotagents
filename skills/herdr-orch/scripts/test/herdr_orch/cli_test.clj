@@ -3024,6 +3024,22 @@
       (is (fs/exists? path))
       (is (git-branch-exists? dir branch)))))
 
+;; Inside the child's own checkout, HEAD is the branch tip, so every branch would read as
+;; `ancestor` (review of c530bb3).
+(deftest worktree-remove-branch-refuses-a-caller-inside-the-recorded-checkout
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "caller inside the child checkout")
+        {:keys [path branch]} (:worktree entry)]
+    (child-commit! path "unmerged-work" "u\n")
+    (publish-child! entry)
+    (fs/create-dirs (fs/path path "nested"))
+    (doseq [cwd [path (str (fs/path path "nested"))]]
+      (let [proc (call-in! cwd env "worktree" "remove" (:task entry) "--branch")]
+        (is (= 1 (:exit proc)) (:out proc))
+        (is (str/includes? (:out proc) "run it from the checkout that integrates the branch") (:out proc))
+        (is (fs/exists? path))
+        (is (git-branch-exists? dir branch))))))
+
 (deftest branch-deletion-refuses-a-branch-that-moved-after-evaluation
   (let [{:keys [dir]} (fake-env {})
         delete! #'cli/delete-branch!

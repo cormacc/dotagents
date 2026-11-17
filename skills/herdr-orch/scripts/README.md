@@ -107,7 +107,7 @@ Each `--artifact` becomes a portable Markdown link. Use `<relative-path>` or `<r
 
 1. Capture and close the child, and integrate its committed work into the checkout that you run `oh` from, by any strategy: fast-forward, merge, squash or cherry-pick.
 2. Read `reconciliation.integration` from `oh task status <full-task-uuid>`. `empty`, `ancestor` and `content` permit deletion. `absent` means that some changed path differs in `HEAD`: review the branch, then integrate the rest or keep it.
-3. Run `oh worktree remove <full-task-uuid> --branch`. Inspect any reported dirt first; the command refuses before it removes anything when the branch is not integrated or another worktree has it checked out.
+3. Run `oh worktree remove <full-task-uuid> --branch`. Inspect any reported dirt first; the command refuses before it removes anything when the branch is not integrated, another worktree has it checked out, or you run it from inside the child's checkout.
 4. Read `module-branches` in the result. A module branch that is `retained` names its reason: `unprotected-tip`, `checked-out`, `ledger-reference` or `error`.
 
 After a squash or cherry-pick, a later edit to a path that the branch changed makes `integration` read `absent`, so the branch stays. A fast-forwarded or merged branch stays `ancestor`. To abandon a branch on purpose, delete it explicitly with Git.

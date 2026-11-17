@@ -65,6 +65,7 @@ Reconciliation gains an `:integration` field computed from Git alone: `ancestor`
 - [X] A module branch whose tip is not protected is kept and reported as `unprotected-tip`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-keeps-unprotected-and-ledger-referenced-branches`
 - [X] A module branch with another reference is kept and reported with that reference. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-keeps-unprotected-and-ledger-referenced-branches`
 - [X] A caller in a subdirectory with `diff.relative=true` gets the same `:integration`, and `--branch` refuses unintegrated work outside that subdirectory. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-from-a-subdirectory-ignores-diff-relative`
+- [X] `--branch` from inside the recorded checkout refuses before any removal. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-refuses-a-caller-inside-the-recorded-checkout`
 - [X] A kept module branch does not prevent deletion of the top-level branch. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-keeps-unprotected-and-ledger-referenced-branches`
 
 *** Anti-criteria
@@ -102,6 +103,7 @@ Reconciliation gains an `:integration` field computed from Git alone: `ancestor`
 
 ** Gotchas
 
+- Inside the child's own checkout, the caller's `HEAD` is the branch tip, so every branch reads `ancestor`. `--branch` refuses a caller inside the recorded checkout (found in the second closeout review).
 - With `diff.relative=true`, `git diff --name-only` from a subdirectory lists only paths inside it. Without `--no-relative`, a caller in a subdirectory saw unintegrated work outside it as `empty`, and `--branch` deleted the branch (found in closeout review).
 - `remove-owned-modules!` overwrites each module's recorded `:tip` with the checkout tip at removal, so the recorded `:tip` cannot prove that a module branch is safe to delete. Protection is a retained `refs/herdr-orch/<owner>/...` ref at the tip, or the recorded `:base`.
 - `:integration` reads `source-cwd`. An in-process `cli/reconciliation` call from outside the fixture repository reports `branch-missing` or `unknown`, while the checkout fields stay correct.
@@ -165,5 +167,6 @@ Extend `worktree-remove!` and the `worktree!` dispatcher in `skills/herdr-orch/s
 * Validation
 
 - Closeout review by two fresh reviewers at cd0c4d9: the correctness reviewer reproduced the `diff.relative` deletion (see Gotchas); the conformance reviewer found that the tests did not prove refusal for `branch-missing` and `unknown`, survival of every retained module ref, base-only module protection or the diagnostic bound, and that the docs overstated the later-edit rule. All were fixed with tests, and each new test failed against a copy with its guard removed.
+- A third fresh reviewer at c530bb3 confirmed the six fixes with mutation checks, and found the caller-inside-checkout case and the missing `--no-relative` in `contract.md`; both were fixed, the first with a test that failed before the fix.
 - Each new guard was removed in a copy of the skill and its named test failed: the protected-tip check, the ledger-reference check, the retirable set (adding `absent`), the module checked-out check and the expected tip in `update-ref -d`. The `content` value was likewise mutated to `absent` and its test failed.
-- `bb test-clojure herdr-orch.cli-test herdr-orch.core-test` at the final tree: 492 tests, 0 failures. Two earlier full runs failed only `headless-fan-in-captures-a-result-published-at-the-liveness-boundary`; it passes alone and fails in the same way in a full run on an export of the pre-change commit 3297891, so it is intermittent and not caused by this change.
+- `bb test-clojure herdr-orch.cli-test herdr-orch.core-test` at the final tree: 493 tests, 0 failures. Two earlier full runs failed only `headless-fan-in-captures-a-result-published-at-the-liveness-boundary`; it passes alone and fails in the same way in a full run on an export of the pre-change commit 3297891, so it is intermittent and not caused by this change.
