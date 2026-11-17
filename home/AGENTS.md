@@ -49,6 +49,10 @@
 - Test a boundary predicate against every source path that creates its entries, with the boundary moved both earlier and later.
 - For a performance comparison, compare environments that differ only in the mechanism. Alternate them in rounds (ABAB) and report each round's median: one pair of medians cannot show that a difference is within noise.
 
+# Context management
+- If the `context_checkpoint` tool is available, read the `context-management` skill before you start multi-step work in a session that the user started. Read it again at each task boundary: a commit, a handoff, a user decision, or a switch to a different task.
+  - A herdr-orch subagent follows its round checkpoint rules instead.
+
 # Git operations
 - Use `git mv`, not `mv`, to move files that Git controls.
 - Revert your own file changes with Git, not by manual edits.
