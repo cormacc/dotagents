@@ -354,6 +354,30 @@ Evidence:
 - Herdr tab bar showed `anthropic-1 auth?`. auth.json: anthropic-1 oauth access token expired 2026-11-13T00:32Z; refresh token present. The session used only `anthropic`, so nothing refreshed anthropic-1.
 - `auth?` maps from state auth_required (scripts/src/herdr_orch/cli.clj, status formatter; contract.md line ~292).
 
+** TODO emacsclient extension: honour documented EMACSCLIENT_TIMEOUT :emacs:
+:PROPERTIES:
+:CUSTOM_ID: 4f48ad9c-f060-4406-877f-c53dbdd076b3
+:CREATED: [2026-11-17 Tue 11:32]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 11:32]
+:END:
+pi/extensions/emacsclient/README.md documents `EMACSCLIENT_TIMEOUT` (example 30000 ms), but no code under pi/extensions/emacsclient/ reads it: `emacsclient.ts` defaults `options.timeout ?? 10000`, and the `emacs_eval` path in `index.ts` passes no timeout. Found during the 2026-11-17 LSP-alternatives research (Emacs/eglot route). Either read the variable or remove it from the README.
+
+** TODO herdr-app quota widget: recover from a refresh that never settles :herdr_app:
+:PROPERTIES:
+:CUSTOM_ID: d63318d4-40ae-4ffd-93a1-a854a06db0f2
+:CREATED: [2026-11-17 Tue 12:52]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 12:52]
+:END:
+On 2026-11-17 the herdr-orch quota widget showed "Quota unavailable" from about 11:25: `~/.config/herdr-app/shared.json` key `herdr-orch.quota` kept `running: true` with `startedAt` 11:21:35 and was not written again. `oh usage --format json` worked (exit 0, 0.28 s, output accepted by `parseQuota`). Touching `herdr-app/mods/herdr-orch/main.js` (hot reload) recovered it at once.
+- Mechanism :: `coordinator().refresh()` in `herdr-app/mods/herdr-orch/quota-state.js` returns the in-flight `pending` promise and clears it only in its `finally`. If that promise never settles, every later refresh (60 s timer and `herdr-orch.refresh` command) returns the dead promise, so the widget never recovers.
+- Cause of the unsettled promise :: not established. herdr-app 0.1.15 `exec` does honour its `timeout` (a probe mod saw `sleep 8` with `timeout: 1500` rejected after 1,506 ms). Open hypotheses: herdr-app dropped the `exec` result (for example after task cancellation; 11:21 coincides with closing a planner tab), or the copy timer and command loop stopped while its render stayed visible.
+- Fix :: record when `pending` starts and discard it when it is older than about 35 s, so the next refresh starts a new command; pass an explicit `timeout` to `exec`. Add a regression test with an `exec` stub whose promise never settles.
+- Leftover :: the probe wrote a harmless `zz-exec-probe` key to `shared.json`.
+
 * Upstream issues
 
 * Chores
