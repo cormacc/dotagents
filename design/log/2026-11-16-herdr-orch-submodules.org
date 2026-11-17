@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch: give managed worktrees usable submodules
 #+DATE: 2026-11-16 Mon
-#+PARENT: [[task:ed32d304-84a5-41c2-8a9c-41be3e848214][herdr-orch: give managed worktrees usable submodules]]
+#+PARENT: [[archive:ed32d304-84a5-41c2-8a9c-41be3e848214][herdr-orch: give managed worktrees usable submodules]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]

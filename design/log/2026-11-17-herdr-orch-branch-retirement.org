@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch: report worktree branch integration and retire integrated branches
 #+DATE: 2026-11-17 Tue
-#+PARENT: [[task:e88e718e-09b1-4dc0-a0df-dc176f1e451f][herdr-orch: report worktree branch integration and retire integrated branches]]
+#+PARENT: [[archive:e88e718e-09b1-4dc0-a0df-dc176f1e451f][herdr-orch: report worktree branch integration and retire integrated branches]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]

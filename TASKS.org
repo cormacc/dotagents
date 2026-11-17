@@ -14,9 +14,9 @@
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
   - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
-  - [[#re-evaluate-pi-context-with-a-week-of-session-data-after-2026-11-10][Re-evaluate pi-context with a week of session data (after 2026-11-10)]]
   - [[#evaluate-hierarchical-agentsmd-discovery-for-pi][Evaluate hierarchical AGENTS.md discovery for Pi]]
   - [[#decide-whether-to-trial-standalone-rpiv-btw][Decide whether to trial standalone rpiv-btw]]
+  - [[#re-evaluate-opus-uptake-of-pi-context-after-the-agentsmd-rule-after-2026-11-24][Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24)]]
 - [[#improvements][Improvements]]
   - [[#claude-code-and-codex-userpromptsubmit-trait-adapters][Claude Code and Codex UserPromptSubmit trait adapters]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
@@ -24,7 +24,7 @@
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
   - [[#add-read-only-native-os-store-quota-reporting][Add read-only native OS-store quota reporting]]
   - [[#add-workspace-pinning-to-the-herdr-org-tasks-adapters][Add workspace pinning to the Herdr org-tasks adapters]]
-  - [[#herdr-orch-evaluate-oh-assisted-integration-of-worktree-branches][herdr-orch: evaluate oh-assisted integration of worktree branches]]
+  - [[#herdr-orch-report-worktree-branch-integration-and-retire-integrated-branches][herdr-orch: report worktree branch integration and retire integrated branches]]
   - [[#herdr-orch-show-the-current-delegation-tree-without-sidebar-changes][herdr-orch: show the current delegation tree without sidebar changes]]
 - [[#fixes][Fixes]]
   - [[#diagnose-intermittent-herdr-app-quota-loading-stall][Diagnose intermittent herdr-app quota loading stall]]
@@ -57,16 +57,6 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 Here's another one that's getting some buzz recently:
 https://github.com/TencentCloud/TencentDB-Agent-Memory/blob/feat/server_team/INSTALL.md
 
-** TODO [#C] Re-evaluate pi-context with a week of session data (after 2026-11-10) :pi:
-:PROPERTIES:
-:CUSTOM_ID: 14cd586c-6010-4b4f-9578-aa88284ec5ba
-:CREATED: [2026-11-03 Tue 20:06]
-:END:
-:LOGBOOK:
-- Created [2026-11-03 Tue 20:06]
-:END:
-pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) after a one-session trial on 2026-11-03. Trial session 2026-11-03T17-10-13 (gpt-6.1-sol, 311 requests, 3 compactions) had mean context per request 103k against 210k-216k for baseline sessions 2026-11-03T00-22 and 2026-11-03T08-28. To revisit: run the analyze:session tool from a checkout of github.com/ttttmr/pi-context on sessions from the following week, in several projects, and compare mean context per request, peak context, total tokens, compaction count, and re-reads after compaction. Baseline and trial reports and the comparison script are in .tmp/pi-context-trial/ and .tmp/pi-context-compare.clj (scratch; regenerate if gone). The context-mode alternative was rejected because its Pi adapter does not intercept read, bash, or codemode output. In orchestrator sessions (root sessions that spawn through oh), also check each compaction made while a round was uncaptured: the summary must keep the round UUID, the reason for dispatch, and the acceptance criteria. If summaries drop them, add a rule to the herdr-orch Lifecycle bullet (deferred on 2026-11-03 because pi-context's summary contract already asks for running processes and the next step). Undeclared packages context-mode 1.0.146, @ogulcancelik/pi-herdr 0.4.0 and pi-zellij-tools 0.1.4 were removed from ~/.pi/agent/npm on 2026-11-03.
-
 ** STARTED Evaluate hierarchical AGENTS.md discovery for Pi :pi:
 :PROPERTIES:
 :CUSTOM_ID: 2ed2d031-aa15-4701-9608-2cf565ddc75e
@@ -98,6 +88,18 @@ Acceptance criteria:
 - Keep the full rpiv-pi workflow uninstalled unless separately approved.
 - Decide whether cross-session question hints within one Pi process are acceptable.
 - Approve a disposable interactive trial on the installed Pi before any persistent package/settings change.
+
+** TODO [#C] Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24) :pi:
+:PROPERTIES:
+:CUSTOM_ID: 57d782a0-ef5a-4585-b484-3000d2dc68f8
+:CREATED: [2026-11-17 Tue 18:20]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 18:20]
+- State "CANCELLED" from "TODO" [2026-11-17 Tue 18:22]
+- State "TODO" from "CANCELLED" [2026-11-17 Tue 18:23]
+:END:
+On 2026-11-17 a Context management rule was added to home/AGENTS.md: if the context_checkpoint tool is available, read the context-management skill before multi-step work in a user-started session and at each task boundary. Reason: in root sessions from 2026-11-04 to 2026-11-17, claude-opus-5-5 read the skill in 1 of 56 sessions and compacted 5 times, against 13 of 13 sessions and 25 compactions for gpt-6.1-sol (see the outcome in task 14cd586c, archived). To evaluate: rerun .tmp/pi-context-eval-2026-11-17/scan.clj, agg.clj and weekly.clj (scratch; regenerate from the outcome if gone) on sessions started after the rule, and compare for claude-opus-5-5 root sessions: skill reads detected as toolCall lines that name context-management/SKILL.md (the skill path also appears in every system prompt, so a plain text match is not valid), pi-context compactions, root sessions above 200k peak context with no compaction, and mean context per request. If uptake stays low, consider the context-nudge extension option: a hook that adds a reminder above a context threshold.
 
 * Improvements
 
@@ -155,16 +157,6 @@ Acceptance criteria:
 :END:
 Deferred by the owner from the owned quota collector delivery. Support native Claude Code on macOS and Codex OS credential stores only when credentials can be read non-interactively, without refresh, credential writes, prompts or cross-harness fallback. Verify host-specific behaviour on macOS; Linux file fixtures do not establish Keychain support. Pi file-store subscription reporting does not depend on this work. Contract: skills/herdr-orch/scripts/docs/contract.md section Owned credential boundary. Origin: design/log/2026-11-05-owned-quota-collector.org.
 
-** TODO herdr-orch: evaluate oh-assisted integration of worktree branches :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: e88e718e-09b1-4dc0-a0df-dc176f1e451f
-:CREATED: [2026-11-11 Wed 10:15]
-:END:
-:LOGBOOK:
-- Created [2026-11-11 Wed 10:15]
-:END:
-Reopens the parent-owned-integration decision of `design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org`. Evaluate a guarded verb that applies one sealed child branch to the parent branch by a caller-named strategy (fast-forward, squash or merge commit), refuses on a conflict instead of resolving it, records the integration in the ledger, and so makes a later guarded branch delete safe. Guards: sealed round, clean checkout, branch tip equals the recorded `CHECKPOINT`, clean parent tree. Out: rebase of a child branch, conflict resolution, push, and any claim that the combined tree was remeasured. Parked from the worktree-integration record (task e9199488).
-
 ** TODO herdr-orch: show the current delegation tree without sidebar changes :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 166a41b8-719d-4d33-a184-dc40ce26e59e
@@ -217,38 +209,6 @@ Deadline: Atlassian removes the v1 endpoint on 2027-03-01 and then moves v1 user
 :END:
 Follow-up to task:d20d04b8-9f0a-4ec6-956e-c535e7ae205a. `oh usage --format status` shows `exp?` for an expired access token, and `pi auth check --provider <id>` refreshes a base provider through the locked Pi auth storage. Pi 1.5.2 does not load extensions for `pi auth`, so `pi auth check --provider anthropic-1 --no-refresh --json` returns `provider_not_found` (measured 2026-11-13): no Pi CLI route refreshes a named `anthropic-<N>` account. Options: ask upstream for extension loading in `pi auth`; or a documented one-request Pi session on that account. The collector stays read-only (contract.md section Owned credential boundary). Open question kept from the original task: does Anthropic rotate refresh tokens on each refresh?
 
-** DONE [#A] herdr-orch: give managed worktrees usable submodules :herdr_orch:
-CLOSED: [2026-11-17 Tue 02:00]
-:PROPERTIES:
-:CUSTOM_ID: ed32d304-84a5-41c2-8a9c-41be3e848214
-:CREATED: [2026-11-16 Mon 13:38]
-:STARTED: [2026-11-16 Mon 20:48]
-:END:
-:LOGBOOK:
-- Created [2026-11-16 Mon 13:38]
-- State "STARTED" from "TODO" [2026-11-16 Mon 20:48]
-- State "DONE" from "STARTED" [2026-11-17 Tue 02:00]
-:END:
-#+IMPORT: [[plan:2026-11-16-herdr-orch-submodules.org]]
-A managed checkout from `--worktree new` (`create-worktree!` in `cli.clj`, plain `git worktree add`) leaves every submodule folder empty, and no persona, trait, reference or prompt text tells the child. A child in a superproject whose build or tests need its submodules (for example the CD repo with `neuromod` and `common`) cannot work effectively. If the child runs `git submodule update --init`, it gets private clones in the checkout module store (`git rev-parse --git-path modules`), fetched from the `.gitmodules` URL; submodule commits stay only there, and `oh worktree remove` refuses that checkout (commit 476483b).
-
-Desired outcome (owner, 2026-11-16): a robust solution. The child gets a complete, buildable tree with no manual step, and integration and teardown need no repetitive manual reconciliation across submodule branches.
-
-Requirements:
-- At checkout creation, `oh` makes every submodule (recursively) usable, at the commit that the superproject records, without a network fetch when the main checkout already has the module repository.
-- A submodule commit that the child makes is never lost at teardown and never needs hand-copying between repositories.
-- Integration and teardown handle submodule branches mechanically: `oh worktree remove` (and failed-launch cleanup) remove nested checkouts in the correct order and leave no stale registrations or occupied branches. Report, do not silently discard, submodule work that is not integrated.
-- Behaviour when the main checkout has an uninitialised submodule, or when a submodule has nested submodules, is defined and tested.
-- Contract (section Explicit teardown and worktree creation), SKILL.md Isolation bullet and worker guidance describe the result.
-
-Candidate designs (decide in a change-record):
-1. Each submodule is a linked worktree of the shared module repository (`git -C .git/modules/<name> worktree add`), on an `orch/*` branch per submodule. No clone; child commits land in the shared repository. Needs branch naming, deepest-first teardown, and a rule for how a child submodule commit joins its result and the parent integration.
-2. Private clones per checkout, seeded from the shared module repositories (`--reference` or alternates), with `oh` verifying before teardown that every submodule commit exists elsewhere, then deleting the store. Simpler topology; costs disk and a reachability check.
-
-Out of scope as an end state: only telling the child that submodules are empty. Acceptable as an interim warning if the design work is long.
-
-Evidence: git 2.56.0 scratch tests and reviewer 67d9d6c8 report (2026-11-13): `git worktree remove` refuses after `submodule deinit` while a module store exists; `submodule deinit` on a shared-module linked worktree deletes its folder but leaves its registration, so its branch stays checked out. Untested: how `oh --worktree new` behaves when started from inside a submodule checkout.
-
 ** STARTED pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics :lsp:
 :PROPERTIES:
 :CUSTOM_ID: 98dafec7-07a5-43f7-a94e-b674b8e40a0c
@@ -279,81 +239,6 @@ Option 2 from the 2026-11-17 pi-lens evaluation: keep the owned `pi/extensions/l
 :END:
 Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the owner accepted this as a known limit on 2026-11-09 (herdr-app/README.md). Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
 
-** DONE herdr-orch housekeeping 2026-11-13 :herdr_orch:
-CLOSED: [2026-11-13 Fri 21:33]
-:PROPERTIES:
-:CUSTOM_ID: c532fc1e-488f-4960-86c4-d57736e7142d
-:CREATED: [2026-11-13 Fri 20:02]
-:STARTED: [2026-11-13 Fri 21:07]
-:END:
-:LOGBOOK:
-- Created [2026-11-13 Fri 20:02]
-- State "STARTED" from "TODO" [2026-11-13 Fri 21:07]
-- State "DONE" from "STARTED" [2026-11-13 Fri 21:33]
-:END:
-Groups small herdr-orch fixes from 2026-11-13 for one batched execution: submodule worktree teardown, ledger-less result re-delivery, and the expired-token usage state. Close and archive this parent when every child is DONE or CANCELLED.
-*** DONE herdr-orch: tear down worktrees whose submodules are worktrees too :herdr_orch:
-CLOSED: [2026-11-13 Fri 21:21]
-:PROPERTIES:
-:CUSTOM_ID: 55cf3819-d749-41dc-bda4-6dbb8ace40fa
-:CREATED: [2026-11-13 Fri 16:16]
-:END:
-:LOGBOOK:
-- Created [2026-11-13 Fri 16:16]
-- State "DONE" from "TODO" [2026-11-13 Fri 21:21]
-:END:
-Check what `oh worktree remove` does with a superproject worktree whose submodule checkouts are themselves worktrees of shared module repos (`.git/modules/<name>`), and document or fix it in `skills/herdr-orch/SKILL.md`. Evidence (CD repo, 2026-11-13): plain `git worktree remove` refused both levels without `--force` ("working trees containing submodules cannot be moved or removed"); the order that worked was the nested submodule's own submodule check, then the `neuromod` and `common` worktrees, then the CD worktree. A leftover worktree keeps its branch checked out and hides which checkout is current. herdr-orch does not mention submodules. The CD worktrees were hand-made, not `oh`-managed, so `oh` behaviour is untested.
-*** DONE herdr-orch: stop re-delivering ledger-less result items in each new session :ext:herdr_orch:
-CLOSED: [2026-11-13 Fri 21:10]
-:PROPERTIES:
-:CUSTOM_ID: ef08b4a6-97c8-45e8-ba19-0fee547e468f
-:CREATED: [2026-11-13 Fri 10:49]
-:END:
-:LOGBOOK:
-- Created [2026-11-13 Fri 10:49]
-- State "DONE" from "TODO" [2026-11-13 Fri 21:10]
-:END:
-The herdr-orch Pi delivery watcher steers a result item that has no ledger entry into each new orchestrator session, not once. The delivered set is per session (`<session-file>.herdr-orch-delivered.json`), and `skipByLedger` in `pi/extensions/herdr-orch/delivery.ts` returns false when `.tmp/herdr-orch/ledger/<task>.json` does not exist. A ledger-less item therefore has no owner check and no captured check. Each new session gets the item as a steer that it cannot act on: `oh task collect` returns `unknown assignment task`, and the agent spends a turn on a stale notification.
-
-Desired outcome: an orphan item (no ledger entry) is not re-delivered in each new session. Possible approaches: skip ledger-less items older than the session start; record delivery of ledger-less items in a root-level store, not a per-session one; or report orphans once through `oh task orphans` or a status warning, not as a steer. Update `scripts/docs/contract.md#Delivery watcher` ("an item without a ledger entry is delivered once") in the same change.
-
-Origin:
-- cwd: /home/cormacc/dev/nix/nix-microchip
-- git: git@github.com:cormacc/nix-microchip @ master
-- timestamp: [2026-11-13 Fri 10:49]
-- sender: human
-
-Evidence:
-- `.tmp/herdr-orch/68deac3a-…-d11d41f3-….result` (planner-68deac3a, 2026-10-20) had no ledger entry; the ledger lists 44 other tasks. A new session on 2026-11-13 received it at once as a `herdr-orch-item` steer, and `oh task collect` failed with `unknown assignment task`. The cause of the missing ledger entry is not known.
-- Workaround: move the orphan `.result` out of `.tmp/herdr-orch/` (here to `.tmp/herdr-orch-orphans/`).
-*** DONE Distinguish refreshable expired tokens from auth_required in oh usage status :skill:herdr_orch:
-CLOSED: [2026-11-13 Fri 21:13]
-:PROPERTIES:
-:CUSTOM_ID: d20d04b8-9f0a-4ec6-956e-c535e7ae205a
-:CREATED: [2026-11-13 Fri 11:02]
-:END:
-:LOGBOOK:
-- Created [2026-11-13 Fri 11:02]
-- State "DONE" from "TODO" [2026-11-13 Fri 21:13]
-:END:
-The oh usage status line shows `auth?` for a Pi account whose OAuth access token has expired but which still has a stored refresh token. This is the normal state of any account that Pi has not used for a request since expiry, so the status line cannot distinguish "idle, refreshable" from "no credential" or "refresh rejected". The collector must stay read-only (contract.md section Usage: reads never refresh tokens; normal harness operation owns refresh).
-
-Desired outcome (keep the collector read-only):
-1. Report an expired access token with a stored refresh token as a separate state and status token (e.g. `exp?`). Keep `auth?` for a missing credential or a refresh known to have failed. Update the status-format contract and cli_test.clj cases.
-2. Provide an on-demand refresh that goes through Pi's own credential path, so that Pi's refresh serialisation applies (e.g. `oh account refresh <id>` or a documented command). First verify whether `pi auth print-bearer-token --provider <id>` refreshes an expired token, uses Pi's lock, and works for extension-registered `anthropic-<N>` providers; discard its output.
-
-Open question: does Anthropic rotate refresh tokens on each refresh? If yes, any refresh outside Pi's lock risks a revoked token and a forced re-login, which is the main reason not to refresh in the collector.
-
-Origin:
-- cwd: /home/cormacc/nmd/process/nmd-dev
-- git: git@github.com:cormacc/dotagents.git @ main (target)
-- timestamp: [2026-11-13 Fri 11:02]
-- sender: human (requested), agent (drafted)
-
-Evidence:
-- Herdr tab bar showed `anthropic-1 auth?`. auth.json: anthropic-1 oauth access token expired 2026-11-13T00:32Z; refresh token present. The session used only `anthropic`, so nothing refreshed anthropic-1.
-- `auth?` maps from state auth_required (scripts/src/herdr_orch/cli.clj, status formatter; contract.md line ~292).
-
 ** TODO emacsclient extension: honour documented EMACSCLIENT_TIMEOUT :emacs:
 :PROPERTIES:
 :CUSTOM_ID: 4f48ad9c-f060-4406-877f-c53dbdd076b3
@@ -377,6 +262,16 @@ On 2026-11-17 the herdr-orch quota widget showed "Quota unavailable" from about 
 - Cause of the unsettled promise :: not established. herdr-app 0.1.15 `exec` does honour its `timeout` (a probe mod saw `sleep 8` with `timeout: 1500` rejected after 1,506 ms). Open hypotheses: herdr-app dropped the `exec` result (for example after task cancellation; 11:21 coincides with closing a planner tab), or the copy timer and command loop stopped while its render stayed visible.
 - Fix :: record when `pending` starts and discard it when it is older than about 35 s, so the next refresh starts a new command; pass an explicit `timeout` to `exec`. Add a regression test with an `exec` stub whose promise never settles.
 - Leftover :: the probe wrote a harmless `zz-exec-probe` key to `shared.json`.
+
+** TODO herdr-orch: headless fan-in test fails intermittently in full cli-test runs :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 5d58a235-4d5c-4dd9-8a89-e1e6d655f28c
+:CREATED: [2026-11-17 Tue 19:34]
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 19:34]
+:END:
+In full runs of `bb test-clojure herdr-orch.cli-test`, `headless-fan-in-captures-a-result-published-at-the-liveness-boundary` fails its control: `collect-any!` reports `{:status "pending" :reason "timeout"}` where the test expects `no-live-children`. It passes alone. Reproduced on 2026-11-17 at the working tree and on an export of 3297891, so it predates task e88e718e. Possibly related to task 64547358.
 
 * Upstream issues
 
@@ -406,46 +301,3 @@ Evidence:
 - 2026-10-14: four batches paired an Edit with a grep or sed of the same file; each check read the pre-edit content, and one led the agent to report a remaining match that the edit had already removed.
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
-
-** DONE AGENTS.md: sweep submodules with git -C <submodule> grep :agents_md:
-CLOSED: [2026-11-16 Mon 20:22]
-:PROPERTIES:
-:CUSTOM_ID: 8eb01e9b-e120-4979-ba67-1b4c8b3c63f5
-:CREATED: [2026-11-16 Mon 20:20]
-:END:
-:LOGBOOK:
-- Created [2026-11-16 Mon 20:20]
-- State "DONE" from "TODO" [2026-11-16 Mon 20:22]
-:END:
-The home AGENTS.md sweep rule recommends `git -C <submodule> ls-files` for submodules. Piped to `xargs grep` from the parent directory, every path fails because the listed paths are relative to the submodule. Replace the rule text with: Sweep each submodule with `git -C <submodule> grep` or `git submodule foreach`; `git -C <submodule> ls-files` prints paths relative to the submodule. Keep the positive-control requirement.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/mbt/cd
-- git: git@git.nmd.ie:products/mbt/cd @ file-get-incremental
-- timestamp: [2026-11-16 Mon 20:20]
-- sender: agent (retro, user-approved)
-
-Evidence:
-- Root and one child both ran `git -C neuromod ls-files -z | xargs -0 grep` from the CD root; grep reported 'No such file or directory' for every path. `git -C <sub> grep` resolves paths inside the submodule.
-
-** DONE herdr-orch: write oh lifecycle verbs as 'oh task <verb>'; continue takes the latest round UUID :skill:herdr_orch:
-CLOSED: [2026-11-16 Mon 20:22]
-:PROPERTIES:
-:CUSTOM_ID: fc4bb4d3-8c4c-41fa-b9a7-6532f9ab098c
-:CREATED: [2026-11-16 Mon 20:20]
-:END:
-:LOGBOOK:
-- Created [2026-11-16 Mon 20:20]
-- State "DONE" from "TODO" [2026-11-16 Mon 20:22]
-:END:
-SKILL.md names oh lifecycle verbs without their group (`close <full-task-uuid>`, `continue <full-task-uuid>`, `prune`, `compact`, `harvest`). The CLI requires `oh task close`, `oh task harvest` etc.; `oh close` and `oh harvest` fail with 'unknown oh command'. Also `oh task continue` must take the UUID of the child's latest round: a superseded round UUID failed (ok:false, no message) and the latest round UUID worked. Desired outcome: write the full `oh task <verb>` form in the Lifecycle and ledger lines, and state that continue takes the latest round UUID (consider a clearer error for a superseded UUID).
-
-Origin:
-- cwd: /home/cormacc/nmd/products/mbt/cd
-- git: git@git.nmd.ie:products/mbt/cd @ file-get-incremental
-- timestamp: [2026-11-16 Mon 20:20]
-- sender: agent (retro, user-approved)
-
-Evidence:
-- `oh close <uuid>` and `oh harvest` -> {"message":"unknown oh command"}; `oh task close` / `oh task harvest` worked.
-- `oh task continue 93a45f56-...` after round 8c437583 existed -> ok:false with null result/error fields; `oh task continue 8c437583-...` worked.
