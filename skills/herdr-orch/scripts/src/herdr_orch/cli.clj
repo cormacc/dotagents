@@ -22,7 +22,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list [--all] [--format json]\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and workflow skills for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-<N> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\nDelegated children use a new tab in the caller's workspace; --tab is optional.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout with recursive recorded submodules as linked worktrees of shared repositories, Git-locked for guarded deepest-first teardown by `oh worktree remove`. Missing objects use a non-interactive fetch; unavailable content refuses launch. Publication retains module-tip refs before containing gitlinks and never pushes them. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\nworktree list --all lists every worktree round under the assignment root with its reconciliation and display string. It needs no caller session and writes neither the ledger nor Git.\nEach reconciliation reports :integration -- empty, ancestor, content, absent, branch-missing or unknown -- for the branch's work against the caller's HEAD; content covers a squash or cherry-pick.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list [--all] [--format json]\n  oh worktree remove <full-task-uuid> [--branch]\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and workflow skills for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-<N> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\nDelegated children use a new tab in the caller's workspace; --tab is optional.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout with recursive recorded submodules as linked worktrees of shared repositories, Git-locked for guarded deepest-first teardown by `oh worktree remove`. Missing objects use a non-interactive fetch; unavailable content refuses launch. Publication retains module-tip refs before containing gitlinks and never pushes them. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\nworktree list --all lists every worktree round under the assignment root with its reconciliation and display string. It needs no caller session and writes neither the ledger nor Git.\nEach reconciliation reports :integration -- empty, ancestor, content, absent, branch-missing or unknown -- for the branch's work against the caller's HEAD; content covers a squash or cherry-pick.\nworktree remove keeps the branch. --branch also deletes it, but only when :integration is empty, ancestor or content, and refuses before any removal otherwise. Owned module branches are deleted when a retained module ref or their base protects the tip and nothing else references them.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn usage-error [message data]
   (throw (ex-info message (assoc data :error-kind :usage))))
@@ -71,7 +71,8 @@
   (cond-> boolean-flags
     (or (and (#{"tab" "ws"} group) (= "create" op))
         (and (= "pane" group) (= "split" op))) (conj "--focus")
-    (and (= "worktree" group) (= "list" op)) (conj "--all")))
+    (and (= "worktree" group) (= "list" op)) (conj "--all")
+    (and (= "worktree" group) (= "remove" op)) (conj "--branch")))
 (defn option-map [args flags known]
   (loop [xs args out {}]
     (if-let [x (first xs)]
@@ -3088,10 +3089,9 @@
                                        :reason (.getMessage e) :detail (ex-data e)})))
             candidates))))
 ;; --- explicit teardown: `oh worktree list|remove` (task 4962846f) --------------------
-;; Removal takes the checkout and never the branch. `git worktree remove` leaves the
-;; branch and its commits intact (reviewer-probed, task f49a63f5/47005e8f's decision
-;; record), so removing a checkout can never destroy committed work; deleting the branch
-;; remains the parent's own act. Tip ancestry against the parent's *live* HEAD is reported
+;; Removal takes the checkout and keeps the branch unless `--branch` asks for it (see
+;; branch retirement below). `git worktree remove` leaves the branch and its commits
+;; intact, so removing a checkout can never destroy committed work. Tip ancestry against the parent's *live* HEAD is reported
 ;; as information only, never a gate: an "unmerged" gate would need an ancestry predicate
 ;; against a moving parent ref, and squash or cherry-pick integration never satisfies it,
 ;; so it would refuse forever after ordinary integration (see the change-record's
@@ -3295,14 +3295,92 @@
             (fail "worktree removal refused: checkout changed after module removal" {:path path :dirty dirty :ignored ignored}))))
       results)))
 
-(defn worktree-remove! [task]
-  (when-not task (usage-error "worktree remove requires a full task uuid" {}))
-  (let [entry (ledger/read! task)]
-    (assert-worktree-owned! "worktree remove" (caller-parent-session) entry)
-    (let [{:keys [path branch base]} (worktree-of "worktree remove" entry)]
-      (assert-managed-worktree-path! task path)
-      (when (worktree-referenced-by-live-round? path (ledger/entries))
-        (fail "worktree remove refused: a live round of this session still references the checkout" {:task task :path path}))
+;; --- branch retirement (`worktree remove --branch`) ---------------------------------------
+;; Deletion needs proof that no work is lost: the top-level branch only when its work is in
+;; the caller's HEAD, and a module branch only when its tip is protected by a retained
+;; module ref or is its recorded base. `update-ref -d` with the evaluated tip refuses a
+;; branch that moved after the check; it does not check worktrees, so that is done here.
+(def ^:private retirable-integrations #{"empty" "ancestor" "content"})
+(defn- branch-checkouts
+  "Return the worktree paths of the repository at `dir` that have local `branch` checked out."
+  [dir branch]
+  (let [target (str "branch refs/heads/" branch)]
+    (->> (partition-by empty? (git-nul dir "worktree" "list" "--porcelain" "-z"))
+         (keep (fn [record] (when (and (str/starts-with? (first record) "worktree ") (some #{target} record))
+                              (subs (first record) 9))))
+         vec)))
+(defn- assert-branch-retirable! [entry path branch base]
+  (when-not (str/starts-with? (str branch) "orch/")
+    (fail "worktree remove --branch refused: the recorded branch is not a managed orch/* branch" {:task (:task entry) :branch branch}))
+  (let [{:keys [integration integration-tip] :as report} (branch-integration (source-cwd) branch base)]
+    (when-not (retirable-integrations integration)
+      (fail (str "worktree remove --branch refused: branch integration is " integration
+                 "; integrate the branch, or delete it explicitly with git")
+            (merge {:task (:task entry) :branch branch} report)))
+    (when-let [others (seq (remove #(= (resolve-worktree-path %) (resolve-worktree-path path))
+                                   (branch-checkouts (source-cwd) branch)))]
+      (fail "worktree remove --branch refused: another worktree has the branch checked out"
+            {:task (:task entry) :branch branch :checkouts (vec others)}))
+    integration-tip))
+(defn- delete-branch! [dir branch tip]
+  (when-let [checkouts (seq (branch-checkouts dir branch))]
+    (fail "branch deletion refused: a worktree has the branch checked out" {:branch branch :checkouts (vec checkouts)}))
+  (let [{:keys [exit err]} @(process/process ["git" "update-ref" "-d" (str "refs/heads/" branch) tip]
+                                             {:dir dir :out :string :err :string})]
+    (when-not (zero? exit)
+      (fail "branch deletion refused: the branch moved after its integration was evaluated"
+            {:branch branch :evaluated-tip tip :stderr (str/trim err)}))))
+(defn- module-branch-references [entry {:keys [repository branch]}]
+  (vec (for [other (ledger/entries)
+             :when (not= (:child other) (:child entry))
+             :when (or (= [repository branch] [(get-in other [:worktree :repository]) (get-in other [:worktree :branch])])
+                       (some #(= [repository branch] [(:repository %) (:branch %)]) (:modules other)))]
+         (:task other))))
+(defn- retire-module-branch! [entry module]
+  (let [{:keys [repository branch base path]} module
+        report {:path path :branch branch}]
+    (try
+      (let [tip (when (fs/directory? repository) (branch-tip repository branch))
+            protected? (fn [] (or (= tip base)
+                                  (seq (git! repository "for-each-ref" "--points-at" tip
+                                             (str "refs/herdr-orch/" (or (:module-owner entry) (:task entry)) "/")))))]
+        (cond
+          (nil? tip) (assoc report :status "missing")
+          (not (protected?)) (assoc report :status "retained" :reason "unprotected-tip" :tip tip)
+          :else
+          (let [checkouts (branch-checkouts repository branch)
+                references (module-branch-references entry module)]
+            (cond
+              (seq checkouts) (assoc report :status "retained" :reason "checked-out" :tip tip :checkouts checkouts)
+              (seq references) (assoc report :status "retained" :reason "ledger-reference" :tip tip :tasks references)
+              :else (do (delete-branch! repository branch tip) (assoc report :status "deleted" :tip tip))))))
+      (catch Exception e (assoc report :status "retained" :reason "error" :diagnostic (bounded-diagnostic e))))))
+
+(declare remove-checkout!)
+(defn worktree-remove!
+  ([task] (worktree-remove! task {}))
+  ([task {:keys [branch?]}]
+   (when-not task (usage-error "worktree remove requires a full task uuid" {}))
+   (let [entry (ledger/read! task)]
+     (assert-worktree-owned! "worktree remove" (caller-parent-session) entry)
+     (let [{:keys [path branch base]} (worktree-of "worktree remove" entry)]
+       (assert-managed-worktree-path! task path)
+       (when (worktree-referenced-by-live-round? path (ledger/entries))
+         (fail "worktree remove refused: a live round of this session still references the checkout" {:task task :path path}))
+       (let [tip (when branch? (assert-branch-retirable! entry path branch base))
+             removed (remove-checkout! task entry path branch base)]
+         (if-not branch?
+           removed
+           (do (try (delete-branch! (source-cwd) branch tip)
+                    (catch Exception e
+                      (fail (str "worktree remove --branch: the checkout is " (:status removed)
+                                 " but the branch was kept: " (ex-message e))
+                            (merge {:task task :checkout removed} (ex-data e)))))
+               (cond-> (assoc removed :branch-retirement {:status "deleted" :branch branch :tip tip})
+                 (contains? entry :modules)
+                 (assoc :module-branches (mapv #(retire-module-branch! entry %) (owned-modules entry)))))))))))
+
+(defn- remove-checkout! [task entry path branch base]
       (if-not (fs/exists? path)
         (do (if (contains? entry :modules)
               (do (remove-owned-modules! entry false)
@@ -3323,7 +3401,7 @@
             (remove-managed-worktree! (source-cwd) path)
             (cond-> {:status "removed" :task task :child (:child entry) :path path :branch branch :base base
                      :tip tip :tip-is-ancestor-of-parent-head ancestor? :ignored ignored}
-              (contains? entry :modules) (assoc :modules modules))))))))
+              (contains? entry :modules) (assoc :modules modules))))))
 ;; --- failed-launch checkout cleanup --------------------------------------------------
 ;; A delegated launch that fails before its child takes the assignment leaves nothing to
 ;; integrate, so a retry should start clean. Only a pristine checkout that this round
@@ -3374,7 +3452,7 @@
   ;; -- referencing it here would fail to compile as an unresolved forward reference.
   (case op
     "list" (do (when (seq positional) (usage-error "worktree list takes no arguments" {:arguments positional})) (worktree-list! opts))
-    "remove" (worktree-remove! (first positional))
+    "remove" (worktree-remove! (first positional) {:branch? (:branch opts)})
     (usage-error "unknown worktree command" {:command op})))
 ;; --- retention ------------------------------------------------------------------------
 ;; Nothing retired a captured ledger entry: `prune` only retires an entry proved *stale*, so
@@ -3974,7 +4052,7 @@
            "compact --closed"
            "harvest [--format json|text]"]
    "worktree" ["list [--all] [--format json]"
-               "remove <full-task-uuid>"]
+               "remove <full-task-uuid> [--branch]"]
    "spawn" ["spawn \"<shell command>\""]
    "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]"]
    "route" ["route --request PATH"]

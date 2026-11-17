@@ -40,40 +40,40 @@ Reconciliation gains an `:integration` field computed from Git alone: `ancestor`
 
 *** Core functionality
 
-- [ ] A branch whose tip is an ancestor of the caller's `HEAD` reports `:integration "ancestor"`.
-- [ ] A branch squash-merged into the caller's `HEAD` reports `:integration "content"`.
-- [ ] A branch whose changed paths have different content in `HEAD` reports `:integration "absent"`.
-- [ ] A branch with no changed paths from `:base` reports `:integration "empty"`.
-- [ ] A deleted branch reports `:integration "branch-missing"`.
-- [ ] A failed Git query reports `:integration "unknown"` with a bounded `:integration-diagnostic`, and the other reconciliation fields are unchanged.
-- [ ] `worktree list --all` entries carry `:integration`.
-- [ ] `oh worktree remove <task> --branch` on an `ancestor`, `content` or `empty` branch removes the checkout and deletes the branch.
-- [ ] The result names the deleted branch and its tip.
-- [ ] `--branch` on an `absent` branch refuses before the checkout is removed.
-- [ ] `--branch` on an entry whose checkout is missing deletes an integrated branch.
-- [ ] `--branch` deletes each owned module branch whose tip equals its recorded `:tip` and that has no other reference.
-- [ ] A module branch has no other reference when no worktree of its module repository has it checked out.
-- [ ] A module branch has no other reference when no ledger entry outside this child lineage records it.
-- [ ] `oh worktree remove` without `--branch` keeps the branch, as now.
-- [ ] `contract.md`, `scripts/README.md`, `SKILL.md` and CLI help describe `:integration` and `--branch`.
+- [X] A branch whose tip is an ancestor of the caller's `HEAD` reports `:integration "ancestor"`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `integration-reports-empty-then-absent-then-ancestor-after-a-fast-forward`
+- [X] A branch squash-merged into the caller's `HEAD` reports `:integration "content"`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `integration-reports-content-after-a-squash-and-absent-after-a-later-edit`
+- [X] A branch whose changed paths have different content in `HEAD` reports `:integration "absent"`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `integration-reports-empty-then-absent-then-ancestor-after-a-fast-forward`
+- [X] A branch with no changed paths from `:base` reports `:integration "empty"`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `integration-reports-empty-then-absent-then-ancestor-after-a-fast-forward`
+- [X] A deleted branch reports `:integration "branch-missing"`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `integration-reports-branch-missing-in-both-listings`
+- [X] A failed Git query reports `:integration "unknown"` with a bounded `:integration-diagnostic`, and the other reconciliation fields are unchanged. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `integration-reports-unknown-with-a-diagnostic-when-git-fails`
+- [X] `worktree list --all` entries carry `:integration`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `integration-reports-branch-missing-in-both-listings`
+- [X] `oh worktree remove <task> --branch` on an `ancestor`, `content` or `empty` branch removes the checkout and deletes the branch. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-deletes-ancestor-content-and-empty-branches`
+- [X] The result names the deleted branch and its tip. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-deletes-ancestor-content-and-empty-branches`
+- [X] `--branch` on an `absent` branch refuses before the checkout is removed. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-refuses-unintegrated-work-before-removal`
+- [X] `--branch` on an entry whose checkout is missing deletes an integrated branch. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-retires-the-branch-of-an-already-removed-checkout`
+- [X] `--branch` deletes each owned module branch whose tip is protected (a retained `refs/herdr-orch/<owner>/...` ref or the module's recorded `:base`) and that has no other reference. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-deletes-protected-branches-and-keeps-checked-out-ones`
+- [X] A module branch has no other reference when no worktree of its module repository has it checked out. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-deletes-protected-branches-and-keeps-checked-out-ones`
+- [X] A module branch has no other reference when no ledger entry outside this child lineage records it. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-keeps-unprotected-and-ledger-referenced-branches`
+- [X] `oh worktree remove` without `--branch` keeps the branch, as now. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-refuses-unintegrated-work-before-removal`
+- [X] `contract.md`, `scripts/README.md`, `SKILL.md` and CLI help describe `:integration` and `--branch`.
 
 *** Edge cases
 
-- [ ] A branch that moves after evaluation is not deleted, and the command reports the conflict.
-- [ ] A branch checked out in any worktree is not deleted.
-- [ ] A content check after a later edit to one of the branch's paths reports `absent`.
-- [ ] A module branch whose tip differs from its recorded `:tip` is kept and reported.
-- [ ] A module branch with another reference is kept and reported with that reference.
-- [ ] A kept module branch does not prevent deletion of the top-level branch.
+- [X] A branch that moves after evaluation is not deleted, and the command reports the conflict. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `branch-deletion-refuses-a-branch-that-moved-after-evaluation`
+- [X] A branch checked out in any worktree is not deleted. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-refuses-a-branch-checked-out-elsewhere`
+- [X] A content check after a later edit to one of the branch's paths reports `absent`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `integration-reports-content-after-a-squash-and-absent-after-a-later-edit`
+- [X] A module branch whose tip is not protected is kept and reported as `unprotected-tip`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-keeps-unprotected-and-ledger-referenced-branches`
+- [X] A module branch with another reference is kept and reported with that reference. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-keeps-unprotected-and-ledger-referenced-branches`
+- [X] A kept module branch does not prevent deletion of the top-level branch. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-keeps-unprotected-and-ledger-referenced-branches`
 
 *** Anti-criteria
 
-- [ ] Must not: merge, rebase, squash, cherry-pick or push.
-- [ ] Must not: delete a branch for `absent`, `branch-missing` or `unknown`.
-- [ ] Must not: delete a branch of a checkout outside the managed root.
-- [ ] Must not: delete a `refs/herdr-orch/...` ref.
-- [ ] Must not: use `git branch -D`.
-- [ ] Must not: mutate the ledger or Git from a reconciliation or listing.
+- [X] Must not: merge, rebase, squash, cherry-pick or push.
+- [X] Must not: delete a branch for `absent`, `branch-missing` or `unknown`. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-remove-branch-refuses-unintegrated-work-before-removal`
+- [X] Must not: delete a branch of a checkout outside the managed root.
+- [X] Must not: delete a `refs/herdr-orch/...` ref. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `managed-modules-branch-retirement-deletes-protected-branches-and-keeps-checked-out-ones`
+- [X] Must not: use `git branch -D`.
+- [X] Must not: mutate the ledger or Git from a reconciliation or listing. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `worktree-list-all-is-read-only-and-lists-newest-rounds-across-parents`
 
 ** Decisions
 
@@ -81,10 +81,10 @@ Reconciliation gains an `:integration` field computed from Git alone: `ancestor`
   Rejected:
   - Guarded `oh` integration verb by strategy (the task as parked): wraps three Git commands; strategy choice, squash commit messages and conflicts stay with the LLM.
   - Ledger record of integration: stale after any manual integration, and redundant with the content check.
-- Content check against the recorded `:base` :: `git diff --quiet <tip> HEAD -- <paths changed from base to tip>`. It covers fast-forward, merge, squash and cherry-pick. A later edit to one of those paths gives `absent`, so the error is to keep a branch, never to delete one. A merge-base from the caller's `HEAD` is wrong after the parent rewrites its branch: in `mbt/cd` it gave 46 to 91 paths where the recorded base gave 0 to 27.
+- Content check against the recorded `:base` :: no path changed from base to tip is among the paths that differ between tip and `HEAD` (two `git diff --name-only` sets, so no long pathspec argument). It covers fast-forward, merge, squash and cherry-pick. A later edit to one of those paths gives `absent`, so the error is to keep a branch, never to delete one. A merge-base from the caller's `HEAD` is wrong after the parent rewrites its branch: in `mbt/cd` it gave 46 to 91 paths where the recorded base gave 0 to 27.
 - Guarded deletion in `oh` reverses an earlier anti-criterion :: "Must not: let `oh` merge, rebase, push or delete a branch" in [[proj:design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org]] and [[proj:design/log/2026-11-11-herdr-orch-worktree-integration.org]]. Deletion stays opt-in (`--branch`), limited to managed checkouts, and needs a proven `:integration`; `oh` still never merges, rebases or pushes.
 - Delete with compare-and-swap :: `git update-ref -d refs/heads/<branch> <evaluated-tip>`, after a check that no worktree has the branch checked out (`update-ref` does not check). `git branch -d` refuses a squashed branch, and `-D` has no tip check.
-- Module branches retire with the top-level branch :: each published module tip already has a permanent `refs/herdr-orch/...` ref, so deleting `orch/<lineage>/module-<id>` at its recorded `:tip` loses no commit. Without this, module branches accumulate in each shared module repository. A module branch is deleted only when nothing else references it: no worktree of the module repository has it checked out, and no ledger entry outside this child lineage records it (user decision, 2026-11-17).
+- Module branches retire with the top-level branch :: each published module tip already has a permanent `refs/herdr-orch/...` ref, so deleting `orch/<lineage>/module-<id>` at a tip that such a ref, or the module's recorded `:base`, protects loses no commit. Without this, module branches accumulate in each shared module repository. A module branch is deleted only when nothing else references it: no worktree of the module repository has it checked out, and no ledger entry outside this child lineage records it (user decision, 2026-11-17).
 
 ** Risks
 
@@ -93,7 +93,20 @@ Reconciliation gains an `:integration` field computed from Git alone: `ancestor`
 - `:integration` is relative to the caller's current `HEAD`. A parent on another branch sees `absent` for work that it integrated elsewhere.
 - One extra `merge-base` and `diff` per entry adds to the cost of `worktree list --all` for the sidebars.
 
+** Shipped
+
+- MODIFIED :: `skills/herdr-orch/scripts/docs/contract.md` -- `:integration` in section 'Worktree reconciliation and teardown'; new subsection 'Branch retirement' under 'Explicit teardown'.
+- MODIFIED :: `skills/herdr-orch/scripts/README.md` -- 'Retire an integrated branch' uses `--branch`, with the Git-only steps kept for a cleared ledger.
+- MODIFIED :: `skills/herdr-orch/SKILL.md` and `skills/herdr-orch/README.org` -- the Integration guidance and the claim that `oh` never deletes a branch; CLI help likewise.
+
+** Gotchas
+
+- `remove-owned-modules!` overwrites each module's recorded `:tip` with the checkout tip at removal, so the recorded `:tip` cannot prove that a module branch is safe to delete. Protection is a retained `refs/herdr-orch/<owner>/...` ref at the tip, or the recorded `:base`.
+- `:integration` reads `source-cwd`. An in-process `cli/reconciliation` call from outside the fixture repository reports `branch-missing` or `unknown`, while the checkout fields stay correct.
+
 ** Follow-ups
+
+- [[task:5d58a235-4d5c-4dd9-8a89-e1e6d655f28c]] -- the headless fan-in test that fails in full `cli-test` runs, before and after this change.
 
 * Plan
 
@@ -118,18 +131,22 @@ Acceptance criteria:
 
 Compute from the branch ref, not the checkout `HEAD`, so a missing checkout still reports. Extend `checkout-reconciliation` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; reuse `ancestor-of-parent-head?`.
 
-** TODO Retire integrated branches with oh worktree remove --branch :herdr_orch:
+** DONE Retire integrated branches with oh worktree remove --branch :herdr_orch:
+CLOSED: [2026-11-17 Tue 19:33]
 :PROPERTIES:
 :CUSTOM_ID: 4a2b1b54-a89c-4ab3-b374-706cbecbe6cd
 :CREATED: [2026-11-17 Tue 19:02]
 :BLOCKED-BY: task:9ce9a258-8150-40f3-aff0-1560a8ba78fb
+:STARTED: [2026-11-17 Tue 19:19]
 :END:
 :LOGBOOK:
 - Created [2026-11-17 Tue 19:02]
+- State "STARTED" from "TODO" [2026-11-17 Tue 19:19]
+- State "DONE" from "STARTED" [2026-11-17 Tue 19:33]
 :END:
 Acceptance criteria:
 - The `--branch` criteria in Core functionality and Edge cases, each with a real-Git test.
-- Module branches: deleted at their recorded `:tip` when they have no other reference (checkout or ledger entry outside this lineage); kept and reported otherwise, without blocking the top-level deletion.
+- Module branches: deleted at a protected tip when they have no other reference (checkout or ledger entry outside this lineage); kept and reported otherwise, without blocking the top-level deletion.
 - Refusal for `absent`, `branch-missing` or `unknown` happens before any unlock or removal.
 - `scripts/README.md` 'Retire an integrated branch' uses `--branch`, and keeps the manual steps for a cleared ledger.
 - `SKILL.md` Integration bullet, `contract.md` section 'Explicit teardown' and CLI help describe `--branch`.
@@ -138,3 +155,12 @@ Acceptance criteria:
 Extend `worktree-remove!` and the `worktree!` dispatcher in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; module branches are recorded by `remove-owned-modules!`'s inventory (`:branch`, `:tip`, `:repository`).
 
 * Implementation
+
+- `branch-integration` (public, so tests can call it) evaluates `empty` before `ancestor`, so a branch with no changed paths reports `empty` even when it is an ancestor.
+- `worktree-remove!` evaluates retirement before `remove-checkout!` (the existing teardown, unchanged), then deletes the top-level branch, then reports each module branch. A top-level deletion failure fails the command after the checkout outcome; module failures never fail it.
+- `--branch` is a value-less flag only for `worktree remove` (`boolean-flags-for`).
+
+* Validation
+
+- Each new guard was removed in a copy of the skill and its named test failed: the protected-tip check, the ledger-reference check, the retirable set (adding `absent`), the module checked-out check and the expected tip in `update-ref -d`. The `content` value was likewise mutated to `absent` and its test failed.
+- `bb test-clojure herdr-orch.cli-test herdr-orch.core-test` at the final tree: 489 tests, 0 failures. Two earlier full runs failed only `headless-fan-in-captures-a-result-published-at-the-liveness-boundary`; it passes alone and fails in the same way in a full run on an export of the pre-change commit 3297891, so it is intermittent and not caused by this change.
