@@ -2,7 +2,7 @@
 #+DATE: 2026-11-17 Tue
 #+PARENT: [[task:e88e718e-09b1-4dc0-a0df-dc176f1e451f][herdr-orch: report worktree branch integration and retire integrated branches]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Active
+#+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 #+SPEC: [[proj:skills/herdr-orch/scripts/README.md]]
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
@@ -15,7 +15,7 @@ Stop `orch/*` branches and managed checkouts from accumulating after the parent 
 
 *Level:* production · *Tests:* thorough · *Docs:* full
 
-Reconciliation gains an `:integration` field computed from Git alone: `ancestor` when the branch tip is an ancestor of the caller's `HEAD`, `content` when every path changed from the recorded `:base` to the branch tip has the same content in `HEAD`, and `empty` when that path set is empty. `oh worktree remove <task> --branch` removes the managed checkout under the existing guards, then deletes its branch, and its module branches, only for those three values, with a compare-and-swap on the evaluated tip.
+Reconciliation gains an `:integration` field computed from Git alone: `ancestor` when the branch tip is an ancestor of the caller's `HEAD`, `content` when every path changed from the recorded `:base` to the branch tip has the same content in `HEAD`, and `empty` when that path set is empty. `oh worktree remove <task> --branch` removes the managed checkout under the existing guards, then deletes its branch with a compare-and-swap on the evaluated tip. It refuses before any removal for any other value, for a branch checked out in another worktree, and for a caller inside the recorded checkout. Owned module branches are deleted when a retained ref or their base protects the tip and nothing else references them.
 
 ** Scope
 
@@ -90,8 +90,7 @@ Reconciliation gains an `:integration` field computed from Git alone: `ancestor`
 
 ** Risks
 
-- A later commit that changes the branch's paths makes a squashed branch `absent`, so it stays. The fallback is the manual review in the README.
-- A later module advance changes the gitlink, so a squashed superproject branch becomes `absent` in the same way.
+- A later commit that changes a squashed branch's paths, including a later module advance of a gitlink, makes the branch `absent`, so it stays until the operator deletes it with Git.
 - `:integration` is relative to the caller's current `HEAD`. A parent on another branch sees `absent` for work that it integrated elsewhere.
 - One extra `merge-base` and `diff` per entry adds to the cost of `worktree list --all` for the sidebars.
 
@@ -103,14 +102,14 @@ Reconciliation gains an `:integration` field computed from Git alone: `ancestor`
 
 ** Gotchas
 
-- Inside the child's own checkout, the caller's `HEAD` is the branch tip, so every branch reads `ancestor`. `--branch` refuses a caller inside the recorded checkout (found in the second closeout review).
-- With `diff.relative=true`, `git diff --name-only` from a subdirectory lists only paths inside it. Without `--no-relative`, a caller in a subdirectory saw unintegrated work outside it as `empty`, and `--branch` deleted the branch (found in closeout review).
+- Inside the child's own checkout, the caller's `HEAD` is the branch tip, so every branch reads `ancestor`; hence the caller-inside-checkout refusal.
+- With `diff.relative=true`, `git diff --name-only` from a subdirectory lists only paths inside it, so work outside it reads `empty`; hence `--no-relative`.
 - `remove-owned-modules!` overwrites each module's recorded `:tip` with the checkout tip at removal, so the recorded `:tip` cannot prove that a module branch is safe to delete. Protection is a retained `refs/herdr-orch/<owner>/...` ref at the tip, or the recorded `:base`.
 - `:integration` reads `source-cwd`. An in-process `cli/reconciliation` call from outside the fixture repository reports `branch-missing` or `unknown`, while the checkout fields stay correct.
 
 ** Follow-ups
 
-- [[task:5d58a235-4d5c-4dd9-8a89-e1e6d655f28c]] -- the headless fan-in test that fails in full `cli-test` runs, before and after this change.
+- [[task:5d58a235-4d5c-4dd9-8a89-e1e6d655f28c]] -- the headless fan-in test that fails intermittently in full `cli-test` runs, before and after this change.
 
 * Plan
 
@@ -126,14 +125,7 @@ CLOSED: [2026-11-17 Tue 19:18]
 - State "STARTED" from "TODO" [2026-11-17 Tue 19:11]
 - State "DONE" from "STARTED" [2026-11-17 Tue 19:18]
 :END:
-Acceptance criteria:
-- The six `:integration` values in Core functionality, each with a real-Git test in `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj`.
-- `worktree list --all` entries carry `:integration`.
-- The content check after a later edit reports `absent`.
-- `contract.md` section 'Worktree reconciliation and teardown' and CLI help describe the field.
-- Must not: mutate the ledger or Git; the query runs under `*read-only-git?*`.
-
-Compute from the branch ref, not the checkout `HEAD`, so a missing checkout still reports. Extend `checkout-reconciliation` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; reuse `ancestor-of-parent-head?`.
+Delivered in 9525146.
 
 ** DONE Retire integrated branches with oh worktree remove --branch :herdr_orch:
 CLOSED: [2026-11-17 Tue 19:33]
@@ -148,15 +140,7 @@ CLOSED: [2026-11-17 Tue 19:33]
 - State "STARTED" from "TODO" [2026-11-17 Tue 19:19]
 - State "DONE" from "STARTED" [2026-11-17 Tue 19:33]
 :END:
-Acceptance criteria:
-- The `--branch` criteria in Core functionality and Edge cases, each with a real-Git test.
-- Module branches: deleted at a protected tip when they have no other reference (checkout or ledger entry outside this lineage); kept and reported otherwise, without blocking the top-level deletion.
-- Refusal for `absent`, `branch-missing` or `unknown` happens before any unlock or removal.
-- `scripts/README.md` 'Retire an integrated branch' uses `--branch`, and keeps the manual steps for a cleared ledger.
-- `SKILL.md` Integration bullet, `contract.md` section 'Explicit teardown' and CLI help describe `--branch`.
-- Must not: use `git branch -D`, or delete a `refs/herdr-orch/...` ref.
-
-Extend `worktree-remove!` and the `worktree!` dispatcher in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; module branches are recorded by `remove-owned-modules!`'s inventory (`:branch`, `:tip`, `:repository`).
+Delivered in cd0c4d9; closeout fixes in c530bb3 and 847cd8e.
 
 * Implementation
 
@@ -166,7 +150,6 @@ Extend `worktree-remove!` and the `worktree!` dispatcher in `skills/herdr-orch/s
 
 * Validation
 
-- Closeout review by two fresh reviewers at cd0c4d9: the correctness reviewer reproduced the `diff.relative` deletion (see Gotchas); the conformance reviewer found that the tests did not prove refusal for `branch-missing` and `unknown`, survival of every retained module ref, base-only module protection or the diagnostic bound, and that the docs overstated the later-edit rule. All were fixed with tests, and each new test failed against a copy with its guard removed.
-- A third fresh reviewer at c530bb3 confirmed the six fixes with mutation checks, and found the caller-inside-checkout case and the missing `--no-relative` in `contract.md`; both were fixed, the first with a test that failed before the fix.
-- Each new guard was removed in a copy of the skill and its named test failed: the protected-tip check, the ledger-reference check, the retirable set (adding `absent`), the module checked-out check and the expected tip in `update-ref -d`. The `content` value was likewise mutated to `absent` and its test failed.
+- Closeout review: two fresh reviewers (correctness, conformance) at cd0c4d9 and one at c530bb3. They reproduced the two Gotchas defects end-to-end and found five gaps in test evidence; all were fixed. The final reviewer confirmed the earlier fixes with mutation checks.
+- Mutation checks, each in a copy of the skill: removing any guard made its named test fail -- the protected-tip, base-only, ledger-reference and module checked-out checks; the retirable set (admitting `absent`, `branch-missing` or `unknown`); the expected tip in `update-ref -d`; the diagnostic bound; retained-ref survival; and the `content` value. The two Gotchas regressions failed before their fixes.
 - `bb test-clojure herdr-orch.cli-test herdr-orch.core-test` at the final tree: 493 tests, 0 failures. Two earlier full runs failed only `headless-fan-in-captures-a-result-published-at-the-liveness-boundary`; it passes alone and fails in the same way in a full run on an export of the pre-change commit 3297891, so it is intermittent and not caused by this change.
