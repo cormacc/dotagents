@@ -2869,12 +2869,21 @@
       (is (fs/exists? path))
       (is (str/includes? (git-worktree-list dir) path)))))
 
+(defn- spawn-legacy-submodule-worktree! [env dir assignment]
+  (let [id (str (java.util.UUID/randomUUID))
+        path (str (fs/path dir ".tmp/herdr-orch/worktrees" id))]
+    (git-in! dir "worktree" "add" "--lock" "--reason" "Managed by oh; use oh worktree remove"
+             "-b" (str "legacy/" id) path "HEAD")
+    (let [proc (call! env "task" "start" "worker" "--worktree" path "--task" assignment)]
+      (when-not (zero? (:exit proc)) (throw (ex-info "legacy fixture spawn failed" proc)))
+      (ledger-entry* dir (get-in (result proc) [:result :task])))))
+
 (deftest worktree-remove-refuses-a-checkout-with-submodules-until-the-module-store-is-gone
   (let [{:keys [env dir]} (fake-env {})
         sub (fixture-git-repo! "oh-submodule-")]
     (git-in! dir "-c" "protocol.file.allow=always" "submodule" "add" "-q" sub "vendor/sub")
     (git-in! dir "commit" "-q" "-m" "add submodule")
-    (testing "a managed checkout leaves submodules uninitialised, so removal proceeds"
+    (testing "a managed checkout prepares submodules and removes them without manual deinit"
       (let [entry (spawn-worktree! env dir "uninitialised submodule")
             path (get-in entry [:worktree :path])]
         (publish-child! entry)
@@ -2882,7 +2891,7 @@
           (is (zero? (:exit proc)) (:out proc))
           (is (not (fs/exists? path))))))
     (testing "a submodule checkout that is a linked worktree of the shared module repository is refused too"
-      (let [entry (spawn-worktree! env dir "shared-module submodule")
+      (let [entry (spawn-legacy-submodule-worktree! env dir "shared-module submodule")
             path (get-in entry [:worktree :path])
             shared (str (fs/path dir ".git" "modules" "vendor" "sub"))
             nested (str (fs/path path "vendor" "sub"))]
@@ -2901,7 +2910,7 @@
           (let [proc (call! env "worktree" "remove" (:task entry))]
             (is (zero? (:exit proc)) (:out proc))
             (is (not (str/includes? (git-in! shared "worktree" "list" "--porcelain") nested)))))))
-    (let [entry (spawn-worktree! env dir "initialised submodule")
+    (let [entry (spawn-legacy-submodule-worktree! env dir "initialised submodule")
           path (get-in entry [:worktree :path])
           store (git-in! path "rev-parse" "--git-path" "modules")
           remove! #(call! env "worktree" "remove" (:task entry))
@@ -3320,6 +3329,657 @@
 (defn- parent-waits [log] (parent-calls log ["agent" "wait"]))
 (defn- parent-gets [log] (parent-calls log ["agent" "get"]))
 (defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
+
+(defn- nested-module-fixture
+  ([] (nested-module-fixture (fake-env {})))
+  ([fixture]
+   (let [{:keys [env dir]} fixture
+         env (merge env {"GIT_AUTHOR_NAME" "fixture" "GIT_AUTHOR_EMAIL" "fixture@example.com"
+                         "GIT_COMMITTER_NAME" "fixture" "GIT_COMMITTER_EMAIL" "fixture@example.com"})
+        leaf (fixture-git-repo! "oh-managed-leaf-")
+        middle (fixture-git-repo! "oh-managed-middle-")]
+    (spit (str (fs/path leaf ".gitignore")) "ignored.cache\n")
+    (git-in! leaf "add" ".gitignore")
+    (git-in! leaf "commit" "-qm" "leaf ignore rule")
+    (git-in! middle "-c" "protocol.file.allow=always" "submodule" "add" "-q" leaf "nested")
+    (git-in! middle "commit" "-qam" "nested module")
+    (git-in! dir "-c" "protocol.file.allow=always" "submodule" "add" "-q" middle "module")
+    (git-in! dir "-c" "protocol.file.allow=always" "submodule" "update" "--init" "--recursive")
+    (git-in! dir "commit" "-qam" "module")
+    (assoc fixture :leaf leaf :middle middle :env env))))
+
+(deftest managed-modules-prepare-publish-retain-and-remove-recursively
+  (let [{:keys [env dir]} (nested-module-fixture)
+        source-config (slurp (str (fs/path dir ".git/config")))
+        source-index (vec (java.nio.file.Files/readAllBytes (fs/path dir ".git/index")))
+        module-source-files (for [store [".git/modules/module" ".git/modules/module/modules/nested"]
+                                  name ["config" "index"]] (fs/path dir store name))
+        module-source-snapshot (mapv #(vec (java.nio.file.Files/readAllBytes %)) module-source-files)
+        entry (spawn-worktree! env dir "recursive managed lifecycle")
+        path (get-in entry [:worktree :path])
+        modules (:modules entry)]
+    (is (= 2 (count modules)))
+    (is (fs/regular-file? (fs/path path "module/nested/seed")))
+    (when (= 2 (count modules))
+      (doseq [module modules]
+        (is (= (:base module) (git-head (:path module))))
+        (is (= (:repository module) (git-in! (:path module) "rev-parse" "--git-common-dir")))
+        (is (str/includes? (git-in! (:path module) "rev-parse" "--absolute-git-dir") "/worktrees/")))
+      (spit (str (fs/path path "module/nested/seed")) "child leaf edit\n")
+      (let [published (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "recursive checkpoint")
+            checkpoint (get-in (result published) [:result :checkpoint])
+            tips (mapv #(git-head (:path %)) modules)]
+        (is (zero? (:exit published)) (:out published))
+        (is (= checkpoint (git-head path)))
+        (is (not= (:base (second modules)) (second tips)))
+        (is (= (first tips) (git-in! path "rev-parse" "HEAD:module")))
+        (is (= (second tips) (git-in! (str (fs/path path "module")) "rev-parse" "HEAD:nested")))
+        (let [removed (call! env "worktree" "remove" (:task entry))]
+          (is (zero? (:exit removed)) (:out removed))
+          (is (= 2 (count (get-in (result removed) [:result :modules]))))
+          (is (every? #(false? (:result-present-in-parent %)) (get-in (result removed) [:result :modules])))
+          (is (not (fs/exists? path))))
+        (doseq [[module tip] (map vector modules tips)]
+          (is (not (str/includes? (git-in! (:repository module) "worktree" "list" "--porcelain") (:path module))))
+          (git-in! (:repository module) "gc" "--prune=now")
+          (is (= tip (git-in! (:repository module) "rev-parse" (:branch module))))
+          (is (seq (git-in! (:repository module) "for-each-ref" "--format=%(objectname)" "refs/herdr-orch/")))
+          (git-in! (:repository module) "update-ref" (str "refs/heads/" (:branch module)) (:base module))
+          (is (= (:base module) (git-in! (:repository module) "rev-parse" (:branch module))))
+          (git-in! (:repository module) "reflog" "expire" "--expire=now" "--all")
+          (git-in! (:repository module) "gc" "--prune=now")
+          (is (= tip (git-in! (:repository module) "rev-parse" (str tip "^{commit}"))))))
+      (is (= source-config (slurp (str (fs/path dir ".git/config")))))
+      (is (= source-index (vec (java.nio.file.Files/readAllBytes (fs/path dir ".git/index")))))
+      (is (= module-source-snapshot (mapv #(vec (java.nio.file.Files/readAllBytes %)) module-source-files)))
+      (is (= "seed\n" (slurp (str (fs/path dir "module/nested/seed"))))))))
+
+(defn- git-trace-env [env dir]
+  (let [delegate (str (fs/which "git"))
+        wrapper-dir (fs/path dir "git-trace-bin")
+        log (str (fs/path dir "git-trace"))
+        wrapper (fs/path wrapper-dir "git")]
+    (fs/create-dirs wrapper-dir)
+    (spit (str wrapper) (str "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$GIT_TRACE_FIXTURE\"\n"
+                             "if [ \"$1\" = fetch ]; then printf 'fetch-env:%s:%s:%s\\n' \"$GIT_TERMINAL_PROMPT\" \"$GIT_PROTOCOL_FROM_USER\" \"$GIT_SSH_COMMAND\" >> \"$GIT_TRACE_FIXTURE\"; fi\n"
+                             "exec " delegate " \"$@\"\n"))
+    (.setExecutable (java.io.File. (str wrapper)) true)
+    {:env (assoc env "PATH" (str wrapper-dir ":" (get env "PATH")) "GIT_TRACE_FIXTURE" log) :log log}))
+
+(deftest managed-modules-local-first-and-containing-revision-not-source-head
+  (let [{:keys [env dir]} (nested-module-fixture)
+        source-module (str (fs/path dir "module"))
+        source-leaf (str (fs/path source-module "nested"))
+        recorded (git-head source-leaf)]
+    (git-in! source-leaf "config" "user.name" "fixture")
+    (git-in! source-leaf "config" "user.email" "fixture@example.com")
+    (spit (str (fs/path source-leaf "seed")) "source-only edit\n")
+    (git-in! source-leaf "commit" "-qam" "source module moves independently")
+    (git-in! dir "config" "submodule.module.url" "/missing/local-first-must-not-fetch")
+    (git-in! dir "config" "submodule.module.update" "!exit 91")
+    (let [{:keys [env log]} (git-trace-env env dir)
+          entry (spawn-worktree! env dir "local-only objects")
+          checkout (get-in entry [:worktree :path])
+          trace (str/split-lines (slurp log))]
+      (is (some #(str/starts-with? % "worktree add") trace) "positive trace control")
+      (is (not-any? #(str/starts-with? % "fetch ") trace))
+      (is (= recorded (git-head (str (fs/path checkout "module/nested")))))
+      (is (= "seed\n" (slurp (str (fs/path checkout "module/nested/seed")))))
+      (is (= "source-only edit\n" (slurp (str (fs/path source-leaf "seed"))))))))
+
+(deftest managed-modules-bootstrap-uninitialised-source-and-relative-urls
+  (doseq [managed? [false true]]
+    (let [{:keys [env dir middle leaf]} (nested-module-fixture)]
+      (git-in! middle "config" "-f" ".gitmodules" "submodule.nested.url" (str "../" (fs/file-name leaf)))
+      (git-in! middle "commit" "-qam" "relative nested module URL")
+      (git-in! dir "submodule" "deinit" "-q" "--all")
+      (fs/delete-tree (fs/path dir ".git/modules/module"))
+      (git-in! dir "config" "remote.origin.url" (str (fs/path (fs/parent (fs/path middle)) "parent.git")))
+      (git-in! dir "config" "-f" ".gitmodules" "submodule.module.url" (str "../" (fs/file-name middle)))
+      (git-in! dir "add" ".gitmodules")
+      (git-in! dir "update-index" "--cacheinfo" "160000" (git-head middle) "module")
+      (git-in! dir "commit" "-qm" "relative recorded module URLs")
+      (let [before (slurp (str (fs/path dir ".git/config")))
+            {:keys [env log]} (git-trace-env (assoc env "GIT_CONFIG_COUNT" "1" "GIT_CONFIG_KEY_0" "protocol.file.allow" "GIT_CONFIG_VALUE_0" "always") dir)]
+        (when managed?
+          (let [entry (spawn-worktree! env dir "bootstrap source remains empty")
+                path (get-in entry [:worktree :path])
+                trace (str/split-lines (slurp log))]
+            (is (fs/regular-file? (fs/path path "module/nested/seed")))
+            (is (= 2 (count (:modules entry))))
+            (is (empty? (fs/list-dir (fs/path dir "module"))))
+            (is (= before (slurp (str (fs/path dir ".git/config")))))
+            (is (= 2 (count (filter #(str/starts-with? % "fetch ") trace))))
+            (is (every? #(str/includes? % "fetch-env:0:0:ssh -o BatchMode=yes")
+                        (filter #(str/starts-with? % "fetch-env:") trace)))
+            (doseq [module (:modules entry)]
+              (is (= "false" (git-in! (:repository module) "config" "--get" "core.bare")))
+              (is (= (:repository module) (git-in! (:path module) "rev-parse" "--git-common-dir")))
+              (is (= (:base module) (git-head (:path module)))))
+            (publish-child! entry)
+            (let [removed (call! env "worktree" "remove" (:task entry))]
+              (is (zero? (:exit removed)) (:out removed))
+              (is (not (fs/exists? path))))
+            (is (= before (slurp (str (fs/path dir ".git/config")))))))
+        ;; The control and treatment both use Git's normal source initialisation path.
+        (let [initialised @(process/process ["git" "submodule" "update" "--init" "--recursive"]
+                                           {:dir dir :env env :out :string :err :string})
+              status @(process/process ["git" "status" "--porcelain"] {:dir dir :env env :out :string :err :string})]
+          (is (zero? (:exit initialised)) (str "managed=" managed? " " (:err initialised)))
+          (is (zero? (:exit status)) (str "managed=" managed? " " (:err status)))
+          (is (fs/regular-file? (fs/path dir "module/nested/seed")))
+          (when (zero? (:exit initialised))
+            (doseq [[relative store] [["module" ".git/modules/module"]
+                                     ["module/nested" ".git/modules/module/modules/nested"]]]
+              (let [repository (str (fs/path dir store))
+                    source (str (fs/path dir relative))
+                    worktree (fs/path (git-in! repository "config" "--get" "core.worktree"))]
+                (is (= "false" (git-in! repository "config" "--get" "core.bare")))
+                (is (= repository (git-in! source "rev-parse" "--git-common-dir")))
+                (is (= (fs/real-path source)
+                       (fs/real-path (if (fs/absolute? worktree) worktree (fs/path repository worktree)))))))))))))
+
+(deftest managed-modules-relative-url-semantics-match-native-git
+  (doseq [[remote url] [["/srv/repos/top.git" "../lib.git"] ["example:repo/top.git" "../lib.git"]
+                        ["example:top.git" "../lib.git"] ["example:top.git" "../../lib.git"]
+                        ["top.git" "../lib.git"] ["https://host/top.git" "../../lib.git"]
+                        ["/top.git" "../lib.git"]]]
+    (let [{:keys [env dir]} (nested-module-fixture)]
+      (git-in! dir "config" "remote.origin.url" remote)
+      (git-in! dir "config" "-f" ".gitmodules" "submodule.module.url" url)
+      (git-in! dir "commit" "-qam" "URL reference fixture")
+      (git-in! dir "config" "--unset-all" "submodule.module.url")
+      (git-in! dir "submodule" "init")
+      (let [native (git-in! dir "config" "--get" "submodule.module.url")
+            expected (if (or (fs/absolute? native) (str/includes? native ":")) native
+                         (str (fs/normalize (fs/path dir native))))]
+        (git-in! dir "config" "--unset-all" "submodule.module.url")
+        (let [entry (spawn-worktree! env dir "native URL semantics")]
+          (is (= expected (get-in entry [:modules 0 :url])) (str remote " " url)))))))
+
+(deftest managed-modules-fetch-a-missing-commit-in-an-existing-store
+  (let [{:keys [env dir middle]} (nested-module-fixture)
+        shared (git-in! (str (fs/path dir "module")) "rev-parse" "--git-common-dir")]
+    (spit (str (fs/path middle "remote-only")) "missing locally\n")
+    (git-in! middle "add" "remote-only")
+    (git-in! middle "commit" "-qm" "remote advances")
+    (let [required (git-head middle)]
+      (git-in! dir "update-index" "--cacheinfo" (str "160000," required ",module"))
+      (git-in! dir "commit" "-qm" "record missing module object")
+      (let [{:keys [env log]} (git-trace-env (assoc env "GIT_CONFIG_COUNT" "1" "GIT_CONFIG_KEY_0" "protocol.file.allow" "GIT_CONFIG_VALUE_0" "always") dir)
+            source-head (git-head (str (fs/path dir "module")))
+            entry (spawn-worktree! env dir "fetch missing object")]
+        (is (not= required source-head))
+        (is (= required (git-head (str (fs/path (get-in entry [:worktree :path]) "module")))))
+        (is (= source-head (git-head (str (fs/path dir "module")))))
+        (is (some #(str/starts-with? % "fetch ") (str/split-lines (slurp log))))
+        (is (= required (git-in! shared "rev-parse" (get-in entry [:modules 0 :branch]))))))))
+
+(deftest managed-modules-incomplete-preparation-refuses-launch-and-cleans-partial-inventory
+  (let [{:keys [env dir middle log]} (nested-module-fixture)
+        control (spawn-worktree! env dir "passing preparation control")]
+    (publish-child! control)
+    (is (zero? (:exit (call! env "worktree" "remove" (:task control)))))
+    (spit (str (fs/path middle "remote-only")) "required but unavailable\n")
+    (git-in! middle "add" "remote-only")
+    (git-in! middle "commit" "-qm" "unavailable commit")
+    (git-in! dir "update-index" "--cacheinfo" (str "160000," (git-head middle) ",module"))
+    (git-in! dir "commit" "-qm" "missing local object")
+    (git-in! dir "config" "submodule.module.url" (str (fs/path dir "absent-remote")))
+    (let [before (count (calls log))
+          proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "must not launch")
+          task (get-in (result proc) [:error :data :task])
+          entry (ledger-entry* dir task)]
+      (is (= 1 (:exit proc)) (:out proc))
+      (is (str/includes? (:out proc) "module content could not be obtained"))
+      (is (not-any? mutating? (drop before (calls log))))
+      (is (= "failed" (:status entry)))
+      (is (= 1 (count (:modules entry))))
+      (is (= "removed" (get-in entry [:checkout-cleanup :status])) (:checkout-cleanup entry))
+      (is (not (fs/exists? (get-in entry [:worktree :path]))))
+      (is (= "removed" (get-in entry [:modules 0 :state]))))))
+
+(deftest managed-modules-fetch-failures-never-start-a-child
+  (let [{:keys [env dir middle leaf log]} (nested-module-fixture)
+        control (spawn-worktree! env dir "passing fetch-failure control")
+        delegate (str (fs/which "git"))
+        wrappers (fs/path dir "fetch-failure-bin")]
+    (publish-child! control)
+    (is (zero? (:exit (call! env "worktree" "remove" (:task control)))))
+    (spit (str (fs/path middle "required-object")) "only the actual remote has this commit\n")
+    (git-in! middle "add" "required-object")
+    (git-in! middle "commit" "-qm" "missing local object")
+    (git-in! dir "update-index" "--cacheinfo" (str "160000," (git-head middle) ",module"))
+    (git-in! dir "commit" "-qm" "require unavailable content")
+    (git-in! dir "config" "submodule.module.url" leaf)
+    (fs/create-dirs wrappers)
+    (spit (str (fs/path wrappers "git"))
+          (str "#!/bin/sh\nif [ \"$1\" = fetch ] && [ \"$FETCH_FAILURE\" != missing-object ]; then "
+               "printf '%s failed\\n' \"$FETCH_FAILURE\" >&2; exit 128; fi\nexec " delegate " \"$@\"\n"))
+    (.setExecutable (java.io.File. (str (fs/path wrappers "git"))) true)
+    (doseq [fault ["authentication" "network" "missing-object"]]
+      (let [before (count (calls log))
+            env (assoc env "PATH" (str wrappers ":" (get env "PATH")) "FETCH_FAILURE" fault
+                       "GIT_CONFIG_COUNT" "1" "GIT_CONFIG_KEY_0" "protocol.file.allow" "GIT_CONFIG_VALUE_0" "always")
+            proc (call! env "task" "start" "worker" "--worktree" "new" "--task" fault)]
+        (is (= 1 (:exit proc)) (:out proc))
+        (is (str/includes? (:out proc) (if (= "missing-object" fault) "not our ref" fault)) (:out proc))
+        (is (not-any? mutating? (drop before (calls log))))))))
+
+(deftest managed-modules-implicit-isolation-and-launch-inside-a-module
+  (let [{:keys [env dir]} (nested-module-fixture)
+        shared (start-child! env dir "first shared writer")
+        proc (call! env "task" "start" "worker" "--task" "implicit managed writer")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (nil? (:worktree shared)))
+    (is (= 2 (count (:modules entry))))
+    (is (fs/regular-file? (fs/path (:work-root entry) "module/nested/seed")))
+    (let [source (str (fs/path dir "module"))
+          proc (call-in! source env "task" "start" "worker" "--worktree" "new" "--task" "inside module")
+          inside (ledger-entry* dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= (git-head source) (get-in inside [:worktree :base])))
+      (is (= (git-in! source "rev-parse" "--git-common-dir") (get-in inside [:worktree :repository])))
+      (is (= 1 (count (:modules inside))))
+      (is (fs/regular-file? (fs/path (:work-root inside) "nested/seed"))))))
+
+(deftest managed-modules-concurrent-children-have-independent-branches-and-removal
+  (let [{:keys [env dir]} (nested-module-fixture)
+        gate (str (fs/path dir "module-creation-gate"))
+        a (concurrent-call dir env gate "task" "start" "worker" "--worktree" "new" "--task" "module sibling a")
+        b (concurrent-call dir env gate "task" "start" "worker" "--worktree" "new" "--task" "module sibling b")]
+    (release-concurrent-calls! gate 2)
+    (let [pa @a pb @b
+          _ (is (zero? (:exit pa)) (:out pa))
+          _ (is (zero? (:exit pb)) (:out pb))
+          a (ledger-entry* dir (get-in (result pa) [:result :task]))
+          b (ledger-entry* dir (get-in (result pb) [:result :task]))]
+      (is (= 2 (count (:modules a)) (count (:modules b))))
+      (is (empty? (filter (set (map :branch (:modules a))) (map :branch (:modules b)))))
+      (publish-child! a)
+      (is (zero? (:exit (call! env "worktree" "remove" (:task a)))))
+      (is (= "seed\n" (slurp (str (fs/path (:work-root b) "module/nested/seed")))))
+      (is (= (get-in b [:modules 1 :base]) (git-head (get-in b [:modules 1 :path])))))))
+
+(deftest managed-modules-continuation-keeps-the-owned-inventory
+  (let [{:keys [env dir]} (nested-module-fixture)
+        first-round (capture-entry! dir (spawn-worktree! env dir "module round one"))
+        proc (call! env "task" "continue" (:task first-round) "--task" "module round two")
+        second-round (ledger-entry* dir (get-in (result proc) [:result :task]))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= (:modules first-round) (:modules second-round)))
+    (is (= (:module-owner first-round) (:module-owner second-round)))
+    (publish-child! second-round)
+    (is (zero? (:exit (call! env "worktree" "remove" (:task first-round)))))))
+
+(deftest managed-modules-read-only-recursive-dirt-has-a-clean-control
+  (let [{:keys [env dir]} (nested-module-fixture)
+        entry (patch-entry! dir (spawn-worktree! env dir "read-only recursive guard") :read-only true)
+        leaf (get-in entry [:modules 1 :path])
+        control (call! (child-publish-env env entry) "task" "publish" "--status" "WAITING" "--summary" "clean control")
+        tips (mapv #(git-head (:path %)) (:modules entry))]
+    (is (zero? (:exit control)) (:out control))
+    (spit (str (fs/path leaf "unexpected")) "read-only violation\n")
+    (let [bad (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "must refuse")]
+      (is (= 1 (:exit bad)))
+      (is (str/includes? (:out bad) "read-only child left changes"))
+      (is (= tips (mapv #(git-head (:path %)) (:modules entry)))))))
+
+(deftest managed-modules-refuse-unknown-or-unsafe-state-before-any-mutation
+  (doseq [fault [:missing :detached :replaced :dirty :foreign-lock :unrecorded :untracked-repository :private-store]]
+    (let [{:keys [env dir]} (nested-module-fixture)
+          entry (spawn-worktree! env dir (str "module refusal " fault))
+          modules (:modules entry)
+          leaf (second modules)
+          path (:path leaf)
+          control (call! (child-publish-env env entry) "task" "publish" "--status" "WAITING" "--summary" "clean control")]
+      (is (zero? (:exit control)) (:out control))
+      (case fault
+        :missing (fs/delete-tree path)
+        :detached (git-in! path "checkout" "--detach" "-q")
+        :replaced (spit (str (fs/path path ".git")) (slurp (str (fs/path (:path (first modules)) ".git"))))
+        :dirty (do (patch-entry! dir (ledger-entry* dir (:task entry)) :read-only true)
+                   (spit (str (fs/path path "uncommitted")) "dirt\n"))
+        :foreign-lock (do (git-in! (:repository leaf) "worktree" "unlock" path)
+                          (git-in! (:repository leaf) "worktree" "lock" "--reason" "foreign operator" path))
+        :unrecorded (git-in! (:work-root entry) "update-index" "--add" "--cacheinfo" (str "160000," (:base leaf) ",unknown-module"))
+        :untracked-repository (git-in! (:work-root entry) "clone" "-q" path "unrecorded-repository")
+        :private-store (fs/create-dirs (git-in! path "rev-parse" "--git-path" "modules")))
+      (let [tips (mapv #(git-in! (:repository %) "rev-parse" (:branch %)) modules)
+            registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") modules)
+            bad (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "must refuse")]
+        (is (= 1 (:exit bad)) (str fault " " (:out bad)))
+        ;; WAITING is not terminal, so seal without another checkpoint to test teardown's own guards.
+        (publish-child! entry)
+        (let [removal (call! env "worktree" "remove" (:task entry))]
+          (is (= 1 (:exit removal)) (str fault " " (:out removal))))
+        (is (= tips (mapv #(git-in! (:repository %) "rev-parse" (:branch %)) modules)))
+        (is (= registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") modules)))))))
+
+(deftest ^:serial managed-modules-interrupted-removal-resumes-after-registration-was-removed
+  (let [{:keys [env dir]} (nested-module-fixture)
+        entry (spawn-worktree! env dir "interrupted removal")
+        original cli/remove-managed-worktree!
+        interrupted (atom false)]
+    (publish-child! entry)
+    (with-redefs [ledger/assignment-root (constantly (str dir))
+                  cli/source-cwd (constantly (str dir))
+                  cli/caller-parent-session (constantly (:parent-session entry))]
+      (is (thrown-with-msg? Exception #"injected after unregister"
+            (with-redefs [cli/remove-managed-worktree!
+                          (fn [repository path]
+                            (original repository path)
+                            (when (compare-and-set! interrupted false true)
+                              (throw (ex-info "injected after unregister" {}))))]
+              (cli/worktree-remove! (:task entry)))))
+      (is @interrupted)
+      (is (some #(= "removing" (:state %)) (:modules (ledger-entry* dir (:task entry)))))
+      (is (= "removed" (:status (cli/worktree-remove! (:task entry)))))
+      (doseq [module (:modules entry)]
+        (is (not (str/includes? (git-in! (:repository module) "worktree" "list" "--porcelain") (:path module))))))))
+
+(deftest ^:serial managed-modules-checkpoint-failure-and-envelope-failure-retry-preserve-completed-tips
+  (let [{:keys [env dir]} (nested-module-fixture)
+        entry (spawn-worktree! env dir "checkpoint failures")
+        [middle leaf] (:modules entry)
+        original cli/git!
+        root (:work-root entry)]
+    (spit (str (fs/path (:path leaf) "seed")) "checkpoint nested first\n")
+    (with-redefs [ledger/assignment-root (constantly (str dir))]
+      (is (thrown-with-msg? Exception #"injected containing commit"
+            (with-redefs [cli/git! (fn [cwd & args]
+                                    (if (and (= cwd (:path middle)) (= "commit" (first args)))
+                                      (throw (ex-info "injected containing commit" {}))
+                                      (apply original cwd args)))]
+              (cli/checkpoint-worktree! entry "COMPLETE")))))
+    (let [completed-leaf (git-head (:path leaf))
+          result-parent (fs/parent (fs/path (:result entry)))]
+      (is (not= (:base leaf) completed-leaf))
+      (is (= (get-in entry [:worktree :base]) (git-head root)))
+      (.setWritable (java.io.File. (str result-parent)) false)
+      (try
+        (let [failed (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "append failure")
+              top (git-head root)]
+          (is (= 1 (:exit failed)))
+          (is (not= (get-in entry [:worktree :base]) top))
+          (is (not (fs/exists? (:result entry))))
+          (.setWritable (java.io.File. (str result-parent)) true)
+          (let [retry (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "retry checkpoint")]
+            (is (zero? (:exit retry)) (:out retry))
+            (is (= top (get-in (result retry) [:result :checkpoint])))
+            (is (= completed-leaf (git-head (:path leaf))))))
+        (finally (.setWritable (java.io.File. (str result-parent)) true))))))
+
+(deftest managed-modules-reconciliation-is-read-only-and-reports-recovery-state
+  (let [{:keys [env dir]} (nested-module-fixture)
+        entry (spawn-worktree! env dir "recursive reconciliation")
+        modules (:modules entry)
+        paths (concat [(fs/path dir ".git/config") (fs/path dir ".git/index")]
+                      (mapcat #(vector (fs/path (:repository %) "config")
+                                       (fs/path (:repository %) "index")
+                                       (fs/path (git-in! (:path %) "rev-parse" "--absolute-git-dir") "index")) modules))
+        snapshot (fn [] (mapv #(vec (java.nio.file.Files/readAllBytes %)) paths))
+        before (snapshot)
+        status (call! env "task" "status" (:task entry))
+        listing (call! env "worktree" "list" "--all" "--format" "json")]
+    (is (zero? (:exit status)) (:out status))
+    (is (zero? (:exit listing)) (:out listing))
+    (is (= 2 (count (get-in (result status) [:result :reconciliation :modules]))))
+    (doseq [module (get-in (result status) [:result :reconciliation :modules])]
+      (is (= "ready" (:state module)))
+      (is (= "present" (:checkout-state module)))
+      (is (= (:base module) (:tip module)))
+      (is (empty? (:dirty module)))
+      (is (some? (:branch module))))
+    (publish-child! entry)
+    (let [collected (call! env "task" "collect" (:task entry))]
+      (is (zero? (:exit collected)) (:out collected))
+      (is (= 2 (count (get-in (result collected) [:result :reconciliation :modules])))))
+    (is (= before (snapshot)))))
+
+(deftest managed-modules-report-gitlink-integration-without-advancing-source-module-heads
+  (let [{:keys [env dir]} (nested-module-fixture)
+        entry (spawn-worktree! env dir "parent integrates gitlinks")
+        source-head (git-head (str (fs/path dir "module")))
+        leaf (get-in entry [:modules 1 :path])]
+    (spit (str (fs/path leaf "seed")) "module publication\n")
+    (let [published (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "module result")
+          checkpoint (get-in (result published) [:result :checkpoint])]
+      (is (zero? (:exit published)) (:out published))
+      (git-in! dir "merge" "--ff-only" checkpoint)
+      (is (= source-head (git-head (str (fs/path dir "module")))))
+      (let [removed (call! env "worktree" "remove" (:task entry))]
+        (is (zero? (:exit removed)) (:out removed))
+        (is (every? :result-present-in-parent (get-in (result removed) [:result :modules])))))))
+
+(deftest managed-modules-unavailable-parent-gitlink-is-informational-at-removal
+  (let [{:keys [env dir middle]} (nested-module-fixture)
+        entry (spawn-worktree! env dir "unknown parent gitlink")]
+    (publish-child! entry)
+    (spit (str (fs/path middle "not-in-child-store")) "parent records an unavailable revision\n")
+    (git-in! middle "add" "not-in-child-store")
+    (git-in! middle "commit" "-qm" "remote-only parent revision")
+    (git-in! dir "update-index" "--cacheinfo" (str "160000," (git-head middle) ",module"))
+    (git-in! dir "commit" "-qm" "parent records missing module revision")
+    (let [removed (call! env "worktree" "remove" (:task entry))]
+      (is (zero? (:exit removed)) (:out removed))
+      (is (= 2 (count (get-in (result removed) [:result :modules]))))
+      (is (every? #(false? (:result-present-in-parent %)) (get-in (result removed) [:result :modules]))))))
+
+(deftest ^:serial managed-modules-ignored-data-is-retained-on-failed-launch-but-reported-on-explicit-removal
+  (let [{:keys [env dir]} (nested-module-fixture)
+        entry (spawn-worktree! env dir "ignored nested data")
+        leaf (get-in entry [:modules 1 :path])
+        ignored (fs/path leaf "ignored.cache")]
+    (spit (str ignored) "must retain after failed launch\n")
+    (with-redefs [ledger/assignment-root (constantly (str dir))
+                  ledger/entries (constantly [])
+                  cli/source-cwd (constantly (str dir))]
+      (is (= "retained" (:status (cli/cleanup-failed-checkout! entry :start)))))
+    (is (fs/exists? ignored))
+    (publish-child! entry)
+    (let [removed (call! env "worktree" "remove" (:task entry))]
+      (is (zero? (:exit removed)) (:out removed))
+      (is (some #(= ["!! ignored.cache"] (:ignored %)) (get-in (result removed) [:result :modules]))))))
+
+(deftest ^:serial managed-modules-recheck-before-removing-a-checkout-that-became-dirty
+  (let [{:keys [env dir]} (nested-module-fixture)
+        entry (spawn-worktree! env dir "external writer race")
+        [middle leaf] (:modules entry)
+        original cli/remove-managed-worktree!
+        dirty (fs/path (:path middle) "arrived-after-preflight")]
+    (publish-child! entry)
+    (with-redefs [ledger/assignment-root (constantly (str dir))
+                  cli/source-cwd (constantly (str dir))
+                  cli/caller-parent-session (constantly (:parent-session entry))]
+      (is (thrown-with-msg? Exception #"changed after preflight"
+            (with-redefs [cli/remove-managed-worktree!
+                          (fn [repository path]
+                            (original repository path)
+                            (when (= path (:path leaf)) (spit (str dirty) "concurrent work\n")))]
+              (cli/worktree-remove! (:task entry)))))
+      (is (fs/exists? dirty))
+      (is (str/includes? (git-in! (:repository middle) "worktree" "list" "--porcelain") (:path middle)))
+      (fs/delete dirty)
+      (is (= "removed" (:status (cli/worktree-remove! (:task entry))))))))
+
+(deftest managed-modules-failed-nested-preparation-removes-pristine-parent-registration
+  (let [{:keys [env dir log]} (nested-module-fixture)
+        delegate (str (fs/which "git"))
+        wrappers (fs/path dir "fail-module-bin")
+        wrapper (fs/path wrappers "git")]
+    (fs/create-dirs wrappers)
+    (spit (str wrapper) (str "#!/bin/sh\ncase \"$*\" in *'worktree add'*'/module/nested'*) "
+                             "if [ \"$FAIL_AFTER_ADD\" = 1 ]; then " delegate " \"$@\" || exit; fi; exit 31;; esac\nexec " delegate " \"$@\"\n"))
+    (.setExecutable (java.io.File. (str wrapper)) true)
+    (doseq [after? ["0" "1"]]
+     (let [before (count (calls log))
+          proc (call! (assoc env "PATH" (str wrappers ":" (get env "PATH")) "FAIL_AFTER_ADD" after?) "task" "start" "worker" "--worktree" "new" "--task" "fail nested add")
+          task (get-in (result proc) [:error :data :task])
+          entry (ledger-entry* dir task)]
+      (is (= 1 (:exit proc)) (:out proc))
+      (is (= 2 (count (:modules entry))))
+      (is (not-any? mutating? (drop before (calls log))))
+      (is (= "removed" (get-in entry [:checkout-cleanup :status])) (:checkout-cleanup entry))
+      (doseq [module (:modules entry)]
+        (is (= "removed" (:state module)))
+        (is (not (str/includes? (git-in! (:repository module) "worktree" "list" "--porcelain") (:path module)))))))))
+
+(defn- module-ignore-fixture [boundary mode]
+  (let [{:keys [dir] :as fixture} (nested-module-fixture)
+        parent (if (= :root boundary) (str dir) (str (fs/path dir "module")))
+        name (if (= :root boundary) "module" "nested")]
+    (git-in! parent "config" "-f" ".gitmodules" (str "submodule." name ".ignore") mode)
+    (git-in! parent "-c" "user.name=fixture" "-c" "user.email=fixture@example.com" "commit" "-qam" "existing module ignore definition")
+    (when (= :nested boundary)
+      (git-in! dir "add" "module")
+      (git-in! dir "commit" "-qm" "record nested ignore definition"))
+    fixture))
+
+(defn- module-source-snapshot [dir]
+  (mapv (fn [path] [path (vec (java.nio.file.Files/readAllBytes (fs/path dir path)))])
+        [".git/config" ".git/index" ".gitmodules" "module/.gitmodules"
+         ".git/modules/module/config" ".git/modules/module/index"
+         ".git/modules/module/modules/nested/config" ".git/modules/module/modules/nested/index"
+         "module/seed" "module/nested/seed"]))
+
+(defn- commit-owned-seed! [path content]
+  (spit (str (fs/path path "seed")) content)
+  (git-in! path "-c" "user.name=fixture" "-c" "user.email=fixture@example.com" "commit" "-qam" "owned module result"))
+
+(deftest managed-modules-ignore-settings-cannot-omit-published-gitlinks
+  (doseq [boundary [:root :nested] mode ["none" "all" "dirty"]]
+    (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
+          source (module-source-snapshot dir)
+          entry (patch-entry! dir (spawn-worktree! env dir "publish with existing ignore settings") :scope ["allowed/"])
+          [middle leaf] (:modules entry)
+          root (:work-root entry)
+          definitions [(slurp (str (fs/path root ".gitmodules")))
+                       (slurp (str (fs/path (:path middle) ".gitmodules")))]]
+      (spit (str (fs/path (:path leaf) "seed")) "must reach the superproject checkpoint\n")
+      (let [published (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "ignore-independent publication")
+            status (call! env "task" "status" (:task entry))
+            rec (get-in (result status) [:result :reconciliation])]
+        (is (zero? (:exit published)) (str boundary " " mode " " (:out published)))
+        (is (= (git-head (:path leaf)) (git-in! (:path middle) "rev-parse" "HEAD:nested")) (str boundary " " mode))
+        (is (= (git-head (:path middle)) (git-in! root "rev-parse" "HEAD:module")) (str boundary " " mode))
+        (is (= (git-head root) (get-in (result published) [:result :checkpoint])))
+        (is (= ["M\tmodule"] (:committed rec)) (str boundary " " mode " " rec))
+        (is (= ["module"] (:undeclared rec)) (str boundary " " mode))
+        (is (= definitions [(slurp (str (fs/path root ".gitmodules")))
+                            (slurp (str (fs/path (:path middle) ".gitmodules")))]))
+        (is (= source (module-source-snapshot dir)))))))
+
+(deftest managed-modules-ignore-settings-cannot-hide-read-only-or-reconciliation-dirt
+  (doseq [boundary [:root :nested] mode ["none" "all" "dirty"]]
+    (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
+          source (module-source-snapshot dir)
+          entry (patch-entry! dir (spawn-worktree! env dir "read-only ignore settings") :read-only true :scope ["allowed/"])
+          [middle leaf] (:modules entry)
+          changed (if (= :root boundary) middle leaf)
+          control (call! (child-publish-env env entry) "task" "publish" "--status" "WAITING" "--summary" "clean control")]
+      (is (zero? (:exit control)) (:out control))
+      (spit (str (fs/path (:path changed) "seed")) "uncommitted owned module edit\n")
+      (let [status (call! env "task" "status" (:task entry))
+            rec (get-in (result status) [:result :reconciliation])
+            parent-dirt (if (= :root boundary) (:dirty rec) (get-in rec [:modules 0 :dirty]))
+            rejected (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "uncommitted refusal")]
+        (is (seq parent-dirt) (str boundary " " mode " " rec))
+        (is (= ["module"] (:undeclared rec)) (str boundary " " mode " " rec))
+        (is (= 1 (:exit rejected)) (:out rejected)))
+      (commit-owned-seed! (:path changed) "committed owned module edit\n")
+      (let [tips (mapv #(git-head (:path %)) (:modules entry))
+            status (call! env "task" "status" (:task entry))
+            rec (get-in (result status) [:result :reconciliation])
+            parent-dirt (if (= :root boundary) (:dirty rec) (get-in rec [:modules 0 :dirty]))
+            rejected (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "gitlink refusal")]
+        (is (seq parent-dirt) (str boundary " " mode " " rec))
+        (is (= 1 (:exit rejected)) (str boundary " " mode " " (:out rejected)))
+        (is (= tips (mapv #(git-head (:path %)) (:modules entry))))
+        (is (= source (module-source-snapshot dir)))))))
+
+(deftest managed-modules-ignore-settings-cannot-hide-removal-preflight-dirt
+  (doseq [boundary [:root :nested] mode ["none" "all" "dirty"]]
+    (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
+          control (spawn-worktree! env dir "clean removal control")]
+      (publish-child! control)
+      (is (zero? (:exit (call! env "worktree" "remove" (:task control)))))
+      (let [entry (spawn-worktree! env dir "dirty gitlink removal")
+            [middle leaf] (:modules entry)
+            changed (if (= :root boundary) middle leaf)]
+        (publish-child! entry)
+        (commit-owned-seed! (:path changed) "must not remove an unrecorded gitlink result\n")
+        (let [registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") (:modules entry))
+              removed (call! env "worktree" "remove" (:task entry))]
+          (is (= 1 (:exit removed)) (str boundary " " mode " " (:out removed)))
+          (is (= registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") (:modules entry)))))))))
+
+(deftest managed-modules-verify-containing-commits-before-publication
+  (doseq [boundary [:root :nested]]
+    (let [{:keys [env dir]} (module-ignore-fixture boundary "none")
+          entry (spawn-worktree! env dir "verify containing commits")
+          [middle leaf] (:modules entry)
+          root (:work-root entry)
+          parent (if (= :root boundary) root (:path middle))
+          relative (if (= :root boundary) "module" "nested")
+          delegate (str (fs/which "git"))
+          wrappers (fs/path dir "corrupt-containing-commit-bin")
+          fault-log (str (fs/path dir "containing-commit-fault"))]
+      (spit (str (fs/path (:path leaf) "seed")) "passing checkpoint control\n")
+      (let [control (call! (child-publish-env env entry) "task" "publish" "--status" "WAITING" "--summary" "passing control")]
+        (is (zero? (:exit control)) (:out control))
+        (is (= (git-head (:path leaf)) (git-in! (:path middle) "rev-parse" "HEAD:nested")))
+        (is (= (git-head (:path middle)) (git-in! root "rev-parse" "HEAD:module"))))
+      (let [old-link (git-in! parent "rev-parse" (str "HEAD:" relative))]
+        (fs/create-dirs wrappers)
+        (spit (str (fs/path wrappers "git"))
+              (str "#!/bin/sh\n" delegate " \"$@\" || exit $?\n"
+                   "if [ \"$1\" = commit ] && [ \"$PWD\" = \"$FAULT_PARENT\" ]; then\n"
+                   delegate " update-index --cacheinfo 160000 \"$FAULT_BASE\" \"$FAULT_RELATIVE\" || exit $?\n"
+                   delegate " commit --amend --no-edit --allow-empty || exit $?\n"
+                   "printf '%s\\n' \"$PWD\" >> \"$FAULT_LOG\"\nfi\n"))
+        (.setExecutable (java.io.File. (str (fs/path wrappers "git"))) true)
+        (spit (str (fs/path (:path leaf) "seed")) "completed leaf checkpoint must survive refusal\n")
+        (let [fault-env (assoc (child-publish-env env entry) "PATH" (str wrappers ":" (get env "PATH"))
+                              "FAULT_PARENT" parent "FAULT_RELATIVE" relative "FAULT_BASE" old-link "FAULT_LOG" fault-log)
+              bad (call! fault-env "task" "publish" "--status" "COMPLETE" "--summary" "must refuse a wrong containing commit")
+              completed-leaf (git-head (:path leaf))]
+          (is (= [parent] (str/split-lines (slurp fault-log))) "the mutation reached the actual containing commit")
+          (is (= old-link (git-in! parent "rev-parse" (str "HEAD:" relative))))
+          (is (= 1 (:exit bad)) (str boundary " " (:out bad)))
+          (is (str/includes? (:out bad) "containing commit omitted an owned module tip") (:out bad))
+          (is (not (fs/exists? (ledger/item-path (:result entry) 2))))
+          (let [retry (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "repair containing gitlinks")]
+            (is (zero? (:exit retry)) (:out retry))
+            (is (= completed-leaf (git-head (:path leaf))))
+            (is (= completed-leaf (git-in! (:path middle) "rev-parse" "HEAD:nested")))
+            (is (= (git-head (:path middle)) (git-in! root "rev-parse" "HEAD:module")))))))))
+
+(deftest ^:serial managed-modules-recovery-does-not-hide-indexed-gitlink-changes
+  (doseq [tamper? [false true]]
+    (let [{:keys [env dir]} (module-ignore-fixture :root "all")
+          entry (spawn-worktree! env dir "recovery index preflight")
+          [middle leaf] (:modules entry)
+          original cli/remove-managed-worktree!]
+      (publish-child! entry)
+      (with-redefs [ledger/assignment-root (constantly (str dir))
+                    cli/source-cwd (constantly (str dir))
+                    cli/caller-parent-session (constantly (:parent-session entry))]
+        (is (thrown-with-msg? Exception #"injected after unregister"
+              (with-redefs [cli/remove-managed-worktree!
+                            (fn [repository path]
+                              (original repository path)
+                              (when (= path (:path leaf)) (throw (ex-info "injected after unregister" {}))))]
+                (cli/worktree-remove! (:task entry)))))
+        (if-not tamper?
+          (is (= "removed" (:status (cli/worktree-remove! (:task entry)))) "pristine recovery control")
+          (let [registrations (git-in! (:repository middle) "worktree" "list" "--porcelain")]
+            (git-in! (:work-root entry) "update-index" "--cacheinfo" "160000" (:base leaf) "module")
+            (is (= (:base leaf) (git-in! (:work-root entry) "rev-parse" ":module")))
+            (is (not= (:base leaf) (git-in! (:work-root entry) "rev-parse" "HEAD:module")))
+            (is (thrown-with-msg? Exception #"indexed gitlink changed" (cli/worktree-remove! (:task entry))))
+            (is (= registrations (git-in! (:repository middle) "worktree" "list" "--porcelain")))))))))
 
 ;; --- publication checkpoints (task c45b3635) -----------------------------------------
 (deftest shared-checkout-publication-never-stages-or-commits-dirt
@@ -8177,6 +8837,31 @@
 (defn- published? [dir task] (fs/exists? (:result (ledger-entry* dir task))))
 (defn- mutating-calls [log] (filterv mutating? (calls log)))
 (defn- live-members [entry] (measurement/session-members (get-in entry [:supervisor :sid])))
+
+(deftest managed-modules-fork-launch-uses-the-prepared-checkout
+  (let [{:keys [env dir] :as fixture} (nested-module-fixture (fork-env {}))
+        proc (call! env "task" "start" "--context" "fork" "--worktree" "new" "--task" "fork with modules")
+        _ (is (zero? (:exit proc)) (:out proc))
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+    (is (= (:work-root entry) (:targetCwd (pi-request fixture "fork-create"))))
+    (is (= 2 (count (:modules entry))))
+    (is (fs/regular-file? (fs/path (:work-root entry) "module/nested/seed")))))
+
+(deftest ^:linux-only managed-modules-measurement-prepares-and-checkpoints-nested-output
+  (let [{:keys [env dir] :as fixture}
+        (nested-module-fixture (measurement-fixture {"FAKE_PI_MEASURE" "output" "FAKE_PI_OUTPUT" "module/nested/generated"}
+                                                   {"expectedOutputs" ["module/nested/generated"]}))
+        proc (measure! fixture "run" "--worktree" "new" "--task" "measurement with modules")
+        _ (is (zero? (:exit proc)) (:out proc))
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        leaf (get-in entry [:modules 1])]
+    (is (= 2 (count (:modules entry))))
+    (is (= "produced\n" (slurp (str (fs/path (:path leaf) "generated")))))
+    (is (not= (:base leaf) (git-head (:path leaf))))
+    (is (= "seed\n" (slurp (str (fs/path (:path leaf) "seed")))))
+    (is (await! #(empty? (live-members entry)) 10000))
+    (let [removed (call! env "worktree" "remove" (:task entry))]
+      (is (zero? (:exit removed)) (:out removed)))))
 
 (deftest ^:linux-only successful-measurement-publishes-supervisor-owned-evidence-without-a-pane
   (let [{:keys [dir log] :as fixture} (measurement-fixture)

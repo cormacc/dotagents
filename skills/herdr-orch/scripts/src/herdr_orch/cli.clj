@@ -22,7 +22,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list [--all] [--format json]\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and workflow skills for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-<N> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\nDelegated children use a new tab in the caller's workspace; --tab is optional.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout, Git-locked so that only `oh worktree remove` removes it. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\nworktree list --all lists every worktree round under the assignment root with its reconciliation and display string. It needs no caller session and writes neither the ledger nor Git.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--harness pi|claude|codex] [--fresh] [--format json|markdown|text|status] [--detail]\n  oh route --request PATH\n\nWORKTREE TEARDOWN\n  oh worktree list [--all] [--format json]\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and workflow skills for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports owned subscription evidence using Pi credentials by default; --harness selects an explicit native credential context. It never contacts Herdr, refreshes credentials or installs software. --provider is repeatable; anthropic includes its named Pi accounts, or select anthropic-<N> alone. Other unconfigured names are usage errors; --fresh bypasses cache TTL but not in-flight collection or failure backoff; --detail (markdown only) adds scope bounds and reset times. --format status prints one plain line for a status bar such as Herdr's tab_bar_right.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\nDelegated children use a new tab in the caller's workspace; --tab is optional.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout with recursive recorded submodules as linked worktrees of shared repositories, Git-locked for guarded deepest-first teardown by `oh worktree remove`. Missing objects use a non-interactive fetch; unavailable content refuses launch. Publication retains module-tip refs before containing gitlinks and never pushes them. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\nworktree list --all lists every worktree round under the assignment root with its reconciliation and display string. It needs no caller session and writes neither the ledger nor Git.\n--scope PATH is repeatable on task run/start and requires a worktree. A trailing / declares a directory prefix; other paths match exactly. Reconciliation reports excess paths without refusing them.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn usage-error [message data]
   (throw (ex-info message (assoc data :error-kind :usage))))
@@ -314,7 +314,7 @@
 (defn- checkpoint-guidance [worktree]
   (str "\nFor Git baseline comparisons, resolve the baseline to an immutable commit before the first publication. Retain that commit for baseline exports, diffs and regression controls; do not resolve mutable HEAD after publication. "
        (if worktree
-         "Write-enabled worktree WAITING and terminal publications can stage nonignored changes, create a checkpoint commit and move HEAD. Branch integration remains parent-owned."
+         "Write-enabled worktree WAITING and terminal publications can stage nonignored changes, create a checkpoint commit and move HEAD. Owned modules checkpoint deepest-first before containing gitlinks; CHECKPOINT stays the top-level tip. Published module refs are retained locally. Do not initialise private module stores or change module topology. Use oh worktree remove for recursive teardown, never deinit or force. Branch integration remains parent-owned."
          "Shared-root publication does not automatically stage changes or create checkpoint commits.")))
 ;; pi-context's `context_compact` can fold history back to `root`, and in a child the first
 ;; user message is the round's assignment: folding it leaves the scope and the publication
@@ -1200,8 +1200,11 @@
 ;; the parent's source cwd, and is skipped entirely when the checkout directory is gone: a
 ;; missing directory (an operator removed it, or cleared `.tmp/`) is reported as `missing`
 ;; data, never an error the verb throws.
-(defn- committed-paths [dir base tip]
-  (vec (remove str/blank? (str/split-lines (git! dir "diff" "--name-status" base tip)))))
+(defn- committed-paths [dir base tip owned?]
+  (vec (remove str/blank?
+               (str/split-lines (apply git! dir (concat ["diff" "--name-status"]
+                                                        (when owned? ["--ignore-submodules=none"])
+                                                        [base tip]))))))
 
 (defn- git-nul [dir & argv]
   (let [{:keys [exit out err]} @(process/process (into ["git"] argv)
@@ -1211,9 +1214,154 @@
       (fail "git path query failed" {:dir dir :argv argv :exit exit :stderr err}))
     (if (empty? out) [] (str/split out #"\u0000"))))
 
-(defn- undeclared-paths [dir base tip scope]
-  (let [committed (git-nul dir "diff" "--no-renames" "--name-only" "-z" base tip)
-        status (git-nul dir "status" "--porcelain" "-z" "--untracked-files=all")
+(declare resolve-worktree-path shell-quote assert-module-layout!)
+;; Module identity is separate from the four-field top-level checkout witness.
+(defn- git-option [dir & args]
+  (let [{:keys [exit out err]} @(process/process (into ["git"] args) {:dir dir :out :string :err :string
+                                                                     :extra-env {"GIT_OPTIONAL_LOCKS" "0"}})]
+    (case (int exit) 0 (str/trim out) 1 nil
+          (fail "git query failed" {:dir dir :argv args :exit exit :stderr err}))))
+
+(defn- recorded-gitlinks [dir revision]
+  (->> (git-nul dir "ls-tree" "-r" "-z" revision)
+       (keep (fn [record]
+               (when-let [[_ sha path] (re-matches #"160000 commit ([0-9a-f]+)\t([\s\S]+)" record)]
+                 {:relative path :base sha}))) vec))
+
+(defn- safe-module-path! [parent relative]
+  (let [parts (str/split relative #"/")
+        path (fs/path parent relative)]
+    (when (or (str/blank? relative) (fs/absolute? relative)
+              (some #{"" "." ".." ".git"} parts)
+              (not= (fs/normalize (fs/absolutize path)) (resolve-worktree-path path)))
+      (fail "unsafe module path" {:parent parent :relative relative}))
+    (str path)))
+
+(defn- module-definitions [dir revision]
+  (let [links (recorded-gitlinks dir revision)
+        definitions (when (seq links)
+                      (git-nul dir "config" "--blob" (str revision ":.gitmodules") "--null"
+                               "--get-regexp" "^submodule\\..*\\.path$"))
+        names (into {} (map (fn [record]
+                             (let [[key path] (str/split record #"\n" 2)]
+                               [path (subs key 10 (- (count key) 5))])) definitions))]
+    (mapv (fn [link]
+            (let [name (get names (:relative link))]
+              (when-not name (fail "gitlink has no recorded module definition" link))
+              (assoc link :name name))) links)))
+
+(defn- absolute-local-url [dir url]
+  (if (or (fs/absolute? url) (str/includes? url ":")) url
+      (str (fs/normalize (fs/absolutize (fs/path dir url))))))
+
+(defn- parent-remote-url [dir]
+  (let [branch (git-option dir "symbolic-ref" "--quiet" "--short" "HEAD")
+        remote (or (when branch (git-option dir "config" "--get" (str "branch." branch ".remote"))) "origin")]
+    (if (= "." remote) dir
+        (absolute-local-url dir (or (git-option dir "config" "--get" (str "remote." remote ".url")) dir)))))
+
+(defn- relative-module-url [parent url]
+  (if-not (or (str/starts-with? url "./") (str/starts-with? url "../")) url
+    ;; Git treats the parent remote as a directory, including scp-style remotes.
+    (loop [base (str/replace parent #"/+$" "") tail url]
+      (cond
+        (str/starts-with? tail "./") (recur base (subs tail 2))
+        (str/starts-with? tail "../")
+        (let [slash (str/last-index-of base "/") colon (str/last-index-of base ":")]
+          (when-not (or slash colon) (fail "cannot resolve relative module URL" {:parent parent :url url}))
+          ;; Git's scp-style traversal uses "." after crossing the host boundary.
+          (recur (if (str/ends-with? base ":") ".:" (subs base 0 (or slash (inc colon)))) (subs tail 3)))
+        :else (str base (when-not (str/ends-with? base ":") "/") tail)))))
+
+(defn- save-module! [task module]
+  (ledger/update! task update :modules
+                  (fn [modules]
+                    (if (some #(= (:path module) (:path %)) modules)
+                      (mapv #(if (= (:path module) (:path %)) module %) modules)
+                      (conj (vec modules) module))))
+  module)
+
+(defn- repository-has-commit? [repository sha]
+  (let [{:keys [exit]} @(process/process ["git" "cat-file" "-e" (str sha "^{commit}")]
+                                        {:dir repository :out :string :err :string})]
+    (zero? exit)))
+
+(defn- fetch-module! [repository url sha]
+  (let [ssh (or (System/getenv "GIT_SSH_COMMAND")
+                (some-> (System/getenv "GIT_SSH") shell-quote)
+                (git-option repository "config" "--get" "core.sshCommand") "ssh")
+        {:keys [exit err]} @(process/process ["git" "fetch" "--no-recurse-submodules" "--" url sha]
+                                            {:dir repository :out :string :err :string
+                                             :extra-env {"GIT_TERMINAL_PROMPT" "0" "GCM_INTERACTIVE" "never"
+                                                         "GIT_PROTOCOL_FROM_USER" "0" "GIT_SSH_COMMAND" (str ssh " -o BatchMode=yes")
+                                                         "GIT_ASKPASS" "false" "SSH_ASKPASS" "false" "SSH_ASKPASS_REQUIRE" "never"}})]
+    (when-not (and (zero? exit) (repository-has-commit? repository sha))
+      (fail "module content could not be obtained before launch" {:repository repository :url url :base sha :exit exit :stderr err}))))
+
+(defn- prepare-managed-modules! [task source]
+  (when (seq (recorded-gitlinks source (get-in (ledger/read! task) [:worktree :base])))
+    (ledger/update! task assoc :modules [] :module-owner task)
+  (let [entry (ledger/read! task)
+        lineage (:task entry)]
+    (letfn [(prepare [source-dir parent repository revision remote-url]
+              (doseq [{:keys [relative base name]} (module-definitions parent revision)]
+                (let [path (safe-module-path! parent relative)
+                      source-path (safe-module-path! source-dir relative)
+                      store (safe-module-path! (str (fs/path repository "modules")) name)
+                      source-checkout? (fs/exists? (fs/path source-dir ".git"))
+                      source-store (when source-checkout?
+                                     (let [raw (fs/path (git! source-dir "rev-parse" "--git-path" "modules"))
+                                           root (resolve-worktree-path (if (fs/absolute? raw) raw (fs/path source-dir raw)))]
+                                       (safe-module-path! (str root) name)))
+                      source-common (when (fs/exists? (fs/path source-path ".git"))
+                                      (let [root (git-path! source-path "rev-parse" "--show-toplevel")]
+                                        (when-not (= root source-path) (fail "source module is not a checkout root" {:path source-path}))
+                                        (git-path! source-path "rev-parse" "--git-common-dir")))
+                      shared (or source-common (when (and source-store (fs/exists? source-store)) source-store)
+                                 (str (resolve-worktree-path store)))
+                      configured (git-option (if source-checkout? source-dir repository)
+                                             "config" "--get" (str "submodule." name ".url"))
+                      recorded (git-option parent "config" "--blob" (str revision ":.gitmodules") "--get" (str "submodule." name ".url"))
+                      url (absolute-local-url source-dir
+                                              (or configured (relative-module-url remote-url
+                                                                                  (or recorded (fail "module URL is missing" {:path path})))))
+                      branch (str "orch/" lineage "/module-" (ledger/stable-id path))
+                      module {:path path :parent parent :relative relative :name name :base base
+                              :repository shared :branch branch :url url :state "preparing"}]
+                  (save-module! task module)
+                  (with-file-lock (fs/path shared "herdr-orch.lock")
+                    (fn []
+                      (when-not (fs/exists? (fs/path shared "HEAD"))
+                        (when-not (= #{"herdr-orch.lock"} (set (map fs/file-name (fs/list-dir shared))))
+                          (fail "module repository creation refused: unknown partial store" module))
+                        (git! shared "init" "--bare")
+                        ;; Source initialisation must be able to attach core.worktree here.
+                        (git! shared "config" "core.bare" "false")
+                        (git! shared "config" "remote.origin.url" url))
+                      (when-not (= shared (git-path! shared "rev-parse" "--git-common-dir"))
+                        (fail "module repository identity mismatch" module))
+                      (when-not (repository-has-commit? shared base) (fetch-module! shared url base))
+                      (git! shared "worktree" "add" "--lock" "--reason" worktree-lock-reason "-b" branch path base)))
+                  (save-module! task (assoc module :state "ready"))
+                  (prepare source-path path shared base
+                           (parent-remote-url (if source-common source-path shared))))))]
+      (prepare (git-path! source "rev-parse" "--show-toplevel")
+               (get-in entry [:worktree :path]) (get-in entry [:worktree :repository])
+               (get-in entry [:worktree :base]) (parent-remote-url source))
+      (doseq [module (assert-module-layout! (ledger/read! task) false)]
+        (when-not (= (:base module) (:tip module))
+          (fail "module preparation refused: checkout moved before launch" module)))))))
+
+(defn- module-ignore-options [modules]
+  (mapcat #(vector "-c" (str "submodule." % ".ignore=none")) (distinct (map :name modules))))
+
+(defn- undeclared-paths [dir base tip scope modules]
+  (let [committed (apply git-nul dir (concat ["diff" "--no-renames" "--name-only" "-z"]
+                                             (when (some? modules) ["--ignore-submodules=none"])
+                                             [base tip]))
+        status (apply git-nul dir (concat (module-ignore-options modules)
+                                          ["status" "--porcelain" "-z" "--untracked-files=all"]
+                                          (when (some? modules) ["--ignore-submodules=none"])))
         dirty (loop [records status paths []]
                 (if-let [record (first records)]
                   (let [rename? (or (#{\R \C} (nth record 0)) (#{\R \C} (nth record 1)))]
@@ -1232,9 +1380,9 @@
 
 ;; The scope report is advisory: its own failure must not discard the validated checkout's
 ;; core change sets, so it is caught here rather than by reconciliation's outer handler.
-(defn- scope-report [checkout base tip scope]
+(defn- scope-report [checkout base tip scope modules]
   (try
-    {:scope scope :undeclared (undeclared-paths checkout base tip scope)}
+    {:scope scope :undeclared (undeclared-paths checkout base tip scope modules)}
     (catch Exception e
       {:scope scope :undeclared nil :scope-diagnostic (bounded-diagnostic e)})))
 
@@ -1252,7 +1400,8 @@
                  :actual-repository actual}))))
     checkout))
 
-(defn reconciliation [entry]
+(declare module-reconciliation assert-module-layout! module-dirty-paths owned-modules)
+(defn- checkout-reconciliation [entry]
   (when-let [{:keys [path branch base repository]} (:worktree entry)]
     (if-not (fs/exists? path)
       (cond-> {:base base :branch branch :tip nil :checkout-state "missing"
@@ -1265,15 +1414,23 @@
           ;; the parent's action differs per set (merge the branch vs rescue/re-prompt a
           ;; child whose work is uncommitted) -- so they are never collapsed into one list.
           (cond-> {:base base :branch branch :tip tip :checkout-state "present"
-                   :committed (committed-paths checkout base tip)
-                   :dirty (dirty-paths checkout)
+                   :committed (committed-paths checkout base tip (contains? entry :modules))
+                   :dirty (if (contains? entry :modules) (module-dirty-paths entry checkout) (dirty-paths checkout))
                    :ignored (ignored-paths checkout)}
-            (contains? entry :scope) (merge (scope-report checkout base tip (:scope entry)))))
+            (contains? entry :scope) (merge (scope-report checkout base tip (:scope entry)
+                                                        (when (contains? entry :modules) (owned-modules entry))))))
         (catch Exception e
           (cond-> {:base base :branch branch :tip nil :checkout-state "invalid"
                    :committed nil :dirty nil :ignored nil
                    :diagnostic (bounded-diagnostic e)}
             (contains? entry :scope) (assoc :scope (:scope entry) :undeclared nil)))))))
+(defn reconciliation [entry]
+  (binding [*read-only-git?* true]
+    (cond-> (checkout-reconciliation entry)
+      (contains? entry :modules)
+      (assoc :modules (module-reconciliation entry)
+             :module-diagnostic (try (assert-module-layout! entry true) nil
+                                     (catch Exception e (bounded-diagnostic e)))))))
 ;; Attached only when the entry actually carries worktree identity: a shared-tree round
 ;; has nothing to reconcile, so its response carries no `:reconciliation` key at all,
 ;; exactly as it carries no `:worktree` field on the ledger entry itself.
@@ -1410,6 +1567,7 @@
       ;; present and never run `git worktree add`.
       (when (= :new (:kind target))
         (try (create-worktree! (source-cwd) (:path worktree) (:branch worktree) (:base worktree))
+             (prepare-managed-modules! task (source-cwd))
              (catch Exception e (safe-cleanup! (ledger/read! task) :worktree) (throw e))))
       ;; No waiting policy is injected: it lives on the ledger entry alone (see
       ;; `publish!`), so a child continued into another round can never publish under
@@ -1614,8 +1772,11 @@
         evidence-dir (get-in entry [:measurement :evidence-dir])]
     (try
       (when (= :new (:kind target))
-        (create-worktree! (source-cwd) (get-in target [:worktree :path]) (get-in target [:worktree :branch]) (get-in target [:worktree :base]))
-        (measurement/check-expected-outputs! resolved (:work-root entry)))
+        (try
+          (create-worktree! (source-cwd) (get-in target [:worktree :path]) (get-in target [:worktree :branch]) (get-in target [:worktree :base]))
+          (prepare-managed-modules! task (source-cwd))
+          (measurement/check-expected-outputs! resolved (:work-root entry))
+          (catch Exception e (safe-cleanup! (ledger/read! task) :worktree) (throw e))))
       ;; The adapter helper freezes the inputs and builds the subject argv; the supervisor runs
       ;; that argv unchanged and builds the subject env from its own routing-free environment.
       (let [spec (measurement/launch-spec {:resolved resolved :task task :assignment assignment :evidence-dir evidence-dir
@@ -1635,7 +1796,7 @@
           (if monitor (attach-monitor! entry monitor) entry)))
       (catch Exception e
         ;; A round retired or closed by someone else stays as they left it.
-        (when-not (:launch-retired (ex-data e))
+        (when-not (or (:launch-retired (ex-data e)) (= "failed" (:status (ledger/read! task))))
           (safe-cleanup! (ledger/read! task) :launch))
         (throw e)))))
 ;; The effective target persona decides authority: an explicit overlay, else the role a fork
@@ -1858,7 +2019,7 @@
          :previous-item (:item previous) :retry-after-ms (- interval elapsed)}))))
 
 (defn- index-dirty? [dir]
-  (let [{:keys [exit err]} @(process/process ["git" "diff" "--cached" "--quiet" "--"]
+  (let [{:keys [exit err]} @(process/process ["git" "diff" "--cached" "--ignore-submodules=none" "--quiet" "--"]
                                              {:dir dir :out :string :err :string})]
     (case (int exit)
       0 false
@@ -1889,18 +2050,183 @@
               {:path checkout :recorded-branch branch :actual-branch actual-branch})))
     {:path checkout :tip (head-sha checkout)}))
 
+(defn- owned-modules [entry]
+  (if (:module-owner entry)
+    (:modules (ledger/read! (:module-owner entry)))
+    (:modules entry)))
+
+(defn- module-postorder [entry]
+  (sort-by (fn [module] [(- (count (fs/components (:path module)))) (:path module)]) (owned-modules entry)))
+
+(defn- registered-worktree [repository path]
+  (some (fn [record]
+          (when (= (str "worktree " path) (first record))
+            {:branch (some #(when (str/starts-with? % "branch refs/heads/") (subs % 18)) record)
+             :lock (some #(when (or (= "locked" %) (str/starts-with? % "locked ")) %) record)}))
+        (partition-by empty? (git-nul repository "worktree" "list" "--porcelain" "-z"))))
+
+(defn- assert-owned-lock! [registration path]
+  (when-let [lock (:lock registration)]
+    (when-not (= lock (str "locked " worktree-lock-reason))
+      (fail "module lifecycle refused: foreign lock" {:path path :lock lock}))))
+
+(defn- private-module-store [path]
+  (let [raw (fs/path (git! path "rev-parse" "--git-path" "modules"))
+        store (if (fs/absolute? raw) raw (fs/path path raw))]
+    (when (fs/exists? store) (str (fs/canonicalize store)))))
+
+(defn- empty-module-directory? [path]
+  (or (not (fs/exists? path)) (and (fs/directory? path) (empty? (fs/list-dir path)))))
+
+;; Recovery ignores only a subtree whose containing gitlink still matches. Its
+;; own checkout and dirt are checked separately by the full inventory preflight.
+(defn- module-dirty-paths [entry path]
+  (let [links (into {} (map (juxt :relative :base) (recorded-gitlinks path "HEAD")))
+        modules (owned-modules entry)
+        recovering (filter #(#{"removing" "removed"} (:state %)) modules)
+        removed (filter (fn [module]
+                          (and (= path (:parent module))
+                               (some #(fs/starts-with? (fs/path (:path %)) (fs/path (:path module))) recovering)))
+                        modules)]
+    (doseq [module removed]
+      (when-not (= (get links (:relative module))
+                   (if (fs/exists? (fs/path (:path module) ".git")) (head-sha (:path module))
+                       (or (:tip module) (:base module))))
+        (fail "module removal recovery refused: containing gitlink changed" module))
+      (when-not (= (get links (:relative module)) (git! path "rev-parse" "--verify" (str ":" (:relative module))))
+        (fail "module removal recovery refused: indexed gitlink changed" module)))
+    (vec (remove str/blank?
+                 (str/split-lines
+                  (apply git! path (concat (module-ignore-options modules)
+                                          ["status" "--porcelain" "--ignore-submodules=none" "--" "."]
+                                          (map #(str ":(top,literal,exclude)" (:relative %)) removed))))))))
+
+(defn- inspect-owned-module! [entry module removal?]
+  (let [{:keys [path parent relative repository branch state]} module
+        root (get-in entry [:worktree :path])
+        parents (conj (set (map :path (owned-modules entry))) root)]
+    (when-not (and (parents parent) (not= path parent)
+                   (fs/starts-with? (fs/path path) (fs/path root))
+                   (= path (safe-module-path! parent relative)))
+      (fail "module lifecycle refused: invalid inventory path" module))
+    (let [registration (when (fs/directory? repository) (registered-worktree repository path))
+          absent? (empty-module-directory? path)]
+      (assert-owned-lock! registration path)
+      (cond
+        (and removal? (#{"preparing" "removing" "removed"} state) absent? (nil? registration))
+        (assoc module :checkout-state "missing" :tip (when (fs/directory? repository) (git-option repository "rev-parse" "--verify" "--quiet" (str "refs/heads/" branch))))
+
+        (and removal? (#{"preparing" "removing"} state) absent? registration (= branch (:branch registration)))
+        (let [tip (git! repository "rev-parse" (str "refs/heads/" branch))]
+          (when (and (= "preparing" state) (not= tip (:base module)))
+            (fail "module preparation recovery refused: branch moved" module))
+          (assoc module :checkout-state "missing" :tip tip))
+
+        :else
+        (do
+          (when (or (= "removed" state) (not= branch (:branch registration)))
+            (fail "module lifecycle refused: missing or replaced registration" module))
+          (let [{:keys [tip]} (inspect-checkpoint-worktree! (assoc entry :worktree (select-keys module [:path :repository :branch :base])))
+                git-dir (git-path! path "rev-parse" "--absolute-git-dir")]
+            (when-not (fs/starts-with? (fs/path git-dir) (fs/path repository "worktrees"))
+              (fail "module lifecycle refused: not a linked module worktree" module))
+            (when-let [store (private-module-store path)]
+              (fail "module lifecycle refused: unexpected private module store" {:path path :module-store store}))
+            (assoc module :checkout-state "present" :tip tip :dirty (module-dirty-paths entry path) :ignored (ignored-paths path))))))))
+
+(defn- assert-module-layout! [entry removal?]
+  (let [modules (owned-modules entry)
+        root (get-in entry [:worktree :path])
+        partial? (and removal? (= "failed" (:status entry)))]
+    (doseq [parent (cons root (map :path modules)) :when (fs/exists? (fs/path parent ".git"))]
+      (doseq [untracked (git-nul parent "ls-files" "--others" "--exclude-standard" "-z")]
+        (when (fs/exists? (fs/path parent untracked ".git"))
+          (fail "module lifecycle refused: unrecorded repository" {:path parent :untracked untracked})))
+      (let [base (if (= parent root) (get-in entry [:worktree :base])
+                     (:base (first (filter #(= parent (:path %)) modules))))]
+        (when-not (str/blank? (git! parent "diff" base "--" ".gitmodules"))
+          (fail "module lifecycle refused: module definitions changed" {:path parent})))
+      (when-let [store (private-module-store parent)]
+        (fail "module lifecycle refused: unexpected private module store" {:path parent :module-store store}))
+      (let [expected (set (map :relative (filter #(= parent (:parent %)) modules)))
+            head-paths (set (map :relative (recorded-gitlinks parent "HEAD")))
+            index-paths (->> (git-nul parent "ls-files" "--stage" "-z")
+                             (keep #(second (re-matches #"160000 [0-9a-f]+ [0-3]\t([\s\S]+)" %))) set)]
+        (when-not (and (= head-paths index-paths)
+                       (if partial? (every? head-paths expected) (= expected head-paths)))
+          (fail "module lifecycle refused: unrecorded or changed module topology"
+                {:path parent :expected expected :head head-paths :index index-paths}))
+        (when partial?
+          (doseq [relative (remove expected head-paths)]
+            (when-not (empty-module-directory? (safe-module-path! parent relative))
+              (fail "module lifecycle refused: unrecorded module content" {:path parent :relative relative}))))))
+    (mapv #(inspect-owned-module! entry % removal?) modules)))
+
+(defn- module-reconciliation [entry]
+  (mapv (fn [module]
+          (try
+            (inspect-owned-module! entry module true)
+            (catch Exception e
+              (assoc module :checkout-state (if (fs/exists? (fs/path (:path module) ".git")) "invalid" "missing")
+                     :diagnostic (bounded-diagnostic e)))))
+        (owned-modules entry)))
+
+(defn- retain-module-tip! [entry module tip]
+  ;; Every published revision gets its own ref: a later branch reset cannot collect it.
+  (git! (:repository module) "update-ref"
+        (str "refs/herdr-orch/" (or (:module-owner entry) (:task entry)) "/"
+             (ledger/stable-id (:path module)) "/" tip) tip)
+  (save-module! (or (:module-owner entry) (:task entry)) (assoc module :tip tip :state "ready")))
+
+(defn- verify-owned-checkpoints! [entry]
+  (let [modules (owned-modules entry)]
+    (when (seq modules)
+      (doseq [module modules]
+        (let [actual (inspect-owned-module! entry module false)]
+          (when-not (= (:tip module) (:tip actual))
+            (fail "checkpoint publication refused: owned module moved after checkpoint"
+                  {:path (:path module) :checkpoint (:tip module) :tip (:tip actual)}))))
+      (doseq [parent (cons (get-in entry [:worktree :path]) (map :path modules))]
+        (let [links (into {} (map (juxt :relative :base) (recorded-gitlinks parent "HEAD")))]
+          (doseq [module modules :when (= parent (:parent module))]
+            (when-not (= (:tip module) (get links (:relative module)))
+              (fail "checkpoint publication refused: containing commit omitted an owned module tip"
+                    {:path parent :module (:relative module) :expected (:tip module)
+                     :recorded (get links (:relative module))}))))))))
+
+(defn- checkpoint-one! [entry path status]
+  (let [children (filter #(= path (:parent %)) (owned-modules entry))]
+    (doseq [module children]
+      (when-not (= (:tip module) (:tip (inspect-owned-module! entry module false)))
+        (fail "checkpoint refused: owned child has no current completed checkpoint" module)))
+    (git! path "add" "-A")
+    ;; Explicit gitlinks prevent ignore settings from omitting completed child work.
+    (doseq [module children]
+      (git! path "update-index" "--cacheinfo" "160000" (:tip module) (:relative module)))
+    (when (index-dirty? path)
+      (git! path "commit" "-m" (str "herdr-orch checkpoint " (:task entry) " " status)))
+    (head-sha path)))
+
 (defn- checkpoint-worktree! [entry status]
   (let [{:keys [path tip]} (inspect-checkpoint-worktree! entry)
-        dirty (dirty-paths path)]
+        modules (when (contains? entry :modules) (assert-module-layout! entry false))
+        dirty (into (if (contains? entry :modules) (module-dirty-paths entry path) (dirty-paths path))
+                    (mapcat :dirty modules))]
     (when (and (:read-only entry) (seq dirty))
       (fail "publication refused: read-only child left changes in its checkout"
             {:task (:task entry) :path path :dirty dirty :checkpoint tip
              :finding "read-only child left changes in its checkout"}))
+    (when (seq modules)
+      (assert-owned-lock! (registered-worktree (get-in entry [:worktree :repository]) path) path))
+    (doseq [module (module-postorder entry)]
+      (inspect-owned-module! entry module false)
+      (retain-module-tip! entry module (if (:read-only entry) (head-sha (:path module))
+                                          (checkpoint-one! entry (:path module) status))))
     (when-not (:read-only entry)
-      (git! path "add" "-A")
-      (when (index-dirty? path)
-        (git! path "commit" "-m"
-              (str "herdr-orch checkpoint " (:task entry) " " status))))
+      (inspect-checkpoint-worktree! entry)
+      (checkpoint-one! entry path status))
+    (inspect-checkpoint-worktree! entry)
+    (verify-owned-checkpoints! entry)
     (head-sha path)))
 ;; Closeout restoration: the pre-stream publish raised a best-effort "Subagent publish failed"
 ;; operator toast on every failed publication, and the stream rewrite dropped it without a
@@ -2864,7 +3190,7 @@
                  (throw (ex-info "worktree removal and re-lock failed" {:path path :lock-error (ex-message lock-error)} e)))))
         (throw e)))))
 
-;; `git worktree remove` refuses a checkout with submodules and offers only `--force`,
+;; Legacy/unowned module topology has no teardown inventory. Git offers only `--force`,
 ;; which would also delete submodule commits that exist only in the checkout's own
 ;; module store. Refuse first, before the unlock, and name what the operator must check.
 ;; The store keeps the refusal alive after `submodule deinit`, so both are reported.
@@ -2878,6 +3204,60 @@
     (when (or (seq initialised) store)
       (cond-> {:submodules initialised} store (assoc :module-store store)))))
 
+(defn- module-integration [entry modules]
+  (let [root (get-in entry [:worktree :path])]
+    (loop [remaining (sort-by #(count (fs/components (:path %))) modules)
+           revisions {root {:repository (get-in entry [:worktree :repository]) :revision (head-sha (source-cwd))}}
+           results []]
+      (if-let [{:keys [parent relative path repository tip] :as module} (first remaining)]
+        (let [containing (get revisions parent)
+              recorded (when (and (:revision containing)
+                                  (repository-has-commit? (:repository containing) (:revision containing)))
+                         (some #(when (= relative (:relative %)) (:base %))
+                               (recorded-gitlinks (:repository containing) (:revision containing))))
+              integrated? (when (and tip recorded (repository-has-commit? repository recorded))
+                            (let [{:keys [exit err]} @(process/process ["git" "merge-base" "--is-ancestor" tip recorded]
+                                                                       {:dir repository :out :string :err :string})]
+                              (case (int exit) 0 true 1 false
+                                    (fail "module ancestry query failed" {:path path :stderr err :exit exit}))))]
+          (recur (rest remaining) (assoc revisions path {:repository repository :revision recorded})
+                 (conj results (assoc module :parent-gitlink recorded :result-present-in-parent (boolean integrated?)))))
+        results))))
+
+(defn- remove-owned-modules! [entry cleanup?]
+  (let [{:keys [path repository]} (:worktree entry)
+        owner (or (:module-owner entry) (:task entry))
+        modules (assert-module-layout! entry true)]
+    (assert-owned-lock! (registered-worktree repository path) path)
+    (when (fs/exists? path) (inspect-checkpoint-worktree! entry))
+    ;; The entire inventory passes before the first unlock. Recheck each checkout at
+    ;; its mutation boundary: an external writer can invalidate an earlier preflight.
+    (doseq [module modules]
+      (when (or (seq (:dirty module))
+                (and cleanup? (or (seq (:ignored module))
+                                 (and (:tip module) (not= (:base module) (:tip module))))))
+        (fail "module removal refused: checkout contains work" module)))
+    (let [results (if cleanup? modules (module-integration entry modules))]
+      (doseq [module (module-postorder entry)]
+        (let [current (inspect-owned-module! entry module true)]
+          (when (or (seq (:dirty current)) (and cleanup? (seq (:ignored current))))
+            (fail "module removal refused: checkout changed after preflight" current))
+          (save-module! owner (assoc module :state "removing"))
+          (when (and (fs/directory? (:repository module))
+                     (registered-worktree (:repository module) (:path module)))
+            (remove-managed-worktree! (:repository module) (:path module)))
+          ;; Git treats a missing gitlink directory as dirt. Its containing checkout
+          ;; can be removed normally once an empty directory replaces the removed tree.
+          (when (fs/exists? (fs/path (:parent module) ".git"))
+            (fs/create-dirs (:path module)))
+          (save-module! owner (assoc module :state "removed" :tip (:tip current)))))
+      (when (fs/exists? path)
+        (inspect-checkpoint-worktree! entry)
+        (let [dirty (module-dirty-paths entry path) ignored (ignored-paths path)]
+          (when (or (seq dirty) (and cleanup? (seq ignored)))
+            (fail "worktree removal refused: checkout changed after module removal" {:path path :dirty dirty :ignored ignored}))))
+      results)))
+
 (defn worktree-remove! [task]
   (when-not task (usage-error "worktree remove requires a full task uuid" {}))
   (let [entry (ledger/read! task)]
@@ -2887,19 +3267,26 @@
       (when (worktree-referenced-by-live-round? path (ledger/entries))
         (fail "worktree remove refused: a live round of this session still references the checkout" {:task task :path path}))
       (if-not (fs/exists? path)
-        (do (unlock-worktree! (source-cwd) path)
+        (do (if (contains? entry :modules)
+              (do (remove-owned-modules! entry false)
+                  (when (registered-worktree (get-in entry [:worktree :repository]) path)
+                    (remove-managed-worktree! (source-cwd) path)))
+              (unlock-worktree! (source-cwd) path))
             {:status "missing" :task task :child (:child entry) :path path :branch branch :base base})
-        (let [dirty (dirty-paths path) ignored (ignored-paths path)]
+        (let [dirty (if (contains? entry :modules) (module-dirty-paths entry path) (dirty-paths path))
+              ignored (ignored-paths path)]
           (when (seq dirty)
             (fail "worktree remove refused: checkout is dirty" {:task task :path path :dirty dirty :ignored ignored}))
-          (when-let [blockers (submodule-blockers path)]
+          (when-let [blockers (when-not (contains? entry :modules) (submodule-blockers path))]
             (fail (str "worktree remove refused: checkout has submodules; keep any submodule commit that exists only here, "
                        "then run `git -C <path> submodule deinit --all`, delete the module store, and remove again")
                   (merge {:task task :path path} blockers)))
-          (let [tip (head-sha path) ancestor? (ancestor-of-parent-head? (source-cwd) tip)]
+          (let [tip (head-sha path) ancestor? (ancestor-of-parent-head? (source-cwd) tip)
+                modules (when (contains? entry :modules) (remove-owned-modules! entry false))]
             (remove-managed-worktree! (source-cwd) path)
-            {:status "removed" :task task :child (:child entry) :path path :branch branch :base base
-             :tip tip :tip-is-ancestor-of-parent-head ancestor? :ignored ignored}))))))
+            (cond-> {:status "removed" :task task :child (:child entry) :path path :branch branch :base base
+                     :tip tip :tip-is-ancestor-of-parent-head ancestor? :ignored ignored}
+              (contains? entry :modules) (assoc :modules modules))))))))
 ;; --- failed-launch checkout cleanup --------------------------------------------------
 ;; A delegated launch that fails before its child takes the assignment leaves nothing to
 ;; integrate, so a retry should start clean. Only a pristine checkout that this round
@@ -2938,7 +3325,8 @@
                            (do (when (= "missing" (:status retention))
                                  (unlock-worktree! (source-cwd) path))
                                retention)
-                           (do (remove-managed-worktree! (source-cwd) path)
+                           (do (when (contains? entry :modules) (remove-owned-modules! entry true))
+                               (remove-managed-worktree! (source-cwd) path)
                                {:status "removed"})))
                        (catch Exception e {:status "retained" :reason "error" :diagnostic (bounded-diagnostic e)}))]
       (try (ledger/update! (:task entry) assoc :checkout-cleanup outcome) (catch Exception _))
@@ -3218,7 +3606,7 @@
                                         :kind :model :model-canonical :model-route :model-args :effort-args
                                         :retro :retro-source :spawns :spawns-source
                                         :timeout :timeout-source :effort :effort-source :placement :shell-pid
-                                        :work-root :worktree :read-only :scope
+                                        :work-root :worktree :modules :module-owner :read-only :scope
                                         :context :execution :role-absent :role-snapshot :fork])
                           {:task task :result result :continues prior-task
                            :parent-session caller :parent-pane (:parent-pane ident)

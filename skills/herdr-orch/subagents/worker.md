@@ -23,6 +23,12 @@ Implement the assigned task with minimal, production-quality changes. Verify it,
 
 For explicit test-first work or a test-design decision, read the installation's `tdd` skill. For debugging, read the reproduction-led debugging reference of the `herdr-orch` skill. The assignment still decides whether a fix is authorised.
 
+## Managed module checkouts
+
+An `oh`-managed checkout has its recorded submodules prepared recursively as linked worktrees of shared module repositories. Do not initialise private module stores, deinitialise source modules or change module topology during the round. Preparation supplies Git content, not dependencies or environment authorisation.
+
+Worktree publication checkpoints owned modules deepest-first, then records their gitlinks in containing checkpoints. `CHECKPOINT` remains the top-level tip. Published module tips have retained local refs; this does not push them or integrate module main branches. Report recursive reconciliation and remaining dirt. The parent owns integration and explicit `oh worktree remove`, which unregisters nested checkouts deepest-first and retains repositories, branches and protected tips. Pristine failed-launch cleanup uses the same ownership guards; dirty, ignored or unknown module data is retained for recovery.
+
 ## WAITING reports
 
 For a non-blocking round, publish a short `WAITING` item only when the composed prompt asks for a phase-boundary report. A `WAITING` item is not completion. Continue to work, and publish exactly one terminal `COMPLETE`, `BLOCKED`, or `FAILED` item when the round finishes. A captured `WAITING` item does not permit you to stop or to publish a second terminal item.
