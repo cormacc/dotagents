@@ -2895,6 +2895,11 @@
     (is (= "unknown" (:integration res)))
     (is (not (str/blank? (:integration-diagnostic res))))
     (is (nil? (:integration-tip res))))
+  (let [long-message (apply str (repeat 1200 "x"))
+        res (with-redefs [cli/branch-tip (fn [& _] (throw (ex-info long-message {})))]
+              (cli/branch-integration "/nonexistent" "orch/00000000" "HEAD"))]
+    (is (= "unknown" (:integration res)))
+    (is (= 500 (count (:integration-diagnostic res))) "the diagnostic is bounded"))
   (let [{:keys [env dir]} (fake-env {})
         entry (spawn-worktree! env dir "integration query fails")
         _ (child-commit! (get-in entry [:worktree :path]) "work" "w\n")
@@ -2957,6 +2962,21 @@
       (is (nil? (:branch-retirement (:result (result plain)))))
       (is (git-branch-exists? dir branch)))))
 
+(deftest worktree-remove-branch-refuses-branch-missing-and-unknown-before-removal
+  (doseq [[integration setup!] [["branch-missing" (fn [dir entry] (git-in! dir "update-ref" "-d" (str "refs/heads/" (get-in entry [:worktree :branch]))) entry)]
+                                ["unknown" (fn [dir entry] (patch-entry! dir entry :worktree (assoc (:worktree entry) :base "1111111111111111111111111111111111111111")))]]]
+    (let [{:keys [env dir]} (fake-env {})
+          entry (spawn-worktree! env dir (str "refusal for " integration))
+          path (get-in entry [:worktree :path])]
+      (publish-child! entry)
+      (setup! dir (ledger-entry* dir (:task entry)))
+      (let [before (git-in! dir "worktree" "list" "--porcelain")
+            proc (remove-branch! env (:task entry))]
+        (is (= 1 (:exit proc)) (str integration " " (:out proc)))
+        (is (str/includes? (:out proc) (str "branch integration is " integration)) (:out proc))
+        (is (fs/exists? path))
+        (is (= before (git-in! dir "worktree" "list" "--porcelain")) "no unlock or removal")))))
+
 (deftest worktree-remove-branch-retires-the-branch-of-an-already-removed-checkout
   (let [{:keys [env dir]} (fake-env {})
         entry (spawn-worktree! env dir "removed earlier")
@@ -2982,6 +3002,26 @@
       (is (= 1 (:exit proc)) (:out proc))
       (is (str/includes? (:out proc) "another worktree has the branch checked out"))
       (is (str/includes? (:out proc) "manual-checkout"))
+      (is (git-branch-exists? dir branch)))))
+
+;; `diff.relative` would limit the path sets to the caller's subdirectory, so work outside
+;; it would read as `empty` and its branch would be deleted (review of task e88e718e).
+(deftest worktree-remove-branch-from-a-subdirectory-ignores-diff-relative
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "work outside the caller's subdirectory")
+        {:keys [path branch]} (:worktree entry)
+        subdir (str (fs/path dir "subdir"))]
+    (git-in! dir "config" "diff.relative" "true")
+    (fs/create-dirs subdir)
+    (child-commit! path "outside-work" "o\n")
+    (publish-child! entry)
+    (let [status (call-in! subdir env "task" "status" (:task entry))]
+      (is (zero? (:exit status)) (:out status))
+      (is (= "absent" (get-in (result status) [:result :reconciliation :integration]))))
+    (let [proc (call-in! subdir env "worktree" "remove" (:task entry) "--branch")]
+      (is (= 1 (:exit proc)) (:out proc))
+      (is (str/includes? (:out proc) "branch integration is absent"))
+      (is (fs/exists? path))
       (is (git-branch-exists? dir branch)))))
 
 (deftest branch-deletion-refuses-a-branch-that-moved-after-evaluation
@@ -3792,9 +3832,14 @@
   (let [{:keys [env dir]} (nested-module-fixture)
         entry (integrated-module-child! env dir "module retirement")
         [middle leaf] (:modules entry)
-        elsewhere (str (fs/path dir ".tmp" "middle-by-hand"))]
+        elsewhere (str (fs/path dir ".tmp" "middle-by-hand"))
+        retained-refs (fn [] (mapv #(git-in! (:repository %) "for-each-ref" "--format=%(refname) %(objectname)" "refs/herdr-orch/")
+                                   [middle leaf]))
+        refs-before (retained-refs)]
+    (is (every? seq refs-before) "positive control: each module has retained refs")
     (git-in! (:repository middle) "worktree" "add" "-q" elsewhere (:branch middle))
     (let [proc (remove-branch! env (:task entry))]
+      (is (= refs-before (retained-refs)) "every retained module ref survives")
       (is (zero? (:exit proc)) (:out proc))
       (is (= "deleted" (get-in (result proc) [:result :branch-retirement :status])))
       (is (not (git-branch-exists? dir (get-in entry [:worktree :branch]))))
@@ -3804,6 +3849,27 @@
       (is (= "retained" (:status (module-branch-report proc middle))))
       (is (= "checked-out" (:reason (module-branch-report proc middle))))
       (is (git-branch-exists? (:repository middle) (:branch middle))))))
+
+;; A module branch still at its recorded base loses nothing when deleted, even without a
+;; retained ref. The refs are deleted by hand here, because every publication adds one.
+(deftest managed-modules-branch-retirement-deletes-an-unchanged-module-branch-at-its-base
+  (let [{:keys [env dir]} (nested-module-fixture)
+        entry (spawn-worktree! env dir "top-level change only")
+        [_ leaf] (:modules entry)]
+    (child-commit! (get-in entry [:worktree :path]) "top-only" "t\n")
+    (let [published (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "top only")]
+      (is (zero? (:exit published)) (:out published)))
+    (git-in! dir "merge" "-q" "--ff-only" (get-in entry [:worktree :branch]))
+    (is (zero? (:exit (call! env "worktree" "remove" (:task entry)))))
+    (is (= (:base leaf) (git-in! (:repository leaf) "rev-parse" (:branch leaf))))
+    (doseq [ref (str/split-lines (git-in! (:repository leaf) "for-each-ref" "--format=%(refname)" "refs/herdr-orch/"))
+            :when (not (str/blank? ref))]
+      (git-in! (:repository leaf) "update-ref" "-d" ref))
+    (is (str/blank? (git-in! (:repository leaf) "for-each-ref" "refs/herdr-orch/")))
+    (let [proc (remove-branch! env (:task entry))]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "deleted" (:status (module-branch-report proc leaf))) (:out proc))
+      (is (not (git-branch-exists? (:repository leaf) (:branch leaf)))))))
 
 (deftest managed-modules-branch-retirement-keeps-unprotected-and-ledger-referenced-branches
   (let [{:keys [env dir]} (nested-module-fixture)

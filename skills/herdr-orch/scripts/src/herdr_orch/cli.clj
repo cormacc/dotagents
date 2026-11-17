@@ -1436,12 +1436,14 @@
       0 (str/trim out)
       1 nil
       (fail "git rev-parse failed" {:dir dir :branch branch :exit exit :stderr (str/trim err)}))))
+;; `--no-relative` overrides `diff.relative`, which would hide changes outside a caller's
+;; subdirectory and let unintegrated work read as `empty`.
 (defn- changed-path-set [dir from to]
-  (set (git-nul dir "diff" "-z" "--name-only" "--no-renames" "--ignore-submodules=none" from to)))
+  (set (git-nul dir "diff" "-z" "--name-only" "--no-relative" "--no-renames" "--ignore-submodules=none" from to)))
 ;; Judged from the branch ref against the caller's HEAD, so it holds for a missing checkout
 ;; and for every integration strategy: ancestry covers fast-forward and merge, and equal
-;; content at each path the branch changed covers squash and cherry-pick. A later edit to
-;; one of those paths reads as `absent`, so a doubtful branch is kept, never lost.
+;; content at each path the branch changed covers squash and cherry-pick. After a squash, a
+;; later edit to one of those paths reads as `absent`, so a doubtful branch is kept.
 (defn branch-integration
   "Return `{:integration v}` for `branch` against the HEAD of `dir`; v is one of
   empty, ancestor, content, absent, branch-missing or unknown (with a diagnostic).

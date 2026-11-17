@@ -110,7 +110,7 @@ Each `--artifact` becomes a portable Markdown link. Use `<relative-path>` or `<r
 3. Run `oh worktree remove <full-task-uuid> --branch`. Inspect any reported dirt first; the command refuses before it removes anything when the branch is not integrated or another worktree has it checked out.
 4. Read `module-branches` in the result. A module branch that is `retained` names its reason: `unprotected-tip`, `checked-out`, `ledger-reference` or `error`.
 
-A later edit to a path that the branch changed makes `integration` read `absent`, so the branch stays. To abandon a branch on purpose, delete it explicitly with Git.
+After a squash or cherry-pick, a later edit to a path that the branch changed makes `integration` read `absent`, so the branch stays. A fast-forwarded or merged branch stays `ancestor`. To abandon a branch on purpose, delete it explicitly with Git.
 
 If the ledger was cleared, `oh` has no record of the branch. Then use Git directly:
 
