@@ -2495,7 +2495,7 @@
       (is (zero? (:exit status-proc)) (:err status-proc))
       (let [reconciliation (get-in (result status-proc) [:result :reconciliation])]
         (is (= "present" (:checkout-state reconciliation)))
-        (is (= #{:base :branch :tip :checkout-state :committed :dirty :ignored} (set (keys reconciliation))))
+        (is (= #{:base :branch :tip :checkout-state :committed :dirty :ignored :integration} (set (keys reconciliation))))
         (is (some #(str/includes? % "committed-work") (:committed reconciliation)))
         (is (not-any? #(str/includes? % "dirty-work") (:committed reconciliation)))
         (is (some #(str/includes? % "dirty-work") (:dirty reconciliation)))
@@ -2522,7 +2522,9 @@
       ;; A failure confined to the advisory scope query must keep the core evidence.
       (let [degraded (with-redefs [cli/undeclared-paths (fn [& _] (throw (ex-info "injected scope-query failure" {})))]
                        (cli/reconciliation entry))]
-        (is (= (dissoc rec :undeclared) (dissoc degraded :undeclared :scope-diagnostic)))
+        ;; `:integration` reads the caller's HEAD, and this in-process call runs outside the
+        ;; fixture repository, so only the checkout fields are compared.
+        (is (= (dissoc rec :undeclared :integration) (dissoc degraded :undeclared :scope-diagnostic :integration)))
         (is (= "present" (:checkout-state degraded)))
         (is (contains? degraded :undeclared))
         (is (nil? (:undeclared degraded)))
@@ -2836,6 +2838,63 @@
       (is (zero? (:exit proc)) (:err proc))
       (is (= "removed" (:status res)))
       (is (false? (:tip-is-ancestor-of-parent-head res))))))
+
+;; --- branch integration report (task 9ce9a258) ------------------------------------------
+(defn- integration-of [env task]
+  (let [proc (call! env "task" "status" task)]
+    (is (zero? (:exit proc)) (:err proc))
+    (get-in (result proc) [:result :reconciliation :integration])))
+(defn- child-commit! [path file content]
+  (spit (str (fs/path path file)) content)
+  (git-in! path "add" file)
+  (git-in! path "commit" "-q" "-m" (str "child writes " file)))
+
+(deftest integration-reports-empty-then-absent-then-ancestor-after-a-fast-forward
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "fast-forward integration")
+        {:keys [path branch]} (:worktree entry)]
+    (publish-child! entry)
+    (is (= "empty" (integration-of env (:task entry))))
+    (child-commit! path "child-work" "child\n")
+    (is (= "absent" (integration-of env (:task entry))))
+    (git-in! dir "merge" "-q" "--ff-only" branch)
+    (is (= "ancestor" (integration-of env (:task entry))))))
+
+(deftest integration-reports-content-after-a-squash-and-absent-after-a-later-edit
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "squash integration")
+        {:keys [path branch]} (:worktree entry)]
+    (publish-child! entry)
+    (child-commit! path "first" "one\n")
+    (child-commit! path "second" "two\n")
+    (git-in! dir "merge" "-q" "--squash" branch)
+    (git-in! dir "commit" "-q" "-m" "feat: squashed child work")
+    (is (= "content" (integration-of env (:task entry))))
+    (spit (str (fs/path dir "first")) "edited later\n")
+    (git-in! dir "commit" "-q" "-am" "parent edits a branch path")
+    (is (= "absent" (integration-of env (:task entry))))))
+
+(deftest integration-reports-branch-missing-in-both-listings
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "branch deleted by hand")
+        {:keys [branch]} (:worktree entry)]
+    (publish-child! entry)
+    (is (zero? (:exit (call! env "worktree" "remove" (:task entry)))))
+    (git-in! dir "branch" "-D" branch)
+    (let [own (call! env "worktree" "list")
+          all (call! env "worktree" "list" "--all")]
+      (is (zero? (:exit own)) (:err own))
+      (is (zero? (:exit all)) (:err all))
+      (is (= ["branch-missing"] (map #(get-in % [:reconciliation :integration]) (:result (result own)))))
+      (is (= ["branch-missing"] (map #(get-in % [:reconciliation :integration])
+                                      (get-in (result all) [:result :entries])))))))
+
+(deftest integration-reports-unknown-with-a-diagnostic-when-git-fails
+  (let [not-a-repository (str (fs/create-temp-dir {:prefix "orch-no-repo"}))
+        res (cli/branch-integration not-a-repository "orch/00000000" "HEAD")]
+    (is (= "unknown" (:integration res)))
+    (is (not (str/blank? (:integration-diagnostic res))))
+    (is (nil? (:integration-tip res)))))
 
 ;; Worktree identity belongs to the lineage, not one round, so a stale round's task id
 ;; still resolves to the current checkout.
