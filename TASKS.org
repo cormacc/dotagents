@@ -217,13 +217,17 @@ Deadline: Atlassian removes the v1 endpoint on 2027-03-01 and then moves v1 user
 :END:
 Follow-up to task:d20d04b8-9f0a-4ec6-956e-c535e7ae205a. `oh usage --format status` shows `exp?` for an expired access token, and `pi auth check --provider <id>` refreshes a base provider through the locked Pi auth storage. Pi 1.5.2 does not load extensions for `pi auth`, so `pi auth check --provider anthropic-1 --no-refresh --json` returns `provider_not_found` (measured 2026-11-13): no Pi CLI route refreshes a named `anthropic-<N>` account. Options: ask upstream for extension loading in `pi auth`; or a documented one-request Pi session on that account. The collector stays read-only (contract.md section Owned credential boundary). Open question kept from the original task: does Anthropic rotate refresh tokens on each refresh?
 
-** TODO [#A] herdr-orch: give managed worktrees usable submodules :herdr_orch:
+** DONE [#A] herdr-orch: give managed worktrees usable submodules :herdr_orch:
+CLOSED: [2026-11-17 Tue 02:00]
 :PROPERTIES:
 :CUSTOM_ID: ed32d304-84a5-41c2-8a9c-41be3e848214
 :CREATED: [2026-11-16 Mon 13:38]
+:STARTED: [2026-11-16 Mon 20:48]
 :END:
 :LOGBOOK:
 - Created [2026-11-16 Mon 13:38]
+- State "STARTED" from "TODO" [2026-11-16 Mon 20:48]
+- State "DONE" from "STARTED" [2026-11-17 Tue 02:00]
 :END:
 #+IMPORT: [[plan:2026-11-16-herdr-orch-submodules.org]]
 A managed checkout from `--worktree new` (`create-worktree!` in `cli.clj`, plain `git worktree add`) leaves every submodule folder empty, and no persona, trait, reference or prompt text tells the child. A child in a superproject whose build or tests need its submodules (for example the CD repo with `neuromod` and `common`) cannot work effectively. If the child runs `git submodule update --init`, it gets private clones in the checkout module store (`git rev-parse --git-path modules`), fetched from the `.gitmodules` URL; submodule commits stay only there, and `oh worktree remove` refuses that checkout (commit 476483b).
