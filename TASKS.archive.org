@@ -6186,3 +6186,61 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 
 Here's another one that's getting some buzz recently:
 https://github.com/TencentCloud/TencentDB-Agent-Memory/blob/feat/server_team/INSTALL.md
+
+** DONE emacsclient extension: honour documented EMACSCLIENT_TIMEOUT :emacs:
+CLOSED: [2026-11-18 Wed 23:06]
+:PROPERTIES:
+:CUSTOM_ID: 4f48ad9c-f060-4406-877f-c53dbdd076b3
+:CREATED: [2026-11-17 Tue 11:32]
+:STARTED: [2026-11-18 Wed 23:03]
+:ARCHIVED: [2026-11-18 Wed 23:06]
+:ARCHIVE_OLPATH: Fixes
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 11:32]
+- State "STARTED" from "TODO" [2026-11-18 Wed 23:03]
+- State "DONE" from "STARTED" [2026-11-18 Wed 23:06]
+:END:
+pi/extensions/emacsclient/README.md documents `EMACSCLIENT_TIMEOUT` (example 30000 ms), but no code under pi/extensions/emacsclient/ reads it: `emacsclient.ts` defaults `options.timeout ?? 10000`, and the `emacs_eval` path in `index.ts` passes no timeout. Found during the 2026-11-17 LSP-alternatives research (Emacs/eglot route). Either read the variable or remove it from the README.
+
+Outcome [2026-11-18 Wed]: the extension reads `EMACSCLIENT_TIMEOUT` (`timeoutFromEnv` in `emacsclient.ts`, used by `getOptions` in `index.ts`); a value that is not a positive integer keeps the 10 s default. The new Pi integration test also found that a call killed by the timeout returned success with result `0`: `pi.exec` reports a killed process as `code: 0, killed: true`. `emacsEval` now reports it as a timeout, and the server probe treats it as a failure. Tests: a hung fake emacsclient fails after about 1 s with `EMACSCLIENT_TIMEOUT=1000`, and after about 10 s without it (control); `pi/extensions/emacsclient/test.sh` passes.
+
+** DONE herdr-app quota widget: recover from a refresh that never settles :herdr_app:
+CLOSED: [2026-11-18 Wed 23:07]
+:PROPERTIES:
+:CUSTOM_ID: d63318d4-40ae-4ffd-93a1-a854a06db0f2
+:CREATED: [2026-11-17 Tue 12:52]
+:STARTED: [2026-11-18 Wed 23:06]
+:ARCHIVED: [2026-11-18 Wed 23:07]
+:ARCHIVE_OLPATH: Fixes
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 12:52]
+- State "STARTED" from "TODO" [2026-11-18 Wed 23:06]
+- State "DONE" from "STARTED" [2026-11-18 Wed 23:07]
+:END:
+On 2026-11-17 the herdr-orch quota widget showed "Quota unavailable" from about 11:25: `~/.config/herdr-app/shared.json` key `herdr-orch.quota` kept `running: true` with `startedAt` 11:21:35 and was not written again. `oh usage --format json` worked (exit 0, 0.28 s, output accepted by `parseQuota`). Touching `herdr-app/mods/herdr-orch/main.js` (hot reload) recovered it at once.
+- Mechanism :: `coordinator().refresh()` in `herdr-app/mods/herdr-orch/quota-state.js` returns the in-flight `pending` promise and clears it only in its `finally`. If that promise never settles, every later refresh (60 s timer and `herdr-orch.refresh` command) returns the dead promise, so the widget never recovers.
+- Cause of the unsettled promise :: not established. herdr-app 0.1.15 `exec` does honour its `timeout` (a probe mod saw `sleep 8` with `timeout: 1500` rejected after 1,506 ms). Open hypotheses: herdr-app dropped the `exec` result (for example after task cancellation; 11:21 coincides with closing a planner tab), or the copy timer and command loop stopped while its render stayed visible.
+- Fix :: record when `pending` starts and discard it when it is older than about 35 s, so the next refresh starts a new command; pass an explicit `timeout` to `exec`. Add a regression test with an `exec` stub whose promise never settles.
+- Leftover :: the probe wrote a harmless `zz-exec-probe` key to `shared.json`.
+
+Outcome [2026-11-18 Wed]: implemented the planned fix in `coordinator` (`herdr-app/mods/herdr-orch/quota-state.js`). `exec` gets `timeout: EXEC_TIMEOUT` (30 s). A refresh still unsettled after `ABANDON` (35 s) is dropped on the next refresh, which starts a new command; a generation check ignores the late writes of the dropped run, and its `finally` no longer clears the newer run. Regression test in `herdr-app/tests/quota-state.test.mjs` uses an `exec` stub that never settles; it fails on the previous code. `bb scripts/test-herdr-app.bb` passes (84 pass, 2 skipped, 0 fail). The cause of the unsettled promise is still not established. The running app loads the change only after a reload (`touch -h` on the mod symlink, see herdr-app/README.md). The `zz-exec-probe` key is left in `shared.json`.
+
+** DONE herdr-orch: headless fan-in test fails intermittently in full cli-test runs :herdr_orch:
+CLOSED: [2026-11-18 Wed 22:16]
+:PROPERTIES:
+:CUSTOM_ID: 5d58a235-4d5c-4dd9-8a89-e1e6d655f28c
+:CREATED: [2026-11-17 Tue 19:34]
+:STARTED: [2026-11-18 Wed 22:11]
+:ARCHIVED: [2026-11-18 Wed 22:16]
+:ARCHIVE_OLPATH: Fixes
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 19:34]
+- State "STARTED" from "TODO" [2026-11-18 Wed 22:11]
+- State "DONE" from "STARTED" [2026-11-18 Wed 22:16]
+:END:
+In full runs of `bb test-clojure herdr-orch.cli-test`, `headless-fan-in-captures-a-result-published-at-the-liveness-boundary` fails its control: `collect-any!` reports `{:status "pending" :reason "timeout"}` where the test expects `no-live-children`. It passes alone. Reproduced on 2026-11-17 at the working tree and on an export of 3297891, so it predates task e88e718e. Possibly related to task 64547358.
+
+Outcome [2026-11-18 Wed]: cause: the test did not pin the terminal backend. Under an hc caller (`HC_TERMINAL_ID` set), `cli/live-agents` reads the real `hc ls --all` plus `hc get` for each agent, not the stubbed `herdr/agents`. When that real read throws, liveness is unknown (`nil` index), so the control falls through to `timeout`. A run with `hc/invoke!` made to throw on `ls` reproduced the reported failure exactly (11 pass, 1 fail). Which hc read failed on 2026-11-17 is not established; a terminal in transition during the long full run is plausible. Fix: the test's `run` helper binds `backend/*context*` to the Herdr backend, as other in-process tests do. With the same injected hc failure the test passes (12 pass, 0 fail); the full `herdr-orch.cli-test` run passes (455 tests, 0 failures).
