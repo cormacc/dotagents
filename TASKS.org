@@ -262,15 +262,21 @@ On 2026-11-17 the herdr-orch quota widget showed "Quota unavailable" from about 
 - Fix :: record when `pending` starts and discard it when it is older than about 35 s, so the next refresh starts a new command; pass an explicit `timeout` to `exec`. Add a regression test with an `exec` stub whose promise never settles.
 - Leftover :: the probe wrote a harmless `zz-exec-probe` key to `shared.json`.
 
-** TODO herdr-orch: headless fan-in test fails intermittently in full cli-test runs :herdr_orch:
+** DONE herdr-orch: headless fan-in test fails intermittently in full cli-test runs :herdr_orch:
+CLOSED: [2026-11-18 Wed 22:16]
 :PROPERTIES:
 :CUSTOM_ID: 5d58a235-4d5c-4dd9-8a89-e1e6d655f28c
 :CREATED: [2026-11-17 Tue 19:34]
+:STARTED: [2026-11-18 Wed 22:11]
 :END:
 :LOGBOOK:
 - Created [2026-11-17 Tue 19:34]
+- State "STARTED" from "TODO" [2026-11-18 Wed 22:11]
+- State "DONE" from "STARTED" [2026-11-18 Wed 22:16]
 :END:
 In full runs of `bb test-clojure herdr-orch.cli-test`, `headless-fan-in-captures-a-result-published-at-the-liveness-boundary` fails its control: `collect-any!` reports `{:status "pending" :reason "timeout"}` where the test expects `no-live-children`. It passes alone. Reproduced on 2026-11-17 at the working tree and on an export of 3297891, so it predates task e88e718e. Possibly related to task 64547358.
+
+Outcome [2026-11-18 Wed]: cause: the test did not pin the terminal backend. Under an hc caller (`HC_TERMINAL_ID` set), `cli/live-agents` reads the real `hc ls --all` plus `hc get` for each agent, not the stubbed `herdr/agents`. When that real read throws, liveness is unknown (`nil` index), so the control falls through to `timeout`. A run with `hc/invoke!` made to throw on `ls` reproduced the reported failure exactly (11 pass, 1 fail). Which hc read failed on 2026-11-17 is not established; a terminal in transition during the long full run is plausible. Fix: the test's `run` helper binds `backend/*context*` to the Herdr backend, as other in-process tests do. With the same injected hc failure the test passes (12 pass, 0 fail); the full `herdr-orch.cli-test` run passes (455 tests, 0 failures).
 
 * Upstream issues
 

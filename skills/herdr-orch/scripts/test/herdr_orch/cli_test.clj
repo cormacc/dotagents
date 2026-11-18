@@ -9791,10 +9791,14 @@
               (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "anyrace-"})))
                     holders (atom [])]
                 (try
-                  (with-redefs [ledger/assignment-root (constantly dir)
-                                cli/parent-identity (constantly {:parent-session "s"})
-                                herdr/agents (constantly [])]
-                    (body dir (fn [] (let [h (session-holder!)] (swap! holders conj h) h))))
+                  ;; Pin the Herdr backend so the stubbed `herdr/agents` is the listing read.
+                  ;; Under an hc caller, the real `hc ls` decides liveness, and a transient
+                  ;; failure there leaves liveness unknown and turns `no-live-children` into `timeout`.
+                  (binding [backend/*context* (delay {:backend :herdr})]
+                    (with-redefs [ledger/assignment-root (constantly dir)
+                                  cli/parent-identity (constantly {:parent-session "s"})
+                                  herdr/agents (constantly [])]
+                      (body dir (fn [] (let [h (session-holder!)] (swap! holders conj h) h)))))
                   (finally (doseq [h @holders] (process/destroy-tree (:proc h)))
                            (fs/delete-tree dir)))))]
     (testing "control: a live execution with nothing published keeps the fan-in pending"
