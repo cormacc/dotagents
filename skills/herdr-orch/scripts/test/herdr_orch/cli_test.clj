@@ -146,10 +146,32 @@
                           {:gate gate :expected expected :ready ready}))
           :else (do (Thread/sleep 5) (recur)))))))
 
+;; A nil directory runs Git in the runner's cwd, and a directory inside this checkout (or
+;; the repository that encloses a copied tree) makes Git discover the real repository: a
+;; fixture command such as `checkout --detach` then mutates it. Fixtures live outside both.
+(def ^:private protected-roots
+  (->> [root (git-toplevel)] (remove nil?) (map #(fs/real-path %)) distinct vec))
+(defn- assert-fixture-dir! [dir]
+  (when (or (nil? dir) (str/blank? (str dir)) (not (fs/directory? dir)))
+    (throw (ex-info "fixture git command refused: directory is missing" {:dir dir})))
+  (let [real (fs/real-path dir)]
+    (when-let [protected (some #(when (fs/starts-with? real %) %) protected-roots)]
+      (throw (ex-info "fixture git command refused: directory is inside the repository under test"
+                      {:dir (str dir) :protected (str protected)})))))
 (defn- git-in! [dir & argv]
-  (let [{:keys [exit out err]} @(process/process (into ["git"] argv) {:dir dir :out :string :err :string})]
+  (assert-fixture-dir! dir)
+  (let [{:keys [exit out err]} @(process/process (into ["git"] argv) {:dir (str dir) :out :string :err :string})]
     (when-not (zero? exit) (throw (ex-info "fixture git command failed" {:dir dir :argv argv :err err})))
     (str/trim out)))
+(deftest fixture-git-refuses-a-missing-or-in-repository-directory
+  (let [outside (str (fs/canonicalize (fs/create-temp-dir {:prefix "orch-fixture-guard"})))]
+    (doseq [dir [nil "" (str (fs/path outside "absent")) root (str (fs/path root "skills"))]]
+      (let [error (try (git-in! dir "status") nil (catch Exception e e))]
+        (is (some? error) (str "refused: " (pr-str dir)))
+        (is (str/starts-with? (str (ex-message error)) "fixture git command refused") (str (ex-message error)))))
+    (is (str/includes? (git-in! outside "init" "-q" ".") "") "positive control: a temporary directory outside the repository is allowed")
+    (is (= outside (str (fs/canonicalize (git-in! outside "rev-parse" "--show-toplevel")))))))
+
 ;; A standalone, disposable git repository for a worktree test that needs its own source
 ;; cwd separate from `fake-env`'s own fixture repo -- e.g. the roots-apart test, and the
 ;; ordinary-worker-in-existing-checkout test, both of which stand up a second repository.
