@@ -20,7 +20,9 @@ Use this skill when:
 - a workflow had to be improvised because no current contract covered it;
 - existing configuration should have answered a question but did not.
 
-Skip one-off mistakes, taste disagreements, ordinary direction changes, correct behavior that needs no rule, session-specific facts, speculative or generic best practices, and duplicates of existing guidance.
+Skip one-off mistakes, taste disagreements, ordinary direction changes, correct behavior that needs no rule, session-specific facts, speculative or generic best practices, and duplicates of open feedback tasks.
+
+A signal that an existing rule should have prevented is a miss, not a duplicate. Log it per [#Rule text and evidence](#rule-text-and-evidence) instead of skipping it.
 
 ## Two loops
 
@@ -90,7 +92,10 @@ An agent loads an instruction file on every turn, so that file carries the reusa
 - Do not write "one session did X", "in one recorded test", incident counts, or an example list into `AGENTS.md`, a skill body, or a skill reference.
 - One illustration may stay inline when it *is* the rule, such as the verified invocation that replaces a failed one. A second illustration of the same rule is evidence and moves to the log.
 - Put the evidence in the commit body, in `<tier-root>/RETROLOG.org`, or both. Create `RETROLOG.org` at the owning tier's repository root when it is absent.
-- Group each log entry under a dated session heading, then under a sub-heading that repeats the rule's instruction-file heading, so a reader can map evidence back to the rule.
+- Group each log entry under a dated session heading, then under a sub-heading that repeats the rule's instruction-file heading, so a reader can map evidence back to the rule. When one entry supports several rules, name each heading in the sub-heading, separated by ` / `.
+- Give each new log entry a property drawer: `:KIND:` is `rule` when the evidence supports a new or changed rule, or `miss` when an existing rule did not prevent the failure; `:PREVENTS:` names the failure that the rule should prevent; `:SIGNAL_SOURCE:` names the harness and model that produced the signal, as `<harness>/<model>`. Do not add these properties to older entries.
+- Before you propose a change for a miss, search the log for the rule's heading text (`rg -n '<heading text>' <tier-root>/RETROLOG.org`) and read the matching entries. When the log already holds a miss for the rule, propose a change to the rule's mechanism or incentive, not a restated or additional rule.
+- Before an edit narrows, merges or removes an instruction-file rule, search the log in the same way and read the entries, so that the edit does not discard the failure that the rule prevents.
 - Keep evidence for a rule that was later removed or narrowed, and say so in the entry. A later capture then knows the case was already seen.
 - Link the log from an instruction file only when the rule is not actionable without the history. A bare rule needs no link.
 
@@ -140,7 +145,7 @@ The JSON report includes per-file and total before, after and delta values for n
 
 ## Verification
 
-Re-read any modified instruction file and run `ot show <id>` for each created or reused task. Confirm that no duplicate or contradictory guidance was introduced, and that the edit added the rule only, with no incident narrative, count, or example list. Confirm that each displaced or new piece of evidence is in the commit body or the log file. Then report changed paths, task UUIDs, and deferred work.
+Re-read any modified instruction file and run `ot show <id>` for each created or reused task. Confirm that no duplicate or contradictory guidance was introduced, and that the edit added the rule only, with no incident narrative, count, or example list. Confirm that each displaced or new piece of evidence is in the commit body or the log file, and that each new log entry has the `:KIND:`, `:PREVENTS:` and `:SIGNAL_SOURCE:` properties. Then report changed paths, task UUIDs, and deferred work.
 
 ## Relationship to other skills
 

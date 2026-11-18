@@ -31,7 +31,7 @@ Prioritize:
 3. **Repeated friction** -- avoidable back-and-forth, manual workaround, or undocumented convention.
 4. **Validated approach** -- an explicitly approved pattern that contradicts or fills a gap in current guidance.
 
-Keep only signals that pass `self-improvement`'s trigger gate.
+Keep only signals that pass `self-improvement`'s trigger gate. A signal that an existing rule should have prevented passes as a miss: name the rule.
 
 ## 2. Classify
 
@@ -41,8 +41,9 @@ Keep only signals that pass `self-improvement`'s trigger gate.
 | Guardrail | Candidate hard rule with verified replacement |
 | Tech debt | TODO/backlog, not an immediate rule |
 | Backlog | TODO/backlog, not an immediate rule |
+| Miss | Log entry with `:KIND: miss`; when the log already holds a miss for the rule, candidate change to the rule's mechanism or incentive |
 
-Tool/API failures are normally guardrails. Only behavioral and guardrail findings are candidates for direct instruction edits.
+Tool/API failures are normally guardrails. Only behavioral, guardrail and repeat-miss findings are candidates for direct instruction edits.
 
 ## 3. Choose the narrowest owner
 

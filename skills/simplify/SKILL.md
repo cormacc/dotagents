@@ -50,6 +50,8 @@ Reuse before you write. Use the standard library before custom code, and native 
 - A targeted probe across the inputs that matter, including edge cases such as zero, empty, a boundary, and the error path.
 - A trace that shows that the replacement is equivalent by definition.
 
+Before a finding narrows, merges or removes a rule in an instruction file (an `AGENTS.md`, a skill body or a skill reference), search the owning tier's `RETROLOG.org` for the rule's heading text and read the matching entries. Cite them in the evidence, or report the finding as an unknown when they show that the rule still prevents a failure.
+
 Before you say that code is unused, search the whole tree for references to it. Include tests, fixtures, configuration, and string or dynamic references, such as a registry key or a name built at runtime. Report the search, and a positive control that shows that the search finds a known reference.
 
 If you cannot produce that evidence, do not report a finding that claims safety. Report it as an unknown: name the candidate and the missing evidence, and stop there. This workflow exists to prevent an unverified "looks equivalent". A shorter diff that silently drops input validation, an error path, or a necessary edge case is not a finding. It is a regression.
