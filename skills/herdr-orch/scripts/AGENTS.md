@@ -27,7 +27,7 @@ The Herdr tests use fake processes and per-test `ORCH_ASSIGNMENT_ROOT` directori
 Before you cite a suite result, run it with the `HERDR_ORCH_*` variables unset, for example `env -u HERDR_ORCH_TASK bb test-clojure herdr-orch.cli-test`. A delegated child inherits those variables, and they can hide a test's dependence on them.
 
 - Resolve a wrapper's delegate to an absolute executable path before prepending wrapper directories to `PATH`.
-- Preserve the full-suite runner's outside-checkout runtime-root contract and use short runtime paths for nested Unix sockets. Keep authored runners and evidence under repository `.tmp/`.
+- Keep runtime and temporary-directory roots outside the checkout for every run, including focused runs and mutation copies: a fixture that must not be a Git repository otherwise finds the enclosing repository. Use short runtime paths for nested Unix sockets. Keep authored runners and evidence under repository `.tmp/`.
 
 ## Regenerating README listings
 

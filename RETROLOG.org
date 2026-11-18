@@ -5,6 +5,16 @@ Historic evidence for the rules in [[file:home/AGENTS.md][home/AGENTS.md]] and [
 
 The [[file:skills/retro/SKILL.md][retro]] skill appends to this file. Group each entry under the rule heading that the evidence supports, and use the rule's own instruction-file heading text so a reader can find the rule.
 
+* 2026-11-17 Tue -- herdr-orch branch retirement closeout
+
+** Splitting test
+
+Acceptance criteria for =oh worktree remove --branch= listed alternatives (refusal for =absent=, =branch-missing= or =unknown=; module protection by a retained ref or the recorded =:base=). Each cited test exercised one alternative, and the implementer's mutation checks covered only the guards it had in mind. A fresh conformance reviewer showed that mutants admitting =branch-missing= and =unknown=, removing base-only protection, dropping the diagnostic bound or deleting retained module refs all passed the cited tests. Rule added to =skills/org-plan/SKILL.md=. Record: =design/log/2026-11-17-herdr-orch-branch-retirement.org=.
+
+** Tests
+
+A child reviewer moved its test fixtures, including directories that must not be Git repositories, under repository =.tmp/=. Git discovery then found the enclosing repository and four focused assertions failed; =GIT_CEILING_DIRECTORIES= at the scratch boundary restored them. The existing bullet in =skills/herdr-orch/scripts/AGENTS.md= named only the full-suite runner, so it was widened to every run.
+
 * 2026-11-12 Thu -- trait probe backlog closure
 
 ** Replies
