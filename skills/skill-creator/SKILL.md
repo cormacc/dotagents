@@ -1,7 +1,7 @@
 ---
 name: skill-creator
 description: Create, edit, review, audit, or benchmark skills, including SKILL.md frontmatter/description tuning and diagnosing why a skill isn't triggering. Use for 'create a skill', 'review this skill', 'audit the SKILL.md', 'why isn't my skill loading', 'tune the description'.
-compatibility: Requires Python 3 and PyYAML 6.0.2 for bundled validation and packaging scripts. The description optimiser also needs the host harness CLI (pi or claude).
+compatibility: Requires Babashka for validation and Python 3 for the eval and description-optimiser scripts. The description optimiser also needs the host harness CLI (pi or claude).
 ---
 
 # Skill Creator
@@ -213,33 +213,21 @@ in [`references/description-optimiser.md`](references/description-optimiser.md).
 - **No display / headless** — pass `--static <output_path>` to
   `generate_review.py` instead of running a server.
 - **Description optimiser harness** — `scripts/run_loop.py` runs queries and the improver through the host harness's CLI: `pi` (default) in a pi session, `claude` (`--harness claude`) only in a Claude Code session or on explicit request. Skip if the host harness has no supported CLI.
-- **No `present_files` tool** — skip the packaging step.
 - **Editing an installed (read-only) skill** — copy to a writable location
-  (e.g. `/tmp/<skill-name>/`) before editing; package from the copy.
+  (e.g. `/tmp/<skill-name>/`) before editing.
   Preserve the original directory name and `name` frontmatter unchanged.
 
-## Validation and packaging
+## Validation and bundled scripts
 
-Resolve this skill's directory from the loaded `SKILL.md`; do not assume the current working directory. From a clean checkout, create an isolated environment and install the exact declared dependency:
-
-```bash
-SKILL_CREATOR_DIR=/absolute/path/to/skills/skill-creator
-SKILL_CREATOR_VENV="${TMPDIR:-/tmp}/skill-creator-venv"
-python3 -m venv "$SKILL_CREATOR_VENV"
-"$SKILL_CREATOR_VENV/bin/python" -m pip install -r "$SKILL_CREATOR_DIR/requirements.txt"
-```
-
-Every `scripts/` entry runs as a module from the skill-creator directory, because `run_loop.py`, `run_eval.py`, `improve_description.py` and `package_skill.py` import their siblings as `scripts.<name>`. Pass the target skill as an absolute path, since the working directory is the skill-creator directory rather than yours:
+Resolve this skill's directory from the loaded `SKILL.md`; do not assume the current working directory. Validate a skill's frontmatter with:
 
 ```bash
-cd "$SKILL_CREATOR_DIR"
-"$SKILL_CREATOR_VENV/bin/python" -m scripts.quick_validate <absolute/path/to/skill-folder>
-"$SKILL_CREATOR_VENV/bin/python" -m scripts.package_skill <absolute/path/to/skill-folder> [output-directory]
+bb <skill-creator-dir>/validate-skill.bb <path/to/skill-folder>
 ```
 
-`eval-viewer/generate_review.py` is the exception: it is outside `scripts/`, imports no sibling, and is invoked by path.
+It prints one message and exits non-zero when the skill is invalid. Do not use `scripts/quick_validate.py` or `scripts/package_skill.py`: they are kept byte-identical to upstream, and `.skill` packages are not used.
 
-The packager validates first and emits `<skill-name>.skill`. If `present_files` is available, present that artifact; otherwise report its path.
+The other `scripts/` entries use only the Python 3 standard library. Each runs as a module from the skill-creator directory, because `run_loop.py`, `run_eval.py` and `improve_description.py` import their siblings as `scripts.<name>`; pass target paths as absolute paths. `eval-viewer/generate_review.py` is the exception: it is outside `scripts/`, imports no sibling, and is invoked by path.
 
 ### After any bulk edit to a SKILL.md
 

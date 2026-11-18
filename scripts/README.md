@@ -124,15 +124,13 @@ bb scripts/test-check-record-identifiers.bb
 ## Skill frontmatter validation
 
 ```sh
-scripts/validate-skills.bb --python /path/to/venv/bin/python
-scripts/validate-skills.bb --python python3 --skills-dir .tmp/fixture
+scripts/validate-skills.bb
+scripts/validate-skills.bb --skills-dir .tmp/fixture
 ```
 
-Runs `skills/skill-creator/scripts/quick_validate.py` over every `skills/*/SKILL.md` in two tiers. First-party and adopted skills gate the exit code; the vendored set from [../skills/README.org#Vendored](../skills/README.org#vendored) only warns, because those bodies follow upstream rather than this repository. `--skills-dir` exists so the gate itself can be tested against a fixture. An explicit `--python` path, including a relative path such as `.tmp/venv/bin/python`, resolves against the caller's directory before the validator changes directories. A bare command such as `python3` is looked up through `PATH`.
+Runs `skills/skill-creator/validate-skill.bb` over every `skills/*/SKILL.md` in two tiers. First-party and adopted skills gate the exit code; the vendored set from [../skills/README.org#Vendored](../skills/README.org#vendored) only warns, because those bodies follow upstream rather than this repository. `--skills-dir` exists so the gate itself can be tested against a fixture; the validator always comes from this repository.
 
-Run the interpreter-path and failure-control fixtures with `bb scripts/test-validate-skills.bb`.
-
-`scripts/check.sh` calls it in place of the previous single-skill validation, which checked only `skills/code-review` and so proved the tooling ran without covering the skill set.
+`bb scripts/test-validate-skills.bb` checks each frontmatter rule against a passing and a failing fixture, and checks the two tiers. With `SKILL_CREATOR_PYTHON` set to an interpreter that has `skills/skill-creator/requirements.txt` installed, it also requires the upstream `skills/skill-creator/scripts/quick_validate.py` to give the same result and message for each fixture. Without it, the run prints a `SKIPPED parity` line. `scripts/check.sh` sets it from a clean venv.
 
 The Agent Skills specification defines exactly six frontmatter fields -- `name`, `description`, `license`, `compatibility`, `metadata` and `allowed-tools` -- and nominates `metadata` as the extension slot for client-specific data. Upstream `gitlab-cli-skills` adds top-level `openclaw:` and `requirements:` keys, so it warns on every run; that is upstream's non-conformance to fix, and the warning is the record of it. A hard error is the wrong severity for keys we do not own: Anthropic's own validator rejects the extension fields Claude Code documents (see anthropics/skills issue #394).
 

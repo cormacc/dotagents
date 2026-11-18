@@ -30,11 +30,14 @@ scripts/check-section-links.bb \
   --exclude skills/gitlab-cli-skills/ \
   --exclude skills/convert-documents-to-markdown/
 
-printf '\n==> skill-creator clean validation and packaging\n'
+printf '\n==> skill frontmatter validation\n'
+scripts/validate-skills.bb
+
+# The Babashka validator mirrors upstream quick_validate.py, which needs PyYAML. A clean
+# venv lets the parity test compare the two, so an upstream rule change is not missed.
+printf '\n==> skill validator parity with upstream quick_validate.py\n'
 python3 -m venv "$work/venv"
 "$work/venv/bin/python" -m pip install --quiet --disable-pip-version-check -r skills/skill-creator/requirements.txt
-scripts/validate-skills.bb --python "$work/venv/bin/python"
-(cd skills/skill-creator && "$work/venv/bin/python" -m scripts.package_skill "$root/skills/code-review" "$work/dist")
-test -s "$work/dist/code-review.skill"
+SKILL_CREATOR_PYTHON="$work/venv/bin/python" bb scripts/test-validate-skills.bb
 
 printf '\nAll repository checks passed.\n'

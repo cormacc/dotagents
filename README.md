@@ -177,7 +177,7 @@ The command (`scripts/check.sh`) does these steps:
 2. Runs `bb test` in an isolated temporary root. This runs the org-tasks and herdr-orch Clojure suites, the herdr-orch Pi adapter suites inside the installed Pi runtime, and the repository and skill script tests (`scripts/test-*.bb` and the `test-*.bb` scripts of individual skills).
 3. Runs each `pi/extensions/*/test.sh`.
 4. Checks that section references resolve (`scripts/check-section-links.bb`).
-5. Validates skill frontmatter with skill-creator in a clean Python venv (`scripts/validate-skills.bb`), and packages one skill as a smoke test.
+5. Validates skill frontmatter (`scripts/validate-skills.bb`), then compares skill-creator's Babashka validator with the upstream Python `quick_validate.py` in a clean Python venv (`scripts/test-validate-skills.bb`).
 
 `npm run check` requires Node/npm, `bb`, Python 3 with venv support, Emacs, pi on `PATH`, and network access for clean npm/Python dependency installs.
 

@@ -13,9 +13,12 @@
 ;; name, description, license, compatibility, metadata and allowed-tools, and
 ;; nominates `metadata` as the extension slot. Fixing that belongs upstream.
 
-(require '[babashka.fs :as fs]
-         '[babashka.process :refer [shell]]
-         '[clojure.string :as str])
+(require '[babashka.fs :as fs])
+
+;; The validator comes from this repository, not from --skills-dir, so a fixture tree
+;; is checked by the same rules as the real one.
+(load-file (str (fs/path (fs/parent (fs/absolutize *file*)) ".." "skills" "skill-creator" "validate-skill.bb")))
+(def validate-skill (resolve 'skill-creator.validate-skill/validate-skill))
 
 ;; Mirrors skills/README.org section 'Vendored'. Keep the two in step -- a skill that
 ;; leaves the vendored class must leave this set, or its frontmatter silently
@@ -26,41 +29,21 @@
 (def vendored #{"gitlab-cli-skills" "herdr"})
 
 (defn parse-args [args]
-  (loop [a args m {:skills-dir "skills" :python "python3"}]
+  (loop [a args m {:skills-dir "skills"}]
     (case (first a)
       nil m
-      "--python" (recur (drop 2 a) (assoc m :python (second a)))
       "--skills-dir" (recur (drop 2 a) (assoc m :skills-dir (second a)))
       (do (binding [*out* *err*] (println "error: unknown argument:" (first a)))
           (System/exit 2)))))
 
-(def opts
-  (update (parse-args *command-line-args*) :python
-          (fn [python]
-            (if (and python (str/includes? python "/"))
-              (str (fs/absolutize python))
-              python))))
-(def skill-creator (fs/path "skills" "skill-creator"))
-
-(when-not (fs/exists? (fs/path skill-creator "scripts" "quick_validate.py"))
-  (binding [*out* *err*] (println "error: validator not found under" (str skill-creator)))
-  (System/exit 2))
-
-;; skill-creator's scripts run as modules from its own directory, so the target
-;; skill must be absolute. See skills/skill-creator/SKILL.md section 'Validation and packaging'.
-(defn validate [dir]
-  (let [{:keys [exit out err]} (shell {:out :string :err :string :continue true
-                                      :dir (str skill-creator)}
-                                     (:python opts) "-m" "scripts.quick_validate"
-                                     (str (fs/absolutize dir)))]
-    {:ok (zero? exit) :msg (str/trim (str out err))}))
+(def opts (parse-args *command-line-args*))
 
 (let [dirs (->> (fs/list-dir (:skills-dir opts))
                 (filter #(fs/exists? (fs/path % "SKILL.md")))
                 (sort-by str))
       results (for [d dirs
                     :let [n (str (fs/file-name d))
-                          {:keys [ok msg]} (validate d)]]
+                          [ok msg] (validate-skill d)]]
                 {:name n :vendored (contains? vendored n) :ok ok :msg msg})
       failures (remove :ok results)
       gating (remove :vendored failures)]
