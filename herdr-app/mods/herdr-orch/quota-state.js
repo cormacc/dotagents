@@ -1,5 +1,7 @@
 // Adapted UI source: Lakris2407/herdr-mods 612d5e8fc8117db8a75f457b2f0ba48f50550626 (MIT).
 export const EVERY = 60000, EXPIRE = 300000;
+// The command limit passed to `exec`, and the age after which an unsettled refresh is abandoned.
+export const EXEC_TIMEOUT = 30000, ABANDON = 35000;
 export const INSTALL_URL = "https://github.com/cormacc/dotagents/blob/main/skills/herdr-orch/references/install-surfaces.md";
 export const ohPath = home => home + "/.agents/skills/herdr-orch/scripts/oh";
 const number = n => Number.isFinite(n) && n >= 0 && n <= 100;
@@ -50,33 +52,40 @@ export function snapshot(state, now) {
 }
 
 // Shared storage is the cross-copy lock: popup and status cannot start competing commands.
-// The native exec limit is 30 seconds; no UI timer pretends to cancel a process.
+// `exec` should reject after EXEC_TIMEOUT, but a result that never arrives must not wedge
+// the widget: a refresh still unsettled after ABANDON is dropped, its late writes are
+// ignored, and the next refresh starts a new command. No UI timer cancels a process.
 // `readTextFile` tells a missing `oh` apart from other start failures; without it,
 // every start failure is reported alike.
 export function coordinator({ exec, home, read, write, readTextFile, clock = Date.now }) {
-  let pending;
+  let pending, pendingAt, generation = 0;
   return {
     refresh() {
-      if (pending) return pending;
+      if (pending && clock() - pendingAt <= ABANDON) return pending;
+      pending = null;
       const previous = read() ?? {};
-      if (previous.running && clock() - previous.startedAt <= 30000) return Promise.resolve();
-      write({ ...previous, running: true, startedAt: clock() });
-      pending = Promise.resolve().then(async () => {
+      if (previous.running && clock() - previous.startedAt <= EXEC_TIMEOUT) return Promise.resolve();
+      const run = ++generation;
+      const save = value => { if (run === generation) write(value); };
+      pendingAt = clock();
+      write({ ...previous, running: true, startedAt: pendingAt });
+      const promise = Promise.resolve().then(async () => {
         try {
-          const r = await exec(ohPath(home()), ["usage", "--format", "json"], { cwd: home() });
-          if (r.code !== 0) { write({ ...read(), error: "Command failed", missing: null, running: false }); return; }
+          const r = await exec(ohPath(home()), ["usage", "--format", "json"], { cwd: home(), timeout: EXEC_TIMEOUT });
+          if (r.code !== 0) { save({ ...read(), error: "Command failed", missing: null, running: false }); return; }
           let providers;
           try { providers = parseQuota(r.stdout); }
-          catch (_) { write({ ...read(), error: "Invalid quota output", missing: null, running: false }); return; }
-          write({ providers, at: clock(), error: null, missing: null, running: false });
+          catch (_) { save({ ...read(), error: "Invalid quota output", missing: null, running: false }); return; }
+          save({ providers, at: clock(), error: null, missing: null, running: false });
         } catch (_) {
           const path = ohPath(home());
           const absent = readTextFile ? await readTextFile(path).then(text => text === null, () => false) : false;
-          write({ ...read(), running: false, missing: absent ? path : null,
+          save({ ...read(), running: false, missing: absent ? path : null,
             error: absent ? `oh not installed at ${path}. See ${INSTALL_URL}` : "Command unavailable or timed out" });
-        } finally { pending = null; }
+        } finally { if (pending === promise) pending = null; }
       });
-      return pending;
+      pending = promise;
+      return promise;
     },
     snapshot() { return snapshot(read(), clock()); },
   };

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { parseQuota, coordinator, elapsed, snapshot, visibleWindows, EVERY, EXPIRE, INSTALL_URL } from "../mods/herdr-orch/quota-state.js";
+import { parseQuota, coordinator, elapsed, snapshot, visibleWindows, EVERY, EXPIRE, INSTALL_URL, EXEC_TIMEOUT, ABANDON } from "../mods/herdr-orch/quota-state.js";
 import { window, modelWindows, namedAccounts, row, envelope, response } from "./quota-fixtures.mjs";
 
 const parse = x => parseQuota(JSON.stringify(x));
@@ -86,7 +86,7 @@ test("initial and concurrent status/popup refreshes run one HOME-scoped command"
   const second = h.other.refresh();
   await Promise.resolve();
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0], ["/fake home/.agents/skills/herdr-orch/scripts/oh", ["usage", "--format", "json"], { cwd: "/fake home" }]);
+  assert.deepEqual(calls[0], ["/fake home/.agents/skills/herdr-orch/scripts/oh", ["usage", "--format", "json"], { cwd: "/fake home", timeout: 30000 }]);
   resolve(response()); await Promise.all([first, second]);
   assert.equal(h.quota.snapshot().providers[0].windows[0].percentUsed, 25);
   assert.deepEqual(h.other.snapshot(), h.quota.snapshot());
@@ -160,6 +160,33 @@ test("a start failure names a missing home oh, and only a missing one", async ()
     readTextFile: async () => { throw Error("unreachable"); }, read: () => state, write: x => { state = x; }, clock: () => 0 });
   await q.refresh();
   assert.equal(q.snapshot().missing, null, "a failed check is not proof of absence");
+});
+
+test("a refresh that never settles is abandoned after its limit, and its late result is ignored", async () => {
+  assert.equal(EXEC_TIMEOUT, 30000); assert.equal(ABANDON, 35000);
+  const settle = [];
+  const h = harness(() => new Promise(r => { settle.push(r); }));
+  const hung = h.quota.refresh();
+  await Promise.resolve();
+  assert.equal(settle.length, 1);
+  h.advance(ABANDON);
+  assert.equal(h.quota.refresh(), hung, "not abandoned at the limit itself");
+  assert.equal(settle.length, 1);
+  h.advance(ABANDON + 1);
+  const next = h.quota.refresh();
+  assert.notEqual(next, hung);
+  await Promise.resolve();
+  assert.equal(settle.length, 2, "a new command starts");
+  settle[1](response()); await next;
+  const fresh = h.quota.snapshot();
+  assert.equal(fresh.stale, false); assert.equal(fresh.running, false);
+  settle[0]({ code: 1, stdout: "" }); await hung;
+  assert.deepEqual(h.quota.snapshot(), fresh, "the abandoned run cannot overwrite the newer result");
+  h.advance(ABANDON + 2);
+  const after = h.quota.refresh();
+  await Promise.resolve();
+  assert.equal(settle.length, 3, "the late settlement did not clear or wedge the new run");
+  settle[2](response()); await after;
 });
 
 test("a synchronous exec rejection does not wedge future refreshes", async () => {

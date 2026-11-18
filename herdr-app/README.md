@@ -69,7 +69,7 @@ Linux does not use the `ctrl-shift-` forms of the macOS keys: the app's Linux de
 
 ## Refresh and limits
 
-Quota refresh starts on display, repeats every 60 seconds, and shares an in-flight request with the Refresh action. A failed request marks the last successful snapshot stale immediately; the popup shows its age and a safe failure category. After five minutes without a successful request, it shows unavailable instead. The app's native command limit is 30 seconds. The collector reads accounts in sequence, so many slow account reads can reach this limit; the UI then reports a failed or timed-out request, not partial numeric evidence.
+Quota refresh starts on display, repeats every 60 seconds, and shares an in-flight request with the Refresh action. A failed request marks the last successful snapshot stale immediately; the popup shows its age and a safe failure category. After five minutes without a successful request, it shows unavailable instead. The mod passes the app's 30-second command limit explicitly. If a request has not settled after 35 seconds, the next refresh abandons it and starts a new command, and a late result from the abandoned request is ignored. The collector reads accounts in sequence, so many slow account reads can reach this limit; the UI then reports a failed or timed-out request, not partial numeric evidence.
 
 The system companion supports CPU and RAM on Linux and macOS; Linux GPU data requires NVIDIA. Missing GPU data does not suppress CPU and RAM. System load follows the selected machine; Activity Monitor is available only for the local macOS machine. Windows, AMD and Intel GPU collection are outside scope.
 
