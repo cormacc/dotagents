@@ -21,7 +21,7 @@ import {
   buildWriteElisp,
   escapeElispString,
 } from "./elisp.ts";
-import { emacsEval, ensureEmacsServer } from "./emacsclient.ts";
+import { emacsEval, ensureEmacsServer, timeoutFromEnv } from "./emacsclient.ts";
 import type { EmacsclientOptions } from "./emacsclient.ts";
 import { focusWindow } from "../lib/wm.ts";
 
@@ -151,6 +151,7 @@ export default function (pi: ExtensionAPI) {
       // Allow tests to override emacsclient/emacs binaries via environment variables
       binary: env?.env?.EMACSCLIENT_BINARY || "emacsclient",
       daemonBinary: env?.env?.EMACS_BINARY || "emacs",
+      timeout: timeoutFromEnv(env?.env?.EMACSCLIENT_TIMEOUT),
       exec: (cmd, args, opts) =>
         pi.exec(cmd, args, {
           signal: opts?.signal,

@@ -10,7 +10,7 @@
  */
 
 import { buildEvalElisp } from "./elisp.ts";
-import { emacsEval } from "./emacsclient.ts";
+import { emacsEval, timeoutFromEnv } from "./emacsclient.ts";
 
 let passed = 0;
 let failed = 0;
@@ -85,6 +85,33 @@ function transportRaw(payload: unknown): string {
 
     assert(result.success, `Expected success, got error: ${result.error}`);
     assert(result.data === "GNU Emacs 30.2", `Unexpected data: ${JSON.stringify(result.data)}`);
+  });
+
+  await test("timeoutFromEnv accepts only a positive integer of milliseconds", async () => {
+    assertDeepEqual(
+      ["30000", " 500 ", undefined, "", "0", "-5", "1.5", "abc", "10s", "99999999999999999999"].map(timeoutFromEnv),
+      [30000, 500, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined]
+    );
+  });
+
+  await test("emacsEval passes its timeout to exec, with a 10 s default", async () => {
+    const seen: Array<number | undefined> = [];
+    const exec = async (_cmd: string, _args: string[], opts?: { timeout?: number }) => {
+      seen.push(opts?.timeout);
+      return { stdout: transportRaw({ type: "number", value: 1 }), stderr: "", code: 0 };
+    };
+    await emacsEval("1", { exec, timeout: 30000 });
+    await emacsEval("1", { exec, timeout: timeoutFromEnv(undefined) });
+    assertDeepEqual(seen, [30000, 10000]);
+  });
+
+  await test("emacsEval reports a killed emacsclient as a timeout, not as a result", async () => {
+    const result = await emacsEval("1", {
+      exec: async () => ({ stdout: "", stderr: "", code: 0, killed: true }),
+      timeout: 1234,
+    });
+    assert(!result.success, `Expected failure, got: ${JSON.stringify(result)}`);
+    assert(result.error === "emacsclient timed out after 1234 ms (set EMACSCLIENT_TIMEOUT to change)", `Unexpected error: ${result.error}`);
   });
 
   console.log(`\n# ${passed} passed, ${failed} failed`);

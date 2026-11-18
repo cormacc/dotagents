@@ -505,6 +505,49 @@ process.exit(1);
     }
   });
 
+  // A hung emacsclient must fail after EMACSCLIENT_TIMEOUT. The unset case is the control:
+  // it waits for the 10 s default, so a fast failure there would mean the probe is broken.
+  async function hungEvalElapsed(tempDir: string, env: Record<string, string>) {
+    const script = join(tempDir, "emacsclient");
+    writeFileSync(script, `#!/usr/bin/env node\nsetTimeout(() => process.exit(0), 20000);\n`, "utf-8");
+    chmodSync(script, 0o755);
+    const llm = createDummyLLM(tempDir, {
+      "hang please": { text: "Evaluating.", tool: "emacs_eval", args: { expression: "(+ 1 2)" } },
+    });
+    const pi = startPi([llm, join(__dirname, "index.ts")], tempDir, { EMACSCLIENT_BINARY: script, ...env });
+    const events: any[] = [];
+    createInterface({ input: pi.stdout! }).on("line", (line) => {
+      try {
+        events.push(JSON.parse(line));
+      } catch {}
+    });
+    try {
+      await new Promise((r) => setTimeout(r, 500));
+      sendCommand(pi, { type: "prompt", message: "hang please" });
+      const end = await waitForEvent(events, (e) => e.type === "tool_execution_end" && e.toolName === "emacs_eval", 20000);
+      const text = end.result?.content?.find((c: any) => c.type === "text")?.text ?? "";
+      return { elapsed: end.durationMs as number, isError: end.isError === true, text };
+    } finally {
+      pi.kill();
+      await new Promise((r) => pi.on("close", r));
+    }
+  }
+
+  await runTest("EMACSCLIENT_TIMEOUT bounds a hung emacsclient call", async (tempDir) => {
+    const { elapsed, isError, text } = await hungEvalElapsed(tempDir, { EMACSCLIENT_TIMEOUT: "1000" });
+    if (!isError) return `Expected the hung call to fail, got: ${text}`;
+    if (!text.includes("timed out after 1000 ms")) return `Expected a timeout diagnostic, got: ${text}`;
+    if (elapsed > 6000) return `Expected failure near 1000 ms, took ${elapsed} ms`;
+    return true;
+  });
+
+  await runTest("control: without EMACSCLIENT_TIMEOUT a hung call waits for the 10 s default", async (tempDir) => {
+    const { elapsed, isError, text } = await hungEvalElapsed(tempDir, { EMACSCLIENT_TIMEOUT: "" });
+    if (!isError) return `Expected the hung call to fail, got: ${text}`;
+    if (elapsed < 9000) return `Expected about 10000 ms, took ${elapsed} ms`;
+    return true;
+  });
+
   console.log(`\n# ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();

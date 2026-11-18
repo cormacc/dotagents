@@ -365,8 +365,10 @@ M-: (treesit-available-p)
 
 ### Timeout errors
 
-Increase the timeout for long-running operations by setting
-`EMACSCLIENT_TIMEOUT`:
+Each emacsclient call fails after 10 seconds by default. Increase the timeout
+for long-running operations by setting `EMACSCLIENT_TIMEOUT` (milliseconds) in
+the environment that starts pi. A value that is not a positive integer keeps the
+default.
 
 ```bash
 export EMACSCLIENT_TIMEOUT=30000  # 30 seconds

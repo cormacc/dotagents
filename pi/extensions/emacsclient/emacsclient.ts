@@ -24,13 +24,23 @@ export interface EmacsclientOptions {
     cmd: string,
     args: string[],
     opts?: { signal?: AbortSignal; timeout?: number }
-  ) => Promise<{ stdout: string; stderr: string; code: number | null }>;
+  ) => Promise<{ stdout: string; stderr: string; code: number | null; killed?: boolean }>;
 }
 
 export interface EmacsclientResult {
   success: boolean;
   data?: unknown;
   error?: string;
+}
+
+/**
+ * Parse EMACSCLIENT_TIMEOUT (milliseconds). Return undefined, so that callers keep
+ * the default, when the value is absent or not a positive integer.
+ */
+export function timeoutFromEnv(value: string | undefined): number | undefined {
+  if (value === undefined || !/^\s*\d+\s*$/.test(value)) return undefined;
+  const ms = Number(value.trim());
+  return Number.isSafeInteger(ms) && ms > 0 ? ms : undefined;
 }
 
 function socketArgs(options: EmacsclientOptions): string[] {
@@ -59,7 +69,7 @@ export async function ensureEmacsServer(
         signal: options.signal,
         timeout: Math.min(timeout, 2000),
       });
-      return result.code === 0;
+      return result.code === 0 && !result.killed;
     } catch {
       return false;
     }
@@ -100,6 +110,17 @@ export async function emacsEval(
       signal: options.signal,
       timeout,
     });
+
+    // pi.exec reports a process that it killed (timeout or abort) with code 0, and its
+    // empty output would otherwise parse as a successful result.
+    if (result.killed) {
+      return {
+        success: false,
+        error: options.signal?.aborted
+          ? "emacsclient was cancelled"
+          : `emacsclient timed out after ${timeout} ms (set EMACSCLIENT_TIMEOUT to change)`,
+      };
+    }
 
     if (result.code !== 0) {
       return {
