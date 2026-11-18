@@ -24,7 +24,6 @@
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
   - [[#add-read-only-native-os-store-quota-reporting][Add read-only native OS-store quota reporting]]
   - [[#add-workspace-pinning-to-the-herdr-org-tasks-adapters][Add workspace pinning to the Herdr org-tasks adapters]]
-  - [[#herdr-orch-report-worktree-branch-integration-and-retire-integrated-branches][herdr-orch: report worktree branch integration and retire integrated branches]]
   - [[#herdr-orch-show-the-current-delegation-tree-without-sidebar-changes][herdr-orch: show the current delegation tree without sidebar changes]]
 - [[#fixes][Fixes]]
   - [[#diagnose-intermittent-herdr-app-quota-loading-stall][Diagnose intermittent herdr-app quota loading stall]]
