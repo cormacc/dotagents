@@ -1,6 +1,6 @@
 #+TITLE: pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics
 #+DATE: 2026-11-17 Tue
-#+PARENT: [[task:98dafec7-07a5-43f7-a94e-b674b8e40a0c][pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics]]
+#+PARENT: [[archive:98dafec7-07a5-43f7-a94e-b674b8e40a0c][pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:pi/extensions/lsp/README.md]]

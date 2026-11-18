@@ -15,7 +15,6 @@
 - [[#explorations][Explorations]]
   - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
   - [[#evaluate-hierarchical-agentsmd-discovery-for-pi][Evaluate hierarchical AGENTS.md discovery for Pi]]
-  - [[#decide-whether-to-trial-standalone-rpiv-btw][Decide whether to trial standalone rpiv-btw]]
   - [[#re-evaluate-opus-uptake-of-pi-context-after-the-agentsmd-rule-after-2026-11-24][Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24)]]
 - [[#improvements][Improvements]]
   - [[#claude-code-and-codex-userpromptsubmit-trait-adapters][Claude Code and Codex UserPromptSubmit trait adapters]]
@@ -33,28 +32,6 @@
   - [[#started-guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][STARTED Guard against a parallel tool batch that writes and reads the same path]]
 
 * Explorations
-
-** STARTED [#C] Explore agent memory options :org:
-:PROPERTIES:
-:CUSTOM_ID: df50e088-86c0-44be-8d0a-3a09fce88d2b
-:STARTED: [2026-11-04 Wed 00:24]
-:END:
-:LOGBOOK:
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
-:END:
-#+IMPORT: [[plan:2026-11-04-agent-memory-evaluation.org]]
-I'm enjoying the org-tasks flow for task tracking and planning, but it's not really agent memory.
-Identify a lower layer more immediately useful to the agent. This is a crowded/interesting space.
-
-A digest of available options and reviews...
-https://neoneye.github.io/agent-memory-atlas
-
-Hindsight gets some good press -- see this guy's extension: https://pi.dev/packages/@noctuid/epimetheus?name=hindsight
-
-Here's one https://github.com/elpapi42/pi-observational-memory
-
-Here's another one that's getting some buzz recently:
-https://github.com/TencentCloud/TencentDB-Agent-Memory/blob/feat/server_team/INSTALL.md
 
 ** STARTED Evaluate hierarchical AGENTS.md discovery for Pi :pi:
 :PROPERTIES:
@@ -74,19 +51,6 @@ Acceptance criteria:
 - Decide whether to add on-touch nested context discovery as a Pi extension, rely on manual pointers, or reject it.
 - Assess interaction with herdr-orch children (a child in a managed worktree has a different working directory) and with project trust, since context files load without trust.
 - Must not: install rpiv-pi.
-
-** TODO Decide whether to trial standalone rpiv-btw
-:PROPERTIES:
-:CUSTOM_ID: 86be0a2b-0097-4b18-9070-506bf85b2bfe
-:CREATED: [2026-11-04 Wed 00:56]
-:END:
-:LOGBOOK:
-- Created [2026-11-04 Wed 00:56]
-:END:
-Acceptance criteria:
-- Keep the full rpiv-pi workflow uninstalled unless separately approved.
-- Decide whether cross-session question hints within one Pi process are acceptable.
-- Approve a disposable interactive trial on the installed Pi before any persistent package/settings change.
 
 ** TODO [#C] Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24) :pi:
 :PROPERTIES:
@@ -207,25 +171,6 @@ Deadline: Atlassian removes the v1 endpoint on 2027-03-01 and then moves v1 user
 - Created [2026-11-13 Fri 21:13]
 :END:
 Follow-up to task:d20d04b8-9f0a-4ec6-956e-c535e7ae205a. `oh usage --format status` shows `exp?` for an expired access token, and `pi auth check --provider <id>` refreshes a base provider through the locked Pi auth storage. Pi 1.5.2 does not load extensions for `pi auth`, so `pi auth check --provider anthropic-1 --no-refresh --json` returns `provider_not_found` (measured 2026-11-13): no Pi CLI route refreshes a named `anthropic-<N>` account. Options: ask upstream for extension loading in `pi auth`; or a documented one-request Pi session on that account. The collector stays read-only (contract.md section Owned credential boundary). Open question kept from the original task: does Anthropic rotate refresh tokens on each refresh?
-
-** STARTED pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics :lsp:
-:PROPERTIES:
-:CUSTOM_ID: 98dafec7-07a5-43f7-a94e-b674b8e40a0c
-:CREATED: [2026-11-17 Tue 09:09]
-:STARTED: [2026-11-17 Tue 12:13]
-:END:
-:LOGBOOK:
-- Created [2026-11-17 Tue 09:09]
-- State "STARTED" from "TODO" [2026-11-17 Tue 12:13]
-:END:
-#+IMPORT: [[plan:2026-11-17-lsp-language-support.org]]
-Option 2 from the 2026-11-17 pi-lens evaluation: keep the owned `pi/extensions/lsp/` extension instead of adopting pi-lens 4.5.1, and close the gaps that the evaluation measured. Evaluation artefacts (runs, checkers, aggregate table) are in the gitignored `.tmp/pilens-eval/` directory and can disappear; the findings below are the durable record.
-- Scope 1 -- C/C++ support through clangd :: the extension rejects `language: "c"` with "Unsupported language: c" (`index.ts`, plugin lookup). pi-lens launched `clangd --background-index` from the file directory and clangd found the parent `compile_commands.json` (cd firmware: ceedling host-gcc database at the cd repository root, symlink to `build/artifacts/compile_commands.json`). clangd `references` on a struct field correctly separated `RenderableStatus.current_index` from `LedEffectSet.current_index`; grep needed manual type tracing for this.
-- Scope 2 -- file/language validation :: a model called the tool with `language: "clojure"` on `Renderable.c` and received 225 meaningless clj-kondo diagnostics. Reject a file whose extension is not in the selected plugin `fileExtensions` (see `LanguagePlugin` in `languages/index.ts`), or infer the language from the file.
-- Scope 3 -- `definition` by `query` :: returns only the first of several same-named definitions (returned `server/storage/supabase.clj` for `create-client`, which is defined in 3 namespaces). Return all matches, or say that more exist.
-- Scope 4 (optional, decide in planning) -- post-edit diagnostics :: pi-lens appended blocking compile errors to the edit tool result (for example `No member named renderable in RenderableStatus`). This did not change task outcomes in the evaluation (all arms fixed the injected errors), so weigh it against cost.
-- Constraints from the evaluation :: never auto-format (291 of 294 cd `firmware/src` files do not conform to the repository `.clang-format`; pi-lens turned a 3-line edit into a 45-line diff with reordered includes -- an IEC 62304 change-control problem). Keep the fixed prompt cost small (owned extension +632 tokens per request against +5,083 for pi-lens). Keep the tolerant start-up timeout (owned 120 s request timeout; the pi-lens 15 s initialise timeout failed 4 of 4 times for clojure-lsp under load). Avoid misleading quick-fix hints.
-- Validation projects :: `~/nmd/products/mbt/cd/firmware` (C) and `~/nmd/products/connect/portal` (Clojure).
 
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:

@@ -1,6 +1,6 @@
 #+TITLE: Explore agent memory options
 #+DATE: 2026-11-04 Wed
-#+PARENT: [[task:df50e088-86c0-44be-8d0a-3a09fce88d2b][Explore agent memory options]]
+#+PARENT: [[archive:df50e088-86c0-44be-8d0a-3a09fce88d2b][Explore agent memory options]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
 #+SPEC: [[proj:skills/self-improvement/SKILL.md]]
@@ -77,13 +77,19 @@ Spawned from the dev-agent-backlog prior-art review (parent task 5aed17ed-cfc4-4
 
 Reviewed [2026-11-04 Wed]: [[proj:design/log/2026-05-01-dev-agent-backlog-review-summary.html]] proposes separate solution/lesson capture but gives no further capture contract. [[proj:skills/self-improvement/SKILL.md]] already owns eligibility, TODO-first capture through =ot=, routing, deduplication, promotion through =org-plan=, and evidence retention in =RETROLOG.org= or commit bodies. No addition is justified by this comparison; keep the existing owners and do not add another knowledge store. This closes only the stored prior-art comparison, not the wider agent-memory exploration.
 
-** TODO Select memory goal and permitted data flow
+** CANCELLED Select memory goal and permitted data flow
+CLOSED: [2026-11-18 Wed 22:13]
 :PROPERTIES:
 :CUSTOM_ID: 36212e4b-18b5-4aee-bb19-1f864d0debc4
 :CREATED: [2026-11-04 Wed 01:42]
+:STARTED: [2026-11-18 Wed 22:13]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 01:42]
+- State "STARTED" from "TODO" [2026-11-18 Wed 22:13]
+- State "WAITING" from "STARTED" [2026-11-18 Wed 22:13]
+- State "DONE" from "WAITING" [2026-11-18 Wed 22:13]
+- State "CANCELLED" from "DONE" [2026-11-18 Wed 22:13]
 :END:
 Acceptance criteria:
 - Choose the memory problem before the package.
@@ -91,14 +97,20 @@ Acceptance criteria:
 - Keep org-tasks and self-improvement as their existing authorities.
 The OPEN decisions require human input before a live trial.
 
-** TODO Run the approved synthetic memory trial
+** CANCELLED Run the approved synthetic memory trial
+CLOSED: [2026-11-18 Wed 22:13]
 :PROPERTIES:
 :CUSTOM_ID: 41a3fdeb-2d21-4162-9f71-9a4e674a1305
 :BLOCKED-BY: task:36212e4b-18b5-4aee-bb19-1f864d0debc4
 :CREATED: [2026-11-04 Wed 01:42]
+:STARTED: [2026-11-18 Wed 22:13]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 01:42]
+- State "STARTED" from "TODO" [2026-11-18 Wed 22:13]
+- State "WAITING" from "STARTED" [2026-11-18 Wed 22:13]
+- State "DONE" from "WAITING" [2026-11-18 Wed 22:13]
+- State "CANCELLED" from "DONE" [2026-11-18 Wed 22:13]
 :END:
 Acceptance criteria:
 - Use an isolated Pi home at the intended runtime and a pinned candidate.

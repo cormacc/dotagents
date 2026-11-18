@@ -6066,3 +6066,123 @@ CLOSED: [2026-11-17 Tue 23:41]
 :END:
 #+IMPORT: [[plan:2026-11-17-herdr-orch-branch-retirement.org]]
 Evaluated 2026-11-17: an `oh` integration verb (fast-forward, squash or merge by strategy) gives little gain over LLM-driven Git, but integrated branches and checkouts accumulate because retirement handles only ancestor branches. Narrowed to a stateless integration report and guarded branch retirement; see the record.
+
+** CANCELLED Decide whether to trial standalone rpiv-btw
+CLOSED: [2026-11-18 Wed 21:08]
+:PROPERTIES:
+:CUSTOM_ID: 86be0a2b-0097-4b18-9070-506bf85b2bfe
+:CREATED: [2026-11-04 Wed 00:56]
+:STARTED: [2026-11-18 Wed 21:08]
+:ARCHIVED: [2026-11-18 Wed 21:08]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:56]
+- State "STARTED" from "TODO" [2026-11-18 Wed 21:08]
+- State "WAITING" from "STARTED" [2026-11-18 Wed 21:08]
+- State "DONE" from "WAITING" [2026-11-18 Wed 21:08]
+- State "CANCELLED" from "DONE" [2026-11-18 Wed 21:08]
+:END:
+Acceptance criteria:
+- Keep the full rpiv-pi workflow uninstalled unless separately approved.
+- Decide whether cross-session question hints within one Pi process are acceptable.
+- Approve a disposable interactive trial on the installed Pi before any persistent package/settings change.
+
+** DONE pi lsp extension: add C/C++ (clangd), file/language validation and optional post-edit diagnostics :lsp:
+CLOSED: [2026-11-18 Wed 21:09]
+:PROPERTIES:
+:CUSTOM_ID: 98dafec7-07a5-43f7-a94e-b674b8e40a0c
+:CREATED: [2026-11-17 Tue 09:09]
+:STARTED: [2026-11-17 Tue 12:13]
+:ARCHIVED: [2026-11-18 Wed 21:09]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 09:09]
+- State "STARTED" from "TODO" [2026-11-17 Tue 12:13]
+- State "WAITING" from "STARTED" [2026-11-18 Wed 21:09]
+- State "DONE" from "WAITING" [2026-11-18 Wed 21:09]
+:END:
+#+IMPORT: [[plan:2026-11-17-lsp-language-support.org]]
+Option 2 from the 2026-11-17 pi-lens evaluation: keep the owned `pi/extensions/lsp/` extension instead of adopting pi-lens 4.5.1, and close the gaps that the evaluation measured. Evaluation artefacts (runs, checkers, aggregate table) are in the gitignored `.tmp/pilens-eval/` directory and can disappear; the findings below are the durable record.
+- Scope 1 -- C/C++ support through clangd :: the extension rejects `language: "c"` with "Unsupported language: c" (`index.ts`, plugin lookup). pi-lens launched `clangd --background-index` from the file directory and clangd found the parent `compile_commands.json` (cd firmware: ceedling host-gcc database at the cd repository root, symlink to `build/artifacts/compile_commands.json`). clangd `references` on a struct field correctly separated `RenderableStatus.current_index` from `LedEffectSet.current_index`; grep needed manual type tracing for this.
+- Scope 2 -- file/language validation :: a model called the tool with `language: "clojure"` on `Renderable.c` and received 225 meaningless clj-kondo diagnostics. Reject a file whose extension is not in the selected plugin `fileExtensions` (see `LanguagePlugin` in `languages/index.ts`), or infer the language from the file.
+- Scope 3 -- `definition` by `query` :: returns only the first of several same-named definitions (returned `server/storage/supabase.clj` for `create-client`, which is defined in 3 namespaces). Return all matches, or say that more exist.
+- Scope 4 (optional, decide in planning) -- post-edit diagnostics :: pi-lens appended blocking compile errors to the edit tool result (for example `No member named renderable in RenderableStatus`). This did not change task outcomes in the evaluation (all arms fixed the injected errors), so weigh it against cost.
+- Constraints from the evaluation :: never auto-format (291 of 294 cd `firmware/src` files do not conform to the repository `.clang-format`; pi-lens turned a 3-line edit into a 45-line diff with reordered includes -- an IEC 62304 change-control problem). Keep the fixed prompt cost small (owned extension +632 tokens per request against +5,083 for pi-lens). Keep the tolerant start-up timeout (owned 120 s request timeout; the pi-lens 15 s initialise timeout failed 4 of 4 times for clojure-lsp under load). Avoid misleading quick-fix hints.
+- Validation projects :: `~/nmd/products/mbt/cd/firmware` (C) and `~/nmd/products/connect/portal` (Clojure).
+
+** DONE Record rule outcomes and provenance in the retro loop (SIM, arXiv 2611.18856) :skill:self_improvement:skill:retro:skill:simplify:
+CLOSED: [2026-11-18 Wed 22:10]
+:PROPERTIES:
+:CUSTOM_ID: 6a78e4e9-05e1-4660-bb39-ea47a67ad0d7
+:CREATED: [2026-11-18 Wed 21:06]
+:STARTED: [2026-11-18 Wed 21:27]
+:ARCHIVED: [2026-11-18 Wed 22:10]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-18 Wed 21:06]
+- State "STARTED" from "TODO" [2026-11-18 Wed 21:27]
+- State "DONE" from "STARTED" [2026-11-18 Wed 22:10]
+:END:
+Close three gaps between the retro/self-improvement loop and the Self-Improvement Memory (SIM) design in arXiv 2611.18856v1. The paper supports the existing split (rule in the instruction file, evidence in RETROLOG.org for the editor only). Its ablation favours a full record of rationale, predicted outcome and observed outcome over root causes alone.
+
+Desired outcome:
+1. Repeat failure is a rule miss, not a duplicate. When a retro signal matches an existing rule, log it under that rule's RETROLOG heading as a miss instead of skipping it as "duplicates of existing guidance". After a second miss, propose a change to the rule's mechanism or incentive, not a restated or additional rule. Owners: self-improvement trigger gate and Rule text and evidence; retro step 1/2.
+2. Read the rationale before you weaken a rule. Before an edit narrows, merges or removes an existing instruction-file rule, read its RETROLOG entries. Owners: self-improvement; simplify (does not reference RETROLOG.org today).
+3. Prediction and provenance in each log entry. Add two fields to each new RETROLOG entry: the failure that the rule should prevent, and the harness/model that produced the signal. This lets a default-model change trigger a review that can remove rules which only fixed an old model. Owners: self-improvement Rule text and evidence; RETROLOG.org header.
+
+Must not: put the new fields or miss records into instruction files; restructure existing RETROLOG entries.
+
+Inline plan (owner opted out of a change-record; 4 small prose edits):
+- Approach: keep the session-keyed RETROLOG layout; the rule's instruction-file heading text stays the key and `rg` is the query. New entries get a property drawer with `:KIND:` (`rule` or `miss`), `:PREVENTS:` and `:SIGNAL_SOURCE:` (harness/model). An entry that supports several rules names each in its sub-heading, separated by ` / `.
+- Rejected: rule-keyed restructure with a conversion flow; a rule registry with UUID links; per-instruction-file sidecar logs; EDN or SQLite/datascript store. Each costs a sync step on every rule edit and a reviewed conversion of six logs, for a benefit this repository cannot measure. Revisit only after a grep lookup fails on a real case.
+- Acceptance: `skills/self-improvement/SKILL.md` Trigger gate treats a signal against an existing rule as a miss, not a duplicate.
+- Acceptance: `skills/self-improvement/SKILL.md` Rule text and evidence states the three properties, the second-miss mechanism/incentive rule and the read-before-weaken grep.
+- Acceptance: `skills/retro/SKILL.md` steps 1-2 route a miss signal to a `:KIND: miss` log entry.
+- Acceptance: `skills/simplify/SKILL.md` requires the RETROLOG read before a finding narrows, merges or removes an instruction-file rule.
+- Acceptance: `RETROLOG.org` header describes the properties and the miss kind.
+- Acceptance: `scripts/check-section-links.bb` reports 0 problems and `scripts/validate-skills.bb` reports 0 gating failures.
+- Must not: add a store, registry, sidecar file or script.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-18 Wed 21:05]
+- sender: agent (owner-approved)
+
+Evidence:
+- Paper: https://arxiv.org/html/2611.18856v1 -- section 4.2 (full SIM beat root-cause-only in all settings; root-cause-only mixed, -1.82 to +2.40 points against no memory), 4.3.1 (Opus-evolved harness started below the Gemini seed in all four domains), appendix D.3 (record: predicted/fixed/missed/domain per attempt), F.3/F.6 (without SIM the optimiser reverted inherited guidance and misattributed an inherited edit). Limits: v1 preprint; repeated runs only in coding (10 pairs, +2.36, p=0.003); relies on automatic held-out scores, which this repository does not have.
+- RETROLOG.org, 2026-08-21 session, heading "Duplicates of existing rules, not re-filed": two repeat failures of home/AGENTS.md 'Verification discipline' recorded and not acted on.
+- Only skills/retro and skills/self-improvement reference RETROLOG.org; skills/simplify does not.
+- A case-sensitive grep of RETROLOG.org for claude|opus|gpt|codex returned 0 lines; provenance is not recorded.
+- Positive precedent for an observed-outcome check: task 57d782a0 (re-evaluate Opus uptake of pi-context after the AGENTS.md rule).
+
+** CANCELLED [#C] Explore agent memory options :org:
+CLOSED: [2026-11-18 Wed 22:13]
+:PROPERTIES:
+:CUSTOM_ID: df50e088-86c0-44be-8d0a-3a09fce88d2b
+:STARTED: [2026-11-04 Wed 00:24]
+:ARCHIVED: [2026-11-18 Wed 22:13]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
+- State "WAITING" from "STARTED" [2026-11-18 Wed 22:13]
+- State "DONE" from "WAITING" [2026-11-18 Wed 22:13]
+- State "CANCELLED" from "DONE" [2026-11-18 Wed 22:13]
+:END:
+#+IMPORT: [[plan:2026-11-04-agent-memory-evaluation.org]]
+I'm enjoying the org-tasks flow for task tracking and planning, but it's not really agent memory.
+Identify a lower layer more immediately useful to the agent. This is a crowded/interesting space.
+
+A digest of available options and reviews...
+https://neoneye.github.io/agent-memory-atlas
+
+Hindsight gets some good press -- see this guy's extension: https://pi.dev/packages/@noctuid/epimetheus?name=hindsight
+
+Here's one https://github.com/elpapi42/pi-observational-memory
+
+Here's another one that's getting some buzz recently:
+https://github.com/TencentCloud/TencentDB-Agent-Memory/blob/feat/server_team/INSTALL.md
