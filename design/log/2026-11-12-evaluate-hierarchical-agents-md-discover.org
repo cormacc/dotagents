@@ -2,16 +2,66 @@
 #+DATE: 2026-11-12 Thu
 #+PARENT: [[task:2ed2d031-aa15-4701-9608-2cf565ddc75e][Evaluate hierarchical AGENTS.md discovery for Pi]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Draft
-#+NO_SPEC: true
+#+STATUS: Complete
+#+SPEC: [[proj:AGENTS.md]]
 
 * Intent
 Decide how a Pi session gets the rules of a nested AGENTS.md when it works below that file: an on-touch extension, manual pointers, or nothing. Do not install rpiv-pi.
 
 * Summary
-*Level:* prototype · *Tests:* smoke · *Docs:* inline
+*Level:* MVP · *Tests:* thorough · *Docs:* README
 
-Initial research is complete (2026-11-12, installed Pi 1.5.2). Pi core declines this feature and leaves it to extensions. At least five published Pi packages implement it. rpiv-pi's implementation has defects that this repository must not copy. No decision, trial or installation has been made.
+Research is complete (2026-11-12, installed Pi 1.5.2). Pi core declines this feature and leaves it to extensions. At least five published Pi packages implement it. rpiv-pi's implementation has defects that this repository must not copy. Shipped 2026-11-19: a local Pi extension, `pi/extensions/nested-context/`, for Pi sessions only. It delivers tracked nested context files in ~read~ results and as the block reason of the first ~edit~ or ~write~. No other harness and no manual pointers.
+
+** Scope
+*** In scope
+- On-touch loading of nested context files for the built-in ~read~, ~edit~ and ~write~ tools in Pi.
+- Context files that Git tracks in the working directory's repository or in one of its submodules.
+- Removal of the manual ot pointer from the root ~AGENTS.md~, which the extension makes redundant.
+*** Out of scope
+- Claude Code, Codex and other harnesses: no ~CLAUDE.md~ stubs, no pointers.
+- ~bash~, ~ffgrep~, ~fffind~, ~lsp~, the ~emacs_*~ tools and codemode. Path extraction from a command is guesswork.
+- Context files above the working directory, which Pi already loads.
+- A system-prompt injection, which invalidates the prompt cache.
+
+** Acceptance
+Tests: `pi/extensions/nested-context/discovery.test.ts` (D) and `pi/extensions/nested-context/pi-integration.test.ts` (I), both run by `pi/extensions/nested-context/test.sh`.
+*** Core functionality
+- [X] A ~read~ of a file below a directory with a nested context file returns the file content followed by that context file, on the first touch in a session. → test:I `a new session keeps its own delivery record`
+- [X] The first ~edit~ or ~write~ to such a file is blocked, and the block reason contains the context file. → test:I `the first write is blocked`
+- [X] A repeated ~edit~ or ~write~ to that file runs. → test:I `the first write is blocked`
+- [X] A second touch under the same directory in the same session adds nothing. → test:I `a later read in the same session adds nothing`
+- [X] After ~session_compact~, the next touch delivers the context file again. → test:I `after compaction`
+- [X] In each directory, the extension picks one file by Pi's order: ~AGENTS.override.md~, ~AGENTS.md~, ~AGENTS.MD~, ~CLAUDE.md~, ~CLAUDE.MD~. → test:D `files at several depths`, `AGENTS.MD is picked before CLAUDE.md`
+- [X] Nested files at several depths between the working directory and the touched file are all delivered, outermost first. → test:D `files at several depths`; test:I `the first write is blocked`
+*** Edge cases
+- [X] A context file that Git does not track, or that Git ignores, is not delivered. → test:D `an untracked context file`, `an ignored context file`; test:I `an untracked context file`
+- [X] A context file tracked by a repository that is not the working directory's repository or one of its submodules is not delivered (for example a clone under ~.tmp/~). → test:D `a nested clone`
+- [X] A context file tracked in a submodule of the working directory's repository is delivered. → test:D `a submodule`
+- [X] A touched path outside the working directory delivers nothing. → test:D `a path outside the working directory`
+- [X] An ~edit~ and a ~read~ of the same directory in one parallel batch deliver the context file once. → test:I `a read and an edit in one parallel batch`
+- [X] Two sessions in one Pi process keep separate delivery records. → test:I `a new session keeps its own delivery record`
+- [X] A failing ~git~ call delivers nothing and does not fail the tool call. → test:D `a failing git call returns nothing`
+*** Anti-criteria
+- [X] Must not: install rpiv-pi or a third-party nested-context package. (No package or settings change.)
+- [X] Must not: change the system prompt. (The extension registers no ~before_agent_start~ or ~context~ handler.)
+- [X] Must not: block ~read~. → test:I `a read and an edit in one parallel batch`
+
+** Shipped
+- ADDED :: `pi/extensions/nested-context/` -- discovery, hooks, README and tests.
+- MODIFIED :: `AGENTS.md` -- removed the manual pointer to `skills/org-tasks/scripts/AGENTS.md`.
+- MODIFIED :: `README.md` -- the extension is in the repository layout tree.
+
+** Decisions
+- Chose a local extension for Pi only :: it can block a write until the rules are seen, it keeps the prompt cache, and its scope rule is ours. Only Pi sessions work in this repository.
+  Rejected:
+  - Trial ~pi-agents-autoload~ 0.1.3: unreviewed, one author, one week old; an extension runs with full user permissions. Read its source as a reference only.
+  - Manual pointers and ~CLAUDE.md~ stubs: cover only this repository and only the named files; no other harness is in use here.
+  - rpiv-pi's design: it steers after the tool batch, so a write runs before the rules arrive.
+- Deliver rules in the ~read~ result, and as the block reason of the first ~edit~ or ~write~ :: both keep the prompt cache. The block guarantees that the rules arrive before the write.
+- Scope by Git tracking, not by project trust :: a tracked nested file has the same source as the root ~AGENTS.md~, which Pi loads without trust. Untracked and cloned content is the real risk, and the tracking rule excludes it.
+- The delivery record is one set per extension instance, not a map keyed by session ID :: Pi creates a new extension instance for each session (new, resume, fork, reload), so the closure already separates sessions. The defect to avoid is a module-wide set, as in rpiv-pi; the new-session test fails when the set is moved to module scope.
+- A file counts as delivered when the extension returns it in a result or a block reason :: in parallel mode, ~tool_call~ preflight runs before sibling results exist, so delivery cannot be inferred from a sibling ~read~ in the same batch.
 
 ** Findings
 - Pi 1.5.2 loads one context file per directory, from the agent directory and from the working directory up to the filesystem root. Per-directory precedence is ~AGENTS.override.md~, ~AGENTS.md~, ~AGENTS.MD~, ~CLAUDE.md~, ~CLAUDE.MD~ (~dist/core/resource-loader.js~, ~loadContextFileFromDir~ and ~loadProjectContextFiles~). Context-file discovery does not require project trust (~docs/configuration.md~ section 'Context files').
@@ -30,16 +80,88 @@ Initial research is complete (2026-11-12, installed Pi 1.5.2). Pi core declines 
 - Pi extension surface for a local implementation (~docs/extensions.md~): ~tool_result~ can append text to a result before the model sees it. ~tool_call~ can block a call. ~before_agent_start~ can add a message. ~session_compact~ marks the point where deduplication must reset.
 
 ** Risks
-- Trust: Pi loads context files without trust. On-touch injection extends the same posture to every nested file in a checkout, including vendored or cloned content below the working directory. An ignore list or a trust gate decides whether this is acceptable.
-- Cache and adherence: a system-prompt addition invalidates the prompt cache. A tool-result or user-message injection keeps the cache but can be followed less strictly.
-- Bash, ~ffgrep~, ~fffind~ and codemode access are not covered by any surveyed package. An agent that edits through bash would bypass the guard.
+- Trust: Pi loads context files without trust. On-touch injection extends the same posture to nested files. Accepted with the Git-tracking scope rule (see Decisions).
+- Adherence: rules in a tool result can be followed less strictly than rules in the system prompt. Accepted to keep the prompt cache.
+- Bypass: an agent that edits through ~bash~ or another tool is not guarded. Accepted; the README states the limit.
+- Cost: the first write under a governed directory takes one extra tool call. Accepted.
+- Size: a large nested file is delivered whole. Accepted; the two files here are 84 and 28 lines.
 
 * Plan
 
+** DONE Discover the nested context files that govern a path
+CLOSED: [2026-11-19 Thu 00:31]
+:PROPERTIES:
+:CUSTOM_ID: 8e057321-11f8-40eb-baca-713cd48668fe
+:CREATED: [2026-11-19 Thu 00:27]
+:STARTED: [2026-11-19 Thu 00:28]
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 00:27]
+- State "STARTED" from "TODO" [2026-11-19 Thu 00:28]
+- State "DONE" from "STARTED" [2026-11-19 Thu 00:31]
+:END:
+Acceptance criteria:
+- A pure function returns, for a working directory and a touched path, the governing context files outermost first, one per directory below the working directory, by Pi's order.
+- It returns nothing for a path outside the working directory.
+- A file is returned only when Git tracks it in the working directory's repository or in a submodule of it; ignored, untracked and foreign-repository files are not returned.
+- A failing ~git~ call returns nothing.
+- Unit tests cover each criterion with a fixture repository and submodule under ~.tmp/~.
+Pi's order is ~loadContextFileFromDir~ in the installed Pi ~dist/core/resource-loader.js~; walk the superproject chain with ~git rev-parse --show-superproject-working-tree~.
+
+** DONE Deliver the rules through read results and a first-write block
+CLOSED: [2026-11-19 Thu 00:34]
+:PROPERTIES:
+:CUSTOM_ID: c7de5a07-efd1-4ee1-9b00-a7fbbd76deb6
+:CREATED: [2026-11-19 Thu 00:27]
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 00:27]
+- State "DONE" from "TODO" [2026-11-19 Thu 00:34]
+:END:
+Acceptance criteria:
+- ~tool_result~ for ~read~ appends each undelivered governing file to the result content.
+- ~tool_call~ for ~edit~ and ~write~ returns ~{ block: true, reason }~ with each undelivered governing file, and lets the call run when none is undelivered.
+- The delivery record lives in the extension instance and is cleared on ~session_compact~.
+- A Pi RPC integration test with a scripted fake model covers the Core functionality and Edge cases criteria in ~** Acceptance~ that need a live session.
+- Must not: change the system prompt or block ~read~.
+RPC harness: ~pi/extensions/test/support/rpc.ts~; pattern: ~pi/extensions/emacsclient/pi-integration.test.ts~.
+
+** DONE Document the extension and drop the manual pointer
+CLOSED: [2026-11-19 Thu 00:35]
+:PROPERTIES:
+:CUSTOM_ID: 32081191-37bb-4699-8d20-f91faebf4e8f
+:CREATED: [2026-11-19 Thu 00:27]
+:STARTED: [2026-11-19 Thu 00:34]
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 00:27]
+- State "STARTED" from "TODO" [2026-11-19 Thu 00:34]
+- State "DONE" from "STARTED" [2026-11-19 Thu 00:35]
+:END:
+Acceptance criteria:
+- ~pi/extensions/nested-context/README.md~ states the tools covered, the scope rule and the bypass limit.
+- ~pi/extensions/nested-context/test.sh~ runs both suites, and ~scripts/check.sh~ runs it through its ~pi/extensions/*/test.sh~ loop.
+- The ot pointer line is removed from the root ~AGENTS.md~.
+- A live Pi session in this repository that reads a file under ~skills/herdr-orch/scripts/src/~ receives ~skills/herdr-orch/scripts/AGENTS.md~ in the result.
+
 * Implementation
+- Each scope check has a mutation control: removing the tracking check, the repository check, the superproject walk, the working-directory exclusion or the real-path resolution fails a discovery test. Removing the compaction reset, the block, or the read append, or moving the delivery set to module scope, fails an integration test.
+- A live RPC session in this repository, with the installed extension found by auto-discovery, received `skills/herdr-orch/scripts/AGENTS.md` in a ~read~ of `skills/herdr-orch/scripts/src/herdr_orch/pi_adapter.clj`.
+- Test harness notes: a manual ~compact~ needs ~compaction.keepRecentTokens~ below the session size (the test sets 1); the compaction summary request reaches the fake model with Pi's summarization prompt as a leading ~system~ message, and the fake model must answer it with text only.
 
 * Open questions
-** OPEN Which option: trial pi-agents-autoload, write a local extension, add manual pointers, or reject?
-Manual pointers cost nothing and cover only this repository: add the herdr-orch pointer to root ~AGENTS.md~, and add ~CLAUDE.md~ links for Claude Code children. A trial of ~pi-agents-autoload~ needs a source review, a project-local install (~pi install -l~) and a session in a disposable checkout. A local extension costs an implementation and its tests, but it can cover the bash and codemode gaps.
-** OPEN Should nested files load in herdr-orch children, and with which ignore list?
-** OPEN Is trust-free loading of nested files acceptable, or must injection require project trust?
+** DECIDED Which option: trial pi-agents-autoload, write a local extension, add manual pointers, or reject?
+:PROPERTIES:
+:DECIDED: [2026-11-19 Thu 00:27]
+:END:
+Decision: a local Pi extension, for Pi only. No pointers or ~CLAUDE.md~ stubs: no Claude Code or Codex sessions work in this repository.
+** DECIDED Should nested files load in herdr-orch children, and with which ignore list?
+:PROPERTIES:
+:DECIDED: [2026-11-19 Thu 00:27]
+:END:
+Decision: yes, by the same rule as any session. A child's working directory is its worktree root, and the Git-tracking scope rule is the ignore list.
+** DECIDED Is trust-free loading of nested files acceptable, or must injection require project trust?
+:PROPERTIES:
+:DECIDED: [2026-11-19 Thu 00:27]
+:END:
+Decision: acceptable for files that Git tracks in the working directory's repository or its submodules. No trust gate.

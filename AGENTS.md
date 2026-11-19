@@ -2,8 +2,6 @@
 
 This file defines project rules for agents that work on this repository. It does not repeat rules that another file owns: portable rules are in `home/AGENTS.md`, which `agents.nix` installs as `~/.pi/agent/AGENTS.md`, and each skill under `skills/` owns its own behaviour.
 
-For `ot` CLI development, read `skills/org-tasks/scripts/AGENTS.md`.
-
 # Layout and maintenance
 
 ## herdr-orch

@@ -41,7 +41,7 @@ dotagents/
     ├── skills/               # pi-only chromium and ext-dev skills
     └── extensions/           # active pi extensions
         ├── tasks, jira, emacsclient, herdr-orch, traits
-        ├── chromium, dataspex, pi-clojure, lsp
+        ├── chromium, dataspex, pi-clojure, lsp, nested-context
         ├── ext-dev/, herdr-agent-state.ts, question.ts, systemprompt.ts
         ├── test/             # tests for the single-file extensions
         └── lib/              # shared code, not an extension entry point

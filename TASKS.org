@@ -33,16 +33,17 @@
 
 * Explorations
 
-** STARTED Evaluate hierarchical AGENTS.md discovery for Pi :pi:
+** DONE Evaluate hierarchical AGENTS.md discovery for Pi :pi:
+CLOSED: [2026-11-19 Thu 00:35]
 :PROPERTIES:
 :CUSTOM_ID: 2ed2d031-aa15-4701-9608-2cf565ddc75e
 :CREATED: [2026-11-05 Thu 14:49]
 :STARTED: [2026-11-12 Thu 11:35]
-:HANDOFF: Initial research done 2026-11-12; findings and three OPEN questions in the linked record. Next: owner picks an option (first open question).
 :END:
 :LOGBOOK:
 - Created [2026-11-05 Thu 14:49]
 - State "STARTED" from "TODO" [2026-11-12 Thu 11:35]
+- State "DONE" from "STARTED" [2026-11-19 Thu 00:35]
 :END:
 #+IMPORT: [[plan:2026-11-12-evaluate-hierarchical-agents-md-discover.org]]
 Pi loads context files from the agent directory, the working directory and its ancestors only (Pi docs/configuration.md, "Context files"). A nested AGENTS.md below the working directory is not loaded: this repository works around that by hand for skills/herdr-orch/scripts/AGENTS.md and skills/org-tasks/scripts/AGENTS.md.
@@ -51,6 +52,8 @@ Acceptance criteria:
 - Decide whether to add on-touch nested context discovery as a Pi extension, rely on manual pointers, or reject it.
 - Assess interaction with herdr-orch children (a child in a managed worktree has a different working directory) and with project trust, since context files load without trust.
 - Must not: install rpiv-pi.
+
+Outcome [2026-11-19 Thu]: shipped the local Pi extension `pi/extensions/nested-context/`. Tracked nested context files arrive in `read` results and as the block reason of the first `edit` or `write`; the manual ot pointer is gone from the root `AGENTS.md`. Details and acceptance evidence are in the linked record.
 
 ** TODO [#C] Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24) :pi:
 :PROPERTIES:
