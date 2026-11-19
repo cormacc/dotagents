@@ -1,0 +1,124 @@
+#+TITLE: Session-only task-root pinning in the Herdr app
+#+DATE: 2026-11-19 Thu
+#+PARENT: [[archive:16358bea-c42f-4342-883b-6409d14c7281][Add workspace pinning to the Herdr org-tasks adapters]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:herdr-app/README.md]]
+
+* Intent
+Keep the Herdr app task widget on a chosen task root while focus moves elsewhere. Pin supported local or remote projects without changing org-tasks or the terminal plugin.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+Delivered. One session-only pin per widget overrides focus-following across workspace switches. The pin contains the resolved task root and its machine; the mod owns the action and state.
+
+** Scope
+*** In scope
+- Widget state, command handling, display, refresh and selection in ~herdr-app/mods/org-tasks/main.js~ and ~herdr-app/mods/org-tasks/state.js~.
+- Regression fixtures and assertions in ~herdr-app/tests/org-tasks-state.test.mjs~, ~herdr-app/tests/org-tasks-ui.test.mjs~ and ~herdr-app/tests/layout-wiring.test.mjs~.
+- Pin bindings in ~herdr-app/keys.darwin.json~ and ~herdr-app/keys.linux.json~.
+- Living user contract: [[proj:herdr-app/README.md]] section 'Task widget'.
+*** Out of scope
+- Terminal-plugin pinning: deferred by the owner; not a prerequisite for this delivery.
+- Workspace-keyed pins, cross-widget synchronisation and restart persistence.
+- Changes to org-tasks parsing, task writes, root-resolution semantics or embedded TUI contracts.
+- New dependencies, configuration options or Home Manager wiring.
+
+** Acceptance
+*** Core functionality
+- [X] The proposed ~org-tasks.pin~ action toggles the pin through the mod command loop.
+- [X] Clicking the pin indicator toggles the same state.
+- [X] The indicator shows ~Pinned~ when pinned.
+- [X] The indicator shows ~Following~ when unpinned.
+- [X] The pinned location is available in the widget UI.
+- [X] macOS binds ~cmd-alt-t~ to the pin action.
+- [X] Linux binds ~ctrl-alt-p~ to the pin action.
+- [X] The key hint reflects the effective pin binding.
+- [X] Pinning captures the successful displayed model's resolved task root.
+- [X] Pinning retains the displayed project's machine identity.
+- [X] Pinned display requests use the pinned root as their working directory.
+- [X] Pinned selection launches use the pinned root as their working directory.
+- [X] Pinned remote display requests run on the pinned machine.
+- [X] Pinned remote selection launches run on the pinned machine.
+- [X] Unpinning immediately resumes current focus-following.
+- [X] A fresh widget starts unpinned after app restart.
+*** Edge cases
+- [X] Switching workspaces leaves the widget's pin unchanged.
+- [X] Focusing an agent pane leaves the pin unchanged.
+- [X] Focusing the task-browser terminal leaves the pin unchanged.
+- [X] Focusing a mod pane leaves the pin unchanged.
+- [X] Pinning is refused without a successful resolved project.
+- [X] Pinning is refused when the project has no task memory.
+- [X] A missing pinned root produces an unavailable state without clearing the pin.
+- [X] An unreachable pinned machine produces an unavailable state without clearing the pin.
+- [X] The same path on different machines remains a distinct project identity.
+- [X] A superseded request cannot replace the current project's model.
+- [X] A superseded watch cannot reload the current project.
+- [X] Unpinning clears pending focus-stability state from before the pin.
+*** Anti-criteria
+- [X] Must not: open task selection when the pin control is clicked.
+- [X] Must not: display an ancestor task root when pinned memory disappears.
+- [X] Must not: open selection in an ancestor task root when pinned memory disappears.
+- [X] Must not: change unpinned local focus-following behaviour.
+- [X] Must not: change unpinned remote focus-following behaviour.
+- [X] Must not: change terminal-plugin behaviour.
+- [X] Must not: make org-tasks workspace-aware.
+- [X] Must not: save pin state across app restarts.
+
+** Decisions
+- The owner approved app-mod-only delivery and remote pinning; these replace the parent task's earlier two-adapter and remote-rejection constraints.
+- Choose a mod action, shared by the key and clickable indicator, using the existing ~nextCommand~ loop.
+  Rejected: a TUI-owned key requires a new return channel and expands scope into org-tasks.
+- Choose one pin per widget across workspace switches, stored in memory on the view.
+  Rejected: a workspace-keyed map adds lifecycle state without a requested benefit. Persistent pins add recovery state the owner does not want.
+- Pin the displayed resolved root, not a transient foreground folder. Preserve its machine as supplied by the app; do not resolve remote paths locally.
+- Use separate pin and task-selection click regions rather than relying on an unverified event propagation API.
+- Keep a failed pin until explicit unpinning; never fall back silently to another root. Selection must also refuse unavailable or substituted pinned memory.
+
+** Risks
+- Requests can finish after a project transition. Invalidate request identity on transitions, including transitions with no replacement request, and test delayed completions across pin/unpin.
+- Watches can outlive their project. Keep the existing generation guard and test that obsolete events cannot reload a replacement project.
+- A task root can disappear while its ancestor still has memory. Test this explicitly for display and selection; do not relax the anti-criterion to simplify the adapter.
+- Builder-spy tests do not prove native click routing, key dispatch or rendering. Require disposable native Linux and macOS checks, including restart; report unavailable platform checks as validation gaps.
+- View-local state is intentionally not shared between widget instances. Mark this at the state site with a ~known-limit:~ comment whose revisit trigger is a requirement for cross-widget synchronisation.
+
+* Plan
+The implementation task owns the coherent feature change. Native validation depends on that delivery.
+
+** DONE Deliver session-only task-root pinning in the app widget
+CLOSED: [2026-11-19 Thu 08:08]
+:PROPERTIES:
+:CUSTOM_ID: 3805d54c-9aee-4f8f-88c6-27557cce331e
+:CREATED: [2026-11-19 Thu 00:54]
+:STARTED: [2026-11-19 Thu 00:58]
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 00:54]
+- State "STARTED" from "TODO" [2026-11-19 Thu 00:58]
+- State "DONE" from "STARTED" [2026-11-19 Thu 08:08]
+:END:
+
+** DONE Validate app task pinning on native Linux and macOS
+CLOSED: [2026-11-19 Thu 10:09]
+:PROPERTIES:
+:CUSTOM_ID: 88ff38c2-a61d-416f-bd0c-95f4a56df563
+:CREATED: [2026-11-19 Thu 00:54]
+:BLOCKED-BY: task:3805d54c-9aee-4f8f-88c6-27557cce331e
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 00:54]
+- State "DONE" from "TODO" [2026-11-19 Thu 10:09]
+:END:
+
+* Implementation
+- The view holds ~{root, machine}~ in memory; ~org-tasks.pin~ and the pin row click share the ~nextCommand~ loop; the pin row and the selection region are siblings.
+- Pinned selection runs a fresh preflight and launches only for the exact pinned root and memory. Review rounds found three ordering defects in this preflight, each fixed with a red-then-green regression test:
+  - A stale preflight could erase a newer display model (review 1).
+  - The round-2 fix made a background poll (~REMOTE_MS~ 5 s) silently cancel a valid selection (review 2).
+  - Two overlapping preflights: an older failure could erase the model after a newer success (closeout correctness review). Fixed with a separate ~selectionRequest~ identity.
+
+* Validation
+- Offline: ~bb scripts/test-herdr-app.bb~ exit 0 at the root after round 4: 110 tests, 108 pass, 0 fail, 2 skipped (baseline 86/84/0/2; the 2 skips are the optional ~HERDR_APP_WIRING~ checks).
+- Closeout review before round 4: conformance reviewer APPROVED (~.tmp/pin-exec/val-a/report.md~); correctness reviewer CHANGES REQUESTED for the overlapping-preflight race (~.tmp/pin-exec/val-b/report.md~). Round 4 applied the reviewer's proposed fix. A fresh reviewer then APPROVED round 4 and ruled all three earlier findings fixed (~.tmp/pin-exec/review-4/report.md~); the implementation task closed on that basis.
+- Native checks: the owner reported on 2026-11-19 that the native validation passed on Linux and on macOS. The record holds that report only, not an observation for each scenario. Agents could not run these checks: the Linux host is Wayland with no input-injection tool, and macOS was not available.

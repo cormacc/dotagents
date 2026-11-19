@@ -58,6 +58,7 @@
     "ctrl-8": "space.select:8",
     "ctrl-9": "space.select:9",
     "cmd-shift-t": "org-tasks.select",
+    "cmd-alt-t": "org-tasks.pin",
     "cmd-shift-o": "layout.toggle:org-tasks"
   },
   "terminal": {

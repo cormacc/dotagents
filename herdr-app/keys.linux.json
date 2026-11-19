@@ -59,6 +59,7 @@
     "f2": "tab.rename",
     "shift-f2": "space.rename",
     "ctrl-alt-t": "org-tasks.select",
+    "ctrl-alt-p": "org-tasks.pin",
     "ctrl-alt-shift-t": "layout.toggle:org-tasks"
   },
   "terminal": {

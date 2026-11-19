@@ -63,11 +63,12 @@ export function countParts(model) {
 
 const ACTIONS = [
   ["org-tasks.select", "select"],
+  ["org-tasks.pin", "pin"],
   ["layout.toggle:org-tasks", "show/hide"],
 ];
 
 // One key-hint line for the bound actions, read from the live key table, as
-// the Herdr TUI compact pane shows it; null when neither action is bound.
+// the Herdr TUI compact pane shows it; null when no action is bound.
 export function hint(bindings) {
   const parts = ACTIONS.flatMap(([action, text]) => {
     const b = bindings.find(k => k.action === action);
@@ -106,7 +107,18 @@ export function missingRemote(result) {
   return line ? line.slice(MISSING.length) : null;
 }
 
-export function parse(result) {
+// A pinned request must resolve exactly the captured root, never an ancestor.
+export function parse(result, pin = null) {
+  const parsed = parseResult(result);
+  if (pin && (parsed.reason || !parsed.model?.memory || parsed.model.root !== pin.root)) {
+    const where = pin.machine ? `${pin.machine}:${pin.root}` : pin.root;
+    return { reason: `Pinned tasks unavailable at ${where}: ${parsed.reason ?? "task memory missing or root changed"}` };
+  }
+  return parsed;
+}
+
+function parseResult(result) {
+  if (result.missing) return { reason: notInstalled(result.missing) };
   if (result.code !== 0) {
     let message = null;
     try { message = JSON.parse(result.stderr || result.stdout)?.error?.message; } catch { /* plain text */ }

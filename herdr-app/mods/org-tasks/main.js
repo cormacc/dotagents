@@ -4,7 +4,7 @@
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { exec, hc, home, focused, panes, spaces, theme, keys, props, settings, run, openOverlay, nextCommand, watchFolder, notify, readTextFile } from "herdr";
-import { project, settle, statusColor, countParts, hint, touches, parse, fitHeight, notInstalled, remoteOt, missingRemote } from "./state.js";
+import { project, settle, statusColor, countParts, hint, touches, parse, fitHeight, remoteOt, missingRemote } from "./state.js";
 
 // Layout props may name the local `ot` executable and the block that holds this
 // widget (default: `org-tasks`), which it sizes to its rows. The default `ot` is
@@ -51,12 +51,15 @@ async function runRemote(dir, machine) {
 
 export default class OrgTasks extends View {
   init(_props, cx) {
+    // known-limit: pins are view-local; revisit if cross-widget synchronisation is required.
+    this.pin = null;
     this.dir = null;
     this.machine = null;
     this.reason = null;
     this.model = null;
     this.generation = 0;
     this.request = 0;
+    this.selectionRequest = 0;
     this.busy = null;
     this.watched = null;
     this.follow(cx);
@@ -66,18 +69,43 @@ export default class OrgTasks extends View {
     cx.spawn(async cx => {
       for (;;) {
         const c = await nextCommand();
-        if (c === "select") await this.select();
+        if (c === "select") cx.spawn(async cx => { await this.select(); cx.notify(); });
+        if (c === "pin") this.togglePin(cx);
         cx.notify();
       }
     });
   }
 
-  // Re-read the project when the focused agent's folder changes.
+  togglePin(cx) {
+    if (!this.pin && (this.reason || !this.model?.memory || !this.model?.root)) {
+      notify({ title: "Org tasks", body: "Cannot pin without resolved task memory", level: "info" });
+      return;
+    }
+    this.pin = this.pin ? null : { root: this.model.root, machine: this.machine };
+    // Focus can move arbitrarily while pinned; no earlier candidate is relevant.
+    this.source = null;
+    this.candidate = null;
+    this.seen = 0;
+    const focus = focused();
+    const p = this.pin ? { dir: this.pin.root, machine: this.pin.machine } : project(focus, panes(), spaces());
+    this.source = focus?.pane ?? focus?.terminal ?? null;
+    this.transition(cx, p);
+  }
+
+  // Re-read focus only when it owns the project's identity.
   follow(cx) {
+    if (this.pin) return;
     const focus = focused();
     const p = project(focus, panes(), spaces());
     const next = settle(this, p, STABLE_POLLS, focus?.pane ?? focus?.terminal ?? null);
     if (!next) return;
+    this.transition(cx, p);
+  }
+
+  transition(cx, p) {
+    // Invalidate even when the new state has no folder and starts no request.
+    ++this.request;
+    this.busy = null;
     this.dir = p.dir ?? null;
     this.machine = p.machine ?? null;
     this.reason = p.reason ?? null;
@@ -89,19 +117,19 @@ export default class OrgTasks extends View {
   }
 
   load(cx) {
-    const dir = this.dir, machine = this.machine, generation = this.generation, request = ++this.request;
+    const dir = this.dir, machine = this.machine, pin = this.pin, generation = this.generation, request = ++this.request;
     this.busy = request;
     cx.spawn(async cx => {
       try {
         const result = machine ? await runRemote(dir, machine) : await runLocal(dir);
         // A later run, or a focus change, supersedes this result.
-        if (request !== this.request) return;
-        const parsed = result.missing ? { reason: notInstalled(result.missing) } : parse(result);
+        if (request !== this.request || generation !== this.generation) return;
+        const parsed = parse(result, pin);
         this.model = parsed.model ?? null;
         this.reason = parsed.reason ?? null;
         // ot resolves the project root upwards from the pane's folder, so watch
         // that root. A remote root is polled instead.
-        const root = this.model?.root;
+        const root = pin?.root ?? this.model?.root;
         if (!machine && root && root !== this.watched) {
           this.watched = root;
           this.watch(cx, root, generation);
@@ -131,10 +159,28 @@ export default class OrgTasks extends View {
       notify({ title: "Org tasks", body: this.reason ?? "No project", level: "info" });
       return;
     }
+    const dir = this.dir, machine = this.machine, pin = this.pin, generation = this.generation;
+    if (pin) {
+      // Observe the display request epoch without superseding an in-flight load.
+      const request = this.request, selectionRequest = ++this.selectionRequest;
+      // Check again at selection time: memory may disappear between refreshes.
+      const result = machine ? await runRemote(dir, machine) : await runLocal(dir);
+      if (generation !== this.generation) return;
+      const parsed = parse(result, pin);
+      if (parsed.reason) {
+        // Newer display loads and selection checks own subsequent display state.
+        if (request === this.request && selectionRequest === this.selectionRequest) {
+          this.model = null;
+          this.reason = parsed.reason;
+        }
+        notify({ title: "Org tasks", body: `Cannot select pinned tasks: ${parsed.reason}`, level: "info" });
+        return;
+      }
+    }
     // A detached terminal ends with `ot`, and the overlay closes when it ends.
-    const argv = this.machine ? remoteOt(["tui"]).flat() : [ot(), "tui"];
-    const on = this.machine ? ["--on", this.machine] : [];
-    const r = await hc(["run", "--json", "--bg", "--no-parent", "--rm", ...on, "--cwd", this.dir, "--", ...argv]);
+    const argv = machine ? remoteOt(["tui"]).flat() : [ot(), "tui"];
+    const on = machine ? ["--on", machine] : [];
+    const r = await hc(["run", "--json", "--bg", "--no-parent", "--rm", ...on, "--cwd", dir, "--", ...argv]);
     let address = null;
     try { address = JSON.parse(r.stdout)?.address; } catch { /* reported below */ }
     if (r.code !== 0 || !address) {
@@ -187,6 +233,7 @@ export default class OrgTasks extends View {
     const t = theme();
     const title = this.model?.title ?? "Tasks";
     const keyHint = hint(keys());
+    const pinnedLocation = this.pin ? (this.pin.machine ? `${this.pin.machine}:${this.pin.root}` : this.pin.root) : null;
     // The rows column keeps its natural height, so its size is what the block needs.
     // The key hint shares the title row, right-justified, so it costs no row of
     // its own and stays visible in every state. The title truncates first.
@@ -195,10 +242,16 @@ export default class OrgTasks extends View {
       .when(keyHint !== null, el => el.child(div().id("org-tasks-hint").flex_none().text_color(t.muted).child(keyHint)));
     const rows = v_flex().id("org-tasks-rows").flex_none().w_full().gap(2)
       .on_size_change(size => this.fit(size.height))
-      .child(header)
-      .children(this.lines(t));
+      .child(h_flex().id("org-tasks-pin").w_full().gap(8).text_color(t.muted)
+        .on_click(() => run("org-tasks.pin"))
+        .child(div().flex_none().child(this.pin ? "Pinned" : "Following"))
+        .when(pinnedLocation !== null, el => el.child(div().min_w(0).truncate().tooltip(pinnedLocation)
+          .child(pinnedLocation))))
+      .child(v_flex().id("org-tasks-selection").w_full().gap(2)
+        .on_click(() => run("org-tasks.select"))
+        .child(header)
+        .children(this.lines(t)));
     return v_flex().id("org-tasks").size_full().px(12).py(PAD_Y).text_size(12).overflow_hidden()
-      .on_click(() => this.select())
       .child(rows);
   }
 }

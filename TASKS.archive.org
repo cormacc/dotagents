@@ -6244,3 +6244,23 @@ CLOSED: [2026-11-18 Wed 22:16]
 In full runs of `bb test-clojure herdr-orch.cli-test`, `headless-fan-in-captures-a-result-published-at-the-liveness-boundary` fails its control: `collect-any!` reports `{:status "pending" :reason "timeout"}` where the test expects `no-live-children`. It passes alone. Reproduced on 2026-11-17 at the working tree and on an export of 3297891, so it predates task e88e718e. Possibly related to task 64547358.
 
 Outcome [2026-11-18 Wed]: cause: the test did not pin the terminal backend. Under an hc caller (`HC_TERMINAL_ID` set), `cli/live-agents` reads the real `hc ls --all` plus `hc get` for each agent, not the stubbed `herdr/agents`. When that real read throws, liveness is unknown (`nil` index), so the control falls through to `timeout`. A run with `hc/invoke!` made to throw on `ls` reproduced the reported failure exactly (11 pass, 1 fail). Which hc read failed on 2026-11-17 is not established; a terminal in transition during the long full run is plausible. Fix: the test's `run` helper binds `backend/*context*` to the Herdr backend, as other in-process tests do. With the same injected hc failure the test passes (12 pass, 0 fail); the full `herdr-orch.cli-test` run passes (455 tests, 0 failures).
+
+** DONE Add workspace pinning to the Herdr org-tasks adapters
+CLOSED: [2026-11-19 Thu 10:09]
+:PROPERTIES:
+:CUSTOM_ID: 16358bea-c42f-4342-883b-6409d14c7281
+:CREATED: [2026-11-06 Fri 08:34]
+:STARTED: [2026-11-19 Thu 00:58]
+:HANDOFF: 3805d54c DONE (offline; round-4 re-review APPROVED). Next: 88ff38c2 native validation on macOS (and Linux) after a Home Manager switch; scenarios in the record's Validation section. Then closeout and record prune.
+:ARCHIVED: [2026-11-19 Thu 10:09]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-06 Fri 08:34]
+- State "CANCELLED" from "TODO" [2026-11-13 Fri 09:45]
+- State "TODO" from "CANCELLED" [2026-11-13 Fri 09:57]
+- State "STARTED" from "TODO" [2026-11-19 Thu 00:58]
+- State "DONE" from "STARTED" [2026-11-19 Thu 10:09]
+:END:
+#+IMPORT: [[plan:2026-11-13-herdr-app-task-pinning.org]]
+Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963. Owner-approved scope on 2026-11-19: deliver pinning in the Herdr app mod only; defer terminal-plugin pinning. One session-only pin per widget spans workspace switches and retains the resolved task root plus machine identity, including supported remote roots. A mod-owned key action and clickable indicator toggle the pin; display and selection use its root as their working directory. Unpinning resumes current focus-following; restart starts unpinned. Missing task memory cannot create a pin; unavailable pinned roots retain the pin and show an error rather than silently switching roots. Org-tasks remains workspace-unaware. The accepted imported record owns detailed criteria, keys, risks and executable tasks. Related: task:6ce22583-ba34-456d-a838-58bfa7b4c044 (nested task roots). Originating record: design/log/2026-11-05-org-tasks-herdr-ui.org.

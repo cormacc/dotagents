@@ -106,6 +106,9 @@ test("hint joins only the bound actions, with their keys, on one line", () => {
   assert.equal(hint(bound), "cmd-shift-t: select / cmd-shift-o: show/hide");
   assert.equal(hint(bound.slice(1)), "cmd-shift-o: show/hide");
   assert.equal(hint([]), null);
+  assert.equal(hint([{ keys: "ctrl-alt-p", action: "org-tasks.pin" }]), "ctrl-alt-p: pin");
+  assert.equal(hint([...bound, { keys: "custom-p", action: "org-tasks.pin" }]),
+    "cmd-shift-t: select / custom-p: pin / cmd-shift-o: show/hide");
 });
 
 test("only changes to watched files reload", () => {
@@ -123,4 +126,17 @@ test("ot results parse to a model or a reason", () => {
   assert.match(parse({ code: 127, stdout: "", stderr: "spawn ot ENOENT\nmore" }).reason, /ot failed: spawn ot ENOENT$/);
   assert.match(parse({ code: 0, stdout: "not json", stderr: "" }).reason, /unreadable/);
   assert.match(parse({ code: 0, stdout: JSON.stringify({ ok: false, error: { message: "x" } }), stderr: "" }).reason, /ot failed: x/);
+});
+
+test("pinned results require memory at exactly the captured root, including remote failures", () => {
+  const pin = { root: "/a/b", machine: "vps" };
+  const result = model => ({ code: 0, stdout: JSON.stringify({ ok: true, result: model }) });
+  assert.equal(parse(result({ root: "/a/b", memory: true }), pin).model.root, "/a/b");
+  for (const r of [result({ root: "/a", memory: true }), result({ root: "/a/b", memory: false }),
+    result({ memory: true }), { code: 1, stderr: "unreachable" }, { missing: "vps:/ot" }]) {
+    const parsed = parse(r, pin);
+    assert.equal(parsed.model, undefined);
+    assert.match(parsed.reason, /^Pinned tasks unavailable at vps:\/a\/b:/);
+  }
+  assert.equal(parse(result({ root: "/a", memory: true })).model.root, "/a", "unpinned upward resolution is unchanged");
 });

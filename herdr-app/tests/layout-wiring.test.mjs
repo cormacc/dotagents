@@ -51,9 +51,20 @@ function validateWiring(value) {
 test("each platform has a key table that binds the org-tasks actions", () => {
   for (const platform of ["darwin", "linux"]) {
     const actions = Object.values(JSON.parse(readFileSync(`herdr-app/keys.${platform}.json`, "utf8")).global);
-    for (const action of ["org-tasks.select", "layout.toggle:org-tasks"])
+    for (const action of ["org-tasks.select", "org-tasks.pin", "layout.toggle:org-tasks"])
       assert.ok(actions.includes(action), `${platform}: ${action}`);
   }
+});
+
+test("platform pin chords dispatch the mod action without replacing select or app defaults", () => {
+  const darwin = JSON.parse(readFileSync("herdr-app/keys.darwin.json", "utf8")).global;
+  const linux = JSON.parse(readFileSync("herdr-app/keys.linux.json", "utf8")).global;
+  assert.equal(darwin["cmd-alt-t"], "org-tasks.pin");
+  assert.equal(linux["ctrl-alt-p"], "org-tasks.pin");
+  assert.equal(darwin["cmd-shift-t"], "org-tasks.select");
+  assert.equal(linux["ctrl-alt-t"], "org-tasks.select");
+  assert.equal(linux["ctrl-shift-t"], "tab.new");
+  assert.equal(linux["ctrl-shift-o"], "pane.split:right");
 });
 
 test("layout validator rejects missing status", () => {
