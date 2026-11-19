@@ -1,6 +1,6 @@
 #+TITLE: Evaluate hierarchical AGENTS.md discovery for Pi
 #+DATE: 2026-11-12 Thu
-#+PARENT: [[task:2ed2d031-aa15-4701-9608-2cf565ddc75e][Evaluate hierarchical AGENTS.md discovery for Pi]]
+#+PARENT: [[archive:2ed2d031-aa15-4701-9608-2cf565ddc75e][Evaluate hierarchical AGENTS.md discovery for Pi]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:AGENTS.md]]

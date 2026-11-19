@@ -6245,6 +6245,30 @@ In full runs of `bb test-clojure herdr-orch.cli-test`, `headless-fan-in-captures
 
 Outcome [2026-11-18 Wed]: cause: the test did not pin the terminal backend. Under an hc caller (`HC_TERMINAL_ID` set), `cli/live-agents` reads the real `hc ls --all` plus `hc get` for each agent, not the stubbed `herdr/agents`. When that real read throws, liveness is unknown (`nil` index), so the control falls through to `timeout`. A run with `hc/invoke!` made to throw on `ls` reproduced the reported failure exactly (11 pass, 1 fail). Which hc read failed on 2026-11-17 is not established; a terminal in transition during the long full run is plausible. Fix: the test's `run` helper binds `backend/*context*` to the Herdr backend, as other in-process tests do. With the same injected hc failure the test passes (12 pass, 0 fail); the full `herdr-orch.cli-test` run passes (455 tests, 0 failures).
 
+** DONE Evaluate hierarchical AGENTS.md discovery for Pi :pi:
+CLOSED: [2026-11-19 Thu 00:35]
+:PROPERTIES:
+:CUSTOM_ID: 2ed2d031-aa15-4701-9608-2cf565ddc75e
+:CREATED: [2026-11-05 Thu 14:49]
+:STARTED: [2026-11-12 Thu 11:35]
+:ARCHIVED: [2026-11-19 Thu 00:35]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 14:49]
+- State "STARTED" from "TODO" [2026-11-12 Thu 11:35]
+- State "DONE" from "STARTED" [2026-11-19 Thu 00:35]
+:END:
+#+IMPORT: [[plan:2026-11-12-evaluate-hierarchical-agents-md-discover.org]]
+Pi loads context files from the agent directory, the working directory and its ancestors only (Pi docs/configuration.md, "Context files"). A nested AGENTS.md below the working directory is not loaded: this repository works around that by hand for skills/herdr-orch/scripts/AGENTS.md and skills/org-tasks/scripts/AGENTS.md.
+rpiv-pi injects the nearest AGENTS.md, CLAUDE.md or .rpiv/guidance/<sub>/architecture.md at each depth when a read, edit or write tool call touches a file, once per session, as a hidden custom message; compaction defers re-injection to the next user turn. Source: rpiv-mono@46dbdfd packages/rpiv-pi/extensions/rpiv-core/guidance.ts and docs/architecture.md section "Guidance injection". Origin: [[task:95649700-252c-46d1-92fd-584f8b3b6237][rpiv absorption review]].
+Acceptance criteria:
+- Decide whether to add on-touch nested context discovery as a Pi extension, rely on manual pointers, or reject it.
+- Assess interaction with herdr-orch children (a child in a managed worktree has a different working directory) and with project trust, since context files load without trust.
+- Must not: install rpiv-pi.
+
+Outcome [2026-11-19 Thu]: shipped the local Pi extension `pi/extensions/nested-context/`. Tracked nested context files arrive in `read` results and as the block reason of the first `edit` or `write`; the manual ot pointer is gone from the root `AGENTS.md`. Details and acceptance evidence are in the linked record.
+
 ** DONE Add workspace pinning to the Herdr org-tasks adapters
 CLOSED: [2026-11-19 Thu 10:09]
 :PROPERTIES:
