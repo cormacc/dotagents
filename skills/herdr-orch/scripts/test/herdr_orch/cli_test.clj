@@ -10437,8 +10437,16 @@
     (is (empty? (filter mutating? (calls log))) "a preview mutates nothing")
     (is (zero? (ledger-count dir)))
     (is (= [] (leaked-secrets dir (:out proc) (:err proc))))
-    (testing "larger remaining fraction wins at equal rank, and the model args follow the choice"
+    (testing "the larger spare rate wins at equal rank, and the model args follow the choice"
+      ;; Fable's weekly model window has no reset time, so it counts as 7 days away; the
+      ;; fixture Codex window resets in 2030, so its rate is far smaller.
       (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 90.0 :codex-used 40})))
+      (clear-usage! dir)
+      (let [other (route-of (preview (assoc env "ORCH_ASSIGNMENT_ROOT" (str dir)) "pi-heavy"))]
+        (is (= fable (:chosen other)))
+        (is (> (:spare-rate (first (:candidates other))) (:spare-rate (second (:candidates other)))))
+        (is (< (abs (- (/ 0.1 7) (:spare-rate (first (:candidates other))))) 1e-9)))
+      (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 100.0 :codex-used 40})))
       (clear-usage! dir)
       (let [other (preview (assoc env "ORCH_ASSIGNMENT_ROOT" (str dir)) "pi-heavy")]
         (is (= astra (get-in (result other) [:result :model-route :chosen])))
@@ -10479,13 +10487,13 @@
         (is (empty? (filter mutating? (calls (:log fixture)))))))))
 
 (deftest routed-start-records-the-route-and-injects-the-chosen-canonical
-  (let [{:keys [env dir log env-file] :as fixture} (routed-fixture (usage-body {:anthropic-used 90.0 :codex-used 40}) {} heavy-persona)
+  (let [{:keys [env dir log env-file] :as fixture} (routed-fixture (usage-body {:anthropic-used 100.0 :codex-used 40}) {} heavy-persona)
         proc (call! env "task" "start" "pi-heavy" "--task" "routed")
         envelope (:result (result proc))
         entry (ledger-entry* dir (:task envelope))
         argv (vec (start-native-args log))]
     (is (zero? (:exit proc)) (:out proc))
-    (is (= astra (:chosen (:model-route envelope))) "the exhausted-ish anthropic loses on remaining fraction")
+    (is (= astra (:chosen (:model-route envelope))) "the exhausted anthropic is excluded")
     (is (= (:model-route envelope) (:model-route entry)) "envelope and ledger agree")
     (is (= {:model "heavy" :model-canonical astra :model-args ["--model" astra]}
            (select-keys entry [:model :model-canonical :model-args])))
@@ -10623,7 +10631,9 @@
            {:claude {:accounts {(str "Bearer " anthropic-secret) {:body {:five_hour {:utilization 100}}}
                                 "Bearer fixture-work" {:body {:five_hour {:utilization 10}
                                                                :seven_day_fable {:utilization 10}}}}}
-            :codex {:body {:rate_limit {:primary_window {:used_percent 90 :limit_window_seconds 18000}}}}})))
+            ;; A weekly window: with no reset time it counts as a full week away, so the
+            ;; named account's 90% weekly Fable credit has the larger spare rate.
+            :codex {:body {:rate_limit {:primary_window {:used_percent 90 :limit_window_seconds 604800}}}}})))
   fixture)
 
 (deftest direct-model-selects-a-named-account-without-changing-model
@@ -10746,6 +10756,32 @@
         (is (zero? (:exit proc)) (:out proc))
         (is (= "openai-codex" (:account route)))
         (is (not-any? #(= "anthropic-2" (:account %)) (:candidates route)))))))
+
+(deftest pi-child-receives-its-launch-weight-alias-only
+  (let [{:keys [env env-file]} (named-routing! (routed-fixture {} {} heavy-persona))
+        alias-launch (call! env "task" "start" "pi-heavy" "--task" "alias")]
+    (is (zero? (:exit alias-launch)) (:out alias-launch))
+    (is (= "heavy" (injected-env env-file "HERDR_ORCH_MODEL_ALIAS"))))
+  (let [{:keys [env env-file]} (named-routing! (routed-fixture {} {} heavy-persona))
+        direct (call! env "task" "start" "pi-heavy" "--model" "fable" "--task" "direct")]
+    (is (zero? (:exit direct)) (:out direct))
+    (is (some? (injected-env env-file "HERDR_ORCH_MODEL")) "positive control: the env file records injected variables")
+    (is (nil? (injected-env env-file "HERDR_ORCH_MODEL_ALIAS")))))
+
+(deftest inventory-refresh-precedes-usage-collection
+  (let [{:keys [env dir]} (named-routing! (routed-fixture {} {} heavy-persona))
+        path (str (fs/path dir "home/.pi/agent/auth.json"))
+        auth (json/parse-string (slurp path) true)]
+    (spit path (json/generate-string (update auth :anthropic-2 assoc :access "fixture-stale" :expires 1)))
+    (clear-usage! dir)
+    (let [proc (call! (assoc env "FAKE_PI_REFRESH" "anthropic-2=fixture-work")
+                      "task" "run" "pi-heavy" "--task" "x" "--print-prompt")
+          route (route-of proc)
+          refreshed (first (filter #(= "anthropic-2" (:account %)) (:candidates route)))]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "anthropic-2" (:account route)))
+      (is (= "ok" (:status refreshed)) "the refreshed account has fresh evidence in the same route")
+      (is (= 0.9 (:remaining refreshed))))))
 
 (deftest malformed-alias-reasoning-refuses-before-collection
   (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10}) {} heavy-persona)

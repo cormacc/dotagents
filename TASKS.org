@@ -131,15 +131,17 @@ Backlog. `ot` resolves one task root: the nearest ancestor that has a TASKS.org 
 :END:
 Deadline: Atlassian removes the v1 endpoint on 2027-03-01 and then moves v1 users to the v2 tools, which breaks our renamed calls. pi/mcp.json uses `https://mcp.atlassian.com/v1/mcp/authv2`; the live server instructions mark it deprecated and name `https://mcp.atlassian.com/v2/mcp`. Sources (read 2026-11-13): support.atlassian.com/atlassian-ai-gateway/docs/how-to-upgrade-from-atlassian-mcp-v1-to-atlassian-mcp-v2/ and .../docs/supported-tools/. Changes found: (1) v2 lists only Primary tools by default; others go through `discover` and `executeRead`/`executeWrite`/`executeDestructive`, and `?tools=all` gives a flat list. The jira extension calls tools by fixed name, so `?tools=all` is the probable choice (decide). (2) Renamed tools that we call: `addCommentToJiraIssue` -> `addOrEditJiraIssueComment`, `getTransitionsForJiraIssue` -> `listJiraIssueTransitions`, `getJiraProjectIssueTypesMetadata` -> `listJiraProjectIssueTypesMetadata` (pi/extensions/jira/tools.ts, jira.test.ts, README.md, skills/org-jira/SKILL.md, references/protocol.md); `getConfluencePage` -> `getConfluenceContent` (skills/org-jira/references/atlassian-exploration.md, exploration.test.ts). Check argument and result shapes too, not only names. Unchanged names: getAccessibleAtlassianResources, getJiraIssue, editJiraIssue, createJiraIssue, transitionJiraIssue, search (Beta, uses Rovo credits), getTeamworkGraphContext, getTeamworkGraphObject. (3) v2 is a separate OAuth resource: re-authenticate after the URL change. Acceptance: pi/mcp.json on v2; no v1 tool names in tracked files; pi/extensions/jira/test.sh passes; one live read-only check and one sandbox write check (comment, transition) pass against v2.
 
-** TODO herdr-orch: refresh an expired named Pi account on demand :herdr_orch:
+** STARTED [#B] herdr-orch: pace-based account routing with refresh and child failover :herdr_orch:
 :PROPERTIES:
-:CUSTOM_ID: 71cafded-bc30-4eea-b42f-1bf196e224aa
-:CREATED: [2026-11-13 Fri 21:13]
+:CUSTOM_ID: 3f174270-af26-4a3d-8a8c-cefe03acb18c
+:CREATED: [2026-11-19 Thu 08:43]
+:STARTED: [2026-11-19 Thu 09:01]
 :END:
 :LOGBOOK:
-- Created [2026-11-13 Fri 21:13]
+- Created [2026-11-19 Thu 08:43]
+- State "STARTED" from "TODO" [2026-11-19 Thu 09:01]
 :END:
-Follow-up to task:d20d04b8-9f0a-4ec6-956e-c535e7ae205a. `oh usage --format status` shows `exp?` for an expired access token, and `pi auth check --provider <id>` refreshes a base provider through the locked Pi auth storage. Pi 1.5.2 does not load extensions for `pi auth`, so `pi auth check --provider anthropic-1 --no-refresh --json` returns `provider_not_found` (measured 2026-11-13): no Pi CLI route refreshes a named `anthropic-<N>` account. Options: ask upstream for extension loading in `pi auth`; or a documented one-request Pi session on that account. The collector stays read-only (contract.md section Owned credential boundary). Open question kept from the original task: does Anthropic rotate refresh tokens on each refresh?
+#+IMPORT: [[plan:2026-11-19-herdr-orch-pace-routing.org]]
 
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:

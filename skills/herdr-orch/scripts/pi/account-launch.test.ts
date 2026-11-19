@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
@@ -155,4 +156,70 @@ export const tests: TestCase[] = [{ name: "installed fresh/fork/measurement load
       } finally { await fake.close(); }
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
+} }, { name: "offline inventory refreshes each expired OAuth account through Pi auth storage and omits only a failed refresh", async run() {
+  const root = mkdtempSync(join(repo, ".tmp/account-refresh-"));
+  const bodies: any[] = [];
+  // Token fixture: only the work refresh token is valid; any other refresh is refused.
+  const server = createServer((req, res) => {
+    let body = "";
+    req.on("data", d => body += d);
+    req.on("end", () => {
+      const parsed = JSON.parse(body);
+      bodies.push(parsed);
+      if (parsed.grant_type === "refresh_token" && parsed.refresh_token === "fixture-refresh-work") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ access_token: "sk-ant-oat01-refreshed", refresh_token: "fixture-refresh-work-2", expires_in: 3600 }));
+      } else {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid_grant" }));
+      }
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const agent = join(root, "agent");
+    mkdirSync(agent, { recursive: true });
+    const oauth = (access: string, refresh: string, expires: number) => ({ type: "oauth", access: `sk-ant-oat01-${access}`, refresh, expires });
+    const auth = {
+      anthropic: oauth("default", "fixture-refresh-default", 4102444800000),
+      "anthropic-1": oauth("work-expired", "fixture-refresh-work", 1),
+      "anthropic-2": oauth("revoked-expired", "fixture-refresh-revoked", 1),
+    };
+    const authPath = join(agent, "auth.json");
+    writeFileSync(authPath, JSON.stringify(auth));
+    writeFileSync(join(agent, "settings.json"), JSON.stringify({ retry: { enabled: false }, compaction: { enabled: false } }));
+    const result = join(root, "inventory.json");
+    // Pi installs its own global fetch at startup, after any --require preload, so the token
+    // endpoint redirect wraps it from an extension factory that then runs the real loader.
+    const redirected = join(root, "redirected-loader.ts");
+    writeFileSync(redirected, `import load from ${JSON.stringify(join(here, "account-loader.ts"))};
+export default (pi) => {
+  const fetch = globalThis.fetch;
+  globalThis.fetch = (input, init) => fetch(String(input?.url ?? input) === "https://platform.claude.com/v1/oauth/token" ? ${JSON.stringify(`${origin}/v1/oauth/token`)} : input, init);
+  return load(pi);
+};
+`);
+    const env = { PATH: process.env.PATH, HOME: root, TMPDIR: root, PI_CODING_AGENT_DIR: agent, PI_OFFLINE: "1",
+      HERDR_ORCH_FAKE_ORIGIN: origin, NODE_OPTIONS: `--require=${join(here, "fake-only.cjs")}`,
+      HERDR_ORCH_ADAPTER: "model-inventory", HERDR_ORCH_ADAPTER_RESULT: result };
+    await run(["--offline", "--no-session", "-ne", "-e", redirected, "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-mcp", "-p", "x"], env, root);
+    const stored = JSON.parse(readFileSync(authPath, "utf8"));
+    assert.equal(stored["anthropic-1"].access, "sk-ant-oat01-refreshed", "expired account with a valid refresh token is refreshed");
+    assert.equal(stored["anthropic-1"].refresh, "fixture-refresh-work-2");
+    assert.ok(stored["anthropic-1"].expires > Date.now(), "refreshed expiry is in the future");
+    assert.deepEqual(stored["anthropic-2"], auth["anthropic-2"], "a failed refresh leaves the credential unchanged");
+    assert.deepEqual(stored.anthropic, auth.anthropic, "a valid credential is not refreshed");
+    assert.ok(!bodies.some(b => b.refresh_token === "fixture-refresh-default"), "no refresh request for a valid credential");
+    assert.ok(bodies.some(b => b.refresh_token === "fixture-refresh-revoked"), "the revoked account was attempted (positive control)");
+    const text = readFileSync(result, "utf8");
+    const inventory = JSON.parse(text);
+    assert.equal(inventory.ok, true);
+    assert.ok(inventory.inventory.some((row: any) => row.account === "anthropic-1"));
+    for (const secret of ["sk-ant-oat01", "fixture-refresh"]) assert.ok(!text.includes(secret), `inventory carries no ${secret} token`);
+    process.stdout.write("ACCOUNT_REFRESH offline inventory refreshed the expired account; failed refresh left its credential unchanged\n");
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    rmSync(root, { recursive: true, force: true });
+  }
 } }];

@@ -24,11 +24,14 @@ export function quotaFailure(message: string): boolean {
 }
 
 /**
- * Install primary recovery and return the `/oh tier` handler, which `/oh` dispatches.
- * Delegated children still retain native account registration.
+ * Install quota recovery and return the `/oh tier` handler, which `/oh` dispatches.
+ * A delegated child recovers within its launch request: the launch weight alias that `oh`
+ * injects as HERDR_ORCH_MODEL_ALIAS, else the failed model only. It ignores tier metadata
+ * copied from a forked session and refuses `/oh tier`.
  */
 export function registerRecovery(pi: ExtensionAPI, execute: Execute): SubcommandHandler {
   const pinned = Boolean(process.env.HERDR_ORCH_TASK || process.env.HERDR_ORCH_CHILD || process.env.HERDR_ORCH_RESULT);
+  const launchAlias = pinned ? process.env.HERDR_ORCH_MODEL_ALIAS || undefined : undefined;
   let active = true, generation = 0, tier: string | undefined;
   let attempted = new Map<string, Pair>();
   let chainInventory: Set<string> | undefined;
@@ -48,7 +51,7 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
   const invalidate = () => { generation++; failure = undefined; staged = undefined; attempted = new Map(); chainInventory = undefined; };
   const retainTier = (value?: string) => { tier = value; pi.appendEntry(TIER_ENTRY, { tier: value ?? null }); };
   const restore = (ctx: ExtensionContext) => {
-    invalidate(); tier = undefined;
+    invalidate(); tier = launchAlias;
     if (pinned) return;
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type === "custom" && entry.customType === TIER_ENTRY) {
@@ -133,13 +136,14 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
     // An uncommitted stage needs no abort: dropping it leaves Pi's retry on the new selection.
     const pending = Boolean(staged?.committed || setting || failure);
     invalidate();
-    if (!pinned) retainTier();
+    // A child records no tier entry; a manual selection still narrows it to that model.
+    if (pinned) tier = undefined; else retainTier();
     if (pending && !ctx.isIdle()) void ctx.abort();
   });
   pi.on("agent_settled", () => invalidate());
   pi.on("agent_start", async (_event, ctx) => {
     const next = staged; staged = undefined;
-    if (!next || pinned) return;
+    if (!next) return;
     if (!active || next.generation !== generation || ctx.signal?.aborted) { void ctx.abort(); return; }
     try {
       const models = await inventory(ctx);
@@ -151,7 +155,7 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
     failure = undefined;
   });
   pi.on("turn_end", (event) => {
-    if (pinned || !request || request.generation !== generation || event.message.role !== "assistant") return;
+    if (!request || request.generation !== generation || event.message.role !== "assistant") return;
     if (event.message.stopReason === "error" && quotaFailure(event.message.errorMessage ?? "")) {
       // The message identifies the physical request, not a mutable UI selection.
       if (event.message.provider !== request.pair.account || pair({ provider: event.message.provider, id: event.message.model } as Model<Api>).canonical !== request.pair.canonical) return;
@@ -162,7 +166,7 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
   // retried refusal goes to the staged account: agent_start applies it before the request.
   pi.on("agent_end", async (_event, ctx) => {
     const failed = failure; failure = undefined;
-    if (pinned || setting || !failed || failed.generation !== generation) return;
+    if (setting || !failed || failed.generation !== generation) return;
     attempted.set(key(failed.pair), failed.pair);
     if (attempted.size >= 4096) {
       report(ctx, "Quota recovery exhausted: route attempt limit reached.", "warning"); return;
@@ -180,7 +184,7 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
   // message or retry budget spent). Pi's retry omits the failed attempt itself.
   pi.on("agent_before_settle", (event, ctx) => {
     const next = staged;
-    if (pinned || setting || !next || next.committed || next.generation !== generation) return;
+    if (setting || !next || next.committed || next.generation !== generation) return;
     if (ctx.hasPendingMessages()) { staged = undefined; return; }
     next.committed = true;
     return { entries: [...event.entries, { type: "context_edit" as const, targetId: next.failedId, replacement: null }], continue: true };

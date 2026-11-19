@@ -52,7 +52,8 @@ export default function fixture(outer: ExtensionAPI) {
           await resumed.prompt("resumed request");
           if (mode === "resume") { assert.deepEqual(requested, [personal, work, "lemonade"]); assert.ok(routes.every(r => r === "fixture-tier")); }
           if (mode === "direct") { assert.deepEqual(requested, [work, personal]); assert.ok(routes.every(r => r === `anthropic/${model}`)); }
-          if (mode === "child-fork") { assert.deepEqual(requested, [personal]); assert.deepEqual(routes, []); }
+          // A forked child recovers, but its copied tier does not widen it beyond the model.
+          if (mode === "child-fork") { assert.deepEqual(requested, [personal, work]); assert.ok(routes.length > 0 && routes.every(r => r === `anthropic/${model}`)); }
           ctx.ui.notify(`PASS installed session ${mode}: ${requested.join(' -> ')}`, "info");
         } finally { resumed.dispose(); rmSync(cwd, { recursive: true, force: true }); }
       }

@@ -1,0 +1,170 @@
+#+TITLE: herdr-orch: pace-based account routing with refresh and child failover
+#+DATE: 2026-11-19 Thu
+#+PARENT: [[task:3f174270-af26-4a3d-8a8c-cefe03acb18c][herdr-orch: pace-based account routing with refresh and child failover]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Review
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+
+* Intent
+Spread work across all authenticated subscription accounts so that weekly credit is not lost unused. Today an account that no session uses keeps an expired token, drops out of the routing inventory, and is never chosen. Routing must refresh such an account, prefer the account whose weekly credit is most at risk of expiring unused, and let a delegated child move to another account when it reaches a quota limit.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+All three plan tasks are implemented and tested; not yet committed. Measured cause (2026-11-19): `cli.clj` `authenticated-inventory` keeps only accounts whose credential is `"ready"`, and `quota_credentials.clj` `ready` returns `expired-credentials` when the access token has expired. In 271 ledger entries, 2 routes chose `anthropic-1`; the route of 2026-11-17 had `anthropic` as its only Anthropic candidate. When both tokens were valid, the current rule chose `anthropic-1` correctly.
+
+** Scope
+*** In scope
+- Refresh of an expired Pi account (base or `anthropic-<N>`) that has a refresh token, during the routing inventory step.
+- Pace-based order of model/account pairs inside one rank, for launch routing and primary recovery (one shared policy).
+- Quota failover in delegated Pi children.
+- The contract, extension README and skill README sections for routing, the owned credential boundary and primary recovery.
+*** Out of scope
+- Pace across ranks: rank stays the first sort key.
+- Native Claude and Codex harnesses: they keep single-account behaviour.
+- Refresh by the quota collector: it stays read-only.
+- A hard 5-hour gate.
+- Separate reserves for each window: the existing `:reserve` on the effective minimum already excludes a pair when any bounding window is at or below it.
+- Account reservations, quota polling and timers that wait for a reset.
+
+** Acceptance
+*** Core functionality
+- [X] A routed Pi launch includes an account whose access token had expired and which has a refresh token. → test:`skills/herdr-orch/scripts/pi/account-launch.test.ts` "offline inventory refreshes each expired OAuth account"
+- [X] After that refresh, the account has fresh usage evidence in the same route. → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `inventory-refresh-precedes-usage-collection`
+- [X] Inside one rank, the eligible pair with the largest weekly spare rate is chosen. → test:`skills/herdr-orch/scripts/test/herdr_orch/core_test.clj` `route-orders-a-rank-by-weekly-spare-rate`
+- [X] Weekly spare rate is the remaining fraction of the longest window that bounds the candidate's scope, divided by the time until that window resets. → test:`skills/herdr-orch/scripts/test/herdr_orch/core_test.clj` `route-orders-a-rank-by-weekly-spare-rate` "each candidate and the reason show the spare rate"
+- [X] Between pairs with equal spare rate, the pair with more session (shortest-window) remaining is chosen. → test:`skills/herdr-orch/scripts/test/herdr_orch/core_test.clj` `route-orders-a-rank-by-weekly-spare-rate`
+- [X] A lower rank number still wins over any pace score. → test:`skills/herdr-orch/scripts/test/herdr_orch/core_test.clj` `route-orders-a-rank-by-weekly-spare-rate`
+- [X] A delegated Pi child that gets a quota error continues on the same model through another eligible account. → test:`pi/extensions/herdr-orch/recovery-integration.test.ts` mode `pinned` (work -> personal)
+- [X] A child launched with a vector alias, with no other account for its model, continues on the next eligible candidate of that alias. → test:`pi/extensions/herdr-orch/recovery.test.ts` "an alias child routes within its launch alias"; the alias-rank step is the existing `select-route` path that primary recovery uses.
+- [X] A child launched with a direct model, with no other account for that model, stops with the quota error. → test:`pi/extensions/herdr-orch/recovery.test.ts` "copied tier metadata does not widen a direct child" (routes the failed model only)
+*** Edge cases
+- [ ] An expired account without a refresh token stays out of the inventory. Not tested separately: Pi's refresh then fails, which is the failed-refresh path below.
+- [X] A failed refresh leaves that account out of the inventory and does not fail the route. → test:`skills/herdr-orch/scripts/pi/account-launch.test.ts` "a failed refresh leaves the credential unchanged"; `cli_test.clj` `named-account-fork-routing-and-expired-account-exclusion`
+- [X] REVERSED 2026-11-19: "A bounding window without `resetsAt` falls back to remaining fraction for that pair, and the route reason says so." A separate fallback group made a pair lose to any paced pair, whatever its credit (it broke the existing Fable-scope fixtures, whose model window has no reset time). Replacement: a missing `resetsAt` counts as a full window away, so the pair keeps a comparable spare rate; only a pair with no window of known length falls back to remaining fraction, after paced pairs. → test:`core_test.clj` `route-orders-a-rank-by-weekly-spare-rate`
+- [X] Unknown evidence still ranks after known evidence in the same rank. → test:`core_test.clj` `route-orders-by-rank-then-known-then-remaining-then-config-order`
+- [X] A child ignores tier metadata copied from a forked parent session; only its launch alias permits a change of model. → test:`pi/extensions/herdr-orch/recovery-session-fixture.ts` mode `child-fork`
+*** Anti-criteria
+- [X] Must not: write credentials from the quota collector or from Babashka code. Pi's auth storage does the only write.
+- [X] Must not: print or record an access or refresh token in a route, ledger, preview or log. → test:`account-launch.test.ts` "inventory carries no ... token"; `cli_test.clj` `leaked-secrets` checks
+- [X] Must not: change the model of a direct-model child.
+- [X] Must not: activate `/oh tier` selection in a delegated child. → test:`recovery.test.ts` "a child records no tier"
+- [X] Must not: route an explicit named-account pin (for example `anthropic-1/<model>`). Unchanged code path; existing tests pass.
+
+** Decisions
+- Rank first, pace inside a rank :: rank expresses model preference between providers; pace only chooses between pairs of equal preference.
+  Rejected:
+  - Pace across all ranks of a tier: a lightly used account of a less preferred model would take work from the preferred model.
+- Weekly spare rate (remaining / time to reset) :: it uses credit that will expire soonest. Example: 50% left with 1 day to reset beats 80% left with 6 days to reset.
+  Rejected:
+  - Effective remaining fraction (current rule): ignores reset time.
+  - Used% minus elapsed%: does not compare windows of different lengths, for example the Codex 30-day window against a 7-day window.
+- 5-hour headroom is a tiebreaker, not a gate :: child failover recovers a child that reaches the session limit.
+  Rejected:
+  - Hard 5-hour gate for delegated launches: skips an account with spare weekly credit even for a short task.
+- Refresh in the headless Pi inventory loader (`skills/herdr-orch/scripts/pi/account-loader.ts`) :: Pi already loads the account extension there, and Pi's own auth storage does the refresh, so Pi stays the owner of refresh.
+  Rejected:
+  - Refresh in the Babashka collector: races running Pi sessions if refresh tokens rotate, and breaks the owned credential boundary.
+  - `pi auth check`: Pi 1.5.2 does not load extensions for `pi auth`, so it returns `provider_not_found` for `anthropic-<N>` (measured 2026-11-13).
+  - A one-request Pi session on the account: uses quota and adds latency to each launch.
+- Child failover follows its launch request :: same model on another account first; an alias launch can then use the alias's ranks; a direct launch never changes model. This is the rule that primary recovery and launch routing already use.
+  This reverses two earlier decisions: the out-of-scope item "Automatic in-flight child failover" in [[file:2026-multiple-subscriptions.org]], and the anti-criterion "Must not: activate primary-session automatic recovery in delegated children" in [[file:2026-pi-recovery-selection-limits.org]]. `/oh tier` stays unavailable in children.
+
+** Risks
+- A fan-out of several children reads the same cached evidence (Claude TTL 5 minutes, `usage.clj` `ttl-ms`) and chooses the same account, so they share its 5-hour limit. Accepted: child failover recovers each child that reaches the limit; see Open questions.
+- After a child fails over, the ledger `:model-canonical` and `:model-route` still show the launch account. Accepted: the ledger records the launch.
+
+** Shipped
+- `skills/herdr-orch/scripts/pi/account-loader.ts`: the `model-inventory` operation asks Pi for the auth of each OAuth provider (15 s bound each) before it writes the inventory; Pi refreshes an expired token through its locked auth storage. `--offline` does not stop the refresh (it disables only model catalogue network).
+- `cli.clj` `route-model`: the inventory loader runs before usage collection, so a refreshed account has fresh evidence.
+- `core.clj` `route`: weekly spare rate inside a rank; each candidate carries `:spare-rate`, also in the ledger `:model-route`; the reason names the rate.
+- `cli.clj` launch env: `HERDR_ORCH_MODEL_ALIAS` for a Pi child launched with a vector alias.
+- `pi/extensions/herdr-orch/recovery.ts`: delegated children recover within their launch request.
+- MODIFIED :: `skills/herdr-orch/scripts/docs/contract.md` -- sections 'Routing', 'Primary Pi recovery', the child environment table and the `exp?` note.
+- MODIFIED :: `pi/extensions/herdr-orch/README.md` -- section 'Primary tiers and quota recovery'.
+- MODIFIED :: `skills/herdr-orch/README.org` -- usage and routing paragraph; it also corrects the stale claim that a string alias or canonical ID is never routed (true only for native non-Pi kinds).
+
+** Gotchas
+- Pi installs its own global `fetch` at startup, after any `NODE_OPTIONS=--require` preload. A test that redirects an HTTPS endpoint must wrap `fetch` from an extension factory, not a preload (`account-launch.test.ts`).
+- `usage-body` fixtures in `cli_test.clj` give Codex a reset in 2030, so its spare rate is near zero; a test that needs Codex chosen must exclude the other candidate instead.
+
+* Plan
+** DONE Refresh an expired Pi account in the routing inventory loader :herdr_orch:
+CLOSED: [2026-11-19 Thu 09:06]
+:PROPERTIES:
+:CUSTOM_ID: 71cafded-bc30-4eea-b42f-1bf196e224aa
+:CREATED: [2026-11-13 Fri 21:13]
+:STARTED: [2026-11-19 Thu 09:01]
+:END:
+:LOGBOOK:
+- Created [2026-11-13 Fri 21:13]
+- State "STARTED" from "TODO" [2026-11-19 Thu 09:01]
+- State "DONE" from "STARTED" [2026-11-19 Thu 09:06]
+:END:
+Acceptance criteria:
+- First, a test against `skills/herdr-orch/scripts/pi/fake-anthropic.ts` shows whether the loader can refresh under `--offline`; the result decides the invocation.
+- The `model-inventory` operation refreshes each expired account that has a refresh token, through Pi's auth storage, before it writes the inventory.
+- `cli.clj` `authenticated-inventory` then reports the account as `"ready"`.
+- A failed refresh omits only that account.
+- Must not: write `auth.json` from Babashka, or put a token in the inventory result.
+
+Origin: task:d20d04b8-9f0a-4ec6-956e-c535e7ae205a. Open from that task: does Anthropic rotate refresh tokens on each refresh?
+
+** DONE Order accounts within a rank by weekly spare rate :herdr_orch:
+CLOSED: [2026-11-19 Thu 09:08]
+:PROPERTIES:
+:CUSTOM_ID: 7be41c7e-3423-4c1b-b6e1-736f93bafd61
+:CREATED: [2026-11-19 Thu 08:44]
+:STARTED: [2026-11-19 Thu 09:06]
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 08:44]
+- State "STARTED" from "TODO" [2026-11-19 Thu 09:06]
+- State "DONE" from "STARTED" [2026-11-19 Thu 09:08]
+:END:
+Acceptance criteria:
+- `core/route` sorts eligible pairs by rank, then known before unknown, then weekly spare rate, then session remaining, then config order.
+- The route reason and each candidate show the spare rate.
+- A pair with no `resetsAt` on its longest bounding window uses remaining fraction.
+- `oh route` and launch routing give the same choice for the same evidence.
+- `contract.md` section 'Routing' states the new order.
+
+The usage rows already carry `windows` with `windowSeconds` and `resetsAt`, and each effective scope carries `boundedBy`; `core/candidate-remaining` reads only `effectivePercentRemaining`. Tests: `core_test.clj`, `routing_test.clj`.
+
+** DONE Fail over a delegated Pi child to another account after a quota error :herdr_orch:
+CLOSED: [2026-11-19 Thu 09:17]
+:PROPERTIES:
+:CUSTOM_ID: 2c32876b-d3ad-4b8a-854f-1c12caa4a205
+:CREATED: [2026-11-19 Thu 08:44]
+:STARTED: [2026-11-19 Thu 09:08]
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 08:44]
+- State "STARTED" from "TODO" [2026-11-19 Thu 09:08]
+- State "DONE" from "STARTED" [2026-11-19 Thu 09:17]
+:END:
+Acceptance criteria:
+- In a delegated child, `recovery.ts` records a quota failure and asks the shared policy for another pair.
+- The child's request is its launch request: the alias when `oh` routed a vector alias, else the canonical model.
+- `oh` gives the child its launch alias; copied fork tier metadata is not used.
+- `/oh tier` in a child still refuses with "Delegated children keep their launch selection."
+- `contract.md` section 'Primary Pi recovery' and `pi/extensions/herdr-orch/README.md` describe child failover.
+
+The `pinned` constant in `pi/extensions/herdr-orch/recovery.ts` gates every recovery hook today. Tests: `recovery.test.ts`, `recovery-integration.test.ts`.
+
+* Implementation
+- Spare rate is remaining fraction per day: `core.clj` `spare-rate`. A due or past reset counts as one minute away. The window is the longest bounding window of known length (least remaining on a tie); session headroom is the shortest one. `:session-remaining` is internal to the sort and not exported.
+- Verification on 2026-11-19: `bb test` (1025 tests, 0 failures), `skills/herdr-orch/scripts/pi/test.sh` (4 suites, `ok`) and `pi/extensions/herdr-orch/test.sh` (exit 0). Each new test failed first against the previous code: the loader refresh test, `inventory-refresh-precedes-usage-collection` with the old `route-model` order, the spare-rate test (arity), and the child recovery unit test.
+- `scripts/check-section-links.bb` reports one problem, a stale TOC link at `TASKS.org` line 17; it is present at HEAD and not part of this change.
+
+* Open questions
+** DECIDED Should launch routing spread a fan-out across accounts?
+:PROPERTIES:
+:DECIDED: [2026-11-19 Thu 08:56]
+:END:
+Decision: no. Keep routing deterministic and rely on child failover, which is quick. Revisit if failover reports show that fan-outs regularly reach the 5-hour limit; the preferred change is then round-robin between pairs whose spare rates are within a margin, with a machine-wide launch count (the ledger is per assignment root).
+Rejected:
+- Subtract an estimated cost for each recent launch: the estimate is a guess, and a bad one moves work away from the account that pace prefers.
+- Bypass the usage cache at launch: new spend appears only after children have run, so fresh evidence does not separate a burst.

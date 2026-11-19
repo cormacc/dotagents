@@ -292,32 +292,71 @@
               scope (first (filter #(= (or quota-scope "all_models") (:scope %)) scopes))]
           (when (= "known" (:status scope)) (/ (:effectivePercentRemaining scope) 100.0)))))))
 
-(defn- annotate [evidence candidate]
+(defn- bounding-windows
+  "The candidate row's windows that bound its effective scope, when its evidence is known."
+  [evidence {:keys [provider account quota-scope] :as candidate}]
+  (when (candidate-remaining evidence candidate)
+    (let [row (first (filter #(= (or account provider) (:localProvider %)) (:providers evidence)))
+          scope (first (filter #(= (or quota-scope "all_models") (:scope %))
+                               (get-in row [:quotaSemantics :effectiveAvailability])))
+          ids (set (:boundedBy scope))]
+      (filter #(and (ids (:id %)) (pos-int? (:windowSeconds %))) (:windows row)))))
+
+(defn- tightest
+  "Among `windows` of the length that `pick` selects, the one with the least remaining."
+  [pick windows]
+  (when (seq windows)
+    (let [length (apply pick (map :windowSeconds windows))]
+      (apply min-key :percentRemaining (filter #(= length (:windowSeconds %)) windows)))))
+
+(defn- spare-rate
+  "Remaining fraction per day until the window resets. Without a parseable `resetsAt`, the
+  reset is assumed a full window away, the least urgent case. A reset that is due or past
+  counts as one minute away, so the rate stays finite."
+  [window now-ms]
+  (let [reset (some-> (:resetsAt window) (#(try (.toEpochMilli (java.time.Instant/parse %)) (catch Exception _ nil))))
+        days (if reset (/ (- reset now-ms) 86400000.0) (/ (:windowSeconds window) 86400.0))]
+    (/ (/ (:percentRemaining window) 100.0) (max (/ 1.0 1440) days))))
+
+(defn- annotate [evidence now-ms candidate]
   (let [entry (first (filter #(= (or (:account candidate) (:provider candidate)) (:localProvider %)) (:providers evidence)))
-        remaining (candidate-remaining evidence candidate)]
-    (cond-> (assoc candidate :status (if (some? remaining) :ok :unknown) :remaining remaining)
+        remaining (candidate-remaining evidence candidate)
+        windows (bounding-windows evidence candidate)
+        spare (some-> (tightest max windows) (spare-rate now-ms))
+        session (some-> (tightest min windows) :percentRemaining (/ 100.0))]
+    (cond-> (assoc candidate :status (if (some? remaining) :ok :unknown) :remaining remaining :spare-rate spare)
+      session (assoc :session-remaining session)
       (nil? remaining) (assoc :reason (or (:reason entry) "unresolved-scope")))))
 
-;; Chooses by rank (lower first), then known before unknown at the same rank,
-;; then larger remaining fraction, then config order. A known candidate whose remaining
-;; fraction is at or below its `:reserve` is excluded; an unknown one stays eligible, so an
-;; unknown higher-ranked candidate beats a known lower-ranked one. No eligible candidate refuses.
-(defn route [candidates usage]
-  (let [annotated (mapv #(annotate usage %) candidates)
+;; Chooses by rank (lower first), then known before unknown at the same rank. Inside that
+;; group, a pair with a weekly spare rate (remaining fraction of its longest bounding window
+;; per day to that window's reset) comes first, largest rate first; a pair without one (no
+;; bounding window of known length) orders by remaining fraction after them. Session (shortest-window) remaining breaks a tie, then
+;; config order. A known candidate whose remaining fraction is at or below its `:reserve` is
+;; excluded; an unknown one stays eligible, so an unknown higher-ranked candidate beats a
+;; known lower-ranked one. No eligible candidate refuses.
+(defn route
+  ([candidates usage] (route candidates usage (System/currentTimeMillis)))
+  ([candidates usage now-ms]
+  (let [annotated (mapv #(annotate usage now-ms %) candidates)
         eligible (filter #(or (nil? (:remaining %)) (> (:remaining %) (:reserve %))) annotated)
-        picked (first (sort-by (fn [c] [(:rank c) (if (:remaining c) 0 1) (- (or (:remaining c) 0))]) eligible))]
+        picked (first (sort-by (fn [c] [(:rank c) (if (:remaining c) 0 1) (if (:spare-rate c) 0 1)
+                                        (- (or (:spare-rate c) (:remaining c) 0)) (- (or (:session-remaining c) 0))])
+                               eligible))]
     (if picked
       (cond-> {:chosen (:canonical picked)
-       :candidates annotated
+       :candidates (mapv #(dissoc % :session-remaining) annotated)
        :reason (if (:remaining picked)
-                 (str "rank " (:rank picked) " with " (:remaining picked) " remaining")
+                 (str "rank " (:rank picked) " with " (:remaining picked) " remaining"
+                      (when-let [spare (:spare-rate picked)]
+                        (format ", spare rate %.3f per day" spare)))
                  (str "rank " (:rank picked) " allowance unknown" (when (:reason picked) (str ": " (:reason picked)))
                       "; no known candidate with credit at that rank or better"))}
         (:account picked) (assoc :account (:account picked)
                                  :concrete (str (:account picked) "/" (subs (:canonical picked) (inc (count (:provider picked)))))))
       {:refused true
-       :candidates annotated
-       :reason (if (empty? annotated) "no candidates" "no candidate has credit and none has unknown allowance")})))
+       :candidates (mapv #(dissoc % :session-remaining) annotated)
+       :reason (if (empty? annotated) "no candidates" "no candidate has credit and none has unknown allowance")}))))
 
 ;; Opt-in per-harness native args, appended to every `agent start` for that kind. The
 ;; shipped config ships none, so relaxed command approval -- claude

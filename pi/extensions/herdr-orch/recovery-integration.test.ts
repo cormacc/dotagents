@@ -103,7 +103,8 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
     await command(h, { type: "prompt", message: "fixture request" });
     await h.waitFor(e => e.type === "agent_settled", "recovery settles", { since });
     assert.deepEqual(errors, []);
-    const excluded = ["auth", "permission", "server", "pinned"].includes(mode);
+    // A delegated child ("pinned") recovers across same-model accounts like a primary.
+    const excluded = ["auth", "permission", "server"].includes(mode);
     assert.deepEqual(requests.map(r => r.account), excluded ? ["work"] : mode === "cross-tier" ? ["personal", "work", "fallback"] : mode === "reasoning" ? ["personal", "work"] : mode === "tools" ? ["work", "work", "personal"] : ["work", "personal"], "native continuation exactly once per eligible pair");
     const notifications = (h.events as any[]).filter(e => e.type === "extension_ui_request" && e.method === "notify").map(e => e.message);
     if (!excluded) {

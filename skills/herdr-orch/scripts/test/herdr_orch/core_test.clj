@@ -985,6 +985,48 @@
     (is (= "c/m" (chosen [a c] {"a" (ok 0.0) "c" {}})))
     (is (= "l/m" (chosen [(cand "l" 2) (cand "z" 1)] {"l" {:local true} "z" (ok 0.0)})))))
 
+(def ^:private pace-now (.toEpochMilli (java.time.Instant/parse "2026-11-19T00:00:00Z")))
+(defn- paced
+  "A fresh row with a weekly and a session window bounding all_models. `reset-hours` nil
+  omits the weekly window's resetsAt."
+  [weekly reset-hours session]
+  (let [weekly-window (cond-> {:id "seven_day" :kind "weekly" :scope "all_models" :percentRemaining (* 100 weekly) :windowSeconds 604800}
+                        reset-hours (assoc :resetsAt (str (.plusSeconds (java.time.Instant/ofEpochMilli pace-now) (long (* 3600 reset-hours))))))
+        session-window {:id "five_hour" :kind "session" :scope "all_models" :percentRemaining (* 100 session) :windowSeconds 18000
+                        :resetsAt "2026-11-19T02:00:00Z"}]
+    {:state {:status "fresh" :stale false}
+     :windows [session-window weekly-window]
+     :quotaSemantics {:effectiveAvailability [{:scope "all_models" :status "known" :boundedBy ["five_hour" "seven_day"]
+                                               :effectivePercentRemaining (* 100 (min weekly session))}]}}))
+(defn- paced-route [candidates rows] (core/route candidates (evidence rows) pace-now))
+
+(deftest route-orders-a-rank-by-weekly-spare-rate
+  (let [cand (fn [p rank & [reserve]] {:model p :canonical (str p "/m") :provider p :rank rank :reserve (or reserve 0)})
+        a (cand "a" 1) b (cand "b" 1) c (cand "c" 2)
+        pick #(:chosen (paced-route %1 %2))]
+    (testing "credit that resets sooner wins over more credit that resets later"
+      (is (= "a/m" (pick [a b] {"a" (paced 0.5 24 1.0) "b" (paced 0.8 144 1.0)})))
+      (is (= "a/m" (pick [b a] {"a" (paced 0.5 24 1.0) "b" (paced 0.8 144 1.0)}))))
+    (testing "a lower rank number wins over any spare rate"
+      (is (= "a/m" (pick [c a] {"a" (paced 0.1 160 1.0) "c" (paced 0.9 1 1.0)}))))
+    (testing "equal spare rate prefers more session remaining"
+      (is (= "b/m" (pick [a b] {"a" (paced 0.5 24 0.2) "b" (paced 0.5 24 0.9)})))
+      (is (= "b/m" (pick [b a] {"a" (paced 0.5 24 0.2) "b" (paced 0.5 24 0.9)}))))
+    (testing "a weekly window without a reset time is assumed to reset a full window away"
+      (is (= "a/m" (pick [b a] {"a" (paced 0.3 24 1.0) "b" (paced 0.9 nil 1.0)})) "0.3 per day beats 0.9 over 7 days")
+      (is (= "b/m" (pick [a b] {"a" (paced 0.3 100 1.0) "b" (paced 0.9 nil 1.0)})) "0.9 over 7 days beats 0.3 over 4.2 days")
+      (is (= "b/m" (pick [a b] {"a" (paced 0.3 nil 1.0) "b" (paced 0.9 nil 1.0)}))))
+    (testing "a pair without a window of known length ranks after paced pairs, by remaining"
+      (let [lengthless #(update % :windows (partial mapv (fn [w] (dissoc w :windowSeconds))))]
+        (is (= "a/m" (pick [b a] {"a" (paced 0.1 100 1.0) "b" (lengthless (paced 0.9 1 1.0))})))
+        (is (= "b/m" (pick [a b] {"a" (lengthless (paced 0.3 1 1.0)) "b" (lengthless (paced 0.9 1 1.0))})))))
+    (testing "the reserve still applies to the effective minimum"
+      (is (= "b/m" (pick [(cand "a" 1 0.25) b] {"a" (paced 0.9 1 0.2) "b" (paced 0.5 100 1.0)}))))
+    (testing "each candidate and the reason show the spare rate"
+      (let [r (paced-route [a b] {"a" (paced 0.5 24 1.0) "b" (paced 0.8 nil 1.0)})]
+        (is (= [0.5 (/ 0.8 7.0)] (mapv :spare-rate (:candidates r))) "remaining fraction per day to reset")
+        (is (re-find #"spare rate 0\.5" (:reason r)) (:reason r))))))
+
 (deftest route-refuses-without-an-eligible-candidate
   (let [cand (fn [p] {:model p :canonical (str p "/m") :provider p :rank 1 :reserve 0})
         r (core/route [(cand "a") (cand "b")] (evidence {"a" (ok 0.0) "b" (ok 0.0)}))]
@@ -998,7 +1040,7 @@
   (let [cand {:model "fable" :canonical "anthropic/x-fable" :provider "anthropic" :rank 1 :reserve 0.2}
         r (core/route [cand {:model "n" :canonical "none/n" :provider "none" :rank 2 :reserve 0}]
                       (evidence {"anthropic" {:reason "provider-unavailable"}}))]
-    (is (= (assoc cand :status :unknown :remaining nil :reason "provider-unavailable") (first (:candidates r))))
+    (is (= (assoc cand :status :unknown :remaining nil :spare-rate nil :reason "provider-unavailable") (first (:candidates r))))
     (is (= {:status :unknown :remaining nil :reason "unresolved-scope"} (select-keys (second (:candidates r)) [:status :remaining :reason])))
     (is (= "anthropic/x-fable" (:chosen r)))
     (is (not (contains? (first (:candidates (core/route [cand] (evidence {"anthropic" (ok 0.9)})))) :reason)))))

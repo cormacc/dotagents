@@ -128,8 +128,22 @@ async function main() {
     assert.equal(f.switches, 1, "a bare tier query keeps staged recovery"); tests++; }
   { const f = fixture(); assert.equal((await f.fail()).continue, true); await f.tier!("clear", f.ctx); await f.emit("agent_start");
     assert.equal(f.switches, 0, "a tier change invalidates staged recovery"); tests++; }
+  // A delegated child recovers within its launch request: copied fork tier metadata is
+  // ignored, a direct launch keeps its model, and a launch alias bounds a change of model.
   { process.env.HERDR_ORCH_TASK = "fixture-child"; const f = fixture("rpc", [{ type: "custom", customType: "herdr-orch-tier", data: { tier: "small" } }]); delete process.env.HERDR_ORCH_TASK;
-    await f.emit("session_start"); assert.equal(await f.fail(), undefined); assert.equal(f.requests.length, 0); tests++; }
+    await f.emit("session_start"); assert.equal((await f.fail()).continue, true, "a direct-model child recovers");
+    assert.equal(f.requests.at(-1).model, "openai/model-a", "copied tier metadata does not widen a direct child");
+    await f.emit("agent_start"); assert.equal(f.switches, 1);
+    const entries = f.entries.length; f.idle(); await f.tier!("small", f.ctx);
+    assert.match(f.notices.at(-1)!, /Delegated children keep their launch selection/); assert.equal(f.entries.length, entries, "a child records no tier"); tests++; }
+  { process.env.HERDR_ORCH_TASK = "fixture-child"; process.env.HERDR_ORCH_MODEL_ALIAS = "heavy";
+    const f = fixture("rpc", [{ type: "custom", customType: "herdr-orch-tier", data: { tier: "small" } }]);
+    delete process.env.HERDR_ORCH_TASK; delete process.env.HERDR_ORCH_MODEL_ALIAS;
+    await f.emit("session_start"); assert.equal((await f.fail()).continue, true);
+    assert.equal(f.requests.at(-1).model, "heavy", "an alias child routes within its launch alias");
+    assert.deepEqual(f.requests.at(-1).current, { canonical: "openai/model-a", account: "openai" }, "same-model siblings come first");
+    await f.emit("agent_start"); assert.equal(f.switches, 1); tests++; }
+  { const f = fixture(); await f.emit("session_start"); await f.fail(); assert.equal(f.requests.at(-1).model, "openai/model-a", "positive control: a primary without a tier routes the failed model"); tests++; }
   {
     const f = fixture();
     f.useInventory([a, ...Array.from({ length: 4095 }, (_, i) => model("google", `model-${i}`))]);

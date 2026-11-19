@@ -406,7 +406,7 @@
 (defn- route-record [alias {:keys [chosen account concrete reason candidates]}]
   (cond-> {:alias alias :chosen chosen :reason reason
    :candidates (mapv (fn [c] (cond-> {:model (:model c) :canonical (:canonical c) :provider (:provider c) :rank (:rank c)
-                                      :status (name (:status c)) :remaining (:remaining c) :reserve (:reserve c)}
+                                      :status (name (:status c)) :remaining (:remaining c) :spare-rate (:spare-rate c) :reserve (:reserve c)}
                                (:reason c) (assoc :reason (:reason c))
                                (:account c) (assoc :account (:account c))))
                      candidates)}
@@ -430,14 +430,18 @@
     (when (= kind "pi")
       (routing/validate! {:schema routing/schema :model model :reasoning reasoning :inventory [] :attempted []}))
     (let [candidates (routing/candidates config kind model)
+          ;; The Pi inventory loader refreshes expired OAuth accounts, so it runs before usage
+          ;; collection: a refreshed account then has a usable token for fresh evidence.
+          inventory (when (= kind "pi")
+                      (authenticated-inventory config
+                        (:inventory (pi-adapter/run-op! (account-loader-file) "model-inventory" {}))))
           usage (if (seq candidates)
                   (usage-mod/usage-for config {:providers (vec (distinct (map :provider candidates))) :harness (keyword kind)})
                   {:providers []})
           route (if (= kind "pi")
                   (routing/select-route config kind
                     {:schema routing/schema :model model :attempted [] :reasoning reasoning
-                     :inventory (authenticated-inventory config
-                                  (:inventory (pi-adapter/run-op! (account-loader-file) "model-inventory" {})))} usage)
+                     :inventory inventory} usage)
                   (core/route candidates usage))]
       (when (:refused route)
         (fail (str "spawn refused: no candidate of model alias '" model "' has allowance for kind " kind ": "
@@ -1643,6 +1647,10 @@
                   ;; The routed canonical ID, never the alias: a same-kind grandchild
                   ;; inherits a concrete model and does not route again.
                   model (assoc "HERDR_ORCH_MODEL" model-effective)
+                  ;; The launch weight alias bounds a Pi child's quota recovery, which may then
+                  ;; move down that alias's ranks. Without it, recovery keeps the model.
+                  (and (= kind "pi") (core/vector-alias? config (:alias model-route)))
+                  (assoc "HERDR_ORCH_MODEL_ALIAS" (:alias model-route))
                   role-absent (assoc "HERDR_ORCH_ANONYMOUS" "1"))
             ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
             pane-placement (herdr/place! (herdr/selected!) {:mode (keyword placement) :cwd child-cwd :label label :env env :focus false})

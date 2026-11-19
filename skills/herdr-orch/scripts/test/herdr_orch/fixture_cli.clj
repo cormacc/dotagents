@@ -1,6 +1,8 @@
 (ns herdr-orch.fixture-cli
   "Run the real CLI with a file-backed HTTP transport in offline subprocess tests."
-  (:require [babashka.http-client :as http]
+  (:require [babashka.fs :as fs]
+            [babashka.http-client :as http]
+            [clojure.string :as str]
             [cheshire.core :as json]
             [herdr-orch.cli :as cli]
             [herdr-orch.core :as core]
@@ -29,18 +31,30 @@
           {:status 200 :body "null" :headers {}}))
       (catch Exception _ {:status 200 :body "null" :headers {}}))))
 
+(defn- simulate-refresh!
+  "Stand in for the Pi loader's OAuth refresh: FAKE_PI_REFRESH=<account>=<access> rewrites
+  that account's stored token with a far-future expiry, as a successful refresh would."
+  []
+  (when-let [spec (not-empty (System/getenv "FAKE_PI_REFRESH"))]
+    (let [[account access] (str/split spec #"=" 2)
+          path (str (fs/path (System/getenv "PI_CODING_AGENT_DIR") "auth.json"))
+          auth (json/parse-string (slurp path))]
+      (spit path (json/generate-string
+                  (update auth account assoc "access" access "expires" 4102444800000))))))
+
 (defn -main [& argv]
   (let [run-op pi-adapter/run-op!]
   (with-redefs [pi-adapter/run-op!
                 (fn [file op request]
                   (if (= op "model-inventory")
                     {:ok true :inventory
+                     (do (simulate-refresh!)
                      (vec (for [canonical (distinct (concat (keys (:models (cli/config)))
                                                            (filter string? (vals (:aliases (cli/config))))))
                                 account (cond-> [(core/provider-prefix canonical)]
                                           (= "anthropic" (core/provider-prefix canonical))
                                           (into (credentials/pi-accounts (credentials/environment))))]
-                            {:canonical canonical :account account :reasoning (vec (sort routing/levels))}))}
+                            {:canonical canonical :account account :reasoning (vec (sort routing/levels))})))}
                     (run-op file op request)))
                 usage/default-http-fn fixture-http
                 http/get (fn [& _] (throw (ex-info "network escaped fixture transport" {})))]
