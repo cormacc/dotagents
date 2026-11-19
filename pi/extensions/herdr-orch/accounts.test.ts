@@ -38,6 +38,24 @@ try {
   assert.equal(providers[0].name, work, "the display name is the full key");
   assert.equal(providers[0].auth.apiKey, undefined);
   assert.deepEqual(providers[0].getModels(), anthropicProvider().getModels().map((m) => ({ ...m, provider: work })), "alias retains native model metadata");
+  {
+    // Pi's cached remote catalog adds models that the static built-in list lacks.
+    const builtin = anthropicProvider().getModels();
+    const storePath = join(cwd, "models-store.json");
+    const catalogModel = { ...builtin[0], id: "claude-fixture-catalog-9", name: "Fixture catalog model", provider: "anthropic" };
+    writeFileSync(storePath, JSON.stringify({
+      anthropic: { lastModified: 1, checkedAt: 1, models: [{ ...builtin[0], name: "must not replace built-in" }, catalogModel, { ...catalogModel, id: "fixture-image", type: "image" }] },
+      "openai-codex": { models: [{ ...catalogModel, id: "codex-only", provider: "openai-codex" }] },
+    }));
+    const models = accountProvider(work).getModels();
+    assert.deepEqual(models.find(m => m.id === "claude-fixture-catalog-9"), { ...catalogModel, provider: work }, "a catalog-only model is added for the account");
+    assert.deepEqual(models.find(m => m.id === builtin[0].id), { ...builtin[0], provider: work }, "a catalog entry never replaces a built-in model");
+    assert.equal(models.length, builtin.length + 1, "only chat models from the anthropic catalog are added");
+    assert.ok(accountProvider(work).getAllModels!().some(m => m.id === "fixture-image"), "getAllModels keeps non-chat catalog types");
+    writeFileSync(storePath, "{not json");
+    assert.deepEqual(accountProvider(work).getModels(), builtin.map(m => ({ ...m, provider: work })), "an unreadable store falls back to the built-in list");
+    rmSync(storePath);
+  }
   assert.match(notices.at(-1)!, /\/login/);
   assert.deepEqual(read(), preserved, "registration does not swap or write credentials");
   await account("add 2", ctx);

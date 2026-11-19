@@ -6288,3 +6288,19 @@ CLOSED: [2026-11-19 Thu 10:09]
 :END:
 #+IMPORT: [[plan:2026-11-13-herdr-app-task-pinning.org]]
 Follow-up to task 82126d8e-eb54-45b8-abbe-9e76451b3963. Owner-approved scope on 2026-11-19: deliver pinning in the Herdr app mod only; defer terminal-plugin pinning. One session-only pin per widget spans workspace switches and retains the resolved task root plus machine identity, including supported remote roots. A mod-owned key action and clickable indicator toggle the pin; display and selection use its root as their working directory. Unpinning resumes current focus-following; restart starts unpinned. Missing task memory cannot create a pin; unavailable pinned roots retain the pin and show an error rather than silently switching roots. Org-tasks remains workspace-unaware. The accepted imported record owns detailed criteria, keys, risks and executable tasks. Related: task:6ce22583-ba34-456d-a838-58bfa7b4c044 (nested task roots). Originating record: design/log/2026-11-05-org-tasks-herdr-ui.org.
+
+** DONE [#B] herdr-orch: pace-based account routing with refresh and child failover :herdr_orch:
+CLOSED: [2026-11-19 Thu 11:09]
+:PROPERTIES:
+:CUSTOM_ID: 3f174270-af26-4a3d-8a8c-cefe03acb18c
+:CREATED: [2026-11-19 Thu 08:43]
+:STARTED: [2026-11-19 Thu 09:01]
+:ARCHIVED: [2026-11-19 Thu 11:09]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 08:43]
+- State "STARTED" from "TODO" [2026-11-19 Thu 09:01]
+- State "DONE" from "STARTED" [2026-11-19 Thu 11:09]
+:END:
+#+IMPORT: [[plan:2026-11-19-herdr-orch-pace-routing.org]]

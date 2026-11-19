@@ -27,17 +27,39 @@ export function isAccountId(id: string): boolean {
   return accountBase(id) !== undefined;
 }
 
+/**
+ * Models from Pi's cached remote catalog for the base provider. Pi overlays this catalog on
+ * its built-in `anthropic` provider only, so without it an account lacks models released
+ * after the installed Pi. The file format is Pi-internal: any read or shape failure yields
+ * no models, which leaves the account on the built-in list.
+ */
+function cachedCatalogModels(base: string, storePath = join(getAgentDir(), "models-store.json")): any[] {
+  try {
+    const models = JSON.parse(readFileSync(storePath, "utf8"))?.[base]?.models;
+    return Array.isArray(models) ? models.filter(model => model && typeof model.id === "string" && model.provider === base) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Built-in models first; a catalog entry only adds an ID that the built-in list lacks. */
+function withCatalog<T extends { id: string; type?: string }>(builtin: T[], catalog: any[], chatOnly: boolean): T[] {
+  const ids = new Set(builtin.map(model => model.id));
+  return [...builtin, ...catalog.filter(model => !ids.has(model.id) && (!chatOnly || model.type === undefined || model.type === "chat"))];
+}
+
 /** Reuse native Anthropic OAuth with private browser login, without API-key or ambient auth methods. */
 export function accountProvider(id: string): Provider<"anthropic-messages"> {
   if (!isAccountId(id)) throw new Error("Invalid Anthropic account identity");
   const base = anthropicProvider();
+  const catalog = cachedCatalogModels(accountBase(id)!);
   return {
     ...base,
     id,
     name: id,
     auth: { oauth: base.auth.oauth && privateBrowserOAuth(base.auth.oauth) },
-    getModels: () => base.getModels().map((model) => ({ ...model, provider: id })),
-    getAllModels: () => base.getModels().map((model) => ({ ...model, provider: id })),
+    getModels: () => withCatalog(base.getModels(), catalog, true).map((model) => ({ ...model, provider: id })),
+    getAllModels: () => withCatalog(base.getModels(), catalog, false).map((model) => ({ ...model, provider: id })),
   };
 }
 

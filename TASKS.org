@@ -13,17 +13,15 @@
 
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
-  - [[#started-c-explore-agent-memory-options][STARTED [#C] Explore agent memory options]]
-  - [[#evaluate-hierarchical-agentsmd-discovery-for-pi][Evaluate hierarchical AGENTS.md discovery for Pi]]
   - [[#re-evaluate-opus-uptake-of-pi-context-after-the-agentsmd-rule-after-2026-11-24][Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24)]]
 - [[#improvements][Improvements]]
   - [[#claude-code-and-codex-userpromptsubmit-trait-adapters][Claude Code and Codex UserPromptSubmit trait adapters]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
-  - [[#started-b-traits-probe-backlog][STARTED [#B] traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
   - [[#add-read-only-native-os-store-quota-reporting][Add read-only native OS-store quota reporting]]
-  - [[#add-workspace-pinning-to-the-herdr-org-tasks-adapters][Add workspace pinning to the Herdr org-tasks adapters]]
   - [[#herdr-orch-show-the-current-delegation-tree-without-sidebar-changes][herdr-orch: show the current delegation tree without sidebar changes]]
+  - [[#make-the-org-tasks-tui-aware-of-nested-task-roots][Make the org-tasks TUI aware of nested task roots]]
+  - [[#migrate-the-atlassian-mcp-connection-and-jira-tooling-to-mcp-v2][Migrate the Atlassian MCP connection and jira tooling to MCP v2]]
 - [[#fixes][Fixes]]
   - [[#diagnose-intermittent-herdr-app-quota-loading-stall][Diagnose intermittent herdr-app quota loading stall]]
 - [[#upstream-issues][Upstream issues]]
@@ -130,18 +128,6 @@ Backlog. `ot` resolves one task root: the nearest ancestor that has a TASKS.org 
 - Created [2026-11-13 Fri 10:12]
 :END:
 Deadline: Atlassian removes the v1 endpoint on 2027-03-01 and then moves v1 users to the v2 tools, which breaks our renamed calls. pi/mcp.json uses `https://mcp.atlassian.com/v1/mcp/authv2`; the live server instructions mark it deprecated and name `https://mcp.atlassian.com/v2/mcp`. Sources (read 2026-11-13): support.atlassian.com/atlassian-ai-gateway/docs/how-to-upgrade-from-atlassian-mcp-v1-to-atlassian-mcp-v2/ and .../docs/supported-tools/. Changes found: (1) v2 lists only Primary tools by default; others go through `discover` and `executeRead`/`executeWrite`/`executeDestructive`, and `?tools=all` gives a flat list. The jira extension calls tools by fixed name, so `?tools=all` is the probable choice (decide). (2) Renamed tools that we call: `addCommentToJiraIssue` -> `addOrEditJiraIssueComment`, `getTransitionsForJiraIssue` -> `listJiraIssueTransitions`, `getJiraProjectIssueTypesMetadata` -> `listJiraProjectIssueTypesMetadata` (pi/extensions/jira/tools.ts, jira.test.ts, README.md, skills/org-jira/SKILL.md, references/protocol.md); `getConfluencePage` -> `getConfluenceContent` (skills/org-jira/references/atlassian-exploration.md, exploration.test.ts). Check argument and result shapes too, not only names. Unchanged names: getAccessibleAtlassianResources, getJiraIssue, editJiraIssue, createJiraIssue, transitionJiraIssue, search (Beta, uses Rovo credits), getTeamworkGraphContext, getTeamworkGraphObject. (3) v2 is a separate OAuth resource: re-authenticate after the URL change. Acceptance: pi/mcp.json on v2; no v1 tool names in tracked files; pi/extensions/jira/test.sh passes; one live read-only check and one sandbox write check (comment, transition) pass against v2.
-
-** STARTED [#B] herdr-orch: pace-based account routing with refresh and child failover :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 3f174270-af26-4a3d-8a8c-cefe03acb18c
-:CREATED: [2026-11-19 Thu 08:43]
-:STARTED: [2026-11-19 Thu 09:01]
-:END:
-:LOGBOOK:
-- Created [2026-11-19 Thu 08:43]
-- State "STARTED" from "TODO" [2026-11-19 Thu 09:01]
-:END:
-#+IMPORT: [[plan:2026-11-19-herdr-orch-pace-routing.org]]
 
 * Fixes
 ** TODO Diagnose intermittent herdr-app quota loading stall :herdr_orch:
