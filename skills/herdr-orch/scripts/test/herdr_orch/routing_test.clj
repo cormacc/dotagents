@@ -7,8 +7,8 @@
 (def config
   {:harnesses {:pi {:model-flag "--model"}}
    :providers {"anthropic" {:reserve 0.1} "openai-codex" {} "lemonade" {}}
-   :aliases {"tier" [{:model "anthropic/m" :rank 1 :quota-scope "exact"}
-                      {:model "openai-codex/n" :rank 2}]}})
+   :pools {"tier" {:models [{:model "anthropic/m" :rank 1 :quota-scope "exact"}
+                            {:model "openai-codex/n" :rank 2}]}}})
 (def a {:canonical "anthropic/m" :account "anthropic"})
 (def b {:canonical "anthropic/m" :account "anthropic-2"})
 (def c {:canonical "openai-codex/n" :account "openai-codex"})
@@ -56,7 +56,7 @@
     (is (not-any? #(= "lemonade" (:account %)) (:candidates (pick req {}))))))
 
 (deftest recovery-prefers-same-model-before-alias-rank
-  (let [cfg (assoc-in config [:aliases "tier"] [{:model "openai-codex/n" :rank 1} {:model "anthropic/m" :rank 2}])
+  (let [cfg (assoc-in config [:pools "tier" :models] [{:model "openai-codex/n" :rank 1} {:model "anthropic/m" :rank 2}])
         req (assoc request :current a :attempted [a])]
     (is (= "anthropic-2" (:account (routing/select-route cfg "pi" req (evidence {"anthropic-2" 0.2})))))))
 

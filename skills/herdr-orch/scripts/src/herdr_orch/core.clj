@@ -219,13 +219,13 @@
 ;; pass-through/empty result. `canonical-model` is the single alias hop: its result is
 ;; looked up in `:models` directly, never re-resolved through `:aliases` again — a chain
 ;; is a validation error (`validate-merged-config!`), not runtime behaviour.
-;; An `:aliases` value is either that string or a vector of ranked candidates
-;; (`[{:model "<name-or-id>" :rank n} ...]`). A vector alias is resolved by the router, not by
-;; `canonical-model`, so it is returned unchanged here and must not reach `translate-model`.
+;; A `:pools` entry names a set of ranked candidates (`{:rank n :models [{:model "<name-or-id>"
+;; :rank n} ...]}`). The router resolves a pool, not `canonical-model`, so a pool name passes
+;; through unchanged here and must not reach `translate-model`.
 (defn canonical-model [config model]
   (get-in config [:aliases model] model))
-(defn vector-alias? [config model]
-  (vector? (get-in config [:aliases model])))
+(defn pool? [config model]
+  (contains? (get config :pools) model))
 ;; Provider of a routed candidate: the `provider/` prefix of its canonical ID, nil when the ID has none.
 (defn provider-prefix [canonical]
   (when-let [i (some-> canonical (str/index-of "/"))] (subs canonical 0 i)))
@@ -248,12 +248,12 @@
 ;; The caller supplies validated effective subscription evidence. Routing owns
 ;; rank, reserve and harness policy; the collector owns evidence validation.
 
-;; Candidates of the vector alias `alias` that `kind` can run, in config order, each
-;; `{:model requested :canonical id :provider p :rank n :reserve r}`. nil when `alias` is not a
-;; vector alias, so a string alias or canonical ID takes no routing. A kind's `:providers` set
+;; Candidates of the pool `pool` that `kind` can run, in config order, each
+;; `{:model requested :canonical id :provider p :rank n :reserve r}`. nil when `pool` is not a
+;; pool, so a string alias or canonical ID takes no pool routing. A kind's `:providers` set
 ;; filters before any selection; a kind without it accepts every provider.
-(defn candidates [config kind alias]
-  (let [v (get-in config [:aliases alias])
+(defn candidates [config kind pool]
+  (let [v (get-in config [:pools pool :models])
         allowed (get-in config [:harnesses (keyword kind) :providers])]
     (when (vector? v)
       (into []
@@ -412,30 +412,42 @@
       (doseq [[kind value] row]
         (when-not (keyword? kind) (throw (ex-info "config :models row key must be a keyword" {:path path :model id :key kind})))
         (when-not (string? value) (throw (ex-info "config :models row value must be a string" {:path path :model id :harness kind :value value})))))
-    ;; `:aliases` maps a short-name to a canonical ID or to a non-empty vector of ranked
-    ;; candidates; names and IDs must round-trip through argv and error messages, so they are
-    ;; constrained to non-blank strings exactly like a `:models` row value. Lower rank is preferred.
+    ;; `:aliases` maps a short name to one canonical ID. `:pools` maps a name to ranked
+    ;; candidates and an optional pool `:rank`; lower rank is preferred at both levels. Names
+    ;; and IDs must round-trip through argv and error messages, so they are non-blank strings.
     (let [aliases (get config :aliases {})
+          pools (get config :pools {})
           nonblank? #(and (string? %) (not (str/blank? %)))]
       (when-not (map? aliases) (throw (ex-info "config :aliases must be a map" {:path path :value aliases})))
       (doseq [[k v] aliases]
         (when-not (nonblank? k)
           (throw (ex-info "config :aliases key must be a non-blank string" {:path path :key k})))
-        (if (vector? v)
-          (do (when (empty? v)
-                (throw (ex-info "config :aliases candidate vector must not be empty" {:path path :key k})))
-              (doseq [candidate v]
-                (when-not (and (map? candidate) (every? #{:model :rank :quota-scope} (keys candidate))
-                               (contains? candidate :model) (contains? candidate :rank))
-                  (throw (ex-info "config :aliases candidate must have :model, :rank and optional :quota-scope" {:path path :key k :candidate candidate})))
-                (when (and (contains? candidate :quota-scope) (not (nonblank? (:quota-scope candidate))))
-                  (throw (ex-info "config :aliases candidate :quota-scope must be a non-blank string" {:path path :key k})))
-                (when-not (nonblank? (:model candidate))
-                  (throw (ex-info "config :aliases candidate :model must be a non-blank string" {:path path :key k :candidate candidate})))
-                (when-not (pos-int? (:rank candidate))
-                  (throw (ex-info "config :aliases candidate :rank must be a positive integer" {:path path :key k :candidate candidate})))))
-          (when-not (nonblank? v)
-            (throw (ex-info "config :aliases value must be a non-blank string or a vector of candidates" {:path path :key k :value v}))))))
+        (when (vector? v)
+          (throw (ex-info (str "config :aliases value for \"" k "\" is a candidate vector: move it to :pools as {\"" k "\" {:models [...]}}")
+                          {:path path :key k})))
+        (when-not (nonblank? v)
+          (throw (ex-info "config :aliases value must be a non-blank string" {:path path :key k :value v}))))
+      (when-not (map? pools) (throw (ex-info "config :pools must be a map" {:path path :value pools})))
+      (doseq [[k pool] pools]
+        (when-not (nonblank? k)
+          (throw (ex-info "config :pools key must be a non-blank string" {:path path :key k})))
+        (when-not (and (map? pool) (contains? pool :models) (every? #{:rank :models} (keys pool)))
+          (throw (ex-info "config :pools entry must be a map with :models and optional :rank" {:path path :pool k})))
+        (when (and (contains? pool :rank) (not (pos-int? (:rank pool))))
+          (throw (ex-info "config :pools pool :rank must be a positive integer" {:path path :pool k :rank (:rank pool)})))
+        (let [v (:models pool)]
+          (when-not (and (vector? v) (seq v))
+            (throw (ex-info "config :pools entry :models must be a non-empty vector of candidates" {:path path :pool k})))
+          (doseq [candidate v]
+            (when-not (and (map? candidate) (every? #{:model :rank :quota-scope} (keys candidate))
+                           (contains? candidate :model) (contains? candidate :rank))
+              (throw (ex-info "config :pools candidate must have :model, :rank and optional :quota-scope" {:path path :pool k :candidate candidate})))
+            (when (and (contains? candidate :quota-scope) (not (nonblank? (:quota-scope candidate))))
+              (throw (ex-info "config :pools candidate :quota-scope must be a non-blank string" {:path path :pool k})))
+            (when-not (nonblank? (:model candidate))
+              (throw (ex-info "config :pools candidate :model must be a non-blank string" {:path path :pool k :candidate candidate})))
+            (when-not (pos-int? (:rank candidate))
+              (throw (ex-info "config :pools candidate :rank must be a positive integer" {:path path :pool k :candidate candidate})))))))
     ;; `:providers` carries the usage-query settings the router reads. Rows are closed so a
     ;; misspelt key fails here instead of silently leaving a provider unknown.
     ;; Empty rows describe local providers with no subscription to query.
@@ -454,6 +466,14 @@
         (when (and (contains? row :reserve) (not (and (number? (:reserve row)) (<= 0 (:reserve row) 1))))
           (throw (ex-info "config :providers entry :reserve must be a number from 0 to 1"
                           {:path path :provider name :reserve (:reserve row)})))))
+    ;; `:pi` holds settings that the Herdr Pi extension reads through `oh roster`. The map is
+    ;; closed so that a misspelt setting fails here instead of being ignored.
+    (when (contains? config :pi)
+      (let [settings (:pi config)]
+        (when-not (and (map? settings) (every? #{:default-model-pool} (keys settings)))
+          (throw (ex-info "config :pi must be a map with only :default-model-pool" {:path path :pi settings})))
+        (when (and (contains? settings :default-model-pool) (not (boolean? (:default-model-pool settings))))
+          (throw (ex-info "config :pi :default-model-pool must be true or false" {:path path :value (:default-model-pool settings)})))))
     ;; `:defaults` has no supported key. Refuse it, so that an override that asks for
     ;; another placement fails loudly instead of being ignored.
     (when (contains? config :defaults)
@@ -492,27 +512,36 @@
 (defn validate-merged-config!
   ([config] (validate-merged-config! config nil))
   ([config layers]
-   (let [aliases (get config :aliases {}) models (get config :models {}) providers (get config :providers {})]
-     (doseq [k (keys aliases)]
-       (when (contains? models k)
-         (throw (config-error layers "config key is present in both :aliases and :models" {:key k}
-                              [:aliases k] [:models k]))))
-     (doseq [[k v] aliases :when (string? v)]
-       (when (contains? aliases v)
-         (throw (config-error layers "config :aliases value is itself an :aliases key; multi-hop alias chains are not supported"
-                              {:key v :alias k} [:aliases k] [:aliases v]))))
-     ;; A routed candidate takes one string-alias hop to a canonical ID, never a vector alias;
-     ;; its provider must be configured. Explicit pass-through strings are not checked.
-     (doseq [[k v] aliases :when (vector? v)
-             {:keys [model]} v]
-       (when (vector? (get aliases model))
-         (throw (config-error layers "config :aliases candidate :model resolves to a vector alias" {:alias k :model model}
-                              [:aliases k] [:aliases model])))
+   (let [aliases (get config :aliases {}) models (get config :models {}) providers (get config :providers {})
+         pools (get config :pools {})]
+     ;; `--model` and a persona `model:` resolve one name across all three sections.
+     (doseq [[a b] [[:aliases :models] [:pools :models] [:aliases :pools]]
+             k (keys (get config a))]
+       (when (contains? (get config b) k)
+         (throw (config-error layers (str "config key is present in both " a " and " b) {:key k}
+                              [a k] [b k]))))
+     (doseq [[k v] aliases]
+       (when (or (contains? aliases v) (contains? pools v))
+         (throw (config-error layers "config :aliases value is itself an :aliases or :pools key; multi-hop alias chains are not supported"
+                              {:key v :alias k} [:aliases k] [(if (contains? pools v) :pools :aliases) v]))))
+     ;; A routed candidate takes one string-alias hop to a canonical ID, never a pool; its
+     ;; provider must be configured. Explicit pass-through strings are not checked.
+     (doseq [[k pool] pools
+             {:keys [model]} (:models pool)]
+       (when (contains? pools model)
+         (throw (config-error layers "config :pools candidate :model names a pool" {:pool k :model model}
+                              [:pools k] [:pools model])))
        (let [canonical (get aliases model model) provider (provider-prefix canonical)]
          (when-not (contains? providers provider)
-           (throw (config-error layers "config :aliases candidate provider is not in :providers"
-                                {:alias k :model model :canonical canonical :provider provider}
-                                [:aliases k] [:aliases model])))))
+           (throw (config-error layers "config :pools candidate provider is not in :providers"
+                                {:pool k :model model :canonical canonical :provider provider}
+                                [:pools k] [:aliases model])))))
+     ;; Pool rank orders startup inference, so two ranked pools must not tie.
+     (doseq [[rank ranked] (group-by (comp :rank val) (filter (comp :rank val) pools))
+             :when (< 1 (count ranked))]
+       (let [names (sort (map key ranked))]
+         (throw (apply config-error layers "config :pools entries have the same :rank" {:rank rank :pools (vec names)}
+                       (map #(vector :pools %) names)))))
      (doseq [[kind entry] (get config :harnesses {})
              provider (:providers entry)]
        (when-not (contains? providers provider)

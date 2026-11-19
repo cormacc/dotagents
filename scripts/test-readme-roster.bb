@@ -24,8 +24,8 @@
       (fs/copy (fs/path root "bb.edn") (fs/path dir "bb.edn"))
       (run!)
       (let [first-run (slurp readme)
-            old "- =heavy= -- rank 1 =fable=; rank 1 =gpt-astra="
-            new "- =heavy= -- rank 1 =gpt-astra=; rank 2 =fable="
+            old "- =heavy= (rank 1) -- rank 1 =fable=; rank 1 =gpt-astra="
+            new "- =heavy= (rank 1) -- rank 1 =gpt-astra=; rank 2 =fable="
             before (slurp config)
             after (str/replace before "{:model \"fable\"  :rank 1 :quota-scope" "{:model \"fable\"  :rank 2 :quota-scope")]
         (is (str/includes? first-run old))
@@ -37,7 +37,7 @@
         (let [changed (slurp readme)]
           (is (str/includes? changed new))
           (is (not (str/includes? changed old)))
-          (is (= 1 (count (re-seq #"Ranked aliases \(lowest rank is preferred\):" changed))))
+          (is (= 1 (count (re-seq #"Pools \(lowest rank is preferred\):" changed))))
           (run!)
           (is (= changed (slurp readme)))))
       (finally (fs/delete-tree dir)))))

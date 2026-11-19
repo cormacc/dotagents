@@ -91,8 +91,8 @@ export default function fixture(outer: ExtensionAPI) {
             await manualPending.promise;
           }
           if (action === "tier-overlap") {
-            await session.prompt("/oh tier fixture-tier");
-            await session.prompt("/oh tier clear");
+            await session.prompt("/oh model fixture-tier");
+            await session.prompt("/oh model clear");
             assert.ok(notices.slice(-2).every(s => s.includes("switch is still pending")), "explicit commands cannot overlap unresolved recovery setter");
           }
           if (["removed", "route-removed"].includes(action)) {

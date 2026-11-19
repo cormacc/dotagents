@@ -51,12 +51,14 @@ async function scenario(mode: string) {
   const origin = `http://127.0.0.1:${(server.address() as any).port}`;
   writeFileSync(join(agent, "auth.json"), JSON.stringify(Object.fromEntries([work, personal].map(account => [account, { type: "oauth", access: `sk-ant-oat01-${account === work && !process.env.RECOVERY_TEST_WRONG_ACCOUNT ? "work" : "personal"}`, refresh: "fixture", expires: 4102444800000 }]))));
   // "retry" keeps Pi's automatic retry, which classes a 429 as transient, so failover must precede it.
-  writeFileSync(join(agent, "settings.json"), JSON.stringify({ retry: mode === "retry" ? { enabled: true, maxRetries: 3, baseDelayMs: 10 } : { enabled: false } }));
+  // Startup modes take Pi's default from settings instead of --provider/--model.
+  const startup = mode === "startup" || mode === "startup-pool";
+  writeFileSync(join(agent, "settings.json"), JSON.stringify({ retry: mode === "retry" ? { enabled: true, maxRetries: 3, baseDelayMs: 10 } : { enabled: false }, ...(startup ? { defaultProvider: work, defaultModel: model } : {}) }));
   writeFileSync(join(agent, "models.json"), JSON.stringify({ providers: { [work]: { baseUrl: origin }, [personal]: { baseUrl: origin } } }));
   writeFileSync(join(cwd, "tool.txt"), "completed tool fixture");
   // Empty provider rows disable quota HTTP in this isolated shared-policy fixture.
   mkdirSync(join(cwd, ".agents/subagents"), { recursive: true });
-  writeFileSync(join(cwd, ".agents/subagents/config.edn"), `{:providers {"anthropic" {} "lemonade" {}} :aliases {"fixture-tier" [{:model "anthropic/${model}" :rank 1} {:model "lemonade/fixture-fallback" :rank 2}]}}`);
+  writeFileSync(join(cwd, ".agents/subagents/config.edn"), `{:providers {"anthropic" {} "lemonade" {}} :pools {"fixture-tier" {:rank 5 :models [{:model "anthropic/${model}" :rank 1} {:model "lemonade/fixture-fallback" :rank 2}]}} :pi {:default-model-pool ${mode.startsWith("startup-")}}}`);
   const extension = join(cwd, "fixture.ts");
   writeFileSync(extension, `import register from ${JSON.stringify(join(here, "index.ts"))};
 export default function(pi) {
@@ -71,7 +73,7 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
     symlinkSync(here, join(agent, "extensions/herdr-orch"), "dir");
     writeFileSync(extension, "export default function() {}\n");
   }
-  const h = createHarness(mode === "boundaries" ? join(here, "recovery-boundaries-fixture.ts") : mode === "delayed" ? join(here, "recovery-runtime-fixture.ts") : mode === "resume" ? join(here, "recovery-session-fixture.ts") : extension, mode === "tier-nongit" ? "/" : cwd, { args: [...(mode === "discovery" ? [] : ["--no-extensions"]), "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", "--provider", work, "--model", model, "--thinking", mode === "reasoning" ? "high" : "off", "--tools", "read"],
+  const h = createHarness(mode === "boundaries" ? join(here, "recovery-boundaries-fixture.ts") : mode === "delayed" ? join(here, "recovery-runtime-fixture.ts") : mode === "resume" ? join(here, "recovery-session-fixture.ts") : extension, mode === "tier-nongit" ? "/" : cwd, { args: [...(mode === "discovery" ? [] : ["--no-extensions"]), "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", ...(startup ? [] : ["--provider", work, "--model", model]), "--thinking", mode === "reasoning" ? "high" : "off", "--tools", "read"],
     env: { ...isolated, HOME: cwd, ORCH_ASSIGNMENT_ROOT: cwd, HERDR_ORCH_BIN: join(root, "skills/herdr-orch/scripts/oh"), HERDR_ENV: "0", PI_CODING_AGENT_DIR: agent,
       NODE_OPTIONS: `--require=${join(here, "account-fake-only.cjs")}`, HERDR_ORCH_FAKE_ORIGIN: origin, RECOVERY_TEST_ROOT: cwd, RECOVERY_LOCKFILE_MODULE: installedLockfileModule(), ...(mode === "pinned" ? { HERDR_ORCH_TASK: "fixture-child" } : {}) } });
   try {
@@ -94,7 +96,7 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
       return;
     }
     if (["tier", "tier-nongit", "cross-tier", "reasoning"].includes(mode)) {
-      await command(h, { type: "prompt", message: "/oh tier fixture-tier" });
+      await command(h, { type: "prompt", message: "/oh model fixture-tier" });
       // Alias selection resolves to personal first in deterministic named-account order.
       assert.equal((await command(h, { type: "get_state" })).data.model.provider, personal);
       if (mode === "tier" || mode === "tier-nongit") await command(h, { type: "set_model", provider: work, modelId: model });
@@ -104,8 +106,16 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
     await h.waitFor(e => e.type === "agent_settled", "recovery settles", { since });
     assert.deepEqual(errors, []);
     // A delegated child ("pinned") recovers across same-model accounts like a primary.
+    if (startup) {
+      // The default account (work) refuses every request, so a first request on personal shows
+      // that the startup hook routed before Pi sent it.
+      assert.deepEqual(requests.map(r => r.account), ["personal"], "startup routing precedes the first request");
+      assert.equal((await command(h, { type: "get_state" })).data.model.provider, personal);
+      console.log(`ok - installed RPC startup routing ${mode}: ${requests.map(r => r.account).join(' -> ')}`);
+      return;
+    }
     const excluded = ["auth", "permission", "server"].includes(mode);
-    assert.deepEqual(requests.map(r => r.account), excluded ? ["work"] : mode === "cross-tier" ? ["personal", "work", "fallback"] : mode === "reasoning" ? ["personal", "work"] : mode === "tools" ? ["work", "work", "personal"] : ["work", "personal"], "native continuation exactly once per eligible pair");
+    assert.deepEqual(requests.map(r => r.account), excluded ? ["work"] : mode === "cross-tier" ? ["personal", "work", "fallback"] : mode === "startup-explicit" ? ["work", "personal"] : mode === "reasoning" ? ["personal", "work"] : mode === "tools" ? ["work", "work", "personal"] : ["work", "personal"], "native continuation exactly once per eligible pair");
     const notifications = (h.events as any[]).filter(e => e.type === "extension_ui_request" && e.method === "notify").map(e => e.message);
     if (!excluded) {
       assert.ok(notifications.some(s => s?.includes("Abort stops recovery")), "RPC exposes the recovery warning");
@@ -135,5 +145,5 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
     console.log(`ok - installed RPC recovery ${mode}: ${requests.map(r => r.account).join(' -> ')}`);
   } finally { await h.dispose(); server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); rmSync(cwd, { recursive: true, force: true }); }
 }
-async function main() { for (const mode of process.env.RECOVERY_TEST_CWD_ONLY ? ["tier", "tier-nongit"] : process.env.RECOVERY_TEST_DELAYED_ONLY ? ["delayed"] : process.env.RECOVERY_TEST_BOUNDARIES_ONLY ? ["boundaries"] : process.env.RECOVERY_TEST_SESSION_ONLY ? ["resume"] : ["discovery", "normal", "retry", "exhaustion", "auth", "permission", "server", "pinned", "tools", "tier", "tier-nongit", "cross-tier", "direct-escape", "reasoning", "delayed", "resume", "boundaries"]) await scenario(mode); console.log("SUMMARY: installed RPC recovery suite passed"); }
+async function main() { for (const mode of process.env.RECOVERY_TEST_CWD_ONLY ? ["tier", "tier-nongit"] : process.env.RECOVERY_TEST_DELAYED_ONLY ? ["delayed"] : process.env.RECOVERY_TEST_BOUNDARIES_ONLY ? ["boundaries"] : process.env.RECOVERY_TEST_SESSION_ONLY ? ["resume"] : ["discovery", "normal", "retry", "exhaustion", "auth", "permission", "server", "pinned", "tools", "tier", "tier-nongit", "cross-tier", "direct-escape", "reasoning", "delayed", "resume", "boundaries", "startup", "startup-pool", "startup-explicit"]) await scenario(mode); console.log("SUMMARY: installed RPC recovery suite passed"); }
 main().catch(e => { console.error(e); process.exitCode = 1; });

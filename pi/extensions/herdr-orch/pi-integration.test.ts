@@ -94,8 +94,9 @@ async function main(): Promise<void> {
         `${message} response`, { since },
       );
       if (!response.success) throw new Error(`${message}: ${response.error}`);
+      // Startup routing may report its account selection; that notice is not the listing.
       const notice = await harness.waitFor(
-        (event) => event.type === "extension_ui_request" && event.method === "notify",
+        (event) => event.type === "extension_ui_request" && event.method === "notify" && !String(event.message).startsWith("Selected "),
         `${message} notification`, { since },
       );
       if (notice.notifyType !== "info") throw new Error(`Incorrect notification: ${JSON.stringify(notice)}`);

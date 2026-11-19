@@ -34,7 +34,7 @@ export default function fixture(outer: ExtensionAPI) {
         const manager = SessionManager.create(cwd, join(cwd, "sessions"));
         const seed = await create(manager, true);
         try {
-          await seed.prompt("/oh tier fixture-tier");
+          await seed.prompt("/oh model fixture-tier");
           assert.equal(seed.model?.provider, personal);
           await seed.prompt("seed successful history");
           assert.ok(manager.getBranch().some(e => e.type === "custom" && e.customType === "herdr-orch-tier" && (e.data as any).tier === "fixture-tier"));

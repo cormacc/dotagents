@@ -37,9 +37,9 @@
   request)
 
 (defn candidates
-  "Return configured model candidates for a validated alias or direct request."
+  "Return configured model candidates for a validated pool or direct request."
   [config kind model]
-  (if (core/vector-alias? config model)
+  (if (core/pool? config model)
     (core/candidates config kind model)
     (let [resolved (core/canonical-model config model)
           prefix (core/provider-prefix resolved)

@@ -284,27 +284,30 @@
                 \"openai-codex\" {:quota-provider \"codex\" :reserve 0.1}
                 \"lemonade\" {}}
     :models {\"anthropic/claude-a-1\" {:claude \"a\"}}
-    :aliases {\"a\" \"anthropic/claude-a-1\" \"x\" \"openai-codex/gpt-x\"
-              \"heavy\" [{:model \"a\" :rank 1} {:model \"x\" :rank 1} {:model \"lemonade/local\" :rank 2}]}}")
+    :aliases {\"a\" \"anthropic/claude-a-1\" \"x\" \"openai-codex/gpt-x\"}
+    :pools {\"heavy\" {:rank 1 :models [{:model \"a\" :rank 1} {:model \"x\" :rank 1} {:model \"lemonade/local\" :rank 2}]}
+            \"unranked\" {:models [{:model \"a\" :rank 1}]}}}")
 
-(deftest ranked-alias-and-provider-shape-is-accepted-and-merges-per-key
+(deftest pool-and-provider-shape-is-accepted-and-merges-per-key
   (let [config (core/parse-config "/tmp/ranked.edn" ranked-fixture)]
-    (is (= [{:model "a" :rank 1} {:model "x" :rank 1} {:model "lemonade/local" :rank 2}] (get-in config [:aliases "heavy"])))
+    (is (= {:rank 1 :models [{:model "a" :rank 1} {:model "x" :rank 1} {:model "lemonade/local" :rank 2}]} (get-in config [:pools "heavy"])))
     (is (= #{"anthropic"} (get-in config [:harnesses :claude :providers])))
     (is (= config (core/validate-merged-config! config)) "the fixture is valid once merged")
-    (testing "vector alias is returned by canonical-model and flagged; string alias is not"
-      (is (core/vector-alias? config "heavy"))
-      (is (not (core/vector-alias? config "a")))
-      (is (not (core/vector-alias? config "anthropic/claude-a-1")))
-      (is (vector? (core/canonical-model config "heavy"))))
+    (testing "a pool name is flagged and passes through canonical-model; a string alias is not a pool"
+      (is (core/pool? config "heavy"))
+      (is (core/pool? config "unranked"))
+      (is (not (core/pool? config "a")))
+      (is (not (core/pool? config "anthropic/claude-a-1")))
+      (is (= "heavy" (core/canonical-model config "heavy"))))
     (testing "string alias and canonical ID resolve exactly as before"
       (is (= ["--model" "a"] (core/model-args config "claude" "a")))
       (is (= ["--model" "a"] (core/model-args config "claude" "anthropic/claude-a-1")))
       (is (= ["--model" "openai-codex/gpt-x"] (core/model-args (assoc-in config [:harnesses :pi :model-flag] "--model") "pi" "x"))))
-    (testing "a vector alias is replaced wholesale per key; sibling aliases and :providers rows follow merge-config"
-      (let [override {:aliases {"heavy" [{:model "x" :rank 1}]} :providers {"anthropic" {:quota-provider "claude"}}}
+    (testing "a pool is replaced wholesale per key, rank included; sibling pools, aliases and :providers rows follow merge-config"
+      (let [override {:pools {"heavy" {:models [{:model "x" :rank 1}]}} :providers {"anthropic" {:quota-provider "claude"}}}
             merged (core/merge-config config override)]
-        (is (= [{:model "x" :rank 1}] (get-in merged [:aliases "heavy"])))
+        (is (= {:models [{:model "x" :rank 1}]} (get-in merged [:pools "heavy"])))
+        (is (= {:models [{:model "a" :rank 1}]} (get-in merged [:pools "unranked"])))
         (is (= "anthropic/claude-a-1" (get-in merged [:aliases "a"])))
         (is (= {:quota-provider "claude"} (get-in merged [:providers "anthropic"])))
         (is (= {:quota-provider "codex" :reserve 0.1} (get-in merged [:providers "openai-codex"])))))
@@ -313,22 +316,35 @@
       (is (nil? (core/provider-prefix "bare")))
       (is (nil? (core/provider-prefix nil))))))
 
-(deftest ranked-alias-and-provider-shape-violations-name-the-file
+(deftest pool-and-provider-shape-violations-name-the-file
   (let [bad (fn [text] (try (core/parse-config "/tmp/ranked-bad.edn" text) nil
                             (catch clojure.lang.ExceptionInfo e (when (= "/tmp/ranked-bad.edn" (:path (ex-data e))) (.getMessage e)))))]
-    (is (nil? (bad "{:aliases {\"h\" [{:model \"a\" :rank 1}]} :providers {\"p\" {:quota-provider \"codex\" :reserve 0}} :harnesses {:pi {:model-flag \"--model\" :providers #{\"p\"}}}}"))
-        "positive control: the minimal valid shape parses")
+    (is (nil? (bad "{:pools {\"h\" {:models [{:model \"a\" :rank 1}]} \"r\" {:rank 2 :models [{:model \"a\" :rank 1}]}} :providers {\"p\" {:quota-provider \"codex\" :reserve 0}} :harnesses {:pi {:model-flag \"--model\" :providers #{\"p\"}}}}"))
+        "positive control: the minimal valid shape parses, with and without a pool rank")
     (doseq [[label text pattern]
-            [["empty candidate vector" "{:aliases {\"h\" []}}" #"must not be empty"]
-             ["candidate not a map" "{:aliases {\"h\" [\"a\"]}}" #":model, :rank and optional :quota-scope"]
-             ["candidate extra key" "{:aliases {\"h\" [{:model \"a\" :rank 1 :x 1}]}}" #":model, :rank and optional :quota-scope"]
-             ["candidate missing rank" "{:aliases {\"h\" [{:model \"a\"}]}}" #":model, :rank and optional :quota-scope"]
-             ["blank candidate model" "{:aliases {\"h\" [{:model \"\" :rank 1}]}}" #":model must be a non-blank"]
-             ["zero rank" "{:aliases {\"h\" [{:model \"a\" :rank 0}]}}" #":rank must be a positive"]
-             ["negative rank" "{:aliases {\"h\" [{:model \"a\" :rank -1}]}}" #":rank must be a positive"]
-             ["fractional rank" "{:aliases {\"h\" [{:model \"a\" :rank 1.5}]}}" #":rank must be a positive"]
-             ["string rank" "{:aliases {\"h\" [{:model \"a\" :rank \"1\"}]}}" #":rank must be a positive"]
-             ["list alias value" "{:aliases {\"h\" ({:model \"a\" :rank 1})}}" #"string or a vector"]
+            [[":pools not a map" "{:pools [1]}" #":pools must be a map"]
+             ["blank pool name" "{:pools {\"\" {:models [{:model \"a\" :rank 1}]}}}" #":pools key must be a non-blank"]
+             ["pool not a map" "{:pools {\"h\" [{:model \"a\" :rank 1}]}}" #"must be a map with :models and optional :rank"]
+             ["pool unknown key" "{:pools {\"h\" {:models [{:model \"a\" :rank 1}] :weight 1}}}" #"must be a map with :models and optional :rank"]
+             ["pool missing :models" "{:pools {\"h\" {:rank 1}}}" #"must be a map with :models and optional :rank"]
+             ["zero pool rank" "{:pools {\"h\" {:rank 0 :models [{:model \"a\" :rank 1}]}}}" #"pool :rank must be a positive"]
+             ["fractional pool rank" "{:pools {\"h\" {:rank 1.5 :models [{:model \"a\" :rank 1}]}}}" #"pool :rank must be a positive"]
+             ["string pool rank" "{:pools {\"h\" {:rank \"1\" :models [{:model \"a\" :rank 1}]}}}" #"pool :rank must be a positive"]
+             ["empty candidate vector" "{:pools {\"h\" {:models []}}}" #"must be a non-empty vector"]
+             ["candidates not a vector" "{:pools {\"h\" {:models ({:model \"a\" :rank 1})}}}" #"must be a non-empty vector"]
+             ["candidate not a map" "{:pools {\"h\" {:models [\"a\"]}}}" #":model, :rank and optional :quota-scope"]
+             ["candidate extra key" "{:pools {\"h\" {:models [{:model \"a\" :rank 1 :x 1}]}}}" #":model, :rank and optional :quota-scope"]
+             ["candidate missing rank" "{:pools {\"h\" {:models [{:model \"a\"}]}}}" #":model, :rank and optional :quota-scope"]
+             ["blank candidate model" "{:pools {\"h\" {:models [{:model \"\" :rank 1}]}}}" #":model must be a non-blank"]
+             ["zero rank" "{:pools {\"h\" {:models [{:model \"a\" :rank 0}]}}}" #"candidate :rank must be a positive"]
+             ["negative rank" "{:pools {\"h\" {:models [{:model \"a\" :rank -1}]}}}" #"candidate :rank must be a positive"]
+             ["fractional rank" "{:pools {\"h\" {:models [{:model \"a\" :rank 1.5}]}}}" #"candidate :rank must be a positive"]
+             ["string rank" "{:pools {\"h\" {:models [{:model \"a\" :rank \"1\"}]}}}" #"candidate :rank must be a positive"]
+             ["legacy vector alias" "{:aliases {\"h\" [{:model \"a\" :rank 1}]}}" #"move it to :pools"]
+             [":pi not a map" "{:pi true}" #":pi must be a map"]
+             [":pi unknown key" "{:pi {:default-pool true}}" #":pi must be a map"]
+             [":pi setting not a boolean" "{:pi {:default-model-pool \"yes\"}}" #"must be true or false"]
+             ["list alias value" "{:aliases {\"h\" ({:model \"a\" :rank 1})}}" #"value must be a non-blank string"]
              [":providers not a map" "{:providers [1]}" #":providers must be a map"]
              [":providers blank key" "{:providers {\"\" {}}}" #"key must be a non-blank"]
              [":providers row not a map" "{:providers {\"p\" 1}}" #"entry must be a map"]
@@ -347,6 +363,10 @@
       (let [message (bad text)]
         (is (some? message) (str label ": must throw with the file path"))
         (is (and message (re-find pattern message)) (str label ": " message))))
+    (testing "the :pi startup setting accepts a boolean and merges per key"
+      (is (nil? (bad "{:pi {:default-model-pool true}}")))
+      (is (nil? (bad "{:pi {}}")))
+      (is (= {:default-model-pool false} (:pi (core/merge-config {:pi {:default-model-pool true}} {:pi {:default-model-pool false}})))))
     (testing "a provider row may be empty (local provider) and :reserve bounds are inclusive"
       (is (nil? (bad "{:providers {\"local\" {} \"p\" {:reserve 1}}}"))))))
 
@@ -354,30 +374,40 @@
   (let [valid (core/parse-config "/tmp/ranked.edn" ranked-fixture)
         thrown (fn [config] (try (core/validate-merged-config! config) nil (catch clojure.lang.ExceptionInfo e e)))]
     (is (nil? (thrown valid)) "positive control: the fixture passes")
-    (testing "a candidate resolving to a vector alias fails, naming alias and model"
-      (let [e (thrown (assoc-in valid [:aliases "middle"] [{:model "heavy" :rank 1}]))]
-        (is (re-find #"resolves to a vector alias" (str (some-> e .getMessage))))
-        (is (= {:alias "middle" :model "heavy"} (select-keys (ex-data e) [:alias :model])))))
+    (testing "a candidate naming a pool fails, naming pool and model"
+      (let [e (thrown (assoc-in valid [:pools "middle"] {:models [{:model "heavy" :rank 1}]}))]
+        (is (re-find #"candidate :model names a pool" (str (some-> e .getMessage))))
+        (is (= {:pool "middle" :model "heavy"} (select-keys (ex-data e) [:pool :model])))))
     (testing "a candidate whose canonical provider prefix is not in :providers fails"
-      (let [e (thrown (assoc-in valid [:aliases "middle"] [{:model "unknown/model" :rank 1}]))]
+      (let [e (thrown (assoc-in valid [:pools "middle"] {:models [{:model "unknown/model" :rank 1}]}))]
         (is (re-find #"not in :providers" (str (some-> e .getMessage))))
         (is (= "unknown" (:provider (ex-data e)))))
       (testing "through a string alias hop"
-        (let [e (thrown (-> valid (assoc-in [:aliases "y"] "mystery/model") (assoc-in [:aliases "middle"] [{:model "y" :rank 1}])))]
+        (let [e (thrown (-> valid (assoc-in [:aliases "y"] "mystery/model") (assoc-in [:pools "middle"] {:models [{:model "y" :rank 1}]})))]
           (is (= "mystery" (:provider (ex-data e))))))
       (testing "a candidate with no provider prefix"
-        (is (some? (thrown (assoc-in valid [:aliases "middle"] [{:model "bare" :rank 1}]))))))
+        (is (some? (thrown (assoc-in valid [:pools "middle"] {:models [{:model "bare" :rank 1}]}))))))
     (testing "an explicit pass-through string alias is not checked for a provider prefix"
       (is (nil? (thrown (assoc-in valid [:aliases "plain"] "mystery/model")))))
     (testing "a :harnesses :providers member absent from :providers fails, naming the kind and provider"
       (let [e (thrown (assoc-in valid [:harnesses :claude :providers] #{"anthropic" "nope"}))]
         (is (= {:harness :claude :provider "nope"} (ex-data e)))))
-    (testing "a string alias chained to a vector alias is still a chain error"
+    (testing "a string alias whose value is a pool name fails, naming the pool"
       (is (= "heavy" (:key (ex-data (thrown (assoc-in valid [:aliases "chain"] "heavy")))))))
-    (testing "a vector alias key colliding with a :models row still fails"
-      (is (= "heavy" (:key (ex-data (thrown (assoc-in valid [:models "heavy"] {:claude "x"})))))))
-    (testing "a vector alias with no :providers at all fails (sparse configs only allow string aliases)"
-      (is (some? (thrown {:aliases {"h" [{:model "a/b" :rank 1}]}})))
+    (testing "a name in more than one of :models, :aliases and :pools fails, naming the key"
+      (doseq [config [(assoc-in valid [:models "heavy"] {:claude "x"})
+                      (assoc-in valid [:aliases "heavy"] "anthropic/claude-a-1")
+                      (assoc-in valid [:models "a"] {:claude "x"})]]
+        (let [e (thrown config)]
+          (is (re-find #"present in both" (str (some-> e .getMessage))))
+          (is (#{"heavy" "a"} (:key (ex-data e)))))))
+    (testing "two ranked pools with the same rank fail; unranked pools never collide"
+      (let [e (thrown (assoc-in valid [:pools "light"] {:rank 1 :models [{:model "a" :rank 1}]}))]
+        (is (re-find #"same :rank" (str (some-> e .getMessage))))
+        (is (= #{"heavy" "light"} (set (:pools (ex-data e))))))
+      (is (nil? (thrown (assoc-in valid [:pools "other"] {:models [{:model "a" :rank 1}]})))))
+    (testing "a pool with no :providers at all fails (sparse configs only allow string aliases)"
+      (is (some? (thrown {:pools {"h" {:models [{:model "a/b" :rank 1}]}}})))
       (is (nil? (thrown {:aliases {"h" "a/b"}}))))))
 
 (deftest worktree-branch-naming-is-predictable
@@ -886,25 +916,29 @@
         thrown (fn [layers]
                  (try (core/validate-merged-config! (apply core/merge-config (map :config layers)) layers) nil
                       (catch clojure.lang.ExceptionInfo e e)))]
-    (is (nil? (thrown [base (layer "/home.edn" {:aliases {"h" [{:model "s" :rank 1}]}})])) "positive control: a valid chain passes")
-    (testing "a candidate with an unknown provider names the file that defines the vector alias"
-      (let [e (thrown [base (layer "/home.edn" {:aliases {"h" [{:model "q/x" :rank 1}]}}) (layer "/project.edn" {})])]
+    (is (nil? (thrown [base (layer "/home.edn" {:pools {"h" {:models [{:model "s" :rank 1}]}}})])) "positive control: a valid chain passes")
+    (testing "a candidate with an unknown provider names the file that defines the pool"
+      (let [e (thrown [base (layer "/home.edn" {:pools {"h" {:models [{:model "q/x" :rank 1}]}}}) (layer "/project.edn" {})])]
         (is (= "/home.edn" (:path (ex-data e))))
         (is (re-find #"\(in /home\.edn\)" (.getMessage e)))))
     (testing "the winning definition is attributed, not an overridden one"
-      (let [layers [base (layer "/home.edn" {:aliases {"h" [{:model "q/x" :rank 1}]}})
-                    (layer "/project.edn" {:aliases {"h" [{:model "q/y" :rank 1}]}})]]
+      (let [layers [base (layer "/home.edn" {:pools {"h" {:models [{:model "q/x" :rank 1}]}}})
+                    (layer "/project.edn" {:pools {"h" {:models [{:model "q/y" :rank 1}]}}})]]
         (is (= "/project.edn" (:path (ex-data (thrown layers))))))
-      (is (nil? (thrown [base (layer "/home.edn" {:aliases {"h" [{:model "q/x" :rank 1}]}})
-                         (layer "/project.edn" {:aliases {"h" [{:model "s" :rank 1}]}})]))
-          "a later layer that replaces the bad alias clears the error"))
-    (testing "a string-alias hop defined in another layer is named too, alias file first"
-      (let [e (thrown [base (layer "/home.edn" {:aliases {"h" [{:model "hop" :rank 1}]}})
+      (is (nil? (thrown [base (layer "/home.edn" {:pools {"h" {:models [{:model "q/x" :rank 1}]}}})
+                         (layer "/project.edn" {:pools {"h" {:models [{:model "s" :rank 1}]}}})]))
+          "a later layer that replaces the bad pool clears the error"))
+    (testing "a string-alias hop defined in another layer is named too, pool file first"
+      (let [e (thrown [base (layer "/home.edn" {:pools {"h" {:models [{:model "hop" :rank 1}]}}})
                        (layer "/project.edn" {:aliases {"hop" "q/x"}})])]
         (is (= ["/home.edn" "/project.edn"] (:paths (ex-data e))))
         (is (= "/home.edn" (:path (ex-data e))))))
-    (testing "a vector-alias candidate, an alias/model overlap, a chain and a harness provider all carry the file"
-      (is (= "/project.edn" (:path (ex-data (thrown [base (layer "/project.edn" {:aliases {"h" [{:model "h2" :rank 1}] "h2" [{:model "s" :rank 1}]}})])))))
+    (testing "duplicate pool ranks in different layers name both files"
+      (let [e (thrown [base (layer "/home.edn" {:pools {"h" {:rank 1 :models [{:model "s" :rank 1}]}}})
+                       (layer "/project.edn" {:pools {"h2" {:rank 1 :models [{:model "s" :rank 1}]}}})])]
+        (is (= #{"/home.edn" "/project.edn"} (set (:paths (ex-data e)))))))
+    (testing "a pool candidate, an alias/model overlap, a chain and a harness provider all carry the file"
+      (is (= "/project.edn" (:path (ex-data (thrown [base (layer "/project.edn" {:pools {"h" {:models [{:model "h2" :rank 1}]} "h2" {:models [{:model "s" :rank 1}]}}})])))))
       (is (= #{"/shipped.edn" "/project.edn"}
              (set (:paths (ex-data (thrown [base (layer "/project.edn" {:aliases {"p/m" "s"}})]))))))
       (is (= "/project.edn" (:path (ex-data (thrown [base (layer "/project.edn" {:aliases {"c" "s2" "s2" "p/m"}})])))))
@@ -921,8 +955,8 @@
    :providers {"anthropic" {:quota-provider "claude"}
                "openai-codex" {:quota-provider "codex" :reserve 0.1} "lemonade" {}}
    :aliases {"fable" "anthropic/claude-fable-5-1" "astra" "openai-codex/gpt-6-astra"
-             "qwen" "lemonade/Qwen-Dense" "plain" "anthropic/claude-opus-5-5"
-             "heavy" [{:model "fable" :rank 1} {:model "astra" :rank 1} {:model "qwen" :rank 2}]}})
+             "qwen" "lemonade/Qwen-Dense" "plain" "anthropic/claude-opus-5-5"}
+   :pools {"heavy" {:rank 1 :models [{:model "fable" :rank 1} {:model "astra" :rank 1} {:model "qwen" :rank 2}]}}})
 
 (defn- ok [remaining]
   {:state {:status "fresh" :stale false}
@@ -931,7 +965,7 @@
   {:providers (mapv (fn [[p row]] (assoc row :localProvider p)) rows)})
 (defn- chosen [candidates rows] (:chosen (core/route candidates (evidence rows))))
 
-(deftest candidates-expands-vector-aliases-and-filters-by-kind
+(deftest candidates-expands-pools-and-filters-by-kind
   (let [all (core/candidates route-config "pi" "heavy")]
     (is (= [{:model "fable" :canonical "anthropic/claude-fable-5-1" :provider "anthropic" :rank 1 :reserve 0}
             {:model "astra" :canonical "openai-codex/gpt-6-astra" :provider "openai-codex" :rank 1 :reserve 0.1}
@@ -940,9 +974,9 @@
     (is (= 3 (count (core/candidates route-config "gemini" "heavy")))))
   (is (every? nil? (map #(core/candidates route-config "pi" %) ["plain" "anthropic/claude-opus-5-5" "nothing"])))
   (is (= "anthropic/claude-x"
-         (:canonical (first (core/candidates (assoc-in route-config [:aliases "v"] [{:model "anthropic/claude-x" :rank 1}]) "pi" "v")))))
+         (:canonical (first (core/candidates (assoc-in route-config [:pools "v"] {:models [{:model "anthropic/claude-x" :rank 1}]}) "pi" "v")))))
   (is (= "seven_day_sonnet"
-         (:quota-scope (first (core/candidates (assoc-in route-config [:aliases "v"] [{:model "plain" :rank 1 :quota-scope "seven_day_sonnet"}]) "pi" "v"))))))
+         (:quota-scope (first (core/candidates (assoc-in route-config [:pools "v"] {:models [{:model "plain" :rank 1 :quota-scope "seven_day_sonnet"}]}) "pi" "v"))))))
 
 (deftest candidates-with-every-provider-filtered-is-an-empty-vector
   (is (= [] (core/candidates (assoc-in route-config [:harnesses :claude :providers] #{"nothing"}) "claude" "heavy"))))
@@ -1049,7 +1083,7 @@
   (let [scoped (assoc-in (ok 0.8) [:quotaSemantics :effectiveAvailability]
                          [{:scope "seven_day_fable" :status "known" :effectivePercentRemaining 0}])
         rows {"anthropic" scoped "openai-codex" (ok 0.5) "lemonade" {:local true}}
-        config (assoc-in route-config [:aliases "heavy" 0 :quota-scope] "seven_day_fable")
+        config (assoc-in route-config [:pools "heavy" :models 0 :quota-scope] "seven_day_fable")
         cs (core/candidates config "pi" "heavy")]
     (is (= "openai-codex/gpt-6-astra" (chosen cs rows)))
     (is (= "openai-codex/gpt-6-astra" (chosen cs (assoc rows "anthropic" {}))) "known sibling beats unresolved scope at the same rank")

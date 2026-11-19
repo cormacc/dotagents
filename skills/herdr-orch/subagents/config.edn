@@ -17,14 +17,17 @@
 ;; claude spelling on an `anthropic/` row, a codex spelling on an `openai-codex/` row). Pi
 ;; receives the canonical ID unchanged, so it has no column.
 ;;
-;; `:aliases` maps a short name to its canonical ID, or a weight name to a vector of ranked
-;; candidates `{:model <short name or canonical ID> :rank n}` with an optional exact
-;; `:quota-scope` selector, which defaults to `all_models`. Give a model with its own
-;; quota scope (for example `model:fable`) that selector. Lower rank is preferred; the
-;; router chooses among them at spawn from each account's remaining allowance. Pi expands
+;; `:aliases` maps a short name to its canonical ID.
+;;
+;; `:pools` maps a pool name to `{:rank n :models [...]}`: ranked candidates
+;; `{:model <short name or canonical ID> :rank n}` with an optional exact `:quota-scope`
+;; selector, which defaults to `all_models`. Give a model with its own quota scope (for
+;; example `model:fable`) that selector. Lower rank is preferred at both levels: the router
+;; chooses among candidates from each account's remaining allowance, and the pool `:rank`
+;; (optional, unique) orders which pool claims a model for startup inference. Pi expands
 ;; authenticated registered model/account pairs and requires the requested reasoning level;
 ;; equal pairs use the default account first. Accounts do not belong in this model table.
-;; A candidate takes at most one string-alias hop and never names another vector alias.
+;; A candidate takes at most one string-alias hop and never names another pool.
 ;;
 ;; `:providers` maps a local provider prefix to its owned adapter `:quota-provider`
 ;; and optional `:reserve` fraction. Empty rows describe local providers.
@@ -46,20 +49,20 @@
           "anthropic/claude-opus-5-5"   {:claude "opus"}
           "anthropic/claude-sonnet-5-5" {:claude "sonnet"}
           "anthropic/claude-haiku-5-5"  {:claude "haiku"}
-          "openai-codex/gpt-6-astra"    {:codex "gpt-6-astra"}
-          "openai-codex/gpt-6.1-sol"    {:codex "gpt-6.1-sol"}
+          "openai-codex/gpt-6.2-astra"  {:codex "gpt-6.2-astra"}
+          "openai-codex/gpt-6.2-sol"    {:codex "gpt-6.2-sol"}
           "openai-codex/gpt-6.1-terra"  {:codex "gpt-6.1-terra"}
           "openai-codex/gpt-6-luna"     {:codex "gpt-6-luna"}}
- :aliases {"heavy"             [{:model "fable"  :rank 1 :quota-scope "model:fable"} {:model "gpt-astra"   :rank 1}]
-           "middle"            [{:model "opus"   :rank 1} {:model "gpt-sol"   :rank 1}]
-           "light"             [{:model "sonnet" :rank 1} {:model "gpt-terra" :rank 1}]
-           "feather"           [{:model "haiku"  :rank 1} {:model "gpt-luna"    :rank 1} {:model "qwen-dense" :rank 2}]
-           "qwen-dense"        "lemonade/Qwen3.8-27B-GGUF-Q4_K_M"
+ :pools {"heavy"   {:rank 1 :models [{:model "fable"  :rank 1 :quota-scope "model:fable"} {:model "gpt-astra" :rank 1}]}
+         "middle"  {:rank 2 :models [{:model "opus"   :rank 1} {:model "gpt-sol"   :rank 1}]}
+         "light"   {:rank 3 :models [{:model "sonnet" :rank 1} {:model "gpt-terra" :rank 1}]}
+         "feather" {:rank 4 :models [{:model "haiku"  :rank 1} {:model "gpt-luna"  :rank 1} {:model "qwen-dense" :rank 2}]}}
+ :aliases {"qwen-dense"        "lemonade/Qwen3.8-27B-GGUF-Q4_K_M"
            "fable"             "anthropic/claude-fable-5-2"
            "opus"              "anthropic/claude-opus-5-5"
            "sonnet"            "anthropic/claude-sonnet-5-5"
            "haiku"             "anthropic/claude-haiku-5-5"
-           "gpt-astra"         "openai-codex/gpt-6-astra"
-           "gpt-sol"           "openai-codex/gpt-6.1-sol"
+           "gpt-astra"         "openai-codex/gpt-6.2-astra"
+           "gpt-sol"           "openai-codex/gpt-6.2-sol"
            "gpt-terra"         "openai-codex/gpt-6.1-terra"
            "gpt-luna"          "openai-codex/gpt-6-luna"}}

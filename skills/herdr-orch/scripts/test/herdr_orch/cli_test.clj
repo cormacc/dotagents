@@ -426,7 +426,7 @@
 
 ;; Ranked aliases come from an explicit fixture config, not the shipped one, so this holds
 ;; independently of which shipped aliases are vectors. Mutates global with-redefs state -- serial.
-(deftest ^:serial roster-lists-ranked-aliases-from-a-fixture-config
+(deftest ^:serial roster-lists-pools-from-a-fixture-config
   (let [dir (fs/create-temp-dir {:prefix "roster-ranked-"})
         project (str (fs/path dir "project"))
         home (str (fs/path dir "home"))
@@ -439,45 +439,55 @@
                                  "openai-codex" {:quota-provider "codex"}}
                      :models {"anthropic/claude-a-1" {:claude "a"}}
                      :aliases {"a" "anthropic/claude-a-1" "x" "openai-codex/gpt-x"
-                               "strong" [{:model "x" :rank 2} {:model "a" :rank 1} {:model "anthropic/claude-b" :rank 2}]
-                               "plain" "anthropic/claude-a-1"}}))
+                               "plain" "anthropic/claude-a-1"}
+                     :pools {"strong" {:rank 2 :models [{:model "x" :rank 2} {:model "a" :rank 1} {:model "anthropic/claude-b" :rank 2}]}
+                             "loose" {:models [{:model "a" :rank 1}]}
+                             "apex" {:rank 1 :models [{:model "a" :rank 1}]}}
+                     :pi {:default-model-pool true}}))
     (write! (fs/path skill "subagents" "ranked.md") "---\nname: ranked\ndescription: fixture\nmodel: strong\nretro: false\n---\nFixture.\n")
     (write! (fs/path skill "subagents" "plain.md") "---\nname: plain\ndescription: fixture\nmodel: plain\nretro: false\n---\nFixture.\n")
     (with-redefs [ledger/assignment-root (constantly project)
                   cli/home-directory (constantly home)
                   cli/launcher-bin (constantly (str (fs/path skill "scripts" "oh")))]
-      (let [{:keys [personas models routes] :as listing} (cli/roster-listing)
+      (let [{:keys [personas models pools] :as listing} (cli/roster-listing)
             by-name (into {} (map (juxt :name identity)) personas)]
-        (testing "a vector alias is a ranked route, lowest rank first, config order within a rank"
-          (is (= [{:alias "strong"
+        (testing "the Pi startup setting is reported"
+          (is (= {:default-model-pool true} (:pi listing))))
+        (testing "ranked pools by rank, then unranked pools; candidates lowest rank first, config order within a rank"
+          (is (= ["apex" "strong" "loose"] (mapv :pool pools)))
+          (is (= [1 2 nil] (mapv :rank pools)))
+          (is (= [{:pool "strong" :rank 2
                    :candidates [{:rank 1 :model "a" :canonical "anthropic/claude-a-1" :provider "anthropic"}
                                 {:rank 2 :model "x" :canonical "openai-codex/gpt-x" :provider "openai-codex"}
                                 {:rank 2 :model "anthropic/claude-b" :canonical "anthropic/claude-b" :provider "anthropic"}]}]
-                 routes)))
+                 (filterv #(= "strong" (:pool %)) pools))))
         (testing "model rows hold string aliases only, and every candidate canonical ID has a row"
           (is (= #{"anthropic/claude-a-1" "openai-codex/gpt-x" "anthropic/claude-b"} (set (map :canonical models))))
           (is (= ["a" "plain"] (:aliases (first (filter #(= "anthropic/claude-a-1" (:canonical %)) models)))))
           (is (not-any? #(some #{"strong"} (:aliases %)) models)))
-        (testing "a persona on a vector alias has no single canonical ID; a string alias keeps its own"
+        (testing "a persona on a pool has no single canonical ID; a string alias keeps its own"
           (is (= {:model "strong" :model-canonical nil} (select-keys (by-name "ranked") [:model :model-canonical])))
           (is (= {:model "plain" :model-canonical "anthropic/claude-a-1"} (select-keys (by-name "plain") [:model :model-canonical]))))
         (testing "markdown and org render the ranked list after the table"
-          (is (= (str "Ranked aliases (lowest rank is preferred):\n\n"
-                      "- `strong` -- rank 1 `a`; rank 2 `x`; rank 2 `anthropic/claude-b`")
+          (is (= (str "Pools (lowest rank is preferred):\n\n"
+                      "- `apex` (rank 1) -- rank 1 `a`\n"
+                      "- `strong` (rank 2) -- rank 1 `a`; rank 2 `x`; rank 2 `anthropic/claude-b`\n"
+                      "- `loose` -- rank 1 `a`")
                  (second (str/split (cli/roster-text listing "markdown" "models" false) #"\n\n" 2))))
-          (is (str/includes? (cli/roster-text listing "org" "models" false) "- =strong= -- rank 1 =a=; rank 2 =x="))
+          (is (str/includes? (cli/roster-text listing "org" "models" false) "- =strong= (rank 2) -- rank 1 =a=; rank 2 =x="))
           (is (str/includes? (cli/roster-text listing "markdown" "models" true)
                              "rank 1 `a` (anthropic/claude-a-1); rank 2 `x` (openai-codex/gpt-x); rank 2 `anthropic/claude-b`")
               "--detail adds the canonical ID only where it differs from the written model"))))
-    (testing "a config with no vector alias renders no ranked section"
+    (testing "a config with no pool renders no pool section"
       (write! (fs/path skill "subagents" "config.edn")
               (pr-str {:harnesses {:pi {:model-flag "--model"}} :models {"m/x" {}} :aliases {"x" "m/x"}}))
       (with-redefs [ledger/assignment-root (constantly project)
                     cli/home-directory (constantly home)
                     cli/launcher-bin (constantly (str (fs/path skill "scripts" "oh")))]
         (let [listing (cli/roster-listing)]
-          (is (= [] (:routes listing)))
-          (is (not (str/includes? (cli/roster-text listing "markdown" "models" false) "Ranked"))))))))
+          (is (= [] (:pools listing)))
+          (is (= {:default-model-pool false} (:pi listing)) "the setting defaults to false")
+          (is (not (str/includes? (cli/roster-text listing "markdown" "models" false) "Pools"))))))))
 
 ;; The README embeds `oh roster --format org` output through org babel `#+CALL:` lines.
 ;; This fails when a packaged persona, trait, or config change was not regenerated into it.
@@ -6654,9 +6664,9 @@
             [weight {"anthropic" anthropic "openai-codex" codex "lemonade" (str/replace local "`" "")}]))))
 
 (defn- shipped-candidates
-  "Ranked candidates of the vector alias `weight`, each with its canonical ID and provider."
+  "Ranked candidates of the pool `weight`, each with its canonical ID and provider."
   [config weight]
-  (for [{:keys [model rank]} (get-in config [:aliases weight])
+  (for [{:keys [model rank]} (get-in config [:pools weight :models])
         :let [canonical (get-in config [:aliases model] model)]]
     {:model model :rank rank :canonical canonical :provider (core/provider-prefix canonical)}))
 
@@ -6664,7 +6674,7 @@
 ;; hand, so a model bump needs no test edit. core_test.clj covers the resolution rules
 ;; themselves (alias hop, pass-through, open kind set) with fixture configs.
 (deftest shipped-config-invariants
-  (let [{:keys [aliases models harnesses providers] :as config} @shipped-config
+  (let [{:keys [aliases models harnesses providers pools] :as config} @shipped-config
         native-kinds (disj (set (keys harnesses)) :pi)
         weights ["heavy" "middle" "light" "feather"]]
     (testing "the shipped config is valid once merged"
@@ -6691,7 +6701,7 @@
       (is (not-any? #(contains? #{"kimi" "zai"} (:provider %))
                     (mapcat #(core/candidates config "pi" %) ["heavy" "middle" "light" "feather"]))))
     (testing "every string alias targets a :models row or a canonical ID of a configured provider"
-      (doseq [[k target] aliases :when (string? target)]
+      (doseq [[k target] aliases]
         (is (or (contains? models target) (contains? providers (core/provider-prefix target))) (str k " -> " target))))
     (testing "every :models row sits under a configured provider and has one column per native kind that provider runs, and no :pi column"
       (is (seq native-kinds) "positive control: the shipped harnesses include native kinds")
@@ -6705,18 +6715,19 @@
     (testing "packaged string aliases keep only short names"
       (is (= #{"fable" "opus" "sonnet" "haiku" "gpt-astra" "gpt-sol"
                "gpt-terra" "gpt-luna" "qwen-dense"}
-             (set (keep (fn [[k v]] (when (string? v) k)) aliases)))))
+             (set (keys aliases)))))
     (testing "only Fable selects a model-specific quota scope"
-      (is (= "model:fable" (get-in aliases ["heavy" 0 :quota-scope])))
+      (is (= "model:fable" (get-in pools ["heavy" :models 0 :quota-scope])))
       (doseq [weight ["middle" "light" "feather"]]
-        (is (nil? (get-in aliases [weight 0 :quota-scope])) weight)))
-    (testing "the four weights are vector aliases of well-formed ranked candidates"
-      (is (= (set weights) (set (keep (fn [[k v]] (when (vector? v) k)) aliases))))
+        (is (nil? (get-in pools [weight :models 0 :quota-scope])) weight)))
+    (testing "the four weights are pools ranked 1 to 4, heaviest first, of well-formed ranked candidates"
+      (is (= (set weights) (set (keys pools))))
+      (is (= [1 2 3 4] (mapv #(get-in pools [% :rank]) weights)))
       (doseq [weight weights
               :let [candidates (shipped-candidates config weight)]]
         (is (every? #(contains? providers (:provider %)) candidates) weight)
         (is (every? #(pos-int? (:rank %)) candidates) weight)
-        (is (every? #(not (vector? (aliases (:model %)))) candidates) weight)))
+        (is (every? #(not (contains? pools (:model %))) candidates) weight)))
     (testing "each weight lists one rank-1 anthropic and one rank-1 openai-codex candidate"
       (doseq [weight weights
               provider ["anthropic" "openai-codex"]]
@@ -7005,11 +7016,12 @@
 ;; both fail before any ledger or pane mutation. Fresh keys keep this independent of the shipped aliases.
 (deftest project-override-ranked-alias-violations-fail-before-ledger-or-mutation
   (doseq [[label override pattern]
-          [["per-file: zero rank" {:aliases {"fixture-r" [{:model "fixture/model" :rank 0}]}} #":rank must be a positive"]
+          [["per-file: zero rank" {:pools {"fixture-r" {:models [{:model "fixture/model" :rank 0}]}}} #":rank must be a positive"]
+           ["per-file: legacy vector alias" {:aliases {"fixture-r" [{:model "fixture/model" :rank 1}]}} #"move it to :pools"]
            ["per-file: legacy adapter" {:providers {"fixture" {:usage :bogus}}} #"legacy provider settings"]
            ["per-file: legacy credentials" {:providers {"fixture" {:credentials [:pi]}}} #"legacy provider settings"]
            ["per-file: legacy cache" {:providers {"fixture" {:cache-ttl-s 300}}} #"legacy provider settings"]
-           ["merged: provider absent from :providers" {:aliases {"fixture-r" [{:model "fixture/model" :rank 1}]}} #"not in :providers"]
+           ["merged: provider absent from :providers" {:pools {"fixture-r" {:models [{:model "fixture/model" :rank 1}]}}} #"not in :providers"]
            ["merged: kind provider absent from :providers" {:harnesses {:pi {:model-flag "--model" :providers #{"fixture"}}}} #":harnesses :providers member"]]]
     (testing label
       (let [{:keys [env log dir]} (fake-env {} minimal-persona)]
@@ -7026,9 +7038,10 @@
 ;; CLI (project layer) and through `cli/config` with an injected home (home layer and mixed layers).
 (deftest project-override-merged-violations-name-the-project-file
   (doseq [[label override pattern]
-          [["candidate provider" {:aliases {"fixture-r" [{:model "fixture/model" :rank 1}]}} #"not in :providers"]
+          [["candidate provider" {:pools {"fixture-r" {:models [{:model "fixture/model" :rank 1}]}}} #"not in :providers"]
            ["harness provider" {:harnesses {:pi {:model-flag "--model" :providers #{"fixture"}}}} #":harnesses :providers member"]
-           ["vector candidate" {:providers {"fixture" {}} :aliases {"fixture-a" [{:model "fixture/x" :rank 1}] "fixture-b" [{:model "fixture-a" :rank 1}]}} #"resolves to a vector alias"]]]
+           ["pool candidate" {:providers {"fixture" {}} :pools {"fixture-a" {:models [{:model "fixture/x" :rank 1}]} "fixture-b" {:models [{:model "fixture-a" :rank 1}]}}} #"names a pool"]
+           ["duplicate pool rank" {:pools {"fixture-a" {:rank 1 :models [{:model "opus" :rank 1}]}}} #"same :rank"]]]
     (testing label
       (let [{:keys [env log dir]} (fake-env {} minimal-persona)
             config-path (str (fs/path dir ".agents" "subagents" "config.edn"))]
@@ -7051,9 +7064,9 @@
     ;; The launcher is pinned so the shipped layer resolves without the caller's HERDR_ORCH_BIN.
     (with-redefs [ledger/assignment-root (constantly project)
                   cli/launcher-bin (constantly (str (fs/path root "skills" "herdr-orch" "scripts" "oh")))]
-      (write! home-config {:providers {"fixture" {}} :aliases {"fixture-r" [{:model "fixture-hop" :rank 1}] "fixture-hop" "fixture/m"}})
+      (write! home-config {:providers {"fixture" {}} :pools {"fixture-r" {:models [{:model "fixture-hop" :rank 1}]}} :aliases {"fixture-hop" "fixture/m"}})
       (is (nil? (failure)) "positive control: the home layer alone is valid")
-      (testing "a project layer that breaks a home-defined candidate names both files, alias file first"
+      (testing "a project layer that breaks a home-defined candidate names both files, pool file first"
         (write! project-config {:aliases {"fixture-hop" "elsewhere/m"}})
         (let [e (failure)]
           (is (re-find #"not in :providers" (str (some-> e .getMessage))))
@@ -7062,13 +7075,13 @@
           (is (str/includes? (.getMessage e) home-config))
           (is (str/includes? (.getMessage e) project-config))))
       (testing "a bad home-only definition names the home file, not the project file"
-        (write! home-config {:providers {"fixture" {}} :aliases {"fixture-r" [{:model "elsewhere/m" :rank 1}]}})
+        (write! home-config {:providers {"fixture" {}} :pools {"fixture-r" {:models [{:model "elsewhere/m" :rank 1}]}}})
         (write! project-config {:harnesses {:pi {:model-flag "--model" :effort-flag "--thinking"}}})
         (let [e (failure)]
           (is (= home-config (:path (ex-data e))))
           (is (not (str/includes? (.getMessage e) project-config)))))
-      (testing "a project override that replaces the bad alias clears the error"
-        (write! project-config {:aliases {"fixture-r" [{:model "fixture/m" :rank 1}]}})
+      (testing "a project override that replaces the bad pool clears the error"
+        (write! project-config {:pools {"fixture-r" {:models [{:model "fixture/m" :rank 1}]}}})
         (is (nil? (failure))))
       (testing "a harness provider error names the layer defining the harness entry"
         (write! home-config {:harnesses {:pi {:model-flag "--model" :providers #{"ghost"}}}})
@@ -10480,7 +10493,7 @@
       (clear-usage! dir)
       (let [proc (call! env "task" "start" "codex-heavy" "--task" "filtered")]
         (is (= 1 (:exit proc)))
-        (is (re-find #"no candidate of model alias 'heavy' has allowance for kind codex" (:out proc)) (:out proc))
+        (is (re-find #"no candidate of model or pool 'heavy' has allowance for kind codex" (:out proc)) (:out proc))
         (is (str/includes? (:out proc) astra))
         (is (not (str/includes? (:out proc) fable)) "the anthropic candidate is filtered, not listed")
         (is (zero? (ledger-count dir)))
@@ -10535,7 +10548,7 @@
         proc (call! env "task" "start" "pi-heavy" "--task" "refused")]
     (is (= 1 (:exit proc)))
     (let [out (:out proc)]
-      (is (re-find #"no candidate of model alias 'heavy' has allowance" out) out)
+      (is (re-find #"no candidate of model or pool 'heavy' has allowance" out) out)
       (is (str/includes? out (str fable " (rank 1): 0% remaining")) out)
       (is (str/includes? out (str astra " (rank 1): 0% remaining")) out)
       (is (not (str/includes? out "ok]")) "an ok status is not annotated"))
@@ -10611,7 +10624,7 @@
         (use! (usage-body {:anthropic-used 100.0 :codex-used 100}))
         (let [proc (measure! fixture "start" "--model" "heavy" "--task" "x")]
           (is (= 1 (:exit proc)))
-          (is (re-find #"no candidate of model alias 'heavy' has allowance" (:out proc)) (:out proc))
+          (is (re-find #"no candidate of model or pool 'heavy' has allowance" (:out proc)) (:out proc))
           (is (no-measurement-allocation? dir (:log fixture) fixture))))
       (testing "an explicit canonical ID routes the same model"
         (use! (usage-body {:anthropic-used 28.0}))
@@ -10672,7 +10685,7 @@
           (is (= "pi" (:kind data)))
           (is (= [fable fable] (mapv :canonical (:candidates data))))
           (is (= [0.0 0.0] (mapv :remaining (:candidates data))))
-          (is (str/includes? (:out proc) "no candidate of model alias"))))
+          (is (str/includes? (:out proc) "no candidate of model or pool"))))
       (is (zero? (ledger-count dir)))
       (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger/indices"))))
       (is (empty? (filter mutating? (calls log)))))))
@@ -10761,12 +10774,12 @@
   (let [{:keys [env env-file]} (named-routing! (routed-fixture {} {} heavy-persona))
         alias-launch (call! env "task" "start" "pi-heavy" "--task" "alias")]
     (is (zero? (:exit alias-launch)) (:out alias-launch))
-    (is (= "heavy" (injected-env env-file "HERDR_ORCH_MODEL_ALIAS"))))
+    (is (= "heavy" (injected-env env-file "HERDR_ORCH_MODEL_POOL"))))
   (let [{:keys [env env-file]} (named-routing! (routed-fixture {} {} heavy-persona))
         direct (call! env "task" "start" "pi-heavy" "--model" "fable" "--task" "direct")]
     (is (zero? (:exit direct)) (:out direct))
     (is (some? (injected-env env-file "HERDR_ORCH_MODEL")) "positive control: the env file records injected variables")
-    (is (nil? (injected-env env-file "HERDR_ORCH_MODEL_ALIAS")))))
+    (is (nil? (injected-env env-file "HERDR_ORCH_MODEL_POOL")))))
 
 (deftest inventory-refresh-precedes-usage-collection
   (let [{:keys [env dir]} (named-routing! (routed-fixture {} {} heavy-persona))

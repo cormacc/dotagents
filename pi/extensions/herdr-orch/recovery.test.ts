@@ -12,20 +12,21 @@ function fixture(mode = "rpc", history: any[] = []) {
   let selected: any = a, aborts = 0, switches = 0, level = "off", available = [a, b, c];
   let selectionGate: ReturnType<typeof deferred> | undefined, routeGate: ReturnType<typeof deferred> | undefined;
   let autoRoute = false;
+  let rosterResult: any = { pools: [{ pool: "small" }], models: [{ canonical: "google/model-a", aliases: ["gm"] }] };
   let setterError = false, routeResult: any = { chosen: "google/model-a", account: "google", concrete: "google/model-a" };
-  const requests: any[] = [], requestPaths: string[] = [];
+  const requests: any[] = [], requestPaths: string[] = [], authChecks: string[] = [];
   const controller = new AbortController();
   const ctx: any = { mode, hasUI: true, cwd: process.cwd(), signal: controller.signal,
     get model() { return selected; }, isIdle: () => false, abort: () => { aborts++; controller.abort(); }, hasPendingMessages: () => false,
     sessionManager: { getBranch: () => entries },
-    modelRegistry: { getAvailableOfType: async () => available },
+    modelRegistry: { getAvailableOfType: async () => available, isUsingOAuth: (m: any) => m.provider !== "mistral", getProviderAuth: async (p: string) => { authChecks.push(p); return {}; } },
     ui: { notify: (s: string) => notices.push(s), setStatus: (...s: any[]) => status.push(s), setWidget: (...s: any[]) => widgets.push(s) } };
   const pi: any = { on: (name: string, fn: any) => handlers.set(name, fn), registerCommand: (name: string, cmd: any) => commands.set(name, cmd),
     appendEntry: (customType: string, data: any) => entries.push({ type: "custom", customType, data }),
     getThinkingLevel: () => level, setThinkingLevel: (s: string) => { level = s; },
     setModel: async (m: any) => { switches++; await selectionGate?.promise; if (setterError) throw Error("SECRET-token"); const prev = selected; selected = m; await handlers.get("model_select")({ model: m, previousModel: prev }, ctx); return true; } };
   const execute: any = async (args: string[]) => {
-    if (args[0] === "roster") return { details: { routes: [{ alias: "small" }] } };
+    if (args[0] === "roster") return { details: rosterResult };
     requestPaths.push(args[2]);
     assert.equal(statSync(args[2]).mode & 0o777, 0o600);
     assert.equal(statSync(join(args[2], "..")).mode & 0o777, 0o700);
@@ -51,10 +52,10 @@ function fixture(mode = "rpc", history: any[] = []) {
     await refuse(...args);
     return emit("agent_before_settle", { entries: [{ type: "custom", customType: "other", data: {} }] });
   };
-  return { ctx, pi, emit, refuse, fail, commands, tier, notices, status, widgets, entries, requests, requestPaths, controller,
+  return { ctx, pi, emit, refuse, fail, commands, tier, notices, status, widgets, entries, requests, requestPaths, controller, authChecks,
     get selected() { return selected; }, get aborts() { return aborts; }, get switches() { return switches; },
     gateSelection() { selectionGate = deferred(); return selectionGate; }, gateRoute() { routeGate = deferred(); return routeGate; },
-    setResult(value: any) { routeResult = value; },
+    setResult(value: any) { routeResult = value; }, setRoster(value: any) { rosterResult = value; },
     useInventory(models: any[]) { available = models; autoRoute = true; }, setError() { setterError = true; }, removeB() { available = [a]; },
     async manual() { selected = c; await emit("model_select", { model: c }); },
     idle() { ctx.isIdle = () => true; } };
@@ -66,7 +67,7 @@ async function main() {
   let tests = 1;
   for (const mode of ["tui", "rpc"]) {
     const f = fixture(mode);
-    assert.equal(typeof f.tier, "function", "primary tier handler must be returned for /oh tier");
+    assert.equal(typeof f.tier, "function", "the /oh model handler must be returned");
     assert.equal(f.commands.size, 0, "recovery registers no top-level command");
     const boundary = await f.fail();
     assert.ok(f.requestPaths[0]?.startsWith(join(tmpdir(), "herdr-orch-route-")), "route requests use private runtime temp");
@@ -120,8 +121,8 @@ async function main() {
   { const f = fixture(); f.setResult("throw"); assert.equal(await f.fail(), undefined); assert.equal(existsSync(join(f.requestPaths[0], "..")), false); assert.match(f.notices.at(-1)!, /routing unavailable/); tests++; }
   { const f = fixture(); f.setResult({ refused: true }); assert.equal(await f.fail(), undefined); assert.match(f.notices.at(-1)!, /exhausted/); tests++; }
   { const f = fixture(); await f.fail(); f.removeB(); await f.emit("agent_start"); assert.equal(f.switches, 0); assert.ok(f.aborts); tests++; }
-  { const f = fixture(); await f.tier!("", f.ctx); assert.match(f.notices.at(-1)!, /No tier selected/); f.idle(); await f.tier!("small", f.ctx); assert.equal(f.entries.at(-1).data.tier, "small");
-    const entries = f.entries.length; await f.tier!("", f.ctx); assert.match(f.notices.at(-1)!, /^Tier: small\./); assert.equal(f.entries.length, entries, "a bare query records nothing");
+  { const f = fixture(); await f.tier!("", f.ctx); assert.match(f.notices.at(-1)!, /No pool selected/); f.idle(); await f.tier!("small", f.ctx); assert.equal(f.entries.at(-1).data.tier, "small");
+    const entries = f.entries.length; await f.tier!("", f.ctx); assert.match(f.notices.at(-1)!, /^Pool: small\./); assert.equal(f.entries.length, entries, "a bare query records nothing");
     await f.emit("session_start"); await f.fail("429", "google"); assert.equal(f.requests.at(-1).model, "small");
     await f.manual(); assert.equal(f.entries.at(-1).data.tier, null); tests++; }
   { const f = fixture(); assert.equal((await f.fail()).continue, true); await f.tier!("", f.ctx); await f.emit("agent_start");
@@ -136,11 +137,60 @@ async function main() {
     await f.emit("agent_start"); assert.equal(f.switches, 1);
     const entries = f.entries.length; f.idle(); await f.tier!("small", f.ctx);
     assert.match(f.notices.at(-1)!, /Delegated children keep their launch selection/); assert.equal(f.entries.length, entries, "a child records no tier"); tests++; }
-  { process.env.HERDR_ORCH_TASK = "fixture-child"; process.env.HERDR_ORCH_MODEL_ALIAS = "heavy";
+  // /oh model with a model name or string alias routes that model only and clears the pool.
+  for (const name of ["google/model-a", "gm"]) {
+    const f = fixture(); f.idle(); await f.tier!("small", f.ctx); assert.equal(f.entries.at(-1).data.tier, "small");
+    await f.tier!(name, f.ctx); assert.equal(f.requests.at(-1).model, name, `${name} routes as requested`);
+    assert.equal(f.entries.at(-1).data.tier, null, `${name} clears the pool`); assert.equal(f.switches, 2); tests++;
+  }
+  { const f = fixture(); f.idle(); await f.tier!("nope", f.ctx); assert.match(f.notices.at(-1)!, /Use \/oh model/); assert.equal(f.requests.length, 0, "an unknown name makes no route call"); tests++; }
+  { const f = fixture(); f.idle(); await f.tier!("small", f.ctx); await f.tier!("clear", f.ctx); assert.match(f.notices.at(-1)!, /^Pool cleared/); assert.equal(f.entries.at(-1).data.tier, null); tests++; }
+  { const f = fixture(); f.idle(); await f.tier!("small", f.ctx); assert.deepEqual([...new Set(f.authChecks)].sort(), ["google", "openai"], "routing refreshes each OAuth account before the policy"); tests++; }
+  {
+    // A bare /oh model opens a picker of pools and canonical models, each annotated by the policy.
+    const f = fixture(); f.idle(); let offered: string[] = [];
+    f.setResult({ chosen: "google/model-a", account: "google", concrete: "google/model-a", candidates: [{ account: "google", canonical: "google/model-a", remaining: 0.82, "spare-rate": 0.56 }] });
+    f.ctx.ui.select = async (_title: string, options: string[]) => { offered = options; return options.find(o => o.startsWith("small")); };
+    await f.tier!("", f.ctx);
+    assert.deepEqual(offered.map(o => o.split(" ")[0]), ["small", "google/model-a", "mistral/model-a", "openai/model-a"], "pools first, then each canonical model once");
+    assert.match(offered[0], /google\/model-a.*82% left.*spare 0\.56\/day/, offered[0]);
+    assert.equal(f.entries.at(-1).data.tier, "small", "choosing a pool selects it"); tests++;
+  }
+  { const f = fixture(); f.idle(); f.ctx.ui.select = async () => undefined; const entries = f.entries.length; await f.tier!("", f.ctx); assert.equal(f.entries.length, entries, "a cancelled picker changes nothing"); assert.equal(f.switches, 0); tests++; }
+  // Startup routing: Pi's default model (here openai/model-a) moves to the policy's account.
+  {
+    const pools = (setting: boolean) => ({ pi: { "default-model-pool": setting }, models: [],
+      pools: [{ pool: "wide", rank: 2, candidates: [{ canonical: "openai/model-a" }] }, { pool: "top", rank: 1, candidates: [{ canonical: "openai/model-a" }] },
+              { pool: "loose", rank: null, candidates: [{ canonical: "openai/model-a" }] }] });
+    const start = async (setting: boolean, reason = "startup", history: any[] = [], roster: any = pools(setting)) => {
+      const f = fixture("rpc", history); f.setRoster(roster); await f.emit("session_start", { reason }); return f;
+    };
+    { const f = await start(false); assert.equal(f.requests.at(-1)?.model, "openai/model-a", "setting false routes the named model");
+      assert.equal(f.selected.provider, "google", "the session moves to the chosen account"); assert.ok(!f.entries.some(e => e.customType === "herdr-orch-tier"), "a named model records no pool"); tests++; }
+    { const f = await start(true); assert.equal(f.requests.at(-1)?.model, "top", "setting true routes the lowest-ranked pool containing the model");
+      assert.equal(f.entries.at(-1).data.tier, "top", "the pool is kept as the recovery scope"); tests++; }
+    { const f = await start(true, "startup", [], { pi: { "default-model-pool": true }, models: [], pools: [{ pool: "loose", rank: null, candidates: [{ canonical: "openai/model-a" }] }] });
+      assert.equal(f.requests.at(-1)?.model, "openai/model-a", "an unranked pool never claims the model; the named model routes"); tests++; }
+    { const f = await start(false, "new"); assert.equal(f.requests.length, 1, "a /new session routes too"); tests++; }
+    for (const reason of ["resume", "fork", "reload"]) { const f = await start(false, reason); assert.equal(f.requests.length, 0, `${reason} does not route`); tests++; }
+    { const f = await start(false, "startup", [{ type: "message", message: { role: "user" } }]); assert.equal(f.requests.length, 0, "a continued session keeps its model"); tests++; }
+    for (const flag of ["--model", "--provider", "--models", "--model=openai/model-a"]) {
+      const argv = process.argv; process.argv = [...argv, flag, ...(flag.includes("=") ? [] : ["x"])];
+      try { const f = await start(false); assert.equal(f.requests.length, 0, `${flag} on the command line skips startup routing`); } finally { process.argv = argv; }
+      tests++;
+    }
+    { process.env.HERDR_ORCH_TASK = "fixture-child"; const f = await start(false); delete process.env.HERDR_ORCH_TASK; assert.equal(f.requests.length, 0, "a delegated child never routes at startup"); tests++; }
+    { const f = fixture("rpc"); f.setRoster(pools(false)); f.setResult({ refused: true }); await f.emit("session_start", { reason: "startup" });
+      assert.equal(f.switches, 0); assert.equal(f.selected.provider, "openai", "a refusal keeps Pi's default"); assert.match(f.notices.at(-1)!, /Startup routing kept openai\/model-a/); tests++; }
+    { const f = fixture("rpc"); f.setRoster(pools(false)); f.setResult("throw"); await f.emit("session_start", { reason: "startup" });
+      assert.equal(f.switches, 0); assert.match(f.notices.at(-1)!, /Startup routing kept openai\/model-a/, "a routing failure does not block the session"); tests++; }
+    { const f = await start(false, "startup", [], { models: [], pools: [] }); assert.equal(f.requests.length, 1, "an absent setting means false"); tests++; }
+  }
+  { process.env.HERDR_ORCH_TASK = "fixture-child"; process.env.HERDR_ORCH_MODEL_POOL = "heavy";
     const f = fixture("rpc", [{ type: "custom", customType: "herdr-orch-tier", data: { tier: "small" } }]);
-    delete process.env.HERDR_ORCH_TASK; delete process.env.HERDR_ORCH_MODEL_ALIAS;
+    delete process.env.HERDR_ORCH_TASK; delete process.env.HERDR_ORCH_MODEL_POOL;
     await f.emit("session_start"); assert.equal((await f.fail()).continue, true);
-    assert.equal(f.requests.at(-1).model, "heavy", "an alias child routes within its launch alias");
+    assert.equal(f.requests.at(-1).model, "heavy", "a pool child routes within its launch pool");
     assert.deepEqual(f.requests.at(-1).current, { canonical: "openai/model-a", account: "openai" }, "same-model siblings come first");
     await f.emit("agent_start"); assert.equal(f.switches, 1); tests++; }
   { const f = fixture(); await f.emit("session_start"); await f.fail(); assert.equal(f.requests.at(-1).model, "openai/model-a", "positive control: a primary without a tier routes the failed model"); tests++; }

@@ -56,22 +56,22 @@ export default function fixture(outer: ExtensionAPI) {
         await owner.session.bindExtensions({ mode: "tui", uiContext: ui });
         try {
           const old = owner.session;
-          const selecting = old.prompt("/oh tier fixture-tier").then(() => { settled = true; });
+          const selecting = old.prompt("/oh model fixture-tier").then(() => { settled = true; });
           if (mode.startsWith("inventory-")) {
             await selecting;
-            if (mode === "inventory-4097") { assert.equal(routeCalls, 0, "oversize inventory refuses before policy invocation"); assert.equal(old.model?.provider, work); assert.match(notices.at(-1)!, /Tier selection failed/); }
+            if (mode === "inventory-4097") { assert.equal(routeCalls, 0, "oversize inventory refuses before policy invocation"); assert.equal(old.model?.provider, work); assert.match(notices.at(-1)!, /Model selection failed/); }
             else { assert.equal(routeCalls, 1); assert.equal(routes[0].inventory.length, Number(mode.split("-")[1])); assert.equal(old.model?.provider, personal); }
           } else {
             await Promise.race([pending.promise, new Promise((_, reject) => setTimeout(() => reject(Error("explicit setter gate not entered")), 10000))]);
             assert.equal(settled, false, "selection really awaits credentials");
             if (mode === "overlap") {
-              await old.prompt("/oh tier fixture-tier"); await old.prompt("/oh tier clear");
+              await old.prompt("/oh model fixture-tier"); await old.prompt("/oh model clear");
               assert.equal(routeCalls, 1, "overlapping commands never launch another setter"); assert.equal(reads, 1);
               assert.ok(notices.slice(-2).every(s => s.includes("switch is still pending")));
             } else {
               assert.equal((await owner.newSession()).cancelled, false);
               assert.notEqual(owner.session, old, "public runtime replaced the session while idle setter is pending");
-              await owner.session.prompt("/oh tier clear");
+              await owner.session.prompt("/oh model clear");
             }
             const before = uiWrites.length;
             release.resolve(); await selecting;

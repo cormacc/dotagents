@@ -395,7 +395,7 @@
       (:timeout entry)
       core/default-timeout-ms))
 ;; --- model routing ----------------------------------------------------------------------
-;; Resolve vector aliases and Pi direct model requests before allocation.
+;; Resolve pools and Pi direct model requests before allocation.
 ;; Pi uses authenticated registered pairs; native harnesses keep one account context.
 (defn- percent [fraction] (format "%.0f%%" (* 100.0 fraction)))
 (defn- candidate-summary [{:keys [canonical rank status remaining reserve reason]}]
@@ -420,10 +420,10 @@
                  (or (nil? adapter)
                      (= "ready" (:status (quota-credentials/credentials :pi adapter context
                                          (when (quota-credentials/pi-account? account) account))))))) inventory)))
-;; Returns a route for vector aliases or requested Pi base models, otherwise nil.
+;; Returns a route for pools or requested Pi base models, otherwise nil.
 ;; Inherited concrete selections, named-account pins and unknown names stay unrouted.
 (defn- route-model [config kind model reasoning direct?]
-  (when (or (core/vector-alias? config model)
+  (when (or (core/pool? config model)
             (and direct? (= kind "pi")
                  (let [provider (core/provider-prefix (core/canonical-model config model))]
                    (and provider (not (core/account-base provider))))))
@@ -444,7 +444,7 @@
                      :inventory inventory} usage)
                   (core/route candidates usage))]
       (when (:refused route)
-        (fail (str "spawn refused: no candidate of model alias '" model "' has allowance for kind " kind ": "
+        (fail (str "spawn refused: no candidate of model or pool '" model "' has allowance for kind " kind ": "
                    (if (seq (:candidates route)) (str/join "; " (map candidate-summary (:candidates route))) "no candidate runs on this kind"))
               {:alias model :kind kind :candidates (:candidates (route-record model route))}))
       (route-record model route))))
@@ -1647,10 +1647,10 @@
                   ;; The routed canonical ID, never the alias: a same-kind grandchild
                   ;; inherits a concrete model and does not route again.
                   model (assoc "HERDR_ORCH_MODEL" model-effective)
-                  ;; The launch weight alias bounds a Pi child's quota recovery, which may then
-                  ;; move down that alias's ranks. Without it, recovery keeps the model.
-                  (and (= kind "pi") (core/vector-alias? config (:alias model-route)))
-                  (assoc "HERDR_ORCH_MODEL_ALIAS" (:alias model-route))
+                  ;; The launch pool bounds a Pi child's quota recovery, which may then move
+                  ;; down that pool's ranks. Without it, recovery keeps the model.
+                  (and (= kind "pi") (core/pool? config (:alias model-route)))
+                  (assoc "HERDR_ORCH_MODEL_POOL" (:alias model-route))
                   role-absent (assoc "HERDR_ORCH_ANONYMOUS" "1"))
             ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
             pane-placement (herdr/place! (herdr/selected!) {:mode (keyword placement) :cwd child-cwd :label label :env env :focus false})
@@ -4278,8 +4278,8 @@
                        ;; `description` is never inherited through `extends`.
                        :description (:description (core/parse-frontmatter text))
                        :model model
-                       ;; A vector alias has no single canonical ID; the router picks one at spawn.
-                       :model-canonical (let [canonical (some->> model (core/canonical-model config))] (when (string? canonical) canonical))
+                       ;; A pool has no single canonical ID; the router picks one at spawn.
+                       :model-canonical (when-not (core/pool? config model) (some->> model (core/canonical-model config)))
                        :kind (:kind frontmatter)
                        :spawns (:spawns (core/resolve-spawns {:persona persona :frontmatter frontmatter
                                                               :resolve-persona #(core/resolve-persona (fn [p] (fs/exists? p)) directories %)}))
@@ -4311,21 +4311,23 @@
                   :description (try (:description (core/parse-frontmatter (slurp path))) (catch Exception _ nil))
                   :selected-by (vec (keep #(when (some #{trait} (:traits %)) (:name %)) personas))})))))
 ;; One row per canonical ID, carrying every string alias that names it and its per-kind
-;; spellings. Shortest alias first, so a short name such as `opus` leads its row. A vector
-;; alias names no single ID: `roster-routes` lists its ranked candidates instead, and each
+;; spellings. Shortest alias first, so a short name such as `opus` leads its row. A pool
+;; names no single ID: `roster-pools` lists its ranked candidates instead, and each
 ;; candidate's canonical ID still gets a row.
 (defn- roster-models [config]
-  (let [string-aliases (into {} (filter (comp string? val)) (:aliases config))
+  (let [string-aliases (:aliases config)
         by-canonical (group-by val string-aliases)
-        candidates (mapcat #(map (comp (partial core/canonical-model config) :model) %) (filter vector? (vals (:aliases config))))]
+        candidates (mapcat #(map (comp (partial core/canonical-model config) :model) (:models %)) (vals (:pools config)))]
     (mapv (fn [id] {:canonical id
                     :aliases (vec (sort-by (juxt count identity) (map key (by-canonical id))))
                     :kinds (into (sorted-map) (get-in config [:models id]))})
           (sort (distinct (concat (keys (:models config)) (vals string-aliases) candidates))))))
-;; One entry per vector alias, candidates lowest rank first and in config order within a rank.
-(defn- roster-routes [config]
-  (vec (for [[alias candidates] (sort-by key (:aliases config)) :when (vector? candidates)]
-         {:alias alias
+;; One entry per pool: ranked pools first by rank, then unranked pools by name. Candidates
+;; lowest rank first and in config order within a rank.
+(defn- roster-pools [config]
+  (vec (for [[pool {:keys [rank models]}] (sort-by (fn [[k v]] [(nil? (:rank v)) (:rank v) k]) (:pools config))
+             :let [candidates models]]
+         {:pool pool :rank rank
           :candidates (mapv (fn [{:keys [model rank]}]
                               (let [canonical (core/canonical-model config model)]
                                 {:rank rank :model model :canonical canonical :provider (core/provider-prefix canonical)}))
@@ -4339,7 +4341,9 @@
     {:personas personas
      :traits (roster-traits personas)
      :models (roster-models merged)
-     :routes (roster-routes merged)
+     :pools (roster-pools merged)
+     ;; Settings the Herdr Pi extension reads, so it never parses config.edn itself.
+     :pi {:default-model-pool (true? (get-in merged [:pi :default-model-pool]))}
      :workflows (workflows/discover skill-roots)
      :harnesses (vec (sort (map name (keys (:harnesses merged)))))
      :layers {:personas (mapv (fn [s d] {:source s :directory (str d)}) layer-names directories)
@@ -4406,14 +4410,14 @@
                (str "|" (str/join "+" (map #(str/join (repeat (+ 2 %) "-")) widths)) "|")
                (str "| " (str/join " | " (map #(str/join (repeat % "-")) widths)) " |"))]
     (into [(row (first rows)) rule] (map row (rest rows)))))
-(defn- route-lines [{:keys [code]} routes detail?]
-  (mapv (fn [{:keys [alias candidates]}]
-          (str "- " (code alias) " -- "
+(defn- pool-lines [{:keys [code]} pools detail?]
+  (mapv (fn [{:keys [pool rank candidates]}]
+          (str "- " (code pool) (when rank (str " (rank " rank ")")) " -- "
                (str/join "; " (map (fn [{:keys [rank model canonical]}]
                                      (str "rank " rank " " (code model) (when (and detail? (not= model canonical)) (str " (" canonical ")"))))
                                    candidates))))
-        routes))
-(defn- model-lines [format {:keys [models harnesses routes]} detail?]
+        pools))
+(defn- model-lines [format {:keys [models harnesses pools]} detail?]
   (let [kinds (if (seq harnesses) harnesses ["pi"])
         table (if (empty? models)
                 ["No models configured."]
@@ -4425,10 +4429,10 @@
                                             (cons (if (seq shown) (str/join ", " shown) "--")
                                                   (map #(get (:kinds model) (keyword %) canonical) kinds))))
                                         models))))]
-    ;; Ranked aliases follow the table only when configured, so a config without them renders as before.
-    (if (seq routes)
-      (into (conj table "" "Ranked aliases (lowest rank is preferred):" "")
-            (route-lines (roster-markup format) routes detail?))
+    ;; Pools follow the table only when configured, so a config without them renders as before.
+    (if (seq pools)
+      (into (conj table "" "Pools (lowest rank is preferred):" "")
+            (pool-lines (roster-markup format) pools detail?))
       table)))
 (defn- layer-lines [{:keys [code]} layers]
   (let [chain (fn [entries] (str/join " > " (map #(str (:source %) " " (code (:directory %))) entries)))]

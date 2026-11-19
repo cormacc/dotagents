@@ -37,9 +37,10 @@ type Command = { handler: (args: string, ctx: any) => Promise<void>; getArgument
 const commands = new Map<string, Command>();
 const entryRenderers = new Map<string, unknown>();
 const entries: Array<{ type: string; data: any }> = [];
+const sessionStart: Array<(event: unknown, ctx: any) => unknown> = [];
 
 register({
-  on() {},
+  on(name: string, handler: (event: unknown, ctx: any) => unknown) { if (name === "session_start") sessionStart.push(handler); },
   registerTool(tool: Tool) {
     tools.set(tool.name, tool);
   },
@@ -58,7 +59,7 @@ register({
     execOptions.push(options);
     if (backendRefusal) return { stdout: JSON.stringify({ ok: false, schema: "herdr-orch/v1", error: { message: "backend-mismatch: fixture" } }), stderr: "", code: 1, killed: false };
     // `oh roster` and `oh usage` markdown output are renderings, not envelopes.
-    if (args[0] === "roster" && args.includes("json")) return { stdout: JSON.stringify({ ok: true, schema: "herdr-orch/v1", result: { routes: [{ alias: "light" }, { alias: "heavy" }] } }), stderr: "", code: 0, killed: false };
+    if (args[0] === "roster" && args.includes("json")) return { stdout: JSON.stringify({ ok: true, schema: "herdr-orch/v1", result: { pools: [{ pool: "light" }, { pool: "heavy" }] } }), stderr: "", code: 0, killed: false };
     if (args[0] === "roster") return { stdout: `LISTING ${args.join(" ")}\n`, stderr: "", code: 0, killed: false };
     if (args[0] === "usage") {
       const detail = args.includes("--detail");
@@ -148,16 +149,19 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   const complete = async (prefix: string) => ((await oh!.getArgumentCompletions!(prefix)) as Array<{ value: string }> | null)?.map((item) => item.value) ?? null;
   same(await complete("u"), ["usage"], "usage section is completed");
   same(await complete("w"), ["workflows"], "workflow section is completed");
-  same(await complete("m"), ["models"], "completion narrows by prefix");
+  same(await complete("p"), ["personas"], "completion narrows by prefix");
   same(await complete("a"), ["account "], "account action is completed");
-  same(await complete("t"), ["traits", "tier "], "sections and actions share the first word");
+  same(await complete("t"), ["traits"], "/oh tier is no longer an action");
+  same(await complete("mo"), ["models", "model "], "sections and actions share the first word");
   let completionCalls = execCalls.length;
   same(await complete("account "), ["account add"], "account add is completed");
   same(execCalls.length, completionCalls, "account completion runs no oh process");
-  same(await complete("tier "), ["tier clear", "tier light", "tier heavy"], "tier completes clear and configured aliases");
-  same(await complete("tier l"), ["tier light"], "tier alias completion narrows by prefix");
-  same(execCalls.length, completionCalls + 1, "tier aliases are cached between keystrokes");
-  same(await complete("tier light x"), null, "no completion after the subcommand argument");
+  const registryModels = [{ provider: "anthropic", id: "claude-x" }, { provider: "anthropic-1", id: "claude-x" }, { provider: "openai-codex", id: "gpt-y" }];
+  for (const handler of sessionStart) await handler({ reason: "startup" }, { modelRegistry: { getAvailable: () => registryModels }, sessionManager: { getBranch: () => [] }, hasUI: false, ui: {} });
+  same(await complete("model "), ["model clear", "model light", "model heavy", "model anthropic/claude-x", "model openai-codex/gpt-y"], "model completes clear, pools and each canonical model once");
+  same(await complete("model l"), ["model light"], "model completion narrows by prefix");
+  same(execCalls.length, completionCalls + 1, "pools are cached between keystrokes");
+  same(await complete("model light x"), null, "no completion after the subcommand argument");
 
   const notices: Array<[string, string]> = [];
   const ctx = (mode: string) => ({ mode, hasUI: true, cwd: "/proj", signal: undefined, ui: { notify: (message: string, level: string) => notices.push([message, level]) } });
@@ -339,10 +343,10 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   same(await oh.getArgumentCompletions!("s"), null, "setup is not completed");
 }
 
-// --- /oh account and /oh tier: actions dispatched before the listing path ---------------
+// --- /oh account and /oh model: actions dispatched before the listing path --------------
 {
   const oh = commands.get("oh")!;
-  ok(![...commands.keys()].some((name) => name.startsWith("oh-")), "account and tier are /oh subcommands, not top-level commands");
+  ok(![...commands.keys()].some((name) => name.startsWith("oh-")), "account and model are /oh subcommands, not top-level commands");
   const notices: string[] = [];
   const ctx = { mode: "tui", hasUI: true, cwd: "/proj", ui: { notify: (message: string) => notices.push(message) } };
   const before = execCalls.length;
@@ -351,15 +355,15 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   ok(notices.at(-1)?.startsWith("No registered accounts.") && notices.at(-1)!.includes("/oh account add"), "bare /oh account shows the registered accounts");
   await oh.handler("account bogus", ctx);
   ok(notices.at(-1)?.startsWith("Use /oh account add"), "unknown account argument reports usage");
-  await oh.handler("tier", ctx);
-  ok(notices.at(-1)?.startsWith("No tier selected"), "bare /oh tier shows the current tier");
+  await oh.handler("model", ctx);
+  ok(notices.at(-1)?.startsWith("No pool selected"), "bare /oh model without a picker shows the current pool");
   same(execCalls.length, before, "state queries run no oh process");
   same(entries.length, entriesBefore, "actions append no listing entry");
   const writes: string[] = [];
   const write = process.stderr.write;
   process.stderr.write = ((text: string) => { writes.push(text); return true; }) as typeof process.stderr.write;
-  try { await oh.handler(" tier ", { ...ctx, hasUI: false }); } finally { process.stderr.write = write; }
-  ok(writes.at(-1)?.startsWith("No tier selected"), "/oh tier reports to a non-UI host instead of stopping at the UI guard");
+  try { await oh.handler(" model ", { ...ctx, hasUI: false }); } finally { process.stderr.write = write; }
+  ok(writes.at(-1)?.startsWith("No pool selected"), "/oh model reports to a non-UI host instead of stopping at the UI guard");
 }
 
 {

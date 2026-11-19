@@ -11,7 +11,15 @@ const WARNING_KEY = "herdr-orch-recovery";
 export const PENDING_WARNING = "Checking recovery account authentication. Avoid changing models until this finishes. Abort stops recovery, but the account selection may still change and overwrite a newer manual selection.";
 type Pair = { canonical: string; account: string };
 type Level = ReturnType<ExtensionAPI["getThinkingLevel"]>;
-type Route = { chosen?: string; account?: string; concrete?: string; refused?: boolean };
+type Candidate = { account?: string; canonical?: string; remaining?: number | null; "spare-rate"?: number | null };
+type Route = { chosen?: string; account?: string; concrete?: string; refused?: boolean; candidates?: Candidate[] };
+type Roster = { pools?: { pool: string; rank?: number | null; candidates?: { canonical?: string }[] }[]; models?: { canonical: string; aliases?: string[] }[];
+  pi?: { "default-model-pool"?: boolean } };
+// Each Pi flag that selects the starting model; the user's explicit choice is not rerouted.
+const EXPLICIT_MODEL = /^--(?:model|models|provider)(?:=|$)/;
+// One refresh must not hold up a selection; the account then stays expired and reports unknown quota.
+const REFRESH_TIMEOUT_MS = 15_000;
+const PICKER_CONCURRENCY = 8;
 type Execute = (args: string[], signal?: AbortSignal, options?: { cwd?: string; timeout?: number }) => Promise<{ details: unknown }>;
 const pair = (model: Model<Api>): Pair => ({ canonical: `${accountBase(model.provider) ?? model.provider}/${model.id}`, account: model.provider });
 const key = (p: Pair) => `${p.account}/${p.canonical}`;
@@ -24,14 +32,17 @@ export function quotaFailure(message: string): boolean {
 }
 
 /**
- * Install quota recovery and return the `/oh tier` handler, which `/oh` dispatches.
- * A delegated child recovers within its launch request: the launch weight alias that `oh`
- * injects as HERDR_ORCH_MODEL_ALIAS, else the failed model only. It ignores tier metadata
- * copied from a forked session and refuses `/oh tier`.
+ * Install quota recovery and return the `/oh model` handler, which `/oh` dispatches.
+ * `/oh model <pool>` keeps the pool as the session's recovery scope; `/oh model <model>`
+ * routes that model only and clears the pool. The session entry keeps its `herdr-orch-tier`
+ * custom type so that sessions from before pools resume with their pool.
+ * A delegated child recovers within its launch request: the launch pool that `oh`
+ * injects as HERDR_ORCH_MODEL_POOL, else the failed model only. It ignores pool metadata
+ * copied from a forked session and refuses `/oh model`.
  */
 export function registerRecovery(pi: ExtensionAPI, execute: Execute): SubcommandHandler {
   const pinned = Boolean(process.env.HERDR_ORCH_TASK || process.env.HERDR_ORCH_CHILD || process.env.HERDR_ORCH_RESULT);
-  const launchAlias = pinned ? process.env.HERDR_ORCH_MODEL_ALIAS || undefined : undefined;
+  const launchAlias = pinned ? process.env.HERDR_ORCH_MODEL_POOL || undefined : undefined;
   let active = true, generation = 0, tier: string | undefined;
   let attempted = new Map<string, Pair>();
   let chainInventory: Set<string> | undefined;
@@ -63,26 +74,41 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
   const inventory = async (ctx: ExtensionContext) => {
     const models = await ctx.modelRegistry.getAvailableOfType("chat");
     const stored = new Set(storedAccountIds());
-    return models.filter(model => !isAccountId(model.provider) || stored.has(model.provider));
-  };
-  async function route(ctx: ExtensionContext, model: string, current: Pair | undefined, reasoning: Level, exclusions: Pair[]) {
-    let models = await inventory(ctx);
-    if (current) {
-      chainInventory ??= new Set(models.map(m => key(pair(m))));
-      models = models.filter(m => chainInventory!.has(key(pair(m))));
+    const usable = models.filter(model => !isAccountId(model.provider) || stored.has(model.provider));
+    // Pi refreshes an expired OAuth token through its locked auth storage when asked for the
+    // provider's auth, so an account that no session uses gets fresh quota evidence. A valid
+    // token is only read, and a failed refresh leaves the credential unchanged.
+    const registry = ctx.modelRegistry as { isUsingOAuth?: (m: Model<Api>) => boolean; getProviderAuth?: (p: string) => Promise<unknown> };
+    if (registry.getProviderAuth) {
+      const oauth = [...new Set(usable.filter(m => registry.isUsingOAuth?.(m)).map(m => m.provider))];
+      await Promise.all(oauth.map(provider => Promise.race([
+        registry.getProviderAuth!(provider).catch(() => undefined),
+        new Promise(resolve => setTimeout(resolve, REFRESH_TIMEOUT_MS).unref()),
+      ])));
     }
+    return usable;
+  };
+  async function evaluate(ctx: ExtensionContext, models: Model<Api>[], model: string, current: Pair | undefined, reasoning: Level, exclusions: Pair[]) {
     if (models.length > 4096) throw new Error("Routing inventory exceeds 4096 pairs");
     const directory = await mkdtemp(join(tmpdir(), "herdr-orch-route-"));
     try {
       const path = join(directory, "request.json");
       await writeFile(path, JSON.stringify({ schema: "herdr-orch-route/v1", model, current,
         inventory: models.map(m => ({ ...pair(m), reasoning: getSupportedThinkingLevels(m) })), attempted: exclusions, reasoning }), { mode: 0o600 });
-      const result = (await execute(["route", "--request", path], ctx.signal, { cwd: ctx.cwd, timeout: 30_000 })).details as Route;
-      if (!result || result.refused) return undefined;
-      const chosen = models.find(m => result.chosen === pair(m).canonical && result.account === m.provider && result.concrete === selectable(m));
-      if (!chosen || exclusions.some(p => key(p) === key(pair(chosen))) || !getSupportedThinkingLevels(chosen).includes(reasoning)) throw new Error("Invalid route");
-      return chosen;
+      return (await execute(["route", "--request", path], ctx.signal, { cwd: ctx.cwd, timeout: 30_000 })).details as Route;
     } finally { await rm(directory, { recursive: true, force: true }); }
+  }
+  async function route(ctx: ExtensionContext, model: string, current: Pair | undefined, reasoning: Level, exclusions: Pair[]) {
+    let models = await inventory(ctx);
+    if (current) {
+      chainInventory ??= new Set(models.map(m => key(pair(m))));
+      models = models.filter(m => chainInventory!.has(key(pair(m))));
+    }
+    const result = await evaluate(ctx, models, model, current, reasoning, exclusions);
+    if (!result || result.refused) return undefined;
+    const chosen = models.find(m => result.chosen === pair(m).canonical && result.account === m.provider && result.concrete === selectable(m));
+    if (!chosen || exclusions.some(p => key(p) === key(pair(chosen))) || !getSupportedThinkingLevels(chosen).includes(reasoning)) throw new Error("Invalid route");
+    return chosen;
   }
   async function select(ctx: ExtensionContext, model: Model<Api>, reasoning: Level, automatic: boolean, token: number): Promise<boolean> {
     if (setting || !active || token !== generation || ctx.signal?.aborted) return false;
@@ -123,7 +149,12 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
     }
   }
 
-  pi.on("session_start", (_event, ctx) => { active = true; restore(ctx); });
+  // Pi awaits session_start before it accepts a prompt, so the first request already uses
+  // the routed account. Only a fresh session on Pi's default model is routed.
+  pi.on("session_start", async (event, ctx) => {
+    active = true; restore(ctx);
+    if (event.reason === "startup" || event.reason === "new") await routeStartup(ctx);
+  });
   pi.on("session_tree", (_event, ctx) => restore(ctx));
   pi.on("session_shutdown", () => { active = false; invalidate(); });
   pi.on("input", (_event, ctx) => {
@@ -190,25 +221,86 @@ export function registerRecovery(pi: ExtensionAPI, execute: Execute): Subcommand
     return { entries: [...event.entries, { type: "context_edit" as const, targetId: next.failedId, replacement: null }], continue: true };
   });
 
+  const roster = async (ctx: ExtensionContext) =>
+    (await execute(["roster", "--format", "json"], undefined, { cwd: ctx.cwd, timeout: 30_000 })).details as Roster;
+  // A name is a pool, a string alias or a canonical `provider/model` ID; anything else is refused
+  // before routing, so a typo gets a usage hint instead of a routing error.
+  const kind = (list: Roster, name: string): "pool" | "model" | undefined =>
+    list?.pools?.some(p => p.pool === name) ? "pool"
+      : name.includes("/") || list?.models?.some(m => m.aliases?.includes(name)) ? "model" : undefined;
+  const percent = (value?: number | null) => typeof value === "number" ? `${Math.round(value * 100)}% left` : "quota unknown";
+  const annotation = (result: Route | undefined) => {
+    if (!result) return "routing unavailable";
+    if (result.refused) return "no eligible account";
+    const chosen = result.candidates?.find(c => c.account === result.account && c.canonical === result.chosen);
+    const spare = chosen?.["spare-rate"];
+    return [result.concrete, percent(chosen?.remaining), ...(typeof spare === "number" ? [`spare ${spare.toFixed(2)}/day`] : [])].join(", ");
+  };
+  // Pools first, then each canonical model once; every item shows the pair the policy would choose.
+  async function pick(ctx: ExtensionContext): Promise<string | undefined> {
+    const [list, models] = await Promise.all([roster(ctx), inventory(ctx)]);
+    const pools = (list?.pools ?? []).map(p => p.pool);
+    const names = [...pools, ...[...new Set(models.map(m => pair(m).canonical))].sort()];
+    const labels: string[] = new Array(names.length);
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(PICKER_CONCURRENCY, names.length) }, async () => {
+      for (let i = next++; i < names.length; i = next++) {
+        const result = await evaluate(ctx, models, names[i], undefined, pi.getThinkingLevel(), []).catch(() => undefined);
+        labels[i] = `${names[i]}${i < pools.length ? " (pool)" : ""}  ->  ${annotation(result)}`;
+      }
+    }));
+    const choice = await ctx.ui.select("Select a pool or model by quota", labels);
+    const index = choice === undefined ? -1 : labels.indexOf(choice);
+    return index < 0 ? undefined : names[index];
+  }
+
+  // Pi's default model is the preference. `:pi {:default-model-pool true}` reinterprets it as
+  // the lowest-ranked pool that contains it; otherwise, or without such a pool, the model
+  // itself is routed across its accounts. A refusal or failure keeps Pi's default.
+  async function routeStartup(ctx: ExtensionContext) {
+    const current = ctx.model;
+    if (pinned || !current || process.argv.slice(2).some(arg => EXPLICIT_MODEL.test(arg))) return;
+    // Pi records the starting model of every new session as a model change, so only a
+    // conversation (a continued session) marks a model that the user already worked with.
+    if (ctx.sessionManager.getBranch().some(entry => entry.type === "message")) return;
+    const canonical = pair(current).canonical, token = generation;
+    try {
+      const list = await roster(ctx);
+      const pool = list?.pi?.["default-model-pool"] === true
+        ? (list.pools ?? []).filter(p => typeof p.rank === "number" && p.candidates?.some(c => c.canonical === canonical))
+          .sort((x, y) => x.rank! - y.rank!)[0]?.pool
+        : undefined;
+      const model = await route(ctx, pool ?? canonical, undefined, pi.getThinkingLevel(), []);
+      if (!model) { report(ctx, `Startup routing kept ${selectable(current)}: no eligible account/model.`, "warning"); return; }
+      if (selectable(model) !== selectable(current) && !await select(ctx, model, pi.getThinkingLevel(), false, token)) return;
+      if (pool) retainTier(pool);
+    } catch { report(ctx, `Startup routing kept ${selectable(current)}: routing unavailable.`, "warning"); }
+  }
+
   return async (args, ctx) => {
     if (pinned) { report(ctx, "Delegated children keep their launch selection.", "warning"); return; }
-    const alias = args.trim();
+    let name = args.trim();
     // A bare query must not invalidate pending recovery, so it returns before invalidate().
-    if (!alias) {
-      report(ctx, `${tier ? `Tier: ${tier}.` : "No tier selected; same-model account recovery only."} Use /oh tier <configured weight alias>, or /oh tier clear.`);
-      return;
+    if (!name) {
+      const ui = ctx.ui as { select?: unknown } | undefined;
+      if (!ctx.hasUI || typeof ui?.select !== "function") {
+        report(ctx, `${tier ? `Pool: ${tier}.` : "No pool selected; same-model account recovery only."} Use /oh model <pool|model>, or /oh model clear.`);
+        return;
+      }
+      try { name = (await pick(ctx)) ?? ""; } catch { report(ctx, "Model selection failed: routing unavailable.", "error"); return; }
+      if (!name) return;
     }
     invalidate();
     if (setting) { report(ctx, "An account switch is still pending. Wait for its selection report.", "warning"); return; }
-    if (alias === "clear") { retainTier(); report(ctx, "Tier cleared; same-model account recovery only."); return; }
-    if (!ctx.isIdle()) { report(ctx, "Select a tier while idle.", "warning"); return; }
+    if (name === "clear") { retainTier(); report(ctx, "Pool cleared; same-model account recovery only."); return; }
+    if (!ctx.isIdle()) { report(ctx, "Select a model while idle.", "warning"); return; }
     const token = generation;
     try {
-      const roster = (await execute(["roster", "--format", "json"], undefined, { cwd: ctx.cwd, timeout: 30_000 })).details as { routes?: { alias: string }[] };
-      if (!roster?.routes?.some(r => r.alias === alias)) { report(ctx, "Use /oh tier <configured weight alias>, or /oh models to list aliases.", "warning"); return; }
-      const model = await route(ctx, alias, undefined, pi.getThinkingLevel(), []);
-      if (!model) { report(ctx, "Tier selection exhausted: no eligible account/model.", "warning"); return; }
-      if (await select(ctx, model, pi.getThinkingLevel(), false, token)) retainTier(alias);
-    } catch { report(ctx, "Tier selection failed: routing unavailable.", "error"); }
+      const target = kind(await roster(ctx), name);
+      if (!target) { report(ctx, "Use /oh model <pool|model>; /oh models lists pools and aliases.", "warning"); return; }
+      const model = await route(ctx, name, undefined, pi.getThinkingLevel(), []);
+      if (!model) { report(ctx, "Model selection exhausted: no eligible account/model.", "warning"); return; }
+      if (await select(ctx, model, pi.getThinkingLevel(), false, token)) retainTier(target === "pool" ? name : undefined);
+    } catch { report(ctx, "Model selection failed: routing unavailable.", "error"); }
   };
 }

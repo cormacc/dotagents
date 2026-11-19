@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
-import { registerAccounts } from "./accounts.ts";
+import { accountBase, registerAccounts } from "./accounts.ts";
 import { registerDelivery } from "./delivery.ts";
 import { registerRecovery } from "./recovery.ts";
 import { completeArguments, composeHelp, parseAction, parseSection, rosterArgs, usageArgs, ACTIONS, SECTIONS, type Section } from "./help.ts";
@@ -189,19 +189,24 @@ export default function (pi: ExtensionAPI) {
     };
   }
 
-  const tier = registerRecovery(pi, execute);
-  // Completion has no command context, so aliases resolve from the process cwd and are
-  // cached briefly: each keystroke after `tier ` would otherwise start an `oh` process.
-  let aliasCache: { at: number; aliases: Promise<string[]> } | undefined;
-  const tierAliases = () => {
-    if (!aliasCache || Date.now() - aliasCache.at > 30_000) {
-      const aliases = execute(["roster", "--format", "json"], undefined, { cwd: process.cwd(), timeout: 5_000 })
-        .then(({ details }) => ((details as { routes?: { alias: string }[] })?.routes ?? []).map((route) => route.alias))
-        .catch(() => { aliasCache = undefined; return []; });
-      aliasCache = { at: Date.now(), aliases };
+  const model = registerRecovery(pi, execute);
+  // Completion has no command context, so pools resolve from the process cwd and are
+  // cached briefly: each keystroke after `model ` would otherwise start an `oh` process.
+  let poolCache: { at: number; pools: Promise<string[]> } | undefined;
+  const pools = () => {
+    if (!poolCache || Date.now() - poolCache.at > 30_000) {
+      const names = execute(["roster", "--format", "json"], undefined, { cwd: process.cwd(), timeout: 5_000 })
+        .then(({ details }) => ((details as { pools?: { pool: string }[] })?.pools ?? []).map((entry) => entry.pool))
+        .catch(() => { poolCache = undefined; return []; });
+      poolCache = { at: Date.now(), pools: names };
     }
-    return aliasCache.aliases;
+    return poolCache.pools;
   };
+  // Canonical model IDs, one per model whatever its accounts, captured when the session starts.
+  let canonicalModels: string[] = [];
+  pi.on("session_start", (_event, ctx) => {
+    canonicalModels = [...new Set(ctx.modelRegistry.getAvailable().map((m) => `${accountBase(m.provider) ?? m.provider}/${m.id}`))].sort();
+  });
   registerDelivery(pi);
 
   pi.registerEntryRenderer<HelpEntry>(HELP_ENTRY, (entry, { expanded }, theme) => {
@@ -219,12 +224,12 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("oh", {
-    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context (${SECTIONS.join(" | ")}), or manage this session's accounts and tier (${ACTIONS.join(" | ")})`,
-    getArgumentCompletions: (prefix) => completeArguments(prefix, tierAliases),
+    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context (${SECTIONS.join(" | ")}), or manage this session's accounts and model (${ACTIONS.join(" | ")})`,
+    getArgumentCompletions: (prefix) => completeArguments(prefix, async () => [...await pools(), ...canonicalModels]),
     handler: async (args, ctx) => {
-      // Actions run before the UI guard: `/oh tier` also serves non-UI hosts.
+      // Actions run before the UI guard: `/oh model` also serves non-UI hosts.
       const action = parseAction(args);
-      if (action) return (action.action === "account" ? account : tier)(action.rest, ctx);
+      if (action) return (action.action === "account" ? account : model)(action.rest, ctx);
       if (!ctx.hasUI) return;
       const section = parseSection(args);
       if (!section) {
