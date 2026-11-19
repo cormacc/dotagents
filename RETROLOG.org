@@ -410,3 +410,13 @@ In the CD repository, the root and one child both ran =git -C neuromod ls-files 
 ** herdr-orch: lifecycle verbs and continue
 
 =oh close <uuid>= and =oh harvest= failed with "unknown oh command"; =oh task close= and =oh task harvest= worked. =oh task continue= with a superseded round UUID returned =ok:false= with empty result and error fields; the latest round UUID (returned by the previous =continue=) worked. Task =fc4bb4d3-8c4c-41fa-b9a7-6532f9ab098c=.
+
+* 2026-11-19 Thu -- CD firmware framework adoption (delegated execution)
+
+** Identifiers and claims / org-tasks: never invent IDs
+:PROPERTIES:
+:KIND: miss
+:PREVENTS: a guessed full task UUID written into a task link or an ot command
+:SIGNAL_SOURCE: pi/claude-opus-5-5
+:END:
+The root twice expanded a correct 8-character task prefix into a guessed full UUID: once in a =task:= link inside a change-record (caught by a grep and fixed), once as the argument of =ot status= (=unknown-task= error). ot accepts unique prefixes, so the full UUID was never needed for the command. Mechanism change proposed in task =9fad8e90-8d9e-4b65-a26b-ef0836fa4d8f=.

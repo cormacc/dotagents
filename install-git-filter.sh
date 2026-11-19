@@ -3,8 +3,9 @@
 #
 # Pi writes runtime state back into ~/.pi/agent/settings.json, which is
 # symlinked from this checkout at pi/settings.json: lastChangelogVersion
-# on every pi upgrade, and a per-installation deviceId (created on first
-# use, for example for Sign in with ChatGPT). Neither belongs in git.
+# on every pi upgrade, extensionChangelogVersions on every extension
+# package update, and a per-installation deviceId (created on first use,
+# for example for Sign in with ChatGPT). None of them belongs in git.
 #
 # This script registers a git clean filter that drops those fields when
 # the file is staged, while leaving the working-tree copy untouched
@@ -41,7 +42,7 @@ if [[ -z "$REPO_ROOT" ]]; then
 fi
 cd "$REPO_ROOT"
 
-CLEAN="jq 'del(.lastChangelogVersion, .deviceId)' --indent 2"
+CLEAN="jq 'del(.lastChangelogVersion, .extensionChangelogVersions, .deviceId)' --indent 2"
 if [[ "$(git config --get filter.pi-settings.clean || true)" == "$CLEAN" &&
       "$(git config --get filter.pi-settings.smudge || true)" == "cat" &&
       "$(git config --get filter.pi-settings.required || true)" == "true" ]]; then

@@ -1,5 +1,5 @@
 # Strip volatile pi-coding-agent runtime fields (lastChangelogVersion,
-# deviceId) from pi/settings.json when staging. defaultProvider and
+# extensionChangelogVersions, deviceId) from pi/settings.json when staging. defaultProvider and
 # defaultModel are tracked (pi saves them only on Ctrl+S in /model). The filter must be registered per-clone via:
 #     ./install-git-filter.sh
 # (the filter config lives in .git/config, which is not version-controlled).
