@@ -32,17 +32,15 @@
 
 * Explorations
 
-** TODO [#C] Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24) :pi:
+** TODO Measure the effect of the compact-at-new-task rule on Opus compaction (after 2026-12-03) :pi:
 :PROPERTIES:
-:CUSTOM_ID: 57d782a0-ef5a-4585-b484-3000d2dc68f8
-:CREATED: [2026-11-17 Tue 18:20]
+:CUSTOM_ID: e6c80c77-3f9b-40e2-a60a-5a4bd89960a8
+:CREATED: [2026-11-26 Thu 22:23]
 :END:
 :LOGBOOK:
-- Created [2026-11-17 Tue 18:20]
-- State "CANCELLED" from "TODO" [2026-11-17 Tue 18:22]
-- State "TODO" from "CANCELLED" [2026-11-17 Tue 18:23]
+- Created [2026-11-26 Thu 22:23]
 :END:
-On 2026-11-17 a Context management rule was added to home/AGENTS.md: if the context_checkpoint tool is available, read the context-management skill before multi-step work in a user-started session and at each task boundary. Reason: in root sessions from 2026-11-04 to 2026-11-17, claude-opus-5-5 read the skill in 1 of 56 sessions and compacted 5 times, against 13 of 13 sessions and 25 compactions for gpt-6.1-sol (see the outcome in task 14cd586c, archived). To evaluate: rerun .tmp/pi-context-eval-2026-11-17/scan.clj, agg.clj and weekly.clj (scratch; regenerate from the outcome if gone) on sessions started after the rule, and compare for claude-opus-5-5 root sessions: skill reads detected as toolCall lines that name context-management/SKILL.md (the skill path also appears in every system prompt, so a plain text match is not valid), pi-context compactions, root sessions above 200k peak context with no compaction, and mean context per request. If uptake stays low, consider the context-nudge extension option: a hook that adds a reminder above a context threshold.
+On 2026-11-26 a rule was added to home/AGENTS.md (Context management): when a user message starts a different task or gives an explicit next step, run `context_timeline`; above 150k tokens, compact to the checkpoint or user turn before the completed work unless the new work needs that raw material. Reason: the 2026-11-26 outcome of task 57d782a0 (archived) found that claude-opus-5-5 root sessions read the context-management skill (20 of 26) and checkpointed (105 calls) but compacted only 4 times, and 10 of 13 sessions above 200k peak context never compacted. Upstream origin of the deferral rule: ttttmr/pi-context#25, commits 7bcce41 and 039919b. To evaluate: copy .tmp/pi-context-eval-2026-11-26/ scan.clj and agg.clj (scratch) to a new directory, set the post-rule boundary to the commit time of this rule, and compare claude-opus-5-5 root sessions before and after: pi-context compactions per session, sessions above 200k peak with no compaction, median peak context, skill reads, and context per request. Also sample 3 compactions: check that each was at a new-task user turn, not at a review or follow-up turn, and that later turns did not re-read the discarded material. Also check cache cost: count compactions per session and compare cost per request, because each compaction rebuilds the prompt cache. If compactions stay rare, consider the context-nudge extension.
 
 * Improvements
 

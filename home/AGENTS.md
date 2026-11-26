@@ -52,6 +52,7 @@
 # Context management
 - If the `context_checkpoint` tool is available, read the `context-management` skill before you start multi-step work in a session that the user started. Read it again at each task boundary: a commit, a handoff, a user decision, or a switch to a different task.
   - A herdr-orch subagent follows its round checkpoint rules instead.
+- When a user message starts a different task or gives an explicit next step, run `context_timeline` before other work. If its `Context:` line shows more than 150k tokens, compact to the checkpoint or user turn before the completed work, unless the new work needs that raw material. The skill's rule against compaction while you wait for feedback ends at this message, because the next task is known.
 
 # Git operations
 - Use `git mv`, not `mv`, to move files that Git controls.

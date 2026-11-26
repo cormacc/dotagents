@@ -6304,3 +6304,20 @@ CLOSED: [2026-11-19 Thu 11:09]
 - State "DONE" from "STARTED" [2026-11-19 Thu 11:09]
 :END:
 #+IMPORT: [[plan:2026-11-19-herdr-orch-pace-routing.org]]
+** DONE [#C] Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24) :pi:
+CLOSED: [2026-11-26 Thu 22:15]
+:PROPERTIES:
+:CUSTOM_ID: 57d782a0-ef5a-4585-b484-3000d2dc68f8
+:CREATED: [2026-11-17 Tue 18:20]
+:ARCHIVED: [2026-11-26 Thu 22:15]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-11-17 Tue 18:20]
+- State "CANCELLED" from "TODO" [2026-11-17 Tue 18:22]
+- State "TODO" from "CANCELLED" [2026-11-17 Tue 18:23]
+- State "DONE" from "TODO" [2026-11-26 Thu 22:15]
+:END:
+On 2026-11-17 a Context management rule was added to home/AGENTS.md: if the context_checkpoint tool is available, read the context-management skill before multi-step work in a user-started session and at each task boundary. Reason: in root sessions from 2026-11-04 to 2026-11-17, claude-opus-5-5 read the skill in 1 of 56 sessions and compacted 5 times, against 13 of 13 sessions and 25 compactions for gpt-6.1-sol (see the outcome in task 14cd586c, archived). To evaluate: rerun .tmp/pi-context-eval-2026-11-17/scan.clj, agg.clj and weekly.clj (scratch; regenerate from the outcome if gone) on sessions started after the rule, and compare for claude-opus-5-5 root sessions: skill reads detected as toolCall lines that name context-management/SKILL.md (the skill path also appears in every system prompt, so a plain text match is not valid), pi-context compactions, root sessions above 200k peak context with no compaction, and mean context per request. If uptake stays low, consider the context-nudge extension option: a hook that adds a reminder above a context threshold.
+
+Outcome [2026-11-26 Thu]: the rule raised skill reads and checkpoints but not compaction. Data: 372 sessions from 2026-11-04 to 2026-11-26; scripts, rows and output in .tmp/pi-context-eval-2026-11-26/ (scratch). Pre-rule is before 2026-11-17 18:00, post-rule is from 2026-11-18; the transition evening is excluded because the rule was live in the working tree before commit `830b0ac` (23:47). Skill reads are toolCall arguments that name context-management/SKILL.md. claude-opus-5-5 root sessions, pre to post: 55 to 26 sessions; skill read in 1 (2%) to 20 (77%); sessions with a checkpoint 13 to 20, checkpoint calls 26 to 105; pi-context compactions 5 to 4 (`context_compact` calls equal compactions, so no failed attempts); sessions above 200k peak context 21 to 13, of which 18 and 10 never compacted; no native compactions in either period (the detector found 1 in the transition window, a positive control). Context per request rose (216k to 267k) and the median peak rose (148k to 216k), but the post period has fewer and longer sessions, so this does not isolate the rule. Pre-rule counts match the 2026-11-17 outcome (1 of 56 reads), which checks the scan. Unverified hypothesis: the skill's compact gate forbids compaction when a reply delivers a result and waits for the user, which is the normal end of an interactive turn, so Opus checkpoints but rarely finds a known continuation. Next step, if wanted: the context-nudge option, or a change to the gate for interactive sessions above a context threshold.
