@@ -222,6 +222,8 @@ Splitting acts on criteria, not on edit sites: work that must edit the same func
 
 When a non-goal would be easy to violate by accident, capture it as an anti-criterion in the same list, prefixed `Must not:` (or under a dedicated `Anti-criteria:` heading for plan tasks with several). Examples: *Must not: write to the production database. Must not: introduce a new top-level dependency. Must not: change the public API signature.*
 
+When a `Must not:` check compares with a fixed commit (for example `git diff --quiet <commit> -- <paths>`), exclude each path that a task in the parent's `:BLOCKED-BY:` chain will change. Otherwise the planned change of the prerequisite fails the check.
+
 ### Body discipline
 
 Each plan task's body is the criteria list plus, at most, one pointer or non-obvious constraint. Prefer a stable symbol reference (file path plus function or var name) to a similar existing pattern -- never a bare line number or range, which drifts between planning and execution -- or an inline code sketch when no reference fits. For a repo-relative file pointer, use a single inline-code token such as `skills/org-tasks/SKILL.md`; `ot doctor` advises when a constrained citation under an existing root does not resolve. Cite a file outside the repository with an absolute or `~/` path, because `ot doctor` resolves a relative inline path against the repository root. Skipping examples leads to workers reporting back for clarification -- spend the 30 seconds now.

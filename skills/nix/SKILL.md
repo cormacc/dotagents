@@ -116,6 +116,8 @@ Refer to a local flake in a Git repository as `.#attr` or `git+file://<dir>`; in
 
 For a clean, untracked snapshot inside another Git repository, use an explicit `path:<snapshot-root>#<attr>` reference so Nix evaluates that snapshot rather than the enclosing Git source. Keep generated output outside the snapshot before evaluation: `path:` includes ignored files. Continue to use Git-backed references for ordinary tracked flakes.
 
+An evaluation of a flake that has no `flake.lock` writes one into it. Pass `--no-write-lock-file` when the flake is not yours to change, for example another agent's evidence directory.
+
 `nix build --file <f>` and `nix eval --file <f>` take the attribute as a positional argument (`nix eval --file f.nix a`). `-A` exists only for `nix-build` and `nix-instantiate`.
 
 ## Pinning and inputs
