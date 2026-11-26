@@ -1,8 +1,8 @@
 #+TITLE: herdr-orch: model pools, /oh model and quota-routed startup
 #+DATE: 2026-11-19 Thu
-#+PARENT: [[task:768056d3-5e59-415e-b9b9-9363e641ddc6][herdr-orch: model pools, /oh model and quota-routed startup]]
+#+PARENT: [[archive:768056d3-5e59-415e-b9b9-9363e641ddc6][herdr-orch: model pools, /oh model and quota-routed startup]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Review
+#+STATUS: Done
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 #+SPEC: [[proj:skills/herdr-orch/README.org]]
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
@@ -15,7 +15,7 @@ Let a primary Pi session choose a model or a model pool by quota, and start on t
 * Summary
 *Level:* production · *Tests:* thorough · *Docs:* README
 
-All three plan tasks are implemented and tested; not yet committed. Pools replace vector aliases (`:pools`, ranked 1 to 4 in the packaged config), `/oh model` replaces `/oh tier` with a quota-annotated picker, and a new primary session starts on the account (or, with `:pi {:default-model-pool true}`, the pool) that the policy chooses for Pi's default model. Live check (2026-11-19 14:15, RPC `get_state`, no prompt): Pi's default `anthropic/claude-opus-5-5` started on `anthropic-1/claude-opus-5-5`; `settings.json` kept `anthropic/claude-opus-5-5`.
+Shipped in `6dc74b5`. Pools replace vector aliases (`:pools`, ranked 1 to 4 in the packaged config), `/oh model` replaces `/oh tier` with a quota-annotated picker, and a new primary session starts on the account (or, with `:pi {:default-model-pool true}`, the pool) that the policy chooses for Pi's default model. Live check (2026-11-19 14:15, RPC `get_state`, no prompt): Pi's default `anthropic/claude-opus-5-5` started on `anthropic-1/claude-opus-5-5`; `settings.json` kept `anthropic/claude-opus-5-5`.
 
 ** Scope
 *** In scope
@@ -98,9 +98,7 @@ All three plan tasks are implemented and tested; not yet committed. Pools replac
 - A startup selection reports "Selected …"; a test that waits for the first notify event must skip it (`pi-integration.test.ts`).
 
 ** Risks
-- If Pi does not await a `session_start` handler before it accepts the first prompt, a fast first prompt goes to Pi's default account. Task 3 establishes this first; if Pi does not wait, the first prompt still works, on the default account.
-- Detecting an explicit `--model` from `process.argv` depends on Pi's flag names. Task 3 tests each flag that selects a model.
-- The rename touches about 29 doc references and about 100 test fixture lines; a missed vector alias in a test fixture fails validation loudly, not silently.
+- Detecting an explicit `--model`, `--models` or `--provider` from `process.argv` depends on Pi's flag names; the installed-Pi `startup-explicit` scenario fails if Pi renames them.
 
 * Plan
 ** DONE Replace vector aliases with a :pools section :herdr_orch:
@@ -115,16 +113,7 @@ CLOSED: [2026-11-19 Thu 13:55]
 - State "STARTED" from "TODO" [2026-11-19 Thu 13:32]
 - State "DONE" from "STARTED" [2026-11-19 Thu 13:55]
 :END:
-Acceptance criteria:
-- Per-file and merged validation implement the `:pools` rules in Acceptance (rank, uniqueness, cross-section names, legacy vector aliases, pool candidates).
-- `core.clj` `vector-alias?` and its callers in `core.clj`, `cli.clj` and `routing.clj` use pools; `:aliases` lookups accept strings only.
-- The packaged `skills/herdr-orch/subagents/config.edn` uses `:pools`; `oh roster` reports `pools`; `bb readme-roster` regenerates the README listings.
-- `cli.clj` injects `HERDR_ORCH_MODEL_POOL`; `recovery.ts` reads it.
-- `pi/extensions/herdr-orch/index.ts` reads pool names from the roster `pools` key.
-- `contract.md`, `README.org`, `SKILL.md` and the extension README say "pool" where they say "vector alias" or "weight alias".
-- `bb test`, `skills/herdr-orch/scripts/pi/test.sh` and `pi/extensions/herdr-orch/test.sh` pass.
-
-`core.clj` `merge-config` merges `:pools` per key, as it does `:aliases`; `validate-merged-config!` holds the alias/model overlap check to extend.
+Config `:pools` section, validation, roster `pools`, `HERDR_ORCH_MODEL_POOL`, and the doc rename from vector alias to pool. See Acceptance.
 
 ** DONE Add /oh model for pools and named models :herdr_orch:
 CLOSED: [2026-11-19 Thu 14:00]
@@ -139,15 +128,7 @@ CLOSED: [2026-11-19 Thu 14:00]
 - State "STARTED" from "TODO" [2026-11-19 Thu 13:55]
 - State "DONE" from "STARTED" [2026-11-19 Thu 14:00]
 :END:
-Acceptance criteria:
-- `/oh model <pool|model|string alias>` and `/oh model clear` behave as in Acceptance; `/oh tier` is removed from the command, its help and completion.
-- A bare `/oh model` opens a `ctx.ui.select` picker; its annotations come from one `oh route` evaluation per item, or from one batched evaluation if `oh route` cost makes the picker slow.
-- Completion uses cached roster pools and canonical model IDs captured from `ctx.modelRegistry` at `session_start`.
-- Before it asks the policy, primary routing calls `ctx.modelRegistry.getProviderAuth` for each OAuth account in its inventory, with the 15 s bound of `account-loader.ts`.
-- A resumed session with a `herdr-orch-tier` entry restores its pool.
-- The extension README section 'Primary tiers and quota recovery' and `contract.md` section 'Primary Pi recovery' describe `/oh model`.
-
-`recovery.ts` `registerRecovery` returns the `/oh tier` handler today; `help.ts` `completeArguments` owns completion.
+`/oh model` (pool, model, alias, clear, picker) replaces `/oh tier`, with in-process token refresh before each policy call. See Acceptance.
 
 ** DONE Route Pi's default model at session startup :herdr_orch:
 CLOSED: [2026-11-19 Thu 14:17]
@@ -162,20 +143,12 @@ CLOSED: [2026-11-19 Thu 14:17]
 - State "STARTED" from "TODO" [2026-11-19 Thu 14:00]
 - State "DONE" from "STARTED" [2026-11-19 Thu 14:17]
 :END:
-Acceptance criteria:
-- First, an installed-Pi test shows whether Pi awaits an async `session_start` handler before the first prompt is sent; the record states the result.
-- The startup criteria in Acceptance pass in installed-Pi tests, including each exclusion and the `/new` case.
-- `:pi {:default-model-pool <boolean>}` is validated per file and merged per key; the default is false.
-- `oh roster` or another existing read exposes the setting to the extension; the extension does not parse `config.edn` itself.
-- `contract.md` and the extension README describe startup routing and the setting.
-
-Reuse the `/oh model` routing path from task 2; the startup hook only chooses the request (pool or model).
+Startup and `/new` routing of Pi's default model, with the `:pi {:default-model-pool <boolean>}` setting exposed through `oh roster`. See Acceptance.
 
 * Implementation
 - Pi awaits `session_start` before it accepts a prompt: interactive mode refuses submission with "Startup is still in progress" until `bindExtensions` resolves (`interactive-mode.js` `handleStartupSubmit`), and print and RPC modes await `bindExtensions` before the prompt. The installed-Pi `startup` scenario confirms it: the default account refuses every request, and the first request goes to the routed account. With the hook disabled, the same scenario fails.
 - Startup routing costs one `oh roster` (about 0.4 s) and one `oh route` (about 0.25 s) call, plus any token refresh.
 - The picker runs one `oh route` per item, 8 at a time (about 0.25 s each).
-- Verification on 2026-11-19: `bb test` (1025 tests, 0 failures), `skills/herdr-orch/scripts/pi/test.sh` (`ok`), `pi/extensions/herdr-orch/test.sh` (exit 0, 51 recovery unit scenarios, startup scenarios `startup`, `startup-pool`, `startup-explicit`).
 
 * Open questions
 ** DECIDED Should a bare /oh model open a picker with quota annotations?

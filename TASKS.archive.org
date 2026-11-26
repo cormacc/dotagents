@@ -6304,6 +6304,39 @@ CLOSED: [2026-11-19 Thu 11:09]
 - State "DONE" from "STARTED" [2026-11-19 Thu 11:09]
 :END:
 #+IMPORT: [[plan:2026-11-19-herdr-orch-pace-routing.org]]
+
+** DONE [#B] herdr-orch: model pools, /oh model and quota-routed startup :herdr_orch:
+CLOSED: [2026-11-26 Thu 22:00]
+:PROPERTIES:
+:CUSTOM_ID: 768056d3-5e59-415e-b9b9-9363e641ddc6
+:CREATED: [2026-11-19 Thu 13:03]
+:STARTED: [2026-11-19 Thu 13:32]
+:ARCHIVED: [2026-11-26 Thu 22:00]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:03]
+- State "STARTED" from "TODO" [2026-11-19 Thu 13:32]
+- State "DONE" from "STARTED" [2026-11-26 Thu 22:00]
+:END:
+#+IMPORT: [[plan:2026-11-19-herdr-orch-model-pools.org]]
+
+** DONE Diagnose intermittent herdr-app quota loading stall :herdr_orch:
+CLOSED: [2026-11-26 Thu 22:13]
+:PROPERTIES:
+:CUSTOM_ID: 407a7f0f-c24a-4af7-84dd-fe5e5d25425b
+:CREATED: [2026-11-05 Thu 20:50]
+:ARCHIVED: [2026-11-26 Thu 22:13]
+:ARCHIVE_OLPATH: Fixes
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 20:50]
+- State "DONE" from "TODO" [2026-11-26 Thu 22:13]
+:END:
+Observed after first selecting the installed herdr-orch layout: shared herdr-orch.quota stayed running:true without result/error for minutes, while HOME-scoped oh usage returned fresh data. A forced hot reload recovered the display; the original committed coordinator also succeeds after reload, so no causal fix is established. Capture a recurrence before replacing its generation, distinguish command launch/completion from native task ownership, and add a demonstrated regression before patching. Preserve user panes and obtain separate consent for disruptive probes. Evidence: .tmp/herdr-quota-live-debug-report.md and .tmp/quota-live-4a61026a/. Native source watching also failed through the Home Manager symlink chain: saving source did not reload, while touch -h on the top-level mod symlink did; the owner accepted this as a known limit on 2026-11-09 (herdr-app/README.md). Origin task f7457cc5-64a5-4139-ba94-7da9eca8f6ed.
+
+Outcome [2026-11-26 Thu]: closed as covered by task d63318d4 (archived), which found the same symptom on 2026-11-17 (`running: true`, no result, recovery by hot reload), identified the cause (`coordinator().refresh()` in `herdr-app/mods/herdr-orch/quota-state.js` returned an in-flight promise that never settled) and fixed it in `8c0782e` with a regression test. Reopen if a stall recurs after `8c0782e`.
+
 ** DONE [#C] Re-evaluate Opus uptake of pi-context after the AGENTS.md rule (after 2026-11-24) :pi:
 CLOSED: [2026-11-26 Thu 22:15]
 :PROPERTIES:
