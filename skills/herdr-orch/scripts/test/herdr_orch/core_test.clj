@@ -1014,7 +1014,10 @@
       (is (= "a/m" (:chosen r)))
       (is (re-find #"unknown.*timeout" (:reason r))))
     (is (= "c/m" (chosen [a c] {"a" (ok 0.0) "c" (ok 0.5)})))
-    (is (= "c/m" (chosen [(cand "a" 1 0.1) c] {"a" (ok 0.1) "c" (ok 0.5)})))
+    (let [route (core/route [(cand "a" 1 0.1) c] (evidence {"a" (ok 0.1) "c" (ok 0.5)}))]
+      (is (= "c/m" (:chosen route)))
+      (is (= :below-reserve (get-in route [:candidates 0 :eligibility])))
+      (is (= :eligible (get-in route [:candidates 1 :eligibility]))))
     (is (= "a/m" (chosen [(cand "a" 1 0.1) c] {"a" (ok 0.11) "c" (ok 0.5)})))
     (is (= "c/m" (chosen [a c] {"a" (ok 0.0) "c" {}})))
     (is (= "l/m" (chosen [(cand "l" 2) (cand "z" 1)] {"l" {:local true} "z" (ok 0.0)})))))
@@ -1057,8 +1060,10 @@
     (testing "the reserve still applies to the effective minimum"
       (is (= "b/m" (pick [(cand "a" 1 0.25) b] {"a" (paced 0.9 1 0.2) "b" (paced 0.5 100 1.0)}))))
     (testing "each candidate and the reason show the spare rate"
-      (let [r (paced-route [a b] {"a" (paced 0.5 24 1.0) "b" (paced 0.8 nil 1.0)})]
+      (let [r (paced-route [a b] {"a" (paced 0.5 24 0.2) "b" (paced 0.8 nil 1.0)})]
         (is (= [0.5 (/ 0.8 7.0)] (mapv :spare-rate (:candidates r))) "remaining fraction per day to reset")
+        (is (= "five_hour" (get-in r [:candidates 0 :limiting-window])) "the tightest bound differs from the ranking window")
+        (is (= "a/m" (:chosen r)))
         (is (re-find #"spare rate 0\.5" (:reason r)) (:reason r))))))
 
 (deftest route-refuses-without-an-eligible-candidate
@@ -1074,8 +1079,9 @@
   (let [cand {:model "fable" :canonical "anthropic/x-fable" :provider "anthropic" :rank 1 :reserve 0.2}
         r (core/route [cand {:model "n" :canonical "none/n" :provider "none" :rank 2 :reserve 0}]
                       (evidence {"anthropic" {:reason "provider-unavailable"}}))]
-    (is (= (assoc cand :status :unknown :remaining nil :spare-rate nil :reason "provider-unavailable") (first (:candidates r))))
-    (is (= {:status :unknown :remaining nil :reason "unresolved-scope"} (select-keys (second (:candidates r)) [:status :remaining :reason])))
+    (is (= (assoc cand :status :unknown :remaining nil :spare-rate nil :eligibility :eligible :reason "provider-unavailable") (first (:candidates r))))
+    (is (= {:status :unknown :remaining nil :eligibility :eligible :reason "unresolved-scope"}
+           (select-keys (second (:candidates r)) [:status :remaining :eligibility :reason])))
     (is (= "anthropic/x-fable" (:chosen r)))
     (is (not (contains? (first (:candidates (core/route [cand] (evidence {"anthropic" (ok 0.9)})))) :reason)))))
 

@@ -121,6 +121,31 @@
         (is (= "missing-credentials" (:reason (row (run context opts)))))
         (is (= 3 (count @calls)))))))
 
+(deftest cached-only-evidence-never-fetches-or-promotes-expired-credit
+  (stores/with-context
+    (fn [context]
+      (stores/seed! context)
+      (stores/put-json! (stores/pi-path context)
+                        {:openai-codex (assoc (stores/oauth "forecast") :expires (+ stores/now-ms 2000000))})
+      (let [calls (atom 0)
+            read-at (fn [offset cached-only]
+                      (run-usage (update context :now-ms + offset) "openai-codex" nil
+                                 {:cached-only cached-only
+                                  :http-fn (fn [_] (swap! calls inc)
+                                             {:status 200 :body (codex-body 25 18000)})}))
+            cache (fs/path (:home context) "cache")]
+        (is (= "cache-miss" (:reason (row (read-at 0 true)))))
+        (is (not (fs/exists? cache)) "a cold forecast creates no cache")
+        (is (= 0 @calls))
+        (is (= 0.75 (remaining (read-at 0 false) "openai-codex")) "control: a normal route fetches")
+        (let [path (first (fs/glob cache "*.json"))
+              original (slurp (str path))]
+          (is (= 0.75 (remaining (read-at 59999 true) "openai-codex")))
+          (is (= "cache-miss" (:reason (row (read-at 60000 true)))))
+          (is (nil? (remaining (read-at 60000 true) "openai-codex")))
+          (is (= original (slurp (str path))) "forecast reads but never updates the cache")
+          (is (= 1 @calls)))))))
+
 (deftest ttl-fresh-negative-cache-and-provider-backoff
   (stores/with-context
     (fn [context]

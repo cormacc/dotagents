@@ -259,14 +259,17 @@
         (if (>= (- now (:snapshot-at state now)) stale-ceiling-ms) (diagnostic-windows evidence []) evidence)
         (and (not failure?) (<= (:fetched-at state) now) (< now (:next-fetch-at state))
              (or (not fresh) coalesced?)) evidence))))
-(defn- collect-provider [provider harness account {:keys [credential-context cache-dir http-fn fresh]}]
+(defn- collect-provider [provider harness account {:keys [credential-context cache-dir http-fn fresh cached-only]}]
   (let [context (or credential-context (credentials/environment))
         now (:now-ms context)
         credential (credentials/credentials harness provider context account)]
     (if-not (= "ready" (:status credential)) (unknown (:reason credential))
       (let [path (fs/path (or cache-dir (default-cache-dir)) (str (:context-key credential) ".json"))
             initial (read-state path)]
-        (with-cache-lock (str path ".lock")
+        (if cached-only
+          ;; Forecasts cannot create a cache directory or turn expired evidence into credit.
+          (or (cached-answer initial now false initial) (unknown "cache-miss"))
+          (with-cache-lock (str path ".lock")
           (fn []
             (let [current-context (or credential-context (credentials/environment))
                   current (credentials/credentials harness provider current-context account)
@@ -292,13 +295,14 @@
                                 (and snapshot (not (authentication-failures (:reason out))))
                                 (assoc :snapshot snapshot :snapshot-at (if success? now (:snapshot-at state now))))]
                     (write-state! path state)
-                    evidence))))))))))
+                    evidence)))))))))))
 
 (defn usage-for
   "Collect owned evidence for configured local providers. Options: :providers
   (nil means all; Pi anthropic expands to its validated named accounts),
   :harness (:pi by default, or explicit :claude/:codex), :fresh
-  bypasses TTL but not in-flight coalescing or failure backoff. Tests can supply
+  bypasses TTL but not in-flight coalescing or failure backoff. :cached-only
+  reads valid cached evidence without fetching or writing. Tests can supply
   :credential-context, :http-fn and :cache-dir. Never refresh or install software."
   ([config] (usage-for config {}))
   ([config {:keys [providers harness] :or {harness :pi} :as opts}]

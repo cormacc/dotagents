@@ -10828,6 +10828,32 @@
       (is (zero? (:exit exhausted)))
       (is (true? (get-in (result exhausted) [:result :refused]))))))
 
+(deftest cached-route-forecast-never-fetches-or-grants-expired-credit
+  (let [{:keys [env dir]} (routed-fixture (usage-body {:anthropic-used 10}) {} nil)
+        path (str (fs/path dir "forecast-request.json"))
+        request {:schema "herdr-orch-route/v1" :model "heavy"
+                 :inventory [{:canonical fable :account "anthropic" :reasoning ["high"]}]
+                 :attempted [] :reasoning "high"}
+        invoke #(call! env "route" "--request" path "--cached-only")]
+    (spit path (json/generate-string request))
+    (let [cold (invoke)]
+      (is (zero? (:exit cold)) (:out cold))
+      (is (true? (get-in (result cold) [:result :forecast])))
+      (is (= "unknown" (get-in (result cold) [:result :candidates 0 :status])))
+      (is (= "eligible" (get-in (result cold) [:result :candidates 0 :eligibility])))
+      (is (not (made-usage-call? dir)) "a cold forecast must not fetch"))
+    (let [warm (call! env "route" "--request" path)]
+      (is (zero? (:exit warm)) (:out warm))
+      (is (made-usage-call? dir) "control: an ordinary route fetches"))
+    (fs/delete-if-exists (usage-call-log dir))
+    (let [forecast (invoke)]
+      (is (zero? (:exit forecast)) (:out forecast))
+      (is (= "anthropic" (get-in (result forecast) [:result :account])))
+      (is (= "five_hour" (get-in (result forecast) [:result :candidates 0 :limiting-window])))
+      (is (= "eligible" (get-in (result forecast) [:result :candidates 0 :eligibility])))
+      (is (not (made-usage-call? dir)) "a warm forecast must not fetch either"))
+    (is (not (fs/exists? (fs/path dir ".tmp/herdr-orch/ledger"))))))
+
 (deftest secret-probe-detects-a-planted-token
   (let [{:keys [dir]} (routed-fixture {})]
     (is (= [anthropic-secret] (leaked-secrets dir (str "log " anthropic-secret))) "known-bad control: a leaked token is found")

@@ -300,7 +300,7 @@
           scope (first (filter #(= (or quota-scope "all_models") (:scope %))
                                (get-in row [:quotaSemantics :effectiveAvailability])))
           ids (set (:boundedBy scope))]
-      (filter #(and (ids (:id %)) (pos-int? (:windowSeconds %))) (:windows row)))))
+      (filter #(ids (:id %)) (:windows row)))))
 
 (defn- tightest
   "Among `windows` of the length that `pick` selects, the one with the least remaining."
@@ -318,31 +318,38 @@
         days (if reset (/ (- reset now-ms) 86400000.0) (/ (:windowSeconds window) 86400.0))]
     (/ (/ (:percentRemaining window) 100.0) (max (/ 1.0 1440) days))))
 
+(defn- eligible-candidate? [{:keys [remaining reserve]}]
+  (or (nil? remaining) (> remaining reserve)))
+
 (defn- annotate [evidence now-ms candidate]
   (let [entry (first (filter #(= (or (:account candidate) (:provider candidate)) (:localProvider %)) (:providers evidence)))
         remaining (candidate-remaining evidence candidate)
         windows (bounding-windows evidence candidate)
-        spare (some-> (tightest max windows) (spare-rate now-ms))
-        session (some-> (tightest min windows) :percentRemaining (/ 100.0))]
-    (cond-> (assoc candidate :status (if (some? remaining) :ok :unknown) :remaining remaining :spare-rate spare)
-      session (assoc :session-remaining session)
-      (nil? remaining) (assoc :reason (or (:reason entry) "unresolved-scope")))))
+        paced (filter #(pos-int? (:windowSeconds %)) windows)
+        spare (some-> (tightest max paced) (spare-rate now-ms))
+        session (some-> (tightest min paced) :percentRemaining (/ 100.0))
+        limiting (first (sort-by (juxt :percentRemaining :id) windows))]
+    (let [candidate (cond-> (assoc candidate :status (if (some? remaining) :ok :unknown)
+                                     :remaining remaining :spare-rate spare)
+                      session (assoc :session-remaining session)
+                      limiting (assoc :limiting-window (:id limiting))
+                      (nil? remaining) (assoc :reason (or (:reason entry) "unresolved-scope")))]
+      (assoc candidate :eligibility (if (eligible-candidate? candidate) :eligible :below-reserve)))))
 
-;; Chooses by rank (lower first), then known before unknown at the same rank. Inside that
-;; group, a pair with a weekly spare rate (remaining fraction of its longest bounding window
-;; per day to that window's reset) comes first, largest rate first; a pair without one (no
-;; bounding window of known length) orders by remaining fraction after them. Session (shortest-window) remaining breaks a tie, then
-;; config order. A known candidate whose remaining fraction is at or below its `:reserve` is
-;; excluded; an unknown one stays eligible, so an unknown higher-ranked candidate beats a
-;; known lower-ranked one. No eligible candidate refuses.
+;; Rank and quota eligibility are independent: a high-ranked exhausted entry cannot win,
+;; while an authenticated entry with unknown allowance can still be tried.
+(defn- ranking-key [candidate]
+  [(:rank candidate) (if (some? (:remaining candidate)) 0 1)
+   (if (some? (:spare-rate candidate)) 0 1)
+   (- (or (:spare-rate candidate) (:remaining candidate) 0))
+   (- (or (:session-remaining candidate) 0))])
+
 (defn route
   ([candidates usage] (route candidates usage (System/currentTimeMillis)))
   ([candidates usage now-ms]
   (let [annotated (mapv #(annotate usage now-ms %) candidates)
-        eligible (filter #(or (nil? (:remaining %)) (> (:remaining %) (:reserve %))) annotated)
-        picked (first (sort-by (fn [c] [(:rank c) (if (:remaining c) 0 1) (if (:spare-rate c) 0 1)
-                                        (- (or (:spare-rate c) (:remaining c) 0)) (- (or (:session-remaining c) 0))])
-                               eligible))]
+        eligible (filter eligible-candidate? annotated)
+        picked (first (sort-by ranking-key eligible))]
     (if picked
       (cond-> {:chosen (:canonical picked)
        :candidates (mapv #(dissoc % :session-remaining) annotated)
