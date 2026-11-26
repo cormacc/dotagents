@@ -334,3 +334,62 @@ Origin:
 - git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
 - timestamp: [2026-11-19 Thu 13:45]
 - sender: human+agent (session retro, approved by the user)
+
+** TODO Put ot on PATH for delegated children :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 7f87508f-fa77-48dc-858d-edfb5f28e080
+:CREATED: [2026-11-26 Thu 17:40]
+:END:
+:LOGBOOK:
+- Created [2026-11-26 Thu 17:40]
+:END:
+A child that an assignment tells to run ot can fail with 'ot: command not found'. Desired: the oh launcher exports the org-tasks ot (or its directory) to the child environment, or the injected prompt names ~/.agents/skills/org-tasks/scripts/ot.
+
+Origin:
+- cwd: /home/cormacc/dev/nix/nix-microchip
+- git: git@github.com:cormacc/nix-microchip @ master
+- timestamp: [2026-11-26 Thu 17:39]
+- sender: agent
+
+Evidence:
+- Planner child f3c0743e reported 'ot: command not found' in its pane; ~/.agents/skills/org-tasks/scripts/ot worked. The parent pane has ot at ~/.local/bin/ot. The child's PATH was not inspected (attributed to the child).
+
+** TODO State the five-item --finding limit in the injected publish instruction :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 9d926e31-eda7-430e-877e-590ccbf01d2c
+:CREATED: [2026-11-26 Thu 17:40]
+:END:
+:LOGBOOK:
+- Created [2026-11-26 Thu 17:40]
+:END:
+task publish rejects more than five --finding items only at the final call. The injected prompt states the five-item limit for --process (cli.clj, 'at most five') but not for --finding. Desired: the publish instruction in cli.clj names the --finding limit too; update any prompt-text tests.
+
+Origin:
+- cwd: /home/cormacc/dev/nix/nix-microchip
+- git: git@github.com:cormacc/nix-microchip @ master
+- timestamp: [2026-11-26 Thu 17:39]
+- sender: agent
+
+Evidence:
+- core.clj max-findings 5 throws 'result envelope FINDINGS exceeds the five-item limit'.
+- Planner child f3c0743e had seven findings rejected at publish.
+
+** TODO Add a supported way to change a task heading :skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 930c2230-4aa0-4dee-8ffd-3b09af82f313
+:CREATED: [2026-11-26 Thu 17:40]
+:END:
+:LOGBOOK:
+- Created [2026-11-26 Thu 17:40]
+:END:
+ot has no verb to change a task's summary, so a planner hand-edited the heading in TASKS.org. Desired: an ot retitle <id> <summary> command, or org-tasks states that a heading edit is sanctioned and how to keep the state token and tags.
+
+Origin:
+- cwd: /home/cormacc/dev/nix/nix-microchip
+- git: git@github.com:cormacc/nix-microchip @ master
+- timestamp: [2026-11-26 Thu 17:39]
+- sender: agent
+
+Evidence:
+- ot --help lists no rename/retitle verb (checked 2026-11-26).
+- Planner child f3c0743e renamed task 226f1ac9 by a hand edit.
