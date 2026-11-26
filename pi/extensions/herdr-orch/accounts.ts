@@ -43,13 +43,15 @@ function cachedCatalogModels(base: string, storePath = join(getAgentDir(), "mode
 }
 
 /** Built-in models first; a catalog entry only adds an ID that the built-in list lacks. */
-function withCatalog<T extends { id: string; type?: string }>(builtin: T[], catalog: any[], chatOnly: boolean): T[] {
+function withCatalog<T extends { id: string; type?: string }>(builtin: readonly T[], catalog: any[], chatOnly: boolean): T[] {
   const ids = new Set(builtin.map(model => model.id));
   return [...builtin, ...catalog.filter(model => !ids.has(model.id) && (!chatOnly || model.type === undefined || model.type === "chat"))];
 }
 
-/** Reuse native Anthropic OAuth with private browser login, without API-key or ambient auth methods. */
-export function accountProvider(id: string): Provider<"anthropic-messages"> {
+type AnthropicStream = Provider<"anthropic-messages">["streamSimple"];
+
+/** Use native OAuth with private browser login and, if supplied, a shared streaming wrapper. */
+export function accountProvider(id: string, getStreamWrapper?: () => AnthropicStream | undefined): Provider<"anthropic-messages"> {
   if (!isAccountId(id)) throw new Error("Invalid Anthropic account identity");
   const base = anthropicProvider();
   const catalog = cachedCatalogModels(accountBase(id)!);
@@ -58,6 +60,10 @@ export function accountProvider(id: string): Provider<"anthropic-messages"> {
     id,
     name: id,
     auth: { oauth: base.auth.oauth && privateBrowserOAuth(base.auth.oauth) },
+    streamSimple(model, context, options) {
+      const wrap = getStreamWrapper?.();
+      return wrap ? wrap(model, context, options) : base.streamSimple(model, context, options);
+    },
     getModels: () => withCatalog(base.getModels(), catalog, true).map((model) => ({ ...model, provider: id })),
     getAllModels: () => withCatalog(base.getModels(), catalog, false).map((model) => ({ ...model, provider: id })),
   };
@@ -76,13 +82,29 @@ export function storedAccountIds(authPath = join(getAgentDir(), "auth.json")): s
   return Object.keys(data).filter(isAccountId).sort();
 }
 
-export function registerStoredAccounts(pi: Pick<ExtensionAPI, "registerProvider">): Set<string> {
+type AccountRegistrationAPI = Pick<ExtensionAPI, "on" | "registerProvider">;
+
+function registerAccountProviders(pi: AccountRegistrationAPI) {
+  let registry: ExtensionCommandContext["modelRegistry"] | undefined;
+  pi.on("session_start", (_event, ctx) => { registry = ctx.modelRegistry; });
+  const getStreamWrapper = () => {
+    // Use only the transport callback, not registry streaming, which resolves auth again.
+    // Look it up per request so extension load order does not affect discovery.
+    const config = registry?.getRegisteredProviderConfig("anthropic");
+    return config?.api === "anthropic-messages" ? config.streamSimple : undefined;
+  };
   const registered = new Set<string>();
-  for (const id of storedAccountIds()) {
-    pi.registerProvider(accountProvider(id));
+  const add = (id: string) => {
+    if (registered.has(id)) return;
+    pi.registerProvider(accountProvider(id, getStreamWrapper));
     registered.add(id);
-  }
-  return registered;
+  };
+  for (const id of storedAccountIds()) add(id);
+  return { registered, add };
+}
+
+export function registerStoredAccounts(pi: AccountRegistrationAPI): Set<string> {
+  return registerAccountProviders(pi).registered;
 }
 
 export type SubcommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
@@ -91,12 +113,7 @@ const ACCOUNT_USAGE = "Use /oh account add [N] to register anthropic-<N>, then /
 
 /** Register stored accounts and return the `/oh account` handler, which `/oh` dispatches. */
 export function registerAccounts(pi: ExtensionAPI): SubcommandHandler {
-  const registered = registerStoredAccounts(pi);
-  const add = (id: string) => {
-    if (registered.has(id)) return;
-    pi.registerProvider(accountProvider(id));
-    registered.add(id);
-  };
+  const { registered, add } = registerAccountProviders(pi);
   return async (args, ctx) => {
     if (!ctx.hasUI) return;
     const parts = args.trim().split(/\s+/).filter(Boolean);

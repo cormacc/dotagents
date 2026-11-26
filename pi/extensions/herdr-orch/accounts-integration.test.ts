@@ -69,6 +69,7 @@ async function main() {
       assert.equal(req.url, "/v1/messages?beta=true");
       assert.ok(req.headers.authorization === "Bearer sk-ant-oat01-work-refreshed", "wrong-account request");
       assert.equal(req.headers["x-api-key"], undefined);
+      assert.equal(req.headers["x-fixture-stream-wrapper"], process.env.ACCOUNT_TEST_GATE_ONLY ? undefined : alias);
       assert.match(String(req.headers["anthropic-beta"]), /oauth-2025-04-20/);
       assert.match(JSON.stringify(body.system), /Claude Code/);
       assert.equal(body.model, model);
@@ -111,7 +112,22 @@ async function main() {
   const extension = join(cwd, "fixture.ts");
   writeFileSync(extension, process.env.ACCOUNT_TEST_GATE_ONLY
     ? `import { accountProvider } from ${JSON.stringify(join(here, "accounts.ts"))};\nexport default (pi) => { globalThis.installAccountTestRedirect(); pi.registerProvider(accountProvider(${JSON.stringify(alias)})); };\n`
-    : `import register from ${JSON.stringify(join(here, "index.ts"))};\nexport default (pi) => { globalThis.installAccountTestRedirect(); register(pi); };\n`);
+    : `import register from ${JSON.stringify(join(here, "index.ts"))};
+import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+export default (pi) => {
+  globalThis.installAccountTestRedirect();
+  register(pi);
+  const native = anthropicProvider();
+  pi.registerProvider("anthropic", {
+    api: "anthropic-messages",
+    streamSimple(model, context, options) {
+      return native.streamSimple(model, context, {
+        ...options, headers: { ...options?.headers, "x-fixture-stream-wrapper": model.provider },
+      });
+    },
+  });
+};
+`);
   const h = createHarness(extension, cwd, {
     args: ["--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", "--tools", "read", "--provider", alias, "--model", model, "--thinking", "off"],
     env: { ...isolatedOrchEnv, PI_CODING_AGENT_DIR: agent, HERDR_ENV: "0", HC_TERMINAL_ID: undefined, ANTHROPIC_API_KEY: "fixture-paid-key-must-not-be-used", NODE_OPTIONS: `--require=${join(here, "account-fake-only.cjs")}`, HERDR_ORCH_FAKE_ORIGIN: origin },
