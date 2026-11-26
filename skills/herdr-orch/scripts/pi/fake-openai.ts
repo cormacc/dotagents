@@ -1,7 +1,7 @@
 // Local fake OpenAI-family endpoints (Chat Completions and the Responses wire used by both
 // openai-responses and openai-codex-responses) for the measurement adapter tests. Like
 // fake-anthropic.ts it records every request body and header set and replays scripted replies
-// as server-sent events, so the installed provider code builds the audited request.
+// as server-sent events, so the installed provider code builds the request.
 import { createServer, type IncomingMessage } from "node:http";
 import { gunzipSync, zstdDecompressSync } from "node:zlib";
 import type { Scripted } from "./fake-anthropic.ts";

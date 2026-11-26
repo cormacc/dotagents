@@ -5,8 +5,8 @@
   compiles the treatment, builds the subject argv/env, reads back terminal evidence, and reads
   process identity for the headless execution. The headless supervisor that owns a run
   (herdr-orch.supervisor) reuses these functions rather than rebuilding argv, stdin, resource
-  selection or request auditing. The Pi-side adapter (scripts/pi/measurement-adapter.ts)
-  enforces the request-context audit inside the subject."
+  or resource selection. The Pi-side adapter (scripts/pi/measurement-adapter.ts) controls
+  the subject's context and records its requests."
   (:require [babashka.fs :as fs]
             [cheshire.core :as json]
             [clojure.string :as str]
@@ -118,7 +118,7 @@
                                  :hard-timeout-ms (:hard-timeout-ms resolved) :expected-outputs (:expected-outputs resolved)}))
     {:argv (vec (concat [(or pi-bin "pi") "--offline" "--no-session" "-ne"]
                         (mapcat (fn [e] ["-e" e]) (:extensions resolved))
-                        ;; Last, so the adapter audits after every other extension's changes.
+                        ;; Last, so the adapter records the request after every other extension's changes.
                         ["-e" adapter "--no-skills" "--no-prompt-templates" "--no-context-files" "--no-mcp"]
                         model-args effort-args
                         (if (seq (:tools resolved)) ["--tools" (str/join "," (:tools resolved))] ["--no-tools"])
@@ -131,44 +131,36 @@
 (defn- read-json [path]
   (try (json/parse-string (slurp (str path)) true) (catch Exception _ ::malformed)))
 
-(defn- audit-index [path]
-  (some-> (re-find #"^audit-(\d+)\.json$" (str (fs/file-name path))) second parse-long))
+(defn- request-index [path]
+  (some-> (re-find #"^request-(\d+)\.json$" (str (fs/file-name path))) second parse-long))
 
 (defn interpret-evidence
   "Reads the adapter's terminal evidence. Success needs a well-formed `terminal.json` with
-  `success: true`, no violations, and, for every request the terminal evidence records, a
-  retained `request-N.json` and an `audit-N.json` that is `ok` with no violations. The recorded
-  request count is the authority: a missing audit, an audit file beyond the count, a missing
-  request payload or a missing count are failures, so no request can have been sent unaudited.
-  Anything missing or malformed is a failure with reasons; this is execution success, not
-  answer quality."
+  `success: true`, no violations, at least one recorded request and a parseable
+  `request-N.json` for each one. The recorded request count is the authority: a missing count,
+  a missing payload or a payload file beyond the count is a failure. Anything missing or
+  malformed is a failure with reasons; this is execution success, not answer quality."
   [adapter-evidence-dir]
   (let [terminal-file (fs/path adapter-evidence-dir "terminal.json")
         terminal (when (fs/exists? terminal-file) (read-json terminal-file))
         requests (when (map? terminal) (:requests terminal))
         counted? (and (integer? requests) (not (neg? requests)))
-        indexes (into (sorted-set) (keep audit-index) (fs/glob adapter-evidence-dir "audit-*.json"))
-        audits (into {} (map (fn [i] [i (read-json (fs/path adapter-evidence-dir (str "audit-" i ".json")))])) indexes)
-        audit-ok? (fn [a] (and (map? a) (true? (:ok a)) (empty? (:violations a))))
+        indexes (into (sorted-set) (keep request-index) (fs/glob adapter-evidence-dir "request-*.json"))
         per-request (when counted?
                       (for [i (range 1 (inc requests))
-                            reason [(when-not (contains? audits i) (str "audit evidence for request " i " is missing"))
-                                    (when (and (contains? audits i) (not (audit-ok? (get audits i)))) (str "a request-context audit failed (request " i ")"))
-                                    (when (let [f (fs/path adapter-evidence-dir (str "request-" i ".json"))]
-                                            (or (not (fs/exists? f)) (= ::malformed (read-json f))))
-                                      (str "request payload evidence for request " i " is missing or malformed"))]
-                            :when reason]
-                        reason))
+                            :when (or (not (contains? indexes i))
+                                      (= ::malformed (read-json (fs/path adapter-evidence-dir (str "request-" i ".json")))))]
+                        (str "request payload evidence for request " i " is missing or malformed")))
         reasons (cond-> []
                   (nil? terminal) (conj "terminal evidence is missing")
                   (= ::malformed terminal) (conj "terminal evidence is malformed")
                   (and (map? terminal) (not (true? (:success terminal)))) (conj (str "harness reported failure" (when-let [r (:reason terminal)] (str ": " r))))
                   (and (map? terminal) (seq (:violations terminal))) (conj "the run recorded violations")
                   (and (map? terminal) (not counted?)) (conj "terminal evidence records no valid request count")
-                  (empty? indexes) (conj "no request-context audit was recorded")
-                  (and counted? (some #(> % requests) indexes)) (conj "audit evidence is inconsistent with the recorded request count")
+                  (and counted? (zero? requests)) (conj "no provider request was recorded")
+                  (and counted? (some #(> % requests) indexes)) (conj "request evidence is inconsistent with the recorded request count")
                   (seq per-request) (into per-request))]
-    {:success? (empty? reasons) :reasons reasons :terminal (when (map? terminal) terminal) :audits (count indexes)}))
+    {:success? (empty? reasons) :reasons reasons :terminal (when (map? terminal) terminal) :requests (when counted? requests)}))
 
 ;; --- headless execution identity --------------------------------------------------------
 ;; A PID alone proves nothing after reuse, so an identity is the PID plus its kernel start time,

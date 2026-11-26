@@ -601,7 +601,7 @@
 ;; The measurement counterpart of `resolve-launch`, shared by preview and launch: the closed
 ;; configuration (frozen file texts), kind, model, effort and wait budget resolve here, before
 ;; any allocation. A measurement has no role, so the frontmatter is empty and kind comes from
-;; the caller's harness; only a pi subject has an audited adapter. Visibility is explicit only:
+;; the caller's harness; only a pi subject has a measurement adapter. Visibility is explicit only:
 ;; `--tab`/`--split` request a monitor; without either, a measurement opens no pane.
 (defn- resolve-measurement [opts]
   (let [resolved (measurement/read-config (one opts :measurement-config))

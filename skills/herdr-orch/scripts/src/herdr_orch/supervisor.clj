@@ -81,7 +81,7 @@
                   (seq remaining) (conj (str (count remaining) " owned process(es) survived cleanup")))]
     {:task task :success (empty? reasons) :reasons reasons :exit exit :timed-out timed-out?
      :hard-timeout-ms hard-timeout-ms :supervisor self :subject subject :cleanup {:remaining remaining}
-     :outputs produced :audits (:audits evidence) :finished-at (now) :evidence-dir evidence-dir}))
+     :outputs produced :requests (:requests evidence) :finished-at (now) :evidence-dir evidence-dir}))
 
 (defn supervise!
   "Runs the measurement described by `run-file` and returns the process exit code."

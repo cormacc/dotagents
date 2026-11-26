@@ -24,7 +24,6 @@ if [ -n "${HERDR_ORCH_MEASUREMENT_MANIFEST:-}" ]; then
   if [ -n "${FAKE_PI_GATE_DIR:-}" ]; then
     for _ in $(seq 1 1200); do [ -e "$FAKE_PI_GATE_DIR/$HERDR_ORCH_SUBJECT" ] && break; sleep 0.05; done
   fi
-  ok='{"ok":true,"violations":[]}'
   terminal='{"success":true,"requests":1,"violations":[],"turns":[]}'
   code=0
   case "${FAKE_PI_MEASURE:-success}" in
@@ -32,13 +31,11 @@ if [ -n "${HERDR_ORCH_MEASUREMENT_MANIFEST:-}" ]; then
     exit-nonzero) code=3 ;;
     malformed) terminal='not json' ;;
     harness-failed) terminal='{"success":false,"reason":"harness error","requests":1,"violations":[]}' ;;
-    audit-failed) ok='{"ok":false,"violations":["unexpected model-visible text"]}' ;;
     output) printf 'produced\n' >"${FAKE_PI_OUTPUT:?}" ;;
     # A grandchild in the same session, recorded so a test can prove the tree was stopped.
     hang) sleep 300 & printf '%s' "$!" >"$received.grandchild"; sleep 300 ;;
   esac
   printf '%s' "$terminal" >"$evidence/terminal.json"
-  printf '%s' "$ok" >"$evidence/audit-1.json"
   printf '{"model":"fake","messages":[]}' >"$evidence/request-1.json"
   printf '{"type":"agent_end"}\n'
   exit "$code"

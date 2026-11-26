@@ -97,7 +97,7 @@ Add `--tab` or `--split` only when a read-only measurement monitor is useful. Th
 "$OH" task start --context measurement --measurement-config experiments/sample.json --worktree new --tab --task-file experiments/sample-assignment.txt
 ```
 
-A measurement result proves only the configured execution and request audit. It is not an answer-quality score. `continue` and `poke` do not apply to a measurement.
+A measurement result proves only the configured execution. It is not an answer-quality score. `continue` and `poke` do not apply to a measurement.
 
 ## Guarded live context smoke -- approval required
 

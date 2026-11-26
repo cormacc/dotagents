@@ -44,7 +44,7 @@ export const tests: TestCase[] = [{ name: "installed fresh/fork/measurement load
       const adapters = layout === "repository" ? here : join(dir, "bare/skills/herdr-orch/scripts/pi");
       if (layout === "package") {
         mkdirSync(adapters, { recursive: true });
-        for (const file of ["account-loader.ts", "account-registration.ts", "fork-adapter.ts", "measurement-adapter.ts", "measurement-audit.ts", "runtime.ts"]) {
+        for (const file of ["account-loader.ts", "account-registration.ts", "fork-adapter.ts", "measurement-adapter.ts", "runtime.ts"]) {
           copyFileSync(join(here, file), join(adapters, file));
         }
       }
@@ -100,7 +100,6 @@ export const tests: TestCase[] = [{ name: "installed fresh/fork/measurement load
         assert.deepEqual(JSON.parse(readFileSync(join(agent, "auth.json"), "utf8")), auth);
         if (mode === "measurement") {
           assert.equal(JSON.parse(readFileSync(join(dir, "evidence/terminal.json"), "utf8")).success, true);
-          assert.equal(JSON.parse(readFileSync(join(dir, "evidence/expectation.json"), "utf8")).provider, account);
         }
         // Offline inventory uses the same loader, with no inference or credential refresh.
         const result = join(dir, "inventory.json");

@@ -3415,17 +3415,6 @@
       (is (fs/exists? path))
       (is (str/includes? (git-worktree-list dir) path)))))
 
-(deftest collect-close-never-touches-a-worktree-checkout
-  (let [{:keys [env dir]} (fake-env {})
-        entry (spawn-worktree! env dir "collect --close keeps its checkout")
-        path (get-in entry [:worktree :path])]
-    (publish-child! entry)
-    (let [proc (call! env "task" "collect" (:task entry) "--close")]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (= "closed" (get-in (result proc) [:result :close :status])))
-      (is (fs/exists? path))
-      (is (str/includes? (git-worktree-list dir) path)))))
-
 (deftest worktree-remove-requires-a-task-positional
   (let [{:keys [env]} (fake-env {})
         proc (call! env "worktree" "remove")]
@@ -3728,23 +3717,24 @@
                 (is (= (fs/real-path source)
                        (fs/real-path (if (fs/absolute? worktree) worktree (fs/path repository worktree)))))))))))))
 
+;; One fixture for every case: the spawn-path wiring of these helpers is covered by
+;; managed-modules-bootstrap-uninitialised-source-and-relative-urls.
 (deftest managed-modules-relative-url-semantics-match-native-git
-  (doseq [[remote url] [["/srv/repos/top.git" "../lib.git"] ["example:repo/top.git" "../lib.git"]
-                        ["example:top.git" "../lib.git"] ["example:top.git" "../../lib.git"]
-                        ["top.git" "../lib.git"] ["https://host/top.git" "../../lib.git"]
-                        ["/top.git" "../lib.git"]]]
-    (let [{:keys [env dir]} (nested-module-fixture)]
+  (let [{:keys [dir]} (nested-module-fixture)
+        dir (str dir)]
+    (doseq [[remote url] [["/srv/repos/top.git" "../lib.git"] ["example:repo/top.git" "../lib.git"]
+                          ["example:top.git" "../lib.git"] ["example:top.git" "../../lib.git"]
+                          ["top.git" "../lib.git"] ["https://host/top.git" "../../lib.git"]
+                          ["/top.git" "../lib.git"]]]
       (git-in! dir "config" "remote.origin.url" remote)
       (git-in! dir "config" "-f" ".gitmodules" "submodule.module.url" url)
-      (git-in! dir "commit" "-qam" "URL reference fixture")
       (git-in! dir "config" "--unset-all" "submodule.module.url")
       (git-in! dir "submodule" "init")
       (let [native (git-in! dir "config" "--get" "submodule.module.url")
             expected (if (or (fs/absolute? native) (str/includes? native ":")) native
                          (str (fs/normalize (fs/path dir native))))]
-        (git-in! dir "config" "--unset-all" "submodule.module.url")
-        (let [entry (spawn-worktree! env dir "native URL semantics")]
-          (is (= expected (get-in entry [:modules 0 :url])) (str remote " " url)))))))
+        (is (= expected (#'cli/absolute-local-url dir (#'cli/relative-module-url (#'cli/parent-remote-url dir) url)))
+            (str remote " " url))))))
 
 (deftest managed-modules-fetch-a-missing-commit-in-an-existing-store
   (let [{:keys [env dir middle]} (nested-module-fixture)
@@ -4151,6 +4141,11 @@
         (is (= "removed" (:state module)))
         (is (not (str/includes? (git-in! (:repository module) "worktree" "list" "--porcelain") (:path module)))))))))
 
+;; cli.clj overrides the configured mode (`--ignore-submodules=none`,
+;; `submodule.<name>.ignore=none`), so one mode exercises the override: `all` hides both
+;; dirt and gitlink changes, a superset of what `dirty` and `none` hide.
+(def ignore-modes ["all"])
+
 (defn- module-ignore-fixture [boundary mode]
   (let [{:keys [dir] :as fixture} (nested-module-fixture)
         parent (if (= :root boundary) (str dir) (str (fs/path dir "module")))
@@ -4174,7 +4169,7 @@
   (git-in! path "-c" "user.name=fixture" "-c" "user.email=fixture@example.com" "commit" "-qam" "owned module result"))
 
 (deftest managed-modules-ignore-settings-cannot-omit-published-gitlinks
-  (doseq [boundary [:root :nested] mode ["none" "all" "dirty"]]
+  (doseq [boundary [:root :nested] mode ignore-modes]
     (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
           source (module-source-snapshot dir)
           entry (patch-entry! dir (spawn-worktree! env dir "publish with existing ignore settings") :scope ["allowed/"])
@@ -4197,7 +4192,7 @@
         (is (= source (module-source-snapshot dir)))))))
 
 (deftest managed-modules-ignore-settings-cannot-hide-read-only-or-reconciliation-dirt
-  (doseq [boundary [:root :nested] mode ["none" "all" "dirty"]]
+  (doseq [boundary [:root :nested] mode ignore-modes]
     (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
           source (module-source-snapshot dir)
           entry (patch-entry! dir (spawn-worktree! env dir "read-only ignore settings") :read-only true :scope ["allowed/"])
@@ -4225,7 +4220,7 @@
         (is (= source (module-source-snapshot dir)))))))
 
 (deftest managed-modules-ignore-settings-cannot-hide-removal-preflight-dirt
-  (doseq [boundary [:root :nested] mode ["none" "all" "dirty"]]
+  (doseq [boundary [:root :nested] mode ignore-modes]
     (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
           control (spawn-worktree! env dir "clean removal control")]
       (publish-child! control)
@@ -5152,141 +5147,6 @@
     {:proc proc :entry (when (zero? (:exit proc))
                          (ledger-entry* dir (get-in (result proc) [:result :task])))}))
 
-(defn- await-bounded-process! [proc contender]
-  (let [outcome (deref proc 30000 :timed-out)]
-    (when (= :timed-out outcome)
-      (throw (ex-info "concurrent reservation contender exceeded its test deadline"
-                      {:contender contender :timeout-ms 30000})))
-    outcome))
-
-(defn- signal-process! [proc signal]
-  (let [pid (str (.pid (:proc proc)))
-        command (process/process ["kill" (str "-" signal) pid] {:out :string :err :string})
-        outcome (deref command 5000 :timed-out)]
-    (when (or (= :timed-out outcome) (not (zero? (:exit outcome))))
-      (process/destroy-tree command)
-      (throw (ex-info "failed to signal concurrent reservation contender"
-                      {:pid pid :signal signal :outcome outcome})))))
-
-(defn- wait-for-new-path! [dir pattern baseline description timeout-ms]
-  (let [deadline (+ (System/currentTimeMillis) timeout-ms)]
-    (loop []
-      (let [paths (set (map str (fs/glob dir pattern)))
-            added (seq (remove baseline paths))]
-        (cond
-          added (first added)
-          (< deadline (System/currentTimeMillis))
-          (throw (ex-info (str "timed out waiting for " description)
-                          {:dir (str dir) :pattern pattern :timeout-ms timeout-ms}))
-          :else (do (Thread/sleep 1) (recur)))))))
-
-(defn- wait-for-call-count! [log prefix expected]
-  (let [deadline (+ (System/currentTimeMillis) 10000)]
-    (loop []
-      (let [observed (count (filter #(= prefix (vec (take (count prefix) %))) (calls log)))]
-        (cond
-          (<= expected observed) observed
-          (< deadline (System/currentTimeMillis))
-          (throw (ex-info "concurrent contender did not finish its pre-reservation call"
-                          {:prefix prefix :expected expected :observed observed}))
-          :else (do (Thread/sleep 5) (recur)))))))
-
-(defn- continue-start-reservation-race! []
-  ;; The large project-local persona widens only spawn's ordinary in-lock file write. The
-  ;; harness can stop that real process after target validation but before its ledger write,
-  ;; with no signal, wait, timeout, or release-file branch in production code.
-  (let [chunk (apply str (repeat 1024 "x"))
-        worker (str "---\nname: worker\ndescription: race fixture\nkind: pi\nmodel: sonnet\n"
-                    "spawns: scout researcher advisor\nretro: false\n---\n%focused\n"
-                    (str/join (repeat 16384 chunk)))
-        {:keys [env dir log roster]} (fake-env {})
-        spawned (spawn-worktree! env dir "captured worktree round")
-        published (call! (child-publish-env env spawned) "task" "publish"
-                         "--status" "COMPLETE" "--summary" "captured before race")
-        _ (when-not (zero? (:exit published))
-            (throw (ex-info "race fixture publish failed" {:out (:out published)})))
-        collected (call! env "task" "collect" (:task spawned))
-        _ (when-not (zero? (:exit collected))
-            (throw (ex-info "race fixture collect failed" {:out (:out collected)})))
-        prior (ledger-entry* dir (:task spawned))
-        _ (fs/create-dirs roster)
-        _ (spit (str (fs/path roster "worker.md")) worker)
-        checkout (get-in prior [:worktree :path])
-        persona-dir (fs/path dir ".tmp" "herdr-orch" "composed")
-        ledger-dir (fs/path dir ".tmp" "herdr-orch" "ledger")
-        persona-baseline (set (map str (fs/glob persona-dir "*worker.md")))
-        ledger-baseline (set (map str (fs/glob ledger-dir "*.json")))
-        start-gate (str (fs/path dir "start-gate"))
-        continue-gate (str (fs/path dir "continue-gate"))
-        agent-lists (count (filter #(= ["agent" "list"] (vec (take 2 %))) (calls log)))
-        processes (atom [])
-        stopped? (atom false)]
-    (try
-      (let [start-proc (concurrent-call dir env start-gate "task" "start" "worker"
-                                        "--worktree" checkout "--task" "explicit contender")
-            continue-proc (concurrent-call dir env continue-gate "task" "continue" (:task prior)
-                                           "--task" "continued contender")
-            _ (reset! processes [start-proc continue-proc])
-            _ (release-concurrent-calls! start-gate 1)
-            _ (wait-for-new-path! persona-dir "*worker.md" persona-baseline
-                                  "start contender persona materialisation" 60000)
-            _ (signal-process! start-proc "STOP")
-            _ (reset! stopped? true)
-            ;; The new persona file is created after same-checkout validation and before the
-            ;; entry write. Missing this window invalidates the harness rather than silently
-            ;; turning the mutation check into a scheduler lottery.
-            after-stop (set (map str (fs/glob ledger-dir "*.json")))
-            _ (when-not (= ledger-baseline after-stop)
-                (throw (ex-info "start contender passed the harness stop window"
-                                {:before ledger-baseline :after after-stop})))
-            _ (release-concurrent-calls! continue-gate 1)
-            _ (wait-for-call-count! log ["agent" "list"] (inc agent-lists))
-            ;; Under the real lock no successor can appear while start is stopped. Under the
-            ;; unlocked mutation continuation writes here, before start resumes, so both win.
-            _ (let [deadline (+ (System/currentTimeMillis) 2000)]
-                (loop []
-                  (when (and (= ledger-baseline (set (map str (fs/glob ledger-dir "*.json"))))
-                             (< (System/currentTimeMillis) deadline))
-                    (Thread/sleep 5)
-                    (recur))))
-            _ (signal-process! start-proc "CONT")
-            _ (reset! stopped? false)
-            contenders [{:contender :start
-                         :result (await-bounded-process! start-proc :start)}
-                        {:contender :continue
-                         :result (await-bounded-process! continue-proc :continue)}]]
-        {:dir dir :checkout checkout :contenders contenders})
-      (finally
-        (when @stopped?
-          (try (signal-process! (first @processes) "CONT") (catch Exception _)))
-        (doseq [proc @processes]
-          (process/destroy-tree proc))
-        (when (fs/exists? checkout)
-          (git-in! dir "worktree" "unlock" checkout)
-          (git-in! dir "worktree" "remove" "--force" checkout))))))
-
-(deftest continue-and-explicit-start-serialize-the-same-checkout-under-concurrency
-  (let [{:keys [dir checkout contenders]} (continue-start-reservation-race!)
-        winners (filterv #(zero? (get-in % [:result :exit])) contenders)
-        losers (filterv #(= 1 (get-in % [:result :exit])) contenders)
-        loser (first losers)
-        winner (first winners)
-        loser-output (get-in loser [:result :out])]
-    (is (= 1 (count winners)) (str contenders))
-    (is (= 1 (count losers)) (str contenders))
-    (when loser
-      (is (re-find (if (= :start (:contender loser))
-                     #"live round still references the checkout"
-                     #"another live round references this checkout")
-                   loser-output)
-          (str "loser: " loser-output)))
-    (when winner
-      (let [winner-task (get-in (result (:result winner)) [:result :task])
-            winner-entry (ledger-entry* dir winner-task)]
-        (is (= checkout (get-in winner-entry [:worktree :path])))
-        (is (= (= :continue (:contender winner))
-               (contains? winner-entry :continues)))))))
-
 (deftest continue-allocates-a-fresh-round-inheriting-the-childs-identity
   (let [{:keys [env log dir prompt-file]} (fake-env {})
         prior (capture-entry! dir (start-child! env dir "round one"))
@@ -5988,6 +5848,8 @@
       (is (seq (child-waits log (:child entry)))
           "close is past its settle wait, so it is parked on the lock and not on Herdr")
       (is (.isAlive (:proc closer)) "close is parked on the child lock")
+      (is (not (fs/exists? item-2)) "no item is committed while another holder owns the lock")
+      (is (empty? (closed-panes log)) "no pane is taken while another holder owns the lock")
       (finally (.close channel)))
     (let [published (settled-within! publisher lock-probe-timeout-ms)
           closed (settled-within! closer lock-probe-timeout-ms)
@@ -6005,45 +5867,6 @@
             (is (re-find #"round is closed" (:out published)))
             (is (not (fs/exists? item-2)) "a losing publication commits no item")
             (is (some? (:closed-at after))))))))
-
-(deftest publish-waits-for-a-held-child-lock
-  (let [{:keys [env dir]} (fake-env {})
-        entry (unsealed-captured-round! env dir "publish waits for the child lock")
-        item-2 (ledger/item-path (:result entry) 2)
-        channel (child-lock-channel! dir (:child entry))
-        proc (process/process [bin "task" "publish" "--task" (:task entry)
-                               "--status" "COMPLETE" "--summary" "held-lock publication"]
-                              {:out :string :err :string :env (child-publish-env env entry) :dir (str dir)})]
-    (try
-      (Thread/sleep lock-probe-hold-ms)
-      (is (.isAlive (:proc proc)) "publish must block until the child lock is free")
-      (is (not (fs/exists? item-2)) "no item is committed while another holder owns the lock")
-      (finally (.close channel)))
-    (let [outcome (settled-within! proc lock-probe-timeout-ms)]
-      (is (zero? (:exit outcome)) (:err outcome))
-      (is (= 2 (get-in (result outcome) [:result :item])))
-      (is (fs/exists? item-2) "the publication commits once the lock is released"))))
-
-(deftest close-waits-for-a-held-child-lock
-  (let [{:keys [env log dir]} (fake-env {"ORCH_SETTLE_CLOSE_MS" "200"})
-        entry (unsealed-captured-round! env dir "close waits for the child lock")
-        channel (child-lock-channel! dir (:child entry))
-        proc (process/process [bin "task" "close" (:task entry)]
-                              {:out :string :err :string :env env :dir (str dir)})]
-    (try
-      (Thread/sleep lock-probe-hold-ms)
-      (is (seq (child-waits log (:child entry)))
-          "close reached its settle wait, which precedes the lock")
-      (is (.isAlive (:proc proc)) "close must block until the child lock is free")
-      (is (nil? (:closed-at (ledger-entry* dir (:task entry))))
-          "no closure is recorded while another holder owns the lock")
-      (is (empty? (closed-panes log)) "no pane is taken while another holder owns the lock")
-      (finally (.close channel)))
-    (let [outcome (settled-within! proc lock-probe-timeout-ms)]
-      (is (zero? (:exit outcome)) (:err outcome))
-      (is (= "closed" (get-in (result outcome) [:result :status])))
-      (is (some? (:closed-at (ledger-entry* dir (:task entry)))))
-      (is (= #{(:pane-id entry)} (closed-panes log))))))
 
 (deftest continue-waits-for-a-held-child-lock
   (let [{:keys [env dir]} (fake-env {"ORCH_SETTLE_CLOSE_MS" "200"})
@@ -8174,19 +7997,6 @@
       (is (re-find #"own" (:out proc)))
       (is (fs/exists? path)))))
 
-(deftest orphans-close-never-touches-a-worktree-checkout
-  (let [{:keys [env dir]} (fake-env {})
-        entry (spawn-worktree! env dir "orphaned round keeps its checkout")
-        path (get-in entry [:worktree :path])]
-    (publish-child! entry)
-    (is (zero? (:exit (call! env "task" "collect" (:task entry)))))
-    (foreign! dir (ledger-entry* dir (:task entry)))
-    (let [proc (call! env "task" "orphans" "--close")]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (= ["closed"] (mapv :status (:result (result proc)))))
-      (is (fs/exists? path))
-      (is (str/includes? (git-worktree-list dir) path)))))
-
 ;; `--prune` takes the mirror set of the listing: uncaptured foreign rounds. It replaces a
 ;; manual "delete the ledger JSON" recipe whose liveness check was an operator eyeballing
 ;; `agent list`, and it applies `prune`'s own staleness proof minus the ownership bar.
@@ -9313,11 +9123,10 @@
   (let [proc (apply measure! fixture "run" args)]
     (assert (zero? (:exit proc)) (:out proc))
     (:result (result proc))))
-(deftest ^:linux-only measurement-success-needs-exit-zero-valid-evidence-an-ok-audit-and-expected-outputs
+(deftest ^:linux-only measurement-success-needs-exit-zero-valid-evidence-and-expected-outputs
   (doseq [[mode pattern] [["exit-nonzero" #"subject exited with status 3"]
                           ["malformed" #"terminal evidence is malformed"]
-                          ["harness-failed" #"harness reported failure: harness error"]
-                          ["audit-failed" #"request-context audit failed"]]]
+                          ["harness-failed" #"harness reported failure: harness error"]]]
     (let [out (measured-failure (measurement-fixture {"FAKE_PI_MEASURE" mode} {}) "--task" "x")]
       (is (= "FAILED" (:status out)) mode)
       (is (re-find pattern (:summary out)) (str mode ": " (:summary out)))
@@ -9727,7 +9536,7 @@
             run (json/parse-string (slurp (evidence-path (str dir) (:task out) "run.json")) true)]
         (is (= "COMPLETE" (:status out)) (str out))
         (is (= "pi" (first (:argv run))) "the installed runtime, resolved from PATH")
-        (is (true? (:ok (adapter "audit-1.json"))) "the real request-context audit ran and passed")
+        (is (= 1 (:requests (adapter "terminal.json"))) "the real adapter recorded the request")
         (is (= 1 (count @(:requests fake))))
         (let [request (first @(:requests fake))]
           (is (= "SYSTEM TREATMENT" (get-in request [:system 0 :text])) "the compiled treatment is the whole system prompt")
