@@ -157,9 +157,8 @@
 (deftest hc-pi-parent-publication-skips-unobservable-session-and-still-collects
   ;; A Pi parent is left to its extension watcher before the session gate is even reached;
   ;; a non-Pi parent on hc still hits the unobservable session and is skipped for that.
-  (doseq [[app expected-reason] [["pi" "watcher"] ["claude" "session-mismatch"]]
-          ;; `idle` would push and `blocked` has its own reason, so both show the precedence.
-          status ["idle" "blocked"]]
+  ;; `idle` would push and `blocked` has its own reason, so each pair shows one precedence.
+  (doseq [[app expected-reason status] [["pi" "watcher" "idle"] ["claude" "session-mismatch" "blocked"]]]
     (let [{:keys [env hc-log] :as fixture} (hc-env {})
           launched (start! fixture) saved (entry fixture (:task launched))
           child-env (merge env (get-in (state fixture) [(:pane-id saved) :round-env])

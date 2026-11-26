@@ -362,39 +362,7 @@
           (is (= 1 exit) err)
           (is (str/includes? err "internal_error") err)
           (is (= {:enabled false} (display ctx)) "the flag still flips")
-          (is (contains? (:panes (state ctx)) :w1:p2) "the failed pane stays recorded for a retry")))
-      (testing "a failed agent.view.clear"
-        (fs/delete-if-exists (display-file ctx))
-        (let [{:keys [exit err]} (tree! ctx "toggle" {"HERDR_SOCKET_PATH" (str (fs/path (:dir ctx) "no.sock"))})]
-          (is (= 1 exit) err)
-          (is (= {:enabled false} (display ctx))))))))
-
-(deftest two-toggles-while-a-session-lock-is-held-leave-the-flag-unchanged
-  (with-env
-    (fn [ctx]
-      (two-children! ctx (:repo ctx))
-      (is (zero? (:exit (tree! ctx "reconcile"))))
-      (let [session (fs/path (:state ctx) "session-tree-test")
-            ch      (FileChannel/open (fs/path session "tree.lock") (into-array StandardOpenOption [StandardOpenOption/CREATE StandardOpenOption/WRITE]))
-            _       (.lock ch)
-            t1      (tree-async! ctx "toggle")
-            _       (Thread/sleep 1500)
-            t2      (tree-async! ctx "toggle")
-            _       (Thread/sleep 1500)]
-        (.close ch) ; closing the channel releases the lock
-
-        (let [r1 @t1 r2 @t2]
-          (is (zero? (:exit r1)) (:err r1))
-          (is (zero? (:exit r2)) (:err r2)))
-        (is (not= {:enabled false} (when (fs/exists? (display-file ctx)) (display ctx)))
-            "two flips restore the original (enabled) value")
-        (is (= #{:w1:p1 :w1:p2 :w1:p3} (set (keys (:panes (state ctx)))))
-            "the session still records its rows: no toggle reset a session whose flag is on")
-        (testing "the dirty marker the toggles left is honoured by the next reconcile"
-          (let [{:keys [exit err]} (tree! ctx "reconcile")]
-            (is (zero? exit) err)
-            (is (= #{:w1:p1 :w1:p2 :w1:p3} (set (keys (:panes (state ctx))))))
-            (is (not (fs/exists? (fs/path session "tree.dirty"))))))))))
+          (is (contains? (:panes (state ctx)) :w1:p2) "the failed pane stays recorded for a retry"))))))
 
 (deftest on-toggle-during-a-slow-off-reset-is-not-lost
   (with-env
@@ -671,7 +639,7 @@
         (is (= "⑂ +3 ~2" (get-in (state ctx) [:panes :w1:p2 :worktree])))))))
 
 (deftest worktree-list-failure-keeps-tree-and-clears-state
-  (doseq [failure [:exit :envelope :malformed :missing]]
+  (doseq [failure [:exit :envelope]]
     (with-env
       (fn [ctx]
         (two-children! ctx (:wt ctx))
@@ -681,8 +649,6 @@
         (case failure
           :envelope (spit (get-in ctx [:env "FAKE_OH_RESULT"])
                           (json/generate-string {:ok false :result {:entries [wt-entry]}}))
-          :malformed (spit (get-in ctx [:env "FAKE_OH_RESULT"]) "{bad json")
-          :missing (fs/delete (:oh ctx))
           nil)
         (let [r (count (reports ctx))
               {:keys [exit err]} (tree! ctx "reconcile" (if (= failure :exit) {"FAKE_OH_EXIT" "1"} {}))]

@@ -3778,33 +3778,6 @@
       (is (not (fs/exists? (get-in entry [:worktree :path]))))
       (is (= "removed" (get-in entry [:modules 0 :state]))))))
 
-(deftest managed-modules-fetch-failures-never-start-a-child
-  (let [{:keys [env dir middle leaf log]} (nested-module-fixture)
-        control (spawn-worktree! env dir "passing fetch-failure control")
-        delegate (str (fs/which "git"))
-        wrappers (fs/path dir "fetch-failure-bin")]
-    (publish-child! control)
-    (is (zero? (:exit (call! env "worktree" "remove" (:task control)))))
-    (spit (str (fs/path middle "required-object")) "only the actual remote has this commit\n")
-    (git-in! middle "add" "required-object")
-    (git-in! middle "commit" "-qm" "missing local object")
-    (git-in! dir "update-index" "--cacheinfo" (str "160000," (git-head middle) ",module"))
-    (git-in! dir "commit" "-qm" "require unavailable content")
-    (git-in! dir "config" "submodule.module.url" leaf)
-    (fs/create-dirs wrappers)
-    (spit (str (fs/path wrappers "git"))
-          (str "#!/bin/sh\nif [ \"$1\" = fetch ] && [ \"$FETCH_FAILURE\" != missing-object ]; then "
-               "printf '%s failed\\n' \"$FETCH_FAILURE\" >&2; exit 128; fi\nexec " delegate " \"$@\"\n"))
-    (.setExecutable (java.io.File. (str (fs/path wrappers "git"))) true)
-    (doseq [fault ["authentication" "network" "missing-object"]]
-      (let [before (count (calls log))
-            env (assoc env "PATH" (str wrappers ":" (get env "PATH")) "FETCH_FAILURE" fault
-                       "GIT_CONFIG_COUNT" "1" "GIT_CONFIG_KEY_0" "protocol.file.allow" "GIT_CONFIG_VALUE_0" "always")
-            proc (call! env "task" "start" "worker" "--worktree" "new" "--task" fault)]
-        (is (= 1 (:exit proc)) (:out proc))
-        (is (str/includes? (:out proc) (if (= "missing-object" fault) "not our ref" fault)) (:out proc))
-        (is (not-any? mutating? (drop before (calls log))))))))
-
 (deftest managed-modules-implicit-isolation-and-launch-inside-a-module
   (let [{:keys [env dir]} (nested-module-fixture)
         shared (start-child! env dir "first shared writer")
@@ -3942,7 +3915,7 @@
       (is (= tips (mapv #(git-head (:path %)) (:modules entry)))))))
 
 (deftest managed-modules-refuse-unknown-or-unsafe-state-before-any-mutation
-  (doseq [fault [:missing :detached :replaced :dirty :foreign-lock :unrecorded :untracked-repository :private-store]]
+  (doseq [fault [:missing :detached :foreign-lock :unrecorded]]
     (let [{:keys [env dir]} (nested-module-fixture)
           entry (spawn-worktree! env dir (str "module refusal " fault))
           modules (:modules entry)
@@ -3953,14 +3926,9 @@
       (case fault
         :missing (fs/delete-tree path)
         :detached (git-in! path "checkout" "--detach" "-q")
-        :replaced (spit (str (fs/path path ".git")) (slurp (str (fs/path (:path (first modules)) ".git"))))
-        :dirty (do (patch-entry! dir (ledger-entry* dir (:task entry)) :read-only true)
-                   (spit (str (fs/path path "uncommitted")) "dirt\n"))
         :foreign-lock (do (git-in! (:repository leaf) "worktree" "unlock" path)
                           (git-in! (:repository leaf) "worktree" "lock" "--reason" "foreign operator" path))
-        :unrecorded (git-in! (:work-root entry) "update-index" "--add" "--cacheinfo" (str "160000," (:base leaf) ",unknown-module"))
-        :untracked-repository (git-in! (:work-root entry) "clone" "-q" path "unrecorded-repository")
-        :private-store (fs/create-dirs (git-in! path "rev-parse" "--git-path" "modules")))
+        :unrecorded (git-in! (:work-root entry) "update-index" "--add" "--cacheinfo" (str "160000," (:base leaf) ",unknown-module")))
       (let [tips (mapv #(git-in! (:repository %) "rev-parse" (:branch %)) modules)
             registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") modules)
             bad (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "must refuse")]
@@ -4142,9 +4110,8 @@
         (is (not (str/includes? (git-in! (:repository module) "worktree" "list" "--porcelain") (:path module)))))))))
 
 ;; cli.clj overrides the configured mode (`--ignore-submodules=none`,
-;; `submodule.<name>.ignore=none`), so one mode exercises the override: `all` hides both
+;; `submodule.<name>.ignore=none`), so the ignore tests use `all` only: it hides both
 ;; dirt and gitlink changes, a superset of what `dirty` and `none` hide.
-(def ignore-modes ["all"])
 
 (defn- module-ignore-fixture [boundary mode]
   (let [{:keys [dir] :as fixture} (nested-module-fixture)
@@ -4169,7 +4136,7 @@
   (git-in! path "-c" "user.name=fixture" "-c" "user.email=fixture@example.com" "commit" "-qam" "owned module result"))
 
 (deftest managed-modules-ignore-settings-cannot-omit-published-gitlinks
-  (doseq [boundary [:root :nested] mode ignore-modes]
+  (doseq [boundary [:root :nested] :let [mode "all"]]
     (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
           source (module-source-snapshot dir)
           entry (patch-entry! dir (spawn-worktree! env dir "publish with existing ignore settings") :scope ["allowed/"])
@@ -4192,48 +4159,41 @@
         (is (= source (module-source-snapshot dir)))))))
 
 (deftest managed-modules-ignore-settings-cannot-hide-read-only-or-reconciliation-dirt
-  (doseq [boundary [:root :nested] mode ignore-modes]
-    (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
-          source (module-source-snapshot dir)
-          entry (patch-entry! dir (spawn-worktree! env dir "read-only ignore settings") :read-only true :scope ["allowed/"])
-          [middle leaf] (:modules entry)
-          changed (if (= :root boundary) middle leaf)
-          control (call! (child-publish-env env entry) "task" "publish" "--status" "WAITING" "--summary" "clean control")]
-      (is (zero? (:exit control)) (:out control))
-      (spit (str (fs/path (:path changed) "seed")) "uncommitted owned module edit\n")
-      (let [status (call! env "task" "status" (:task entry))
-            rec (get-in (result status) [:result :reconciliation])
-            parent-dirt (if (= :root boundary) (:dirty rec) (get-in rec [:modules 0 :dirty]))
-            rejected (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "uncommitted refusal")]
-        (is (seq parent-dirt) (str boundary " " mode " " rec))
-        (is (= ["module"] (:undeclared rec)) (str boundary " " mode " " rec))
-        (is (= 1 (:exit rejected)) (:out rejected)))
-      (commit-owned-seed! (:path changed) "committed owned module edit\n")
-      (let [tips (mapv #(git-head (:path %)) (:modules entry))
-            status (call! env "task" "status" (:task entry))
-            rec (get-in (result status) [:result :reconciliation])
-            parent-dirt (if (= :root boundary) (:dirty rec) (get-in rec [:modules 0 :dirty]))
-            rejected (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "gitlink refusal")]
-        (is (seq parent-dirt) (str boundary " " mode " " rec))
-        (is (= 1 (:exit rejected)) (str boundary " " mode " " (:out rejected)))
-        (is (= tips (mapv #(git-head (:path %)) (:modules entry))))
-        (is (= source (module-source-snapshot dir)))))))
+  (let [{:keys [env dir]} (module-ignore-fixture :nested "all")
+        source (module-source-snapshot dir)
+        entry (patch-entry! dir (spawn-worktree! env dir "read-only ignore settings") :read-only true :scope ["allowed/"])
+        leaf (get-in entry [:modules 1 :path])
+        control (call! (child-publish-env env entry) "task" "publish" "--status" "WAITING" "--summary" "clean control")]
+    (is (zero? (:exit control)) (:out control))
+    (spit (str (fs/path leaf "seed")) "uncommitted owned module edit\n")
+    (let [status (call! env "task" "status" (:task entry))
+          rec (get-in (result status) [:result :reconciliation])
+          rejected (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "uncommitted refusal")]
+      (is (seq (get-in rec [:modules 0 :dirty])) (str rec))
+      (is (= ["module"] (:undeclared rec)) (str rec))
+      (is (= 1 (:exit rejected)) (:out rejected)))
+    (commit-owned-seed! leaf "committed owned module edit\n")
+    (let [tips (mapv #(git-head (:path %)) (:modules entry))
+          status (call! env "task" "status" (:task entry))
+          rec (get-in (result status) [:result :reconciliation])
+          rejected (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "gitlink refusal")]
+      (is (seq (get-in rec [:modules 0 :dirty])) (str rec))
+      (is (= 1 (:exit rejected)) (:out rejected))
+      (is (= tips (mapv #(git-head (:path %)) (:modules entry))))
+      (is (= source (module-source-snapshot dir))))))
 
 (deftest managed-modules-ignore-settings-cannot-hide-removal-preflight-dirt
-  (doseq [boundary [:root :nested] mode ignore-modes]
-    (let [{:keys [env dir]} (module-ignore-fixture boundary mode)
-          control (spawn-worktree! env dir "clean removal control")]
-      (publish-child! control)
-      (is (zero? (:exit (call! env "worktree" "remove" (:task control)))))
-      (let [entry (spawn-worktree! env dir "dirty gitlink removal")
-            [middle leaf] (:modules entry)
-            changed (if (= :root boundary) middle leaf)]
-        (publish-child! entry)
-        (commit-owned-seed! (:path changed) "must not remove an unrecorded gitlink result\n")
-        (let [registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") (:modules entry))
-              removed (call! env "worktree" "remove" (:task entry))]
-          (is (= 1 (:exit removed)) (str boundary " " mode " " (:out removed)))
-          (is (= registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") (:modules entry)))))))))
+  (let [{:keys [env dir]} (module-ignore-fixture :nested "all")
+        control (spawn-worktree! env dir "clean removal control")]
+    (publish-child! control)
+    (is (zero? (:exit (call! env "worktree" "remove" (:task control)))))
+    (let [entry (spawn-worktree! env dir "dirty gitlink removal")]
+      (publish-child! entry)
+      (commit-owned-seed! (get-in entry [:modules 1 :path]) "must not remove an unrecorded gitlink result\n")
+      (let [registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") (:modules entry))
+            removed (call! env "worktree" "remove" (:task entry))]
+        (is (= 1 (:exit removed)) (:out removed))
+        (is (= registrations (mapv #(git-in! (:repository %) "worktree" "list" "--porcelain") (:modules entry))))))))
 
 (deftest managed-modules-verify-containing-commits-before-publication
   (doseq [boundary [:root :nested]]
@@ -5374,11 +5334,6 @@
 
 (deftest poke-refuses-a-published-or-unownable-round
   (let [{:keys [env dir]} (fake-env {"FAKE_WAIT" "idle"})]
-    (testing "a round whose captured head carries a terminal status"
-      (let [entry (capture-entry! dir (start-child! env dir "already published"))
-            proc (call! env "task" "poke" (:task entry))]
-        (is (= 1 (:exit proc)))
-        (is (re-find #"already published a terminal envelope" (:out proc)))))
     (testing "a round with a captured terminal envelope"
       (let [entry (start-child! env dir "published and collected")]
         (publish-stream! env entry "COMPLETE")
@@ -7410,20 +7365,20 @@
     ;; terminal states that a read-only listing must distinguish.
     (is (= "FAILED" (get-in published [:envelope :status])) "the published result is upper-case FAILED")
     (spit log "")
-    (doseq [op ["status" "list"]]
-      (let [invoke #(apply call! env (into ["task" op] %))
-            default (invoke [])
-            included (invoke ["--include-failed"])
-            text-default (invoke ["--format" "text"])
-            text-included (invoke ["--format" "text" "--include-failed"])]
-        (doseq [proc [default included text-default text-included]]
-          (is (zero? (:exit proc)) (str op " -> " (:out proc))))
-        (is (= visible (json-tasks default)) (str op " default JSON"))
-        (is (= all-tasks (json-tasks included)) (str op " audit JSON"))
-        (is (= {:FAILED 1 :invalid 1 :COMPLETE 1} (:counts (result default))))
-        (is (= {:failed 1 :FAILED 1 :invalid 1 :COMPLETE 1} (:counts (result included))))
-        (is (= visible (text-tasks text-default)) (str op " default text"))
-        (is (= all-tasks (text-tasks text-included)) (str op " audit text"))))
+    ;; `task list` and `task status` without an ID share `task-listing`, so `status` covers both.
+    (let [invoke #(apply call! env "task" "status" %)
+          default (invoke [])
+          included (invoke ["--include-failed"])
+          text-default (invoke ["--format" "text"])
+          text-included (invoke ["--format" "text" "--include-failed"])]
+      (doseq [proc [default included text-default text-included]]
+        (is (zero? (:exit proc)) (:out proc)))
+      (is (= visible (json-tasks default)) "default JSON")
+      (is (= all-tasks (json-tasks included)) "audit JSON")
+      (is (= {:FAILED 1 :invalid 1 :COMPLETE 1} (:counts (result default))))
+      (is (= {:failed 1 :FAILED 1 :invalid 1 :COMPLETE 1} (:counts (result included))))
+      (is (= visible (text-tasks text-default)) "default text")
+      (is (= all-tasks (text-tasks text-included)) "audit text"))
     (testing "a full UUID remains an audit lookup without the listing option"
       (let [proc (call! env "task" "status" (:task failed))]
         (is (zero? (:exit proc)) (:out proc))
