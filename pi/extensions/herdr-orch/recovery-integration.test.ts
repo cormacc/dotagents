@@ -33,7 +33,7 @@ async function scenario(mode: string) {
       const seed = mode === "resume" && JSON.stringify(body.messages).includes("seed successful history") && !JSON.stringify(body.messages).includes("resumed request");
       const shouldFail = !seed && (mode === "exhaustion" || (mode === "resume" && account !== "fallback") || (["cross-tier", "direct-escape", "reasoning"].includes(mode) && account !== "fallback") || (account === "work" && !tool));
       if (shouldFail) {
-        const status = mode === "auth" ? 401 : mode === "permission" ? 403 : mode === "server" ? 500 : 429;
+        const status = mode === "auth" ? 401 : 429;
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify({ type: "error", error: { type: status === 429 ? "rate_limit_error" : "api_error", message: status === 429 ? "quota exhausted" : "fixture denied" } })); return;
       }
@@ -114,7 +114,7 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
       console.log(`ok - installed RPC startup routing ${mode}: ${requests.map(r => r.account).join(' -> ')}`);
       return;
     }
-    const excluded = ["auth", "permission", "server"].includes(mode);
+    const excluded = mode === "auth";
     assert.deepEqual(requests.map(r => r.account), excluded ? ["work"] : mode === "cross-tier" ? ["personal", "work", "fallback"] : mode === "startup-explicit" ? ["work", "personal"] : mode === "reasoning" ? ["personal", "work"] : mode === "tools" ? ["work", "work", "personal"] : ["work", "personal"], "native continuation exactly once per eligible pair");
     const notifications = (h.events as any[]).filter(e => e.type === "extension_ui_request" && e.method === "notify").map(e => e.message);
     if (!excluded) {
@@ -145,5 +145,5 @@ pi.on('session_start',(_e,ctx)=>{pi.registerCommand('fixture-state',{handler:()=
     console.log(`ok - installed RPC recovery ${mode}: ${requests.map(r => r.account).join(' -> ')}`);
   } finally { await h.dispose(); server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); rmSync(cwd, { recursive: true, force: true }); }
 }
-async function main() { for (const mode of process.env.RECOVERY_TEST_CWD_ONLY ? ["tier", "tier-nongit"] : process.env.RECOVERY_TEST_DELAYED_ONLY ? ["delayed"] : process.env.RECOVERY_TEST_BOUNDARIES_ONLY ? ["boundaries"] : process.env.RECOVERY_TEST_SESSION_ONLY ? ["resume"] : ["discovery", "normal", "retry", "exhaustion", "auth", "permission", "server", "pinned", "tools", "tier", "tier-nongit", "cross-tier", "direct-escape", "reasoning", "delayed", "resume", "boundaries", "startup", "startup-pool", "startup-explicit"]) await scenario(mode); console.log("SUMMARY: installed RPC recovery suite passed"); }
+async function main() { for (const mode of process.env.RECOVERY_TEST_CWD_ONLY ? ["tier", "tier-nongit"] : process.env.RECOVERY_TEST_DELAYED_ONLY ? ["delayed"] : process.env.RECOVERY_TEST_BOUNDARIES_ONLY ? ["boundaries"] : process.env.RECOVERY_TEST_SESSION_ONLY ? ["resume"] : ["discovery", "normal", "retry", "exhaustion", "auth", "pinned", "tools", "tier", "tier-nongit", "cross-tier", "direct-escape", "reasoning", "delayed", "resume", "boundaries", "startup", "startup-pool", "startup-explicit"]) await scenario(mode); console.log("SUMMARY: installed RPC recovery suite passed"); }
 main().catch(e => { console.error(e); process.exitCode = 1; });

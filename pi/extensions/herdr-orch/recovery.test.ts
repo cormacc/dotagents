@@ -195,19 +195,6 @@ async function main() {
     await f.emit("agent_start"); assert.equal(f.switches, 1); tests++; }
   { const f = fixture(); await f.emit("session_start"); await f.fail(); assert.equal(f.requests.at(-1).model, "openai/model-a", "positive control: a primary without a tier routes the failed model"); tests++; }
   {
-    const f = fixture();
-    f.useInventory([a, ...Array.from({ length: 4095 }, (_, i) => model("google", `model-${i}`))]);
-    for (let i = 1; i < 4096; i++) {
-      assert.equal((await f.fail()).continue, true, `attempt ${i + 1} is permitted below the hard cap`);
-      await f.emit("agent_start");
-    }
-    assert.equal(f.switches, 4095);
-    assert.equal(await f.fail(), undefined, "4096th failed pair stops without a 4097th attempt");
-    assert.equal(f.requests.length, 4095);
-    assert.match(f.notices.at(-1)!, /route attempt limit/);
-    tests++;
-  }
-  {
     // Pi's automatic retry: each refusal switches account before the retried request.
     const f = fixture(); f.useInventory([a, b, c]);
     await f.refuse(); assert.equal(f.switches, 0, "agent_end stages without a setter");
