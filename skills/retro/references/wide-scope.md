@@ -11,7 +11,7 @@ A wide retro mines the repository's pi sessions for friction that repeats across
 
 ## 1. Window and extract
 
-The default window starts at the date of the latest `:KIND: wide-run` entry in `RETROLOG.org` and ends today. A window that the user names overrides it. With no entry, use the last 7 days.
+The default window starts at the date of the latest `:KIND: wide-run` entry in the mined repository's `RETROLOG.org` and ends today. A window that the user names overrides it. With no entry, use the last 7 days.
 
 `<skill-dir>` is the directory of the `retro` skill.
 
@@ -44,7 +44,7 @@ Each surviving candidate enters SKILL.md step 2 as `signal -> category -> propos
 
 ## 6. Record the run
 
-Each wide retro, and each declined closeout offer, appends one entry to the owning tier's `RETROLOG.org`, under a `* <date> -- wide retro` heading:
+Each wide retro, and each declined closeout offer, appends one entry to the mined repository's own `RETROLOG.org` (the checkout that `--root` names), under a `* <date> -- wide retro` heading:
 
 ```org
 ** Wide retro
@@ -54,4 +54,4 @@ Each wide retro, and each declined closeout offer, appends one entry to the owni
 :END:
 ```
 
-A declined offer uses the window that it would have covered. The entry holds no transcript text. [`sessions.bb due`](../scripts/sessions.bb) reads the date of the nearest preceding `* <date>` heading of each such entry, across the `RETROLOG.org` of every checkout of the repository. The closeout passes `--exclude-id` with the current session id so that the running session does not count.
+If that file is absent, create it with a `#+TITLE: Retro evidence log` header. A declined offer uses the window that it would have covered. The entry holds no transcript text. [`sessions.bb due`](../scripts/sessions.bb) reads the date of the nearest preceding `* <date>` heading of each such entry, across the `RETROLOG.org` of every checkout of the repository. The closeout passes `--exclude-id` with the current session id so that the running session does not count.

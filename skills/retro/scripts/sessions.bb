@@ -169,7 +169,9 @@
         logs (map #(fs/path % "RETROLOG.org") (repo-roots (:root opts)))
         last-run (->> logs (filter fs/exists?) (mapcat #(wide-run-dates (slurp (str %)))) sort last)
         recent? (and last-run (.isAfter last-run (.minusDays today days)))
-        since (or last-run (.minusDays today days))
+        ;; known-limit: counts whole days after the run, so a session started
+        ;; later on the run's own day is missed; compare timestamps if that matters.
+        since (if last-run (.plusDays last-run 1) (.minusDays today days))
         {:keys [scanned sessions]} (scan (assoc opts :since (str since)))
         sessions (remove #(= (:exclude-id opts) (:id %)) sessions)
         n (count sessions)]

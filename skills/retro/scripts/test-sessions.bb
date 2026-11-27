@@ -144,6 +144,17 @@
         (is (true? (get-in r [:json :due])))
         (is (= "2026-11-20" (get-in r [:json :last_wide_run])))))))
 
+(deftest run-day-session-does-not-count
+  (let [{:keys [repo sdir] :as fx} (fixture!)]
+    (session-file! sdir "--a--" "wide" "2026-11-20T10:00:00.000Z" repo)
+    (write-run! fx "2026-11-20 Fri")
+    (let [r (run fx "due" "--today" "2026-11-27")]
+      (is (false? (get-in r [:json :due])) "the wide-retro session itself is not new")
+      (is (= 0 (get-in r [:json :sessions_since]))))
+    (testing "control: a session on a later date makes it due"
+      (session-file! sdir "--a--" "next" "2026-11-21T10:00:00.000Z" repo)
+      (is (true? (get-in (run fx "due" "--today" "2026-11-27") [:json :due]))))))
+
 (deftest extract-writes-only-under-repo-tmp
   (let [{:keys [repo sdir] :as fx} (fixture!)
         body (str (json/generate-string {:type "message" :timestamp "2026-11-20T10:00:01.000Z" :message {:role "user" :content [{:type "text" :text "hello"}]}}) "\n"
