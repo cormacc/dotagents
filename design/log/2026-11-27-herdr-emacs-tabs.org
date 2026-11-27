@@ -1,0 +1,163 @@
+#+TITLE: Emacs tabs in Herdr: open emacsclient frames as tabs or panes on the space's machine
+#+DATE: 2026-11-27 Fri
+#+PARENT: [[task:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][Emacs tabs in Herdr: open emacsclient frames as tabs or panes on the space's machine]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:emacs/README.org]]
+#+SPEC: [[proj:herdr-app/README.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/install-surfaces.md]]
+
+* Intent
+Make Emacs a first-class Herdr tab: one command opens, or focuses, a named tab that runs an =emacsclient -t= frame on the machine that owns the current space, in herdr TUI and herdr-app, locally and remotely. Use it for a Magit tab, a Plan tab on the selected task's change-record, and as the frame host for the [[task:66fea944-8ac8-422b-9417-d8ddbf99f3de][Emacs diff review]].
+
+* Summary
+*Level:* MVP · *Tests:* smoke · *Docs:* README
+
+=emacs-tab <name> [--cwd DIR] -- <elisp>= finds the tab called =<name>= in the caller's space and focuses it, or creates it with =emacsclient -t -a '' --eval <elisp>= in DIR. Keys in both Herdr front ends open =magit= and =plan= tabs. The Emacs server is the one on the space's machine, the same server that the pi =emacs_*= tools use.
+
+** Scope
+*** In scope
+- =emacs-tab= CLI with focus-or-create by name, for herdr TUI and herdr-app.
+- Remote spaces: herdr TUI running on a remote host over SSH, and herdr-app spaces on another machine.
+- Emacs entry points: =herdr-tabs-magit= (=magit-status= on DIR) and =herdr-tabs-plan= (the selected task's change-record, else =TASKS.org=).
+- Key bindings: herdr TUI =keys.command= entries in =herdr/config.toml=; herdr-app bindings in =herdr-app/keys.linux.json= and =keys.darwin.json=.
+- A machine-readable result (tab and pane or terminal id) so that the review can host its frame and detect its end.
+- Docs: =emacs/README.org=, =herdr-app/README.md=, and the install-surfaces reference.
+*** Out of scope
+- An Emacs view embedded in a herdr-app side panel: a mod view cannot hold a terminal.
+- GUI Emacs frames; outside Herdr the review keeps its own GUI host.
+- Starting an Emacs daemon with a non-default socket name.
+- Removing the herdr-app Changes panel from the layout: ordinary herdr-app configuration that the user does by hand once the Emacs tabs are proven.
+- The review itself: owned by [[task:66fea944-8ac8-422b-9417-d8ddbf99f3de][the review task]].
+
+** Acceptance
+*** Core functionality
+- [ ] =emacs-tab magit= in herdr TUI creates a tab called =magit= running an Emacs frame with =magit-status= on the caller's folder.
+- [ ] A second =emacs-tab magit= in the same workspace focuses that tab and creates no new one.
+- [ ] The same two behaviours hold in herdr-app for the caller's space.
+- [ ] In herdr TUI on a remote host, the Emacs frame belongs to that host's Emacs server.
+- [ ] In a herdr-app space on another machine, the Emacs frame belongs to that machine's Emacs server.
+- [ ] =emacs-tab plan= opens the selected task's change-record from =ot show selected --format json= (=.result.record.path=).
+- [ ] With no selected task, or a task without a record, =emacs-tab plan= opens =TASKS.org=.
+- [ ] =emacs-tab --format json= prints the tab id and the pane or terminal id.
+- [ ] Deleting the Emacs frame (=C-x 5 0=) closes the tab.
+- [ ] A herdr TUI key opens the Magit tab.
+- [ ] A herdr TUI key opens the Plan tab.
+- [ ] A herdr-app key opens the Magit tab.
+- [ ] A herdr-app key opens the Plan tab.
+*** Edge cases
+- [ ] With no Emacs server running, =emacsclient -a ''= starts one and the tab opens.
+- [ ] Outside Herdr, =emacs-tab= exits nonzero with a message and creates nothing.
+- [ ] A user-renamed tab with the same name is reused, not duplicated.
+*** Anti-criteria
+- [ ] Must not: change the =oh= delegation verbs or their ledger.
+- [ ] Must not: modify the herdr-app shipped mods or layouts in =~/.config/herdr-app/mods/= or the shipped =main= layout.
+- [ ] Must not: take a key that the existing bindings in =herdr/config.toml= or =herdr-app/keys.*.json= already use.
+
+** Decisions
+- A Herdr tab, not a herdr-app panel :: a tab works in both front ends and on remote machines; a herdr-app mod view cannot embed a terminal, and a layout terminal block needs a fixed terminal id.
+  Rejected:
+  - Replace the herdr-app Changes panel with an Emacs panel: not possible without a terminal-capable mod view.
+- One CLI, =emacs-tab=, in Babashka under =emacs/herdr-tabs/= :: keys in both front ends and the pi review extension call the same command, so focus-or-create and remote behaviour have one implementation. It selects the runtime with the same rule as =oh= (nearest host in process ancestry).
+  Rejected:
+  - Separate herdr TUI plugin and herdr-app mod with their own logic: two implementations of focus-or-create.
+  - A new =oh= verb: =oh= is the delegation CLI; an editor tab is not delegation.
+- On herdr-app, create the tab through label adoption on the caller's machine core :: =hc run --keep --label herdr.space=<id> --label herdr.tab=<new id>= starts the terminal on the machine where the caller runs, which is how =oh= places hc children; =herdr-app do= reaches only the local window and fails from a remote terminal. Verify in the first task.
+- Emacs entry points in =emacs/herdr-tabs/herdr-tabs.el=, loaded by =config.org= :: the same pattern as =emacs/tasks-org/=; the user confirmed that remote hosts get this Emacs config through Home Manager.
+- Focus-or-create by tab name in the caller's space :: one Magit tab and one Plan tab for each space; re-pressing a key returns to the existing tab.
+
+** Risks
+- A terminal adopted into a remote herdr-app space may not take focus: accept a visible new tab without focus if the app gives no remote focus path, and record it in Gotchas.
+- herdr TUI has no "focus-or-create" primitive: =emacs-tab= lists tabs and matches the label; two quick presses can create two tabs. Accepted.
+- Emacs keys inside a terminal frame compete with Herdr's prefix and the app's =ctrl-alt-= and =alt-= bindings: the existing tables already avoid Emacs-relevant chords; the new keys must too.
+
+** Follow-ups
+- [[task:5a1e3490-2e59-467f-ad7d-72e837bd9476][Herdr frame host for the review]] consumes =emacs-tab=.
+
+* Plan
+** TODO emacs-tab CLI: focus-or-create a named Emacs tab on the space's machine
+:PROPERTIES:
+:CUSTOM_ID: 712ccdac-59b9-44b6-a6b1-46f80d97455b
+:CREATED: [2026-11-27 Fri 09:51]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:51]
+:END:
+Acceptance criteria:
+- First, a recorded probe establishes, for herdr-app, whether a terminal created by =hc run= with herdr labels from inside a space appears as a new tab in that space, and whether it can be focused; the result goes into Implementation.
+- =emacs-tab <name> [--cwd DIR] [--format json] -- <elisp>= creates or focuses the named tab in herdr TUI and herdr-app.
+- The frame command is =emacsclient -t -a '' --eval <elisp>=.
+- Outside Herdr it exits nonzero and creates nothing.
+- Babashka tests with a fake runtime cover create, reuse, outside-Herdr refusal and JSON output.
+- Must not: change =oh= delegation verbs.
+
+Runtime selection: follow the =oh= rule in =skills/herdr-orch/scripts/docs/contract.md= section 'Preconditions'.
+
+** TODO Emacs entry points: Magit and Plan views for a TTY frame
+:PROPERTIES:
+:CUSTOM_ID: 0aa2d20e-94dd-4017-a44e-623a545e10f8
+:CREATED: [2026-11-27 Fri 09:51]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:51]
+:END:
+Acceptance criteria:
+- =(herdr-tabs-magit DIR)= shows =magit-status= for DIR in the selected frame as its only window.
+- =(herdr-tabs-plan DIR)= visits the selected task's change-record from =ot show selected --format json=, else =TASKS.org= in the project root.
+- =config.org= in the parent dotfiles repository adds =emacs/herdr-tabs= to =load-path= and requires =herdr-tabs=.
+- ERT tests cover the plan-path choice with a stubbed =ot=.
+
+Pattern: =emacs/tasks-org/tasks-org.el=; it already finds =TASKS.org= with =tasks-org--project-root=.
+
+** TODO Herdr TUI bindings
+:PROPERTIES:
+:CUSTOM_ID: 58015db2-a559-4e04-a365-3a34c5b3433c
+:CREATED: [2026-11-27 Fri 09:51]
+:BLOCKED-BY: [[task:712ccdac-59b9-44b6-a6b1-46f80d97455b]] [[task:0aa2d20e-94dd-4017-a44e-623a545e10f8]]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:51]
+:END:
+Acceptance criteria:
+- =herdr/config.toml= binds one key to =emacs-tab magit= and one to =emacs-tab plan=, as =type = "shell"= =keys.command= entries.
+- Each key works after =herdr server reload-config=.
+- Must not: reuse a key already bound in =herdr/config.toml=.
+
+** TODO herdr-app bindings
+:PROPERTIES:
+:CUSTOM_ID: d242c6ef-1aa4-4473-8872-1313b1ba626e
+:CREATED: [2026-11-27 Fri 09:51]
+:BLOCKED-BY: [[task:712ccdac-59b9-44b6-a6b1-46f80d97455b]] [[task:0aa2d20e-94dd-4017-a44e-623a545e10f8]]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:51]
+:END:
+Acceptance criteria:
+- =herdr-app/keys.linux.json= and =keys.darwin.json= each bind a Magit key and a Plan key that run =emacs-tab= in the focused space.
+- Must not: edit shipped mods or the shipped =main= layout.
+
+A key can name an app command only; if no app command can run =emacs-tab=, add a small mod under =herdr-app/mods/= whose =nextCommand()= handler calls =exec=, as =herdr-app/mods/org-tasks/main.js= does for =ot=.
+
+** TODO Documentation and install surfaces
+:PROPERTIES:
+:CUSTOM_ID: 3c52005f-2f97-4152-be18-106b6bcee1fb
+:CREATED: [2026-11-27 Fri 09:51]
+:BLOCKED-BY: [[task:58015db2-a559-4e04-a365-3a34c5b3433c]] [[task:d242c6ef-1aa4-4473-8872-1313b1ba626e]]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:51]
+:END:
+Acceptance criteria:
+- =emacs/README.org= lists =herdr-tabs/= with =emacs-tab= usage and the Emacs entry points.
+- =herdr-app/README.md= documents the new keys.
+- =skills/herdr-orch/references/install-surfaces.md= says how =emacs-tab= gets onto =PATH= or how keys reach it by absolute path.
+- A manual check in each front end opens and reuses the Magit and Plan tabs.
+
+* Implementation
+
+* Open questions
+** DECIDED Keep the herdr-app Changes panel in the herdr-orch layout, or remove it once the Magit tab exists?
+:PROPERTIES:
+:DECIDED: [2026-11-27 Fri 09:47]
+:END:
+Decision (user): out of scope. The user removes the =changes= block from =herdr-app/layouts/herdr-orch.json= by hand once the Emacs tabs are proven.

@@ -148,6 +148,28 @@ Deadline: Atlassian removes the v1 endpoint on 2027-03-01 and then moves v1 user
 :END:
 skills/org-tasks/scripts/AGENTS.md (Workflows, Parity) asks that user-visible mutations stay available in both the standalone TUI and the pi overlay (pi/extensions/tasks/). `ot retitle` (task 930c2230) shipped as a CLI verb only. Add a retitle key in the TUI (registry `:tui-key`, tui/dispatch.clj) and the equivalent pi overlay action, both dispatching through `ot retitle`; update references/ot-cli.md Interactive TUI key map.
 
+** TODO Emacs diff review with FIX/DISCUSS annotations for pi :pi:emacs:
+:PROPERTIES:
+:CUSTOM_ID: 66fea944-8ac8-422b-9417-d8ddbf99f3de
+:CREATED: [2026-11-27 Fri 09:20]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:20]
+:END:
+#+IMPORT: [[plan:2026-11-27-emacs-diff-review.org]]
+Port the pi-slopchop review workflow (https://github.com/robzolkos/pi-slopchop) to Emacs: annotate a diff in Emacs, stage the review prompt in pi's editor.
+
+** TODO Emacs tabs in Herdr: open emacsclient frames as tabs or panes on the space's machine :emacs:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: b9d2a8f2-4380-492f-a8bc-9644afcba9c3
+:CREATED: [2026-11-27 Fri 09:38]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:38]
+:END:
+#+IMPORT: [[plan:2026-11-27-herdr-emacs-tabs.org]]
+Precursor for the Emacs diff review (66fea944). One host-neutral way to open or focus a named Emacs tab running emacsclient -t on the machine that owns the space, in herdr TUI and herdr-app. Candidate uses: a Plan tab on the selected task's change-record, a Magit tab that could replace the herdr-app Changes panel, and the review frame. Needs its own change-record.
+
 * Fixes
 * Upstream issues
 
