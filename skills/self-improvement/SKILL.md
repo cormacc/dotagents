@@ -80,6 +80,16 @@ Conceptual split:
 
 Within that tier, choose the narrowest canonical owner: a skill workflow belongs in that skill or its reference; a project convention belongs in the project `AGENTS.md`; executable or non-trivial work belongs in an `Agent feedback` TODO. Where a tier separates portable rules from project rules, route by whether the finding holds in *every* project: dotagents keeps portable rules in `home/AGENTS.md` (projected to `~/.pi/agent/AGENTS.md`) and its own maintenance rules in the repo-root `AGENTS.md`, so a rule that only makes sense while working on dotagents never belongs in the former. Read the target instructions before proposing changes, and do not invent harness-specific destinations that the repository does not declare. Keep the destination proportionate: `AGENTS.md` stays concise, and a skill body that outgrows itself moves detail into `references/` per [`skill-creator`](../skill-creator/SKILL.md).
 
+### Cheapest fix
+
+Choose the first form that fully prevents the failure:
+
+1. Remove an instruction or stale text that causes it.
+2. Add a mechanical check: a test, lint, `ot doctor` finding or hook.
+3. Fix a pointer or document in the file that agents already read for that area.
+4. Add skill or reference text.
+5. Add an always-loaded rule only when every session needs it and its cost recurs.
+
 Ask once when ownership is ambiguous. If unresolved, use the current project and tag `tier_unknown`.
 
 Cross-project routing is a direct `ot --root <target> ...` operation. It does not depend on a live target agent session, `pi-intercom`, or optional pi task tools.
@@ -93,7 +103,8 @@ An agent loads an instruction file on every turn, so that file carries the reusa
 - One illustration may stay inline when it *is* the rule, such as the verified invocation that replaces a failed one. A second illustration of the same rule is evidence and moves to the log.
 - Put the evidence in the commit body, in `<tier-root>/RETROLOG.org`, or both. Create `RETROLOG.org` at the owning tier's repository root when it is absent.
 - Group each log entry under a dated session heading, then under a sub-heading that repeats the rule's instruction-file heading, so a reader can map evidence back to the rule. When one entry supports several rules, name each heading in the sub-heading, separated by ` / `.
-- Give each new log entry a property drawer: `:KIND:` is `rule` when the evidence supports a new or changed rule, or `miss` when an existing rule did not prevent the failure; `:PREVENTS:` names the failure that the rule should prevent; `:SIGNAL_SOURCE:` names the harness and model that produced the signal, as `<harness>/<model>`. Do not add these properties to older entries.
+- Give each new log entry a property drawer: `:KIND:` is `rule` when the evidence supports a new or changed rule, `miss` when an existing rule did not prevent the failure, or `rejected` for a proposed rule or fix that the user declined; `:PREVENTS:` names the failure that the rule should prevent; `:SIGNAL_SOURCE:` names the harness and model that produced the signal, as `<harness>/<model>`. Each `rule` entry also has `:SIGNAL:`, which states what a later session or the tree shows when the rule works. Do not add these properties to older entries.
+- File a `:KIND: rejected` entry under the heading that the declined rule would have taken, with the user's reason paraphrased. A later retro drops a candidate that matches it unless the candidate's evidence is newer.
 - Before you propose a change for a miss, search the log for the rule's heading text (`rg -n '<heading text>' <tier-root>/RETROLOG.org`) and read the matching entries. When the log already holds a miss for the rule, propose a change to the rule's mechanism or incentive, not a restated or additional rule.
 - Before an edit narrows, merges or removes an instruction-file rule, search the log in the same way and read the entries, so that the edit does not discard the failure that the rule prevents.
 - Keep evidence for a rule that was later removed or narrowed, and say so in the entry. A later capture then knows the case was already seen.
@@ -145,7 +156,7 @@ The JSON report includes per-file and total before, after and delta values for n
 
 ## Verification
 
-Re-read any modified instruction file and run `ot show <id>` for each created or reused task. Confirm that no duplicate or contradictory guidance was introduced, and that the edit added the rule only, with no incident narrative, count, or example list. Confirm that each displaced or new piece of evidence is in the commit body or the log file, and that each new log entry has the `:KIND:`, `:PREVENTS:` and `:SIGNAL_SOURCE:` properties. Then report changed paths, task UUIDs, and deferred work.
+Re-read any modified instruction file and run `ot show <id>` for each created or reused task. Confirm that no duplicate or contradictory guidance was introduced, and that the edit added the rule only, with no incident narrative, count, or example list. Confirm that each displaced or new piece of evidence is in the commit body or the log file, and that each new log entry has the `:KIND:`, `:PREVENTS:` and `:SIGNAL_SOURCE:` properties, and each new `rule` entry has `:SIGNAL:`. Then report changed paths, task UUIDs, and deferred work.
 
 ## Relationship to other skills
 

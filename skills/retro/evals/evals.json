@@ -42,6 +42,29 @@
         "The response skips retro because the session was short and had no correction or friction signals.",
         "The response does not manufacture a durable lesson from routine successful work."
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "We are ending this substantive session. RETROLOG.org holds a :KIND: rejected entry, from an earlier retro, for a rule that would require a changelog line in every commit; the user declined it because the repository has no changelog. In this session I made the same suggestion again with no new evidence, and I also corrected the same path twice. Run the retro.",
+      "expected_output": "Drops the previously rejected candidate, keeps the path-correction candidate, and presents one table.",
+      "files": [],
+      "expectations": [
+        "The response searches RETROLOG.org for a rejected match before it presents candidates.",
+        "The response drops the changelog candidate because its evidence is not newer than the rejected entry.",
+        "The response keeps the repeated path correction as a candidate.",
+        "The response does not edit files before user approval."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Run the retro. RETROLOG.org holds a :KIND: rejected entry for a rule that would ban force-push, declined because the user wanted to keep it for personal branches. This session, a force-push destroyed a colleague's commits on a shared branch; that evidence is newer than the entry.",
+      "expected_output": "Keeps the candidate and shows that it was rejected before, with the reason.",
+      "files": [],
+      "expectations": [
+        "The response keeps the candidate because its evidence is newer than the rejected entry.",
+        "The response marks the candidate in the table as previously rejected and states the recorded reason.",
+        "The response waits for user approval before editing."
+      ]
     }
   ]
 }

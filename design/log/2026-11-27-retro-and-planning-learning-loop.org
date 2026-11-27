@@ -106,13 +106,17 @@ Six changes to =retro=, =self-improvement=, =org-plan=, =org-execute= and the =r
 - Merge with the parallel Emacs-tabs branch :: this branch adds one =TASKS.org= entry in =Improvements= and touches no Herdr tab files.
 
 * Plan
-** TODO Retro decision records: rejected entries and success signals
+** DONE Retro decision records: rejected entries and success signals
+CLOSED: [2026-11-27 Fri 10:20]
 :PROPERTIES:
 :CUSTOM_ID: 5dec5b9d-8698-4110-b216-8cbd7127a896
 :CREATED: [2026-11-27 Fri 09:59]
+:STARTED: [2026-11-27 Fri 10:14]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:59]
+- State "STARTED" from "TODO" [2026-11-27 Fri 10:14]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:20]
 :END:
 Acceptance criteria:
 - =self-improvement= section 'Rule text and evidence' defines =:KIND: rejected=: a proposed rule or fix the user declined, under the heading it would have taken, with the user's reason paraphrased.
@@ -122,13 +126,17 @@ Acceptance criteria:
 - The =RETROLOG.org= header matches; =skills/retro/evals/evals.json= gains a previously-rejected case.
 - Must not: add properties to older entries.
 
-** TODO Cheapest-fix ladder in self-improvement routing
+** DONE Cheapest-fix ladder in self-improvement routing
+CLOSED: [2026-11-27 Fri 10:20]
 :PROPERTIES:
 :CUSTOM_ID: f2c02c83-2a63-43d5-b283-e5937ab65f95
 :CREATED: [2026-11-27 Fri 09:59]
+:STARTED: [2026-11-27 Fri 10:14]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:59]
+- State "STARTED" from "TODO" [2026-11-27 Fri 10:14]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:20]
 :END:
 Acceptance criteria:
 - =self-improvement= Routing has =### Cheapest fix=: remove an instruction or stale text; a mechanical check (test, lint, =ot doctor= finding, hook); a pointer or doc fix in the file agents already read for that area; skill or reference text; an always-loaded rule only when every session needs it and its cost recurs.

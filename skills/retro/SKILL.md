@@ -33,6 +33,8 @@ Prioritize:
 
 Keep only signals that pass `self-improvement`'s trigger gate. A signal that an existing rule should have prevented passes as a miss: name the rule.
 
+Before a candidate reaches the table, search `RETROLOG.org` for its rule heading. Drop a candidate that matches a `:KIND: rejected` entry unless its evidence is newer than that entry. A candidate that returns with newer evidence stays, and the table marks it as previously rejected with the recorded reason.
+
 ## 2. Classify
 
 | Category | Treatment |
@@ -47,7 +49,7 @@ Tool/API failures are normally guardrails. Only behavioral, guardrail and repeat
 
 ## 3. Choose the narrowest owner
 
-Route each retained finding per `self-improvement`'s ownership and routing rules.
+Route each retained finding per `self-improvement`'s ownership and routing rules, and choose its form by [`self-improvement` section 'Cheapest fix'](../self-improvement/SKILL.md#cheapest-fix). The Destination column names the chosen form.
 
 ## 4. Present findings
 
@@ -63,6 +65,8 @@ Wait for user approval before editing or filing tasks. The user may reject, rewr
 ## 5. Apply approved changes
 
 For each approved item, apply `self-improvement`'s tight-loop or TODO-first workflow exactly.
+
+For each item that the user declines, write a `:KIND: rejected` entry per `self-improvement`. Give each new `:KIND: rule` entry a `:SIGNAL:`.
 
 A retro is the main source of instruction-file bloat, because each session arrives with fresh incident detail. Apply [../self-improvement/SKILL.md#Rule text and evidence](../self-improvement/SKILL.md#rule-text-and-evidence) to every instruction edit: the file receives the rule, and the session evidence goes to the commit body or `<tier-root>/RETROLOG.org`.
 
