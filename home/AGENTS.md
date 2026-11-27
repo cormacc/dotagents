@@ -39,6 +39,7 @@
 - Parse machine-readable JSON with `jq` or a JSON parser, not the Clojure reader.
 - Do not put an assertion and its verification command in the same invocation. Read the verification output first, then write the claim.
 - When a matched skill owns a domain, read that skill before you probe the domain.
+- Run CI pipelines locally if possible, and only when impacted by the change. Do not push and poll a remote pipeline for a commit that changes no file a job reads; run the job steps locally instead.
 - Before you offer an action, confirm that the mechanism supports it: read its contract or run a dry check.
 - Do not cite a green suite as coverage until you confirm that it executes the changed file. Confirm which namespaces the test task runs before you attribute its total to one component.
 - Run `date` before you write a new timestamp into a file. Do not infer the date from context.
