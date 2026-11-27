@@ -236,6 +236,9 @@
     :spec (merge priority-spec include-content-spec) :args->opts [:id :level]
     :summary ["<id> [<level>]" "Set, cycle (--cycle forward|back), or --clear the priority cookie"]
     :tui-key :priority}
+   {:cmds ["retitle"]            :fn status/retitle-cmd
+    :spec include-content-spec :args->opts [:id :summary]
+    :summary ["<id> <summary>" "Replace a task's heading text, keeping state, priority, tags and body"]}
    {:cmds ["select"]             :fn list-show/select-cmd
     :spec select-spec :args->opts [:id]
     :tui-key :select

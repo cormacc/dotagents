@@ -142,6 +142,68 @@
                  (if prev (style/priority opts prev) "(none)") " → "
                  (if new-prio (style/priority opts new-prio) "(none)"))]})))))
 
+(defn- retitle-problem
+  "Return an error message when `summary` cannot be written as heading title
+  text without changing the heading structure, else nil. Rejects empty, multi-line,
+  leading `*`, leading state keyword or `[#X]` cookie, and trailing `:tag:` syntax."
+  [summary]
+  (cond
+    (str/blank? summary)
+    "Summary must not be empty."
+
+    (re-find #"[\r\n]" summary)
+    "Summary must be a single line."
+
+    (str/starts-with? summary "*")
+    "Summary must not start with '*'."
+
+    (re-find (re-pattern (str "^(?:" (str/join "|" lifecycle/status-cycle) ")(?:\\s|$)")) summary)
+    "Summary must not start with a state keyword."
+
+    (re-find #"^\[#[A-Za-z]\]" summary)
+    "Summary must not start with a priority cookie."
+
+    (re-find #"\s:[\w@#%:]+:\s*$" (str " " summary))
+    "Summary must not end with ':tag:' syntax; use 'ot tag add'."))
+
+(defn retitle-cmd
+  "Replace only the heading title text of a task. State, priority, tags and
+  everything below the heading are preserved."
+  [{:keys [opts] :as result}]
+  (let [{:keys [tasks selected-id]} (load-context opts)
+        id      (positional-arg result :id)
+        raw     (positional-arg result :summary 1)
+        summary (some-> raw str/trim)]
+    (cond
+      (or (nil? id) (nil? raw))
+      (out/emit-error opts
+                      {:code "argument-error"
+                       :message "ot retitle requires <id> <summary>."})
+
+      (retitle-problem summary)
+      (out/emit-error opts
+                      {:code "invalid-summary"
+                       :message (retitle-problem summary)
+                       :details {:value raw}})
+
+      :else
+      (let [target (resolve-required-id tasks id opts)
+            prev   (:summary target)
+            full-id (parser/get-task-id target)
+            tree-final (tree/update-by-id tasks full-id
+                                          #(assoc % :summary summary))]
+        (when-not (:dry-run opts)
+          (loader/save-source-roots-locality (:project-root (resolve-context opts))
+                                             tree-final))
+        (out/emit-result
+          opts
+          {:task (task/task->wire (task/find-by-id tree-final full-id) nil
+                                  {:include-content? (boolean (:include-content opts))
+                                   :selected-id selected-id})
+           :prevSummary prev
+           :summary summary
+           :text/lines [(str prev " → " summary)]})))))
+
 (defn status-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks selected-id]} (load-context opts)
         id        (positional-arg result :id)

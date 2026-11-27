@@ -64,6 +64,7 @@ ot status <id> --cycle forward --no-promote
 ot priority <id> B               # set the priority cookie (A|B|C|D)
 ot priority <id> --cycle forward # unset → A → B → C → D → unset; back reverses (unset → D)
 ot priority <id> --clear
+ot retitle <id> "New heading text"   # replace only the title text; add --dry-run to preview
 ot select <id>        # or: ot select --clear / ot select --clear-stale
 ot remove <id> --yes  # non-top-level subtree only; preview with --dry-run
                         # pass --prune-blockers only to remove reported inbound task blockers
@@ -107,6 +108,10 @@ A STARTED status transition promotes TODO ancestors by default. Pass boolean `--
 `ot tag add <id> <tag>` and `ot tag remove <id> <tag>` mutate the trailing Org heading tags of an existing task. IDs accept the standard full UUID or unique prefix, and the task is written back to its owning `TASKS.org`, `TASKS.local.org`, or imported plan file. `--dry-run` returns the proposed tag list without writing.
 
 Tags are ASCII letters, digits, and underscores (`[A-Za-z0-9_]+`). Surrounding whitespace and one conventional `:tag:` wrapper are normalised. Whitespace inside a tag, colons, and other characters are rejected. Add is idempotent and preserves existing tag order. Remove is idempotent, and removing the final tag leaves no dangling colon suffix. These commands alter only the owning heading. The task UUID, status, priority, drawers, body, sibling order, and unrelated file content are preserved. Imported owners use the normal atomic optimistic-concurrency write and fail with `conflict` if changed on disk.
+
+## Changing a task heading
+
+`ot retitle <id> <summary>` replaces only the heading title text and preserves the state, priority, tags and everything below the heading. The summary must be one non-empty line that cannot change heading structure: no leading `*`, state keyword or `[#X]` cookie, and no trailing `:tag:`. See [scripts/docs/contract.md#`ot retitle <id> <summary>`](../scripts/docs/contract.md#ot-retitle-id-summary).
 
 ## Moving existing tasks
 

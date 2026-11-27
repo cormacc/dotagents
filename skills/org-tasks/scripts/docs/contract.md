@@ -49,7 +49,7 @@ This document defines the JSON / EDN contract for `ot --format json|edn` and its
 
 #### `conflict`
 
-Write-time optimistic-concurrency check: a mutator (`status`, `priority`, `move`, `remove`, `archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/ `blocker`/`handoff` mutations, `backfill`) detects that a target file's on-disk bytes no longer match the snapshot it loaded at the start of the command -- e.g. another `ot` process or an editor wrote to it in between. The command aborts without writing:
+Write-time optimistic-concurrency check: a mutator (`status`, `priority`, `retitle`, `move`, `remove`, `archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/ `blocker`/`handoff` mutations, `backfill`) detects that a target file's on-disk bytes no longer match the snapshot it loaded at the start of the command -- e.g. another `ot` process or an editor wrote to it in between. The command aborts without writing:
 
 ```json
 {
@@ -92,7 +92,7 @@ Id-accepting commands resolve exact `:CUSTOM_ID:` values first, then accept any 
 
 ## Common task shape (`Task`)
 
-Returned by `list --full` (`rows[]` and within `tree[]`), `show`, `selected`, `status`, `priority`, `move`, `publish`/`unpublish`, `archive`/`unarchive`, and as the `task` field of related result payloads. `create` returns a locator instead (see [#`ot create`](#ot-create)).
+Returned by `list --full` (`rows[]` and within `tree[]`), `show`, `selected`, `status`, `priority`, `retitle`, `move`, `publish`/`unpublish`, `archive`/`unarchive`, and as the `task` field of related result payloads. `create` returns a locator instead (see [#`ot create`](#ot-create)).
 
 ```jsonc
 {
@@ -277,7 +277,7 @@ Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--ta
 }
 ```
 
-Relocates an *existing* task subtree **within its own file**. Exactly one destination is required: `--parent <id>` appends the subtree as that task's last child; `--section <name>` appends at level 2 in an existing level-1 section; `--before <id>` inserts as the anchor's preceding sibling; `--after <id>` inserts as a sibling after the anchor's whole subtree. Heading depth is adjusted for the whole moved subtree. Relative moves inherit the anchor's depth and in-file parent; no parent or section option is needed. `parentId` is the resulting in-file parent UUID, or `null` for a file root. `section` names only an explicit section destination; it is `null` for task destinations. `beforeId` and `afterId` contain the resolved anchor UUID for their respective modes and are otherwise `null`. Sections must already exist; moves do not create them. `previousParentId` is `null` when the task was already a root of its file. `movedCount` counts the moved root plus its descendants. `fromLevel`/`toLevel` are the subtree root's heading depth before and after. `task` reflects the post-move `level` and `line`. Like every mutator that returns `Task` (`status`, `priority`, `move`, `archive`, `unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits `sourceContent` and `effectiveSourceContent` across the complete task tree. Pass `--include-content` to any of those commands to include both fields; text output is unchanged. This applies equally to `--dry-run` envelopes.
+Relocates an *existing* task subtree **within its own file**. Exactly one destination is required: `--parent <id>` appends the subtree as that task's last child; `--section <name>` appends at level 2 in an existing level-1 section; `--before <id>` inserts as the anchor's preceding sibling; `--after <id>` inserts as a sibling after the anchor's whole subtree. Heading depth is adjusted for the whole moved subtree. Relative moves inherit the anchor's depth and in-file parent; no parent or section option is needed. `parentId` is the resulting in-file parent UUID, or `null` for a file root. `section` names only an explicit section destination; it is `null` for task destinations. `beforeId` and `afterId` contain the resolved anchor UUID for their respective modes and are otherwise `null`. Sections must already exist; moves do not create them. `previousParentId` is `null` when the task was already a root of its file. `movedCount` counts the moved root plus its descendants. `fromLevel`/`toLevel` are the subtree root's heading depth before and after. `task` reflects the post-move `level` and `line`. Like every mutator that returns `Task` (`status`, `priority`, `retitle`, `move`, `archive`, `unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits `sourceContent` and `effectiveSourceContent` across the complete task tree. Pass `--include-content` to any of those commands to include both fields; text output is unchanged. This applies equally to `--dry-run` envelopes.
 
 The subtree's source lines are relocated verbatim apart from heading stars, so `:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`, unknown drawer properties, bodies, descendant order, and intra-subtree blank lines are byte-preserved, and every region of the file outside the move is left untouched. Because `:CUSTOM_ID:` never changes, `#+IMPORT:` links and a change-record's `#+PARENT: [[task:<uuid>]]` keep resolving across a move.
 
@@ -309,6 +309,18 @@ Cross-file moves are refused: locality changes belong to `publish` / `unpublish`
 ```
 
 Sets the priority cookie explicitly (`<level>`, case-insensitive), cycles it with `--cycle forward|back`, or removes it with `--clear`. The cycle order includes the unset slot: forward from unset lands on `A` (highest), back from unset lands on `D` (lowest); `A` back and `D` forward return to unset. Priority changes do not write LOGBOOK entries. Errors: `unknown-task`, `invalid-priority`, `argument-error`.
+
+### `ot retitle <id> <summary>`
+
+```json
+"result": {
+  "task":        Task,
+  "prevSummary": "string",
+  "summary":     "string"
+}
+```
+
+Replaces only the heading's title text. The state token, priority cookie, trailing tags, drawers, body and children are preserved. Targets resolve and persist like `status`, including tasks in `#+IMPORT:`-linked plan files. The summary is trimmed, then rejected when it is empty, spans more than one line, starts with `*`, starts with a state keyword (`TODO`, `STARTED`, `WAITING`, `DONE`, `CANCELLED`) or a `[#X]` priority cookie, or ends with `:tag:` syntax. Use `ot tag add` for tags. `--dry-run` never writes. `--include-content` applies as for the other mutators that return `Task`. Errors: `unknown-task`, `ambiguous-id`, `invalid-summary`, `argument-error`.
 
 ### `ot select [<id>]`
 

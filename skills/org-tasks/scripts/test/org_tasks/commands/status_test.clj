@@ -363,3 +363,71 @@
             e (parse-json-error err)]
         (is (= 1 exit))
         (is (= "argument-error" (:code e)))))))
+
+(deftest retitle-replaces-only-title-text
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [path (str (fs/path root "TASKS.org"))
+            before (slurp path)
+            {:keys [out exit]}
+            (run-cli! "--root" root "--format" "json" "retitle" "11111111" "Renamed first")
+            r (parse-json-result out)
+            after (slurp path)]
+        (is (zero? exit))
+        (is (= "First" (:prevSummary r)))
+        (is (= "Renamed first" (:summary r)))
+        (is (= "Renamed first" (get-in r [:task :summary])))
+        (testing "state, priority, tags and drawer are preserved"
+          (is (= (str/replace before "* TODO [#A] First :backend:"
+                              "* TODO [#A] Renamed first :backend:")
+                 after)))))))
+
+(deftest retitle-dry-run-does-not-write
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [path (str (fs/path root "TASKS.org"))
+            before (slurp path)
+            {:keys [exit]} (run-cli! "--root" root "--format" "json" "--dry-run"
+                                     "retitle" "11111111" "Renamed")]
+        (is (zero? exit))
+        (is (= before (slurp path)))))))
+
+(deftest retitle-persists-to-imported-plan-file
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [plan-path (str (fs/path root "design" "log" "linked-plan.org"))
+            before (slurp plan-path)
+            {:keys [exit]} (run-cli! "--root" root "--format" "json"
+                                     "retitle" linked-plan-child-id "Renamed plan child")]
+        (is (zero? exit))
+        (is (= (str/replace before "** TODO Plan child" "** TODO Renamed plan child")
+               (slurp plan-path)))))))
+
+(deftest retitle-rejects-structure-changing-summaries
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [path (str (fs/path root "TASKS.org"))
+            before (slurp path)]
+        (doseq [bad ["" "   " "two\nlines" "* star" "TODO again" "DONE" "[#B] cookie"
+                     "title :tag:" "Meet :@home:"]]
+          (let [{:keys [err exit]} (run-cli! "--root" root "--format" "json"
+                                             "retitle" "11111111" bad)]
+            (is (not (zero? exit)) (pr-str bad))
+            (is (= "invalid-summary" (:code (parse-json-error err))) (pr-str bad))
+            (is (= before (slurp path)) (pr-str bad))))
+        (testing "text that only resembles structure mid-title is allowed"
+          (let [{:keys [exit]} (run-cli! "--root" root "--format" "json"
+                                         "retitle" "11111111" "Fix TODO handling: [#A] in titles")]
+            (is (zero? exit))))))))
+
+(deftest retitle-requires-id-and-summary
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [{:keys [err exit]} (run-cli! "--root" root "--format" "json" "retitle" "11111111")]
+        (is (not (zero? exit)))
+        (is (= "argument-error" (:code (parse-json-error err))))))))
