@@ -159,13 +159,15 @@ skills/org-tasks/scripts/AGENTS.md (Workflows, Parity) asks that user-visible mu
 #+IMPORT: [[plan:2026-11-27-emacs-diff-review.org]]
 Port the pi-slopchop review workflow (https://github.com/robzolkos/pi-slopchop) to Emacs: annotate a diff in Emacs, stage the review prompt in pi's editor.
 
-** TODO Emacs tabs in Herdr: open emacsclient frames as tabs or panes on the space's machine :emacs:herdr_orch:
+** STARTED Emacs tabs in Herdr: open emacsclient frames as tabs or panes on the space's machine :emacs:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: b9d2a8f2-4380-492f-a8bc-9644afcba9c3
 :CREATED: [2026-11-27 Fri 09:38]
+:STARTED: [2026-11-27 Fri 09:59]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:38]
+- State "STARTED" from "TODO" [2026-11-27 Fri 09:59]
 :END:
 #+IMPORT: [[plan:2026-11-27-herdr-emacs-tabs.org]]
 Precursor for the Emacs diff review (66fea944). One host-neutral way to open or focus a named Emacs tab running emacsclient -t on the machine that owns the space, in herdr TUI and herdr-app. Candidate uses: a Plan tab on the selected task's change-record, a Magit tab that could replace the herdr-app Changes panel, and the review frame. Needs its own change-record.

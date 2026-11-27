@@ -58,11 +58,12 @@ Make Emacs a first-class Herdr tab: one command opens, or focuses, a named tab t
 - A Herdr tab, not a herdr-app panel :: a tab works in both front ends and on remote machines; a herdr-app mod view cannot embed a terminal, and a layout terminal block needs a fixed terminal id.
   Rejected:
   - Replace the herdr-app Changes panel with an Emacs panel: not possible without a terminal-capable mod view.
-- One CLI, =emacs-tab=, in Babashka under =emacs/herdr-tabs/= :: keys in both front ends and the pi review extension call the same command, so focus-or-create and remote behaviour have one implementation. It selects the runtime with the same rule as =oh= (nearest host in process ancestry).
+- One CLI, =emacs-tab=, in Babashka under =emacs/herdr-tabs/= :: keys in both front ends and the pi review extension call the same command, so focus-or-create and remote behaviour have one implementation. Runtime: =--runtime tui|hc= when given, else =HC_TERMINAL_ID= selects hc and =HERDR_ENV=1= selects TUI; both or neither is a usage error.
   Rejected:
+  - The =oh= ancestry gate for runtime selection: a key binding runs outside any pane, so there is no caller ancestry to inspect; the binding names its front end instead.
   - Separate herdr TUI plugin and herdr-app mod with their own logic: two implementations of focus-or-create.
   - A new =oh= verb: =oh= is the delegation CLI; an editor tab is not delegation.
-- On herdr-app, create the tab through label adoption on the caller's machine core :: =hc run --keep --label herdr.space=<id> --label herdr.tab=<new id>= starts the terminal on the machine where the caller runs, which is how =oh= places hc children; =herdr-app do= reaches only the local window and fails from a remote terminal. Verify in the first task.
+- On herdr-app, create the tab through label adoption on the caller's machine core :: =hc run --no-parent --label herdr.space=<id> --label herdr.tab=<new id>= starts the terminal on the machine where the caller runs, which is how =oh= places hc children; =herdr-app do= reaches only the local window, so naming and focus are best effort. Verified locally; unverified for a space on another machine.
 - Emacs entry points in =emacs/herdr-tabs/herdr-tabs.el=, loaded by =config.org= :: the same pattern as =emacs/tasks-org/=; the user confirmed that remote hosts get this Emacs config through Home Manager.
 - Focus-or-create by tab name in the caller's space :: one Magit tab and one Plan tab for each space; re-pressing a key returns to the existing tab.
 
@@ -75,13 +76,17 @@ Make Emacs a first-class Herdr tab: one command opens, or focuses, a named tab t
 - [[task:5a1e3490-2e59-467f-ad7d-72e837bd9476][Herdr frame host for the review]] consumes =emacs-tab=.
 
 * Plan
-** TODO emacs-tab CLI: focus-or-create a named Emacs tab on the space's machine
+** DONE emacs-tab CLI: focus-or-create a named Emacs tab on the space's machine
+CLOSED: [2026-11-27 Fri 10:03]
 :PROPERTIES:
 :CUSTOM_ID: 712ccdac-59b9-44b6-a6b1-46f80d97455b
 :CREATED: [2026-11-27 Fri 09:51]
+:STARTED: [2026-11-27 Fri 09:59]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:51]
+- State "STARTED" from "TODO" [2026-11-27 Fri 09:59]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:03]
 :END:
 Acceptance criteria:
 - First, a recorded probe establishes, for herdr-app, whether a terminal created by =hc run= with herdr labels from inside a space appears as a new tab in that space, and whether it can be focused; the result goes into Implementation.
@@ -154,6 +159,9 @@ Acceptance criteria:
 - A manual check in each front end opens and reuses the Magit and Plan tabs.
 
 * Implementation
+- herdr-app probe (local machine, 2026-11-27, =.tmp/probe-hc-tab2.clj=): =hc run --bg --no-notify --label herdr.space=<caller's space> --label herdr.tab=<new uuid> --label emacs-tab=probe -- sleep 120= appeared as a new tab in the caller's space within 3 s, without taking focus. =herdr-app do pane.focus '{"terminal":"<addr>"}'= made it the active tab; =herdr-app do tab.rename= succeeded; custom labels survive on the terminal (=hc get --json=); =hc kill= closed the tab. Not probed: a space on another machine (no machines configured), where =herdr-app= may not reach the window.
+- =emacs/herdr-tabs/emacs-tab= finds an existing tab by terminal labels on hc (=hc ls --label emacs-tab=<name> --label herdr.space=<space>=, live only) and by tab label on TUI. On hc the terminal is started with =--no-parent=, so herdr-app shows it as a tab, not as a sub-agent of the caller. Window calls (=tab.rename=, =pane.focus=) are best effort and become =warnings= in the result, so a remote caller still gets its tab. On TUI the root pane runs =exec emacsclient ...=, so deleting the frame closes the tab.
+- Live smoke on herdr-app (local): create, reuse (=created: false=, same terminal), tab named =smoke=, and =delete-frame= finished the terminal and removed the tab. The TUI path is covered by =emacs/herdr-tabs/test-emacs-tab.bb= against a fake runtime only; the live TUI check is in the documentation task.
 
 * Open questions
 ** DECIDED Keep the herdr-app Changes panel in the herdr-orch layout, or remove it once the Magit tab exists?

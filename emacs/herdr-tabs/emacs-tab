@@ -1,0 +1,186 @@
+#!/usr/bin/env bb
+;; emacs-tab: focus, or create, a named Herdr tab that runs an Emacs terminal frame.
+;;
+;; Usage: emacs-tab <name> [--runtime tui|hc] [--space ID] [--workspace ID]
+;;                  [--cwd DIR] [--no-focus] [--format text|json] [-- <elisp>]
+;;
+;; The frame is `emacsclient -t -a '' --eval <elisp>` on the machine where this
+;; command runs, so a remote space gets that machine's Emacs server. The names
+;; `magit` and `plan` have default elisp from herdr-tabs.el; other names need an
+;; explicit form after `--`. Exit status: 0 success, 1 runtime failure, 2 usage.
+
+(ns emacs-tab
+  (:require [babashka.process :as process]
+            [cheshire.core :as json]
+            [clojure.string :as str]))
+
+(def ^:dynamic *run*
+  "Run argv and return {:exit :out :err}. Tests rebind it to a fake runtime."
+  (fn [argv]
+    (let [r (deref (process/process argv {:out :string :err :string}) 10000 ::timeout)]
+      (if (= r ::timeout)
+        {:exit 124 :out "" :err (str (first argv) " timed out")}
+        (select-keys r [:exit :out :err])))))
+
+(def ^:dynamic *env* (fn [k] (System/getenv k)))
+(def ^:dynamic *sleep* (fn [ms] (Thread/sleep ms)))
+(def ^:dynamic *uuid* (fn [] (str (java.util.UUID/randomUUID))))
+
+(defn- fail [code message & [data]]
+  (throw (ex-info message (merge {:code code} data))))
+
+(defn- run-json! [argv]
+  (let [{:keys [exit out err]} (*run* argv)]
+    (when-not (zero? exit)
+      (fail 1 (str (str/join " " (take 3 argv)) " failed: " (str/trim (str err out)))))
+    (try (json/parse-string out true)
+         (catch Exception _ (fail 1 (str (first argv) " returned non-JSON output"))))))
+
+(defn elisp-string [s] (pr-str (str s)))
+
+(defn default-elisp [name cwd]
+  (case name
+    "magit" (format "(progn (require 'herdr-tabs) (herdr-tabs-magit %s))" (elisp-string cwd))
+    "plan" (format "(progn (require 'herdr-tabs) (herdr-tabs-plan %s))" (elisp-string cwd))
+    nil))
+
+(defn frame-argv [elisp] ["emacsclient" "-t" "-a" "" "--eval" elisp])
+
+(defn shell-quote [s] (str "'" (str/replace s "'" "'\\''") "'"))
+
+(defn select-runtime
+  "An explicit --runtime wins. Otherwise the caller's variables decide; both or
+  neither is a usage error, because a key binding knows its own front end."
+  [explicit]
+  (let [hc? (seq (*env* "HC_TERMINAL_ID")) tui? (= "1" (*env* "HERDR_ENV"))]
+    (cond
+      explicit (if (#{"tui" "hc"} explicit) (keyword explicit) (fail 2 (str "unknown runtime: " explicit)))
+      (and hc? tui?) (fail 2 "both HC_TERMINAL_ID and HERDR_ENV are set; pass --runtime")
+      hc? :hc
+      tui? :tui
+      :else (fail 2 "not inside Herdr: set --runtime, or run from a Herdr pane"))))
+
+;; ── herdr-app / hc ────────────────────────────────────────────────
+
+(defn- hc-caller []
+  (when-let [addr (not-empty (*env* "HC_TERMINAL_ID"))]
+    (run-json! ["hc" "get" addr "--json"])))
+
+(defn- app-call
+  "Call the herdr-app window. It is reachable only from the machine that runs the
+  app, so a failure is a warning: the tab still exists, without a name or focus."
+  [warnings argv]
+  (let [{:keys [exit out err]} (*run* (into ["herdr-app"] argv))]
+    (if (zero? exit)
+      (try (json/parse-string out true) (catch Exception _ {}))
+      (do (swap! warnings conj (str "herdr-app " (first argv) " " (second argv) ": " (str/trim (str err out))))
+          nil))))
+
+(defn- app-tab-of [warnings address]
+  (when-let [ls (app-call warnings ["ls"])]
+    (first (for [space (:spaces ls) tab (:tabs space)
+                 :when (some #(= address (:terminal %)) (:terminals tab))]
+             tab))))
+
+(defn- hc-open! [{:keys [name space cwd elisp focus?]}]
+  (let [caller (hc-caller)
+        space (or space (get-in caller [:labels :herdr.space])
+                  (fail 2 "no herdr-app space: pass --space or run from a Herdr terminal"))
+        cwd (or cwd (get-in caller [:foreground :cwd]) (:cwd caller) (*env* "PWD"))
+        warnings (atom [])
+        existing (->> (:terminals (run-json! ["hc" "ls" "--json" "--label" (str "emacs-tab=" name)
+                                              "--label" (str "herdr.space=" space)]))
+                      (filter #(= "live" (:state %)))
+                      first)
+        address (or (:address existing)
+                    (let [elisp (or elisp (default-elisp name cwd) (fail 2 (str "no default elisp for " name "; pass -- <elisp>")))
+                          created (run-json! (into ["hc" "run" "--json" "--bg" "--no-parent" "--no-notify"
+                                                    "--cwd" cwd
+                                                    "--label" (str "herdr.space=" space)
+                                                    "--label" (str "herdr.tab=" (*uuid*))
+                                                    "--label" (str "emacs-tab=" name) "--"]
+                                                   (frame-argv elisp)))]
+                      (or (not-empty (:address created)) (fail 1 "hc run returned no terminal address"))))
+        ;; The window adopts a new terminal into a tab shortly after `hc run` returns.
+        tab (if existing
+              (app-tab-of warnings address)
+              (loop [n 0]
+                (or (app-tab-of (atom []) address)
+                    (if (< n 30) (do (*sleep* 100) (recur (inc n)))
+                        (do (swap! warnings conj "herdr-app shows no tab for the new terminal") nil)))))]
+    (when (and tab (not existing) (not= name (:name tab)))
+      (app-call warnings ["do" "tab.rename" (json/generate-string {:id (:id tab) :name name})]))
+    (when focus?
+      (app-call warnings ["do" "pane.focus" (json/generate-string {:terminal address})]))
+    {:runtime "hc" :name name :created (nil? existing) :terminal address
+     :tab (:id tab) :space space :warnings @warnings}))
+
+;; ── herdr TUI ─────────────────────────────────────────────────────
+
+(defn- tui-pane []
+  (let [pane-id (not-empty (*env* "HERDR_PANE_ID"))]
+    (:pane (:result (run-json! (if pane-id ["herdr" "pane" "get" pane-id] ["herdr" "pane" "current"]))))))
+
+(defn- tui-open! [{:keys [name workspace cwd elisp focus?]}]
+  (let [pane (when-not (and workspace cwd) (tui-pane))
+        workspace (or workspace (:workspace_id pane) (fail 2 "no Herdr workspace: pass --workspace"))
+        cwd (or cwd (:cwd pane) (*env* "PWD"))
+        tabs (:tabs (:result (run-json! ["herdr" "tab" "list" "--workspace" workspace])))
+        existing (first (filter #(= name (:label %)) tabs))]
+    (if existing
+      (do (when focus? (run-json! ["herdr" "tab" "focus" (:tab_id existing)]))
+          {:runtime "tui" :name name :created false :tab (:tab_id existing) :workspace workspace :warnings []})
+      (let [elisp (or elisp (default-elisp name cwd) (fail 2 (str "no default elisp for " name "; pass -- <elisp>")))
+            result (:result (run-json! ["herdr" "tab" "create" "--workspace" workspace "--cwd" cwd
+                                        "--label" name (if focus? "--focus" "--no-focus")]))
+            pane-id (get-in result [:root_pane :pane_id])]
+        (when-not pane-id (fail 1 "herdr tab create returned no root pane"))
+        ;; `exec` replaces the pane's shell, so deleting the frame closes the tab.
+        (run-json! ["herdr" "pane" "run" pane-id
+                    (str "exec " (str/join " " (map shell-quote (frame-argv elisp))))])
+        {:runtime "tui" :name name :created true :tab (get-in result [:tab :tab_id])
+         :pane pane-id :workspace workspace :warnings []}))))
+
+;; ── CLI ───────────────────────────────────────────────────────────
+
+(defn parse-args [args]
+  (let [[opts elisp] (split-with #(not= "--" %) args)
+        elisp (when (seq elisp) (str/join " " (rest elisp)))]
+    (loop [[a & more] opts acc {:focus? true :format "text"}]
+      (cond
+        (nil? a) (cond-> acc elisp (assoc :elisp elisp))
+        (= a "--no-focus") (recur more (assoc acc :focus? false))
+        (#{"--runtime" "--space" "--workspace" "--cwd" "--format"} a)
+        (if (seq more)
+          (recur (rest more) (assoc acc (keyword (subs a 2)) (first more)))
+          (fail 2 (str a " needs a value")))
+        (str/starts-with? a "-") (fail 2 (str "unknown option: " a))
+        (:name acc) (fail 2 (str "unexpected argument: " a))
+        :else (recur more (assoc acc :name a))))))
+
+(defn open! [args]
+  (let [{:keys [name runtime] :as opts} (parse-args args)]
+    (when (str/blank? name) (fail 2 "usage: emacs-tab <name> [options] [-- <elisp>]"))
+    (case (select-runtime runtime)
+      :hc (hc-open! opts)
+      :tui (tui-open! opts))))
+
+(defn -main [& args]
+  (let [json? (some #{"json"} (drop 1 (drop-while #(not= "--format" %) (take-while #(not= "--" %) args))))]
+    (try
+      (let [result (open! args)]
+        (if json?
+          (println (json/generate-string {:ok true :result result}))
+          (do (println (str (if (:created result) "created " "focused ") (:name result)
+                            " (" (:runtime result) " tab " (:tab result) ")"))
+              (doseq [w (:warnings result)] (binding [*out* *err*] (println "warning:" w)))))
+        0)
+      (catch clojure.lang.ExceptionInfo e
+        (let [code (or (:code (ex-data e)) 1)]
+          (if json?
+            (println (json/generate-string {:ok false :error {:code code :message (ex-message e)}}))
+            (binding [*out* *err*] (println "emacs-tab:" (ex-message e))))
+          code)))))
+
+(when (= *file* (System/getProperty "babashka.file"))
+  (System/exit (apply -main *command-line-args*)))
