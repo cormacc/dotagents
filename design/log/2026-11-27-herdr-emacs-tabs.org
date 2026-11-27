@@ -98,13 +98,17 @@ Acceptance criteria:
 
 Runtime selection: follow the =oh= rule in =skills/herdr-orch/scripts/docs/contract.md= section 'Preconditions'.
 
-** TODO Emacs entry points: Magit and Plan views for a TTY frame
+** DONE Emacs entry points: Magit and Plan views for a TTY frame
+CLOSED: [2026-11-27 Fri 10:13]
 :PROPERTIES:
 :CUSTOM_ID: 0aa2d20e-94dd-4017-a44e-623a545e10f8
 :CREATED: [2026-11-27 Fri 09:51]
+:STARTED: [2026-11-27 Fri 10:10]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:51]
+- State "STARTED" from "TODO" [2026-11-27 Fri 10:10]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:13]
 :END:
 Acceptance criteria:
 - =(herdr-tabs-magit DIR)= shows =magit-status= for DIR in the selected frame as its only window.
@@ -162,6 +166,8 @@ Acceptance criteria:
 - herdr-app probe (local machine, 2026-11-27, =.tmp/probe-hc-tab2.clj=): =hc run --bg --no-notify --label herdr.space=<caller's space> --label herdr.tab=<new uuid> --label emacs-tab=probe -- sleep 120= appeared as a new tab in the caller's space within 3 s, without taking focus. =herdr-app do pane.focus '{"terminal":"<addr>"}'= made it the active tab; =herdr-app do tab.rename= succeeded; custom labels survive on the terminal (=hc get --json=); =hc kill= closed the tab. Not probed: a space on another machine (no machines configured), where =herdr-app= may not reach the window.
 - =emacs/herdr-tabs/emacs-tab= finds an existing tab by terminal labels on hc (=hc ls --label emacs-tab=<name> --label herdr.space=<space>=, live only) and by tab label on TUI. On hc the terminal is started with =--no-parent=, so herdr-app shows it as a tab, not as a sub-agent of the caller. Window calls (=tab.rename=, =pane.focus=) are best effort and become =warnings= in the result, so a remote caller still gets its tab. On TUI the root pane runs =exec emacsclient ...=, so deleting the frame closes the tab.
 - Live smoke on herdr-app (local): create, reuse (=created: false=, same terminal), tab named =smoke=, and =delete-frame= finished the terminal and removed the tab. The TUI path is covered by =emacs/herdr-tabs/test-emacs-tab.bb= against a fake runtime only; the live TUI check is in the documentation task.
+- =herdr-tabs--fill-frame= deletes side windows before =delete-other-windows= and sets the buffer with =set-window-buffer=. The first live Magit tab exited with =Cannot make side window the only window=, and a later one showed Magit in a right side window: the user's =display-buffer-alist= sends Magit buffers to a side window, and =switch-to-buffer= obeyed it. ERT regressions cover both.
+- Live smoke on herdr-app (local): =emacs-tab magit= showed =magit: agents= alone; =emacs-tab plan= with no selected task showed =TASKS.org= alone. Selection-to-record is covered by ERT with a stub =ot=.
 
 * Open questions
 ** DECIDED Keep the herdr-app Changes panel in the herdr-orch layout, or remove it once the Magit tab exists?

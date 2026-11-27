@@ -62,6 +62,7 @@
                     ["scripts/test-herdr-org-tasks.bb"]
                     ["scripts/test-herdr-app.bb"]
                     ["emacs/herdr-tabs/test-emacs-tab.bb"]
+                    ["emacs/herdr-tabs/test-herdr-tabs.bb"]
                     ["scripts/test-check-record-identifiers.bb"]
                     ["scripts/test-validate-skills.bb"]
                     ["skills/self-improvement/scripts/test-compare-instructions.bb"]
