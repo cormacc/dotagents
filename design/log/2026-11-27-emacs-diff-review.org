@@ -133,7 +133,8 @@ Lives at =pi/extensions/emacsclient/elisp/pi-review.el=; Magit is a soft depende
 :PROPERTIES:
 :CUSTOM_ID: ce3f398e-1fb6-4516-9920-8370dca9e015
 :CREATED: [2026-11-27 Fri 09:21]
-:BLOCKED-BY: [[task:b80ae6b4-3e66-4c34-8700-81e12dad89b1]] [[task:48138a01-28dc-432a-9732-f10e0de1ac34]]
+:BLOCKED-BY: task:b80ae6b4-3e66-4c34-8700-81e12dad89b1
+:BLOCKED-BY+: task:48138a01-28dc-432a-9732-f10e0de1ac34
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:21]
@@ -153,7 +154,7 @@ Inject =exec= and the file watcher for tests, as =emacsclient.ts= does for =exec
 :PROPERTIES:
 :CUSTOM_ID: 5a1e3490-2e59-467f-ad7d-72e837bd9476
 :CREATED: [2026-11-27 Fri 09:40]
-:BLOCKED-BY: [[task:ce3f398e-1fb6-4516-9920-8370dca9e015]] [[archive:b9d2a8f2-4380-492f-a8bc-9644afcba9c3]]
+:BLOCKED-BY: task:ce3f398e-1fb6-4516-9920-8370dca9e015
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:40]
@@ -168,7 +169,7 @@ Acceptance criteria:
 :PROPERTIES:
 :CUSTOM_ID: 1f9aadd4-96f4-4419-a6da-d75fff18f40b
 :CREATED: [2026-11-27 Fri 09:21]
-:BLOCKED-BY: [[task:ce3f398e-1fb6-4516-9920-8370dca9e015]]
+:BLOCKED-BY: task:ce3f398e-1fb6-4516-9920-8370dca9e015
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:21]
