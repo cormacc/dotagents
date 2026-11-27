@@ -1,0 +1,227 @@
+#+TITLE: Retro and planning learning loop: ideas adapted from compound-engineering-plugin
+#+DATE: 2026-11-27 Fri
+#+PARENT: [[task:d6dd7ba3-71f5-43e7-8a60-83b87d9490e7][Adapt ideas from compound-engineering-plugin]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/retro/SKILL.md]]
+#+SPEC: [[proj:skills/self-improvement/SKILL.md]]
+#+SPEC: [[proj:RETROLOG.org]]
+#+SPEC: [[proj:skills/org-plan/SKILL.md]]
+#+SPEC: [[proj:skills/org-plan/references/change-record-format.md]]
+#+SPEC: [[proj:skills/org-execute/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/subagents/reviewer.md]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+
+* Intent
+Close the gaps in our learning loop that the EveryInc compound-engineering-plugin (CE, MIT, evaluated at commit =ee3695a=) handles better: retro remembers what the user rejected and checks whether accepted rules worked, fixes take the cheapest durable form, planning finds lessons in earlier change-records, user decisions are not reopened without evidence, deferred review findings are not lost, and a retro can see friction that repeats across sessions. Adapt the ideas to our existing stores (=RETROLOG.org=, =design/log/=, =ot=, =herdr-orch=) rather than import CE's machinery.
+
+* Summary
+*Level:* production · *Tests:* smoke · *Docs:* inline
+
+Six changes to =retro=, =self-improvement=, =org-plan=, =org-execute= and the =reviewer= persona. One new Babashka script locates and extracts pi sessions for the wide-scope retro; everything else is skill text.
+
+** Scope
+*** In scope
+- =RETROLOG.org= as the retro decision ledger: =:KIND: rejected= entries, and =:SIGNAL:= on =:KIND: rule= entries.
+- A cheapest-fix order in =self-improvement= routing, used by =retro=.
+- Prior-record lookup in =org-plan= drafting, and a durability test for =** Gotchas= at closure.
+- Settled-decision provenance labels on =** Decisions= entries, honoured by planners and the =reviewer= persona.
+- Durable residuals for unfixed review findings in =org-execute=.
+- A wide-scope retro over pi sessions of the repository, its worktrees and Herdr child checkouts: =skills/retro/scripts/sessions.bb=, a reference for the wide procedure, and a session-miner brief.
+- A weekly wide-retro offer at session closeout, driven by a run entry that each wide retro writes to =RETROLOG.org=.
+- Attribution to CE in =PROVENANCE.md= (=org-plan=, =org-execute=) and =skills/retro/README.md=.
+- =evals.json= cases for the changed =retro= and =org-execute= behaviour.
+*** Out of scope
+- Claude Code and Codex transcripts in the wide retro.
+- A separate ledger file, or a retro cutoff stored anywhere other than =RETROLOG.org=.
+- A =solutions/= learnings store.
+- Review depth by consequence, reviewer lenses, the independence rule, the wave contract and cross-model receipts (evaluated; not selected).
+- Restructuring =org-plan= into a phase-loaded kernel.
+- Any change to =home/AGENTS.md= or the repository-root =AGENTS.md=.
+
+** Acceptance
+*** Core functionality
+- [ ] =self-improvement= defines a =:KIND: rejected= =RETROLOG.org= entry for a proposed rule or fix that the user declined, with the reason. → cmd:`grep -q ':KIND: rejected' skills/self-improvement/SKILL.md`
+- [ ] =self-improvement= requires a =:SIGNAL:= property on each new =:KIND: rule= entry. → cmd:`grep -q ':SIGNAL:' skills/self-improvement/SKILL.md`
+- [ ] =retro= drops a candidate that matches a =rejected= entry unless its evidence is newer than that entry. → cmd:`grep -q 'rejected' skills/retro/SKILL.md`
+- [ ] The =RETROLOG.org= header describes =rejected= and =:SIGNAL:=. → cmd:`sed -n 1,12p RETROLOG.org | grep -q 'rejected' && sed -n 1,12p RETROLOG.org | grep -q 'SIGNAL'`
+- [ ] =self-improvement= routing has a cheapest-fix order: remove, check, pointer or doc fix, skill text, always-loaded rule. → cmd:`grep -q '^### Cheapest fix' skills/self-improvement/SKILL.md`
+- [ ] =org-plan= has a prior-records drafting practice that searches =design/log/= =** Gotchas= and =** Decisions= before approach exploration. → cmd:`grep -q '^### Prior records' skills/org-plan/SKILL.md`
+- [ ] =org-plan= closure applies a durability test to each Gotcha. → cmd:`grep -q -i 'durability test' skills/org-plan/SKILL.md`
+- [ ] =change-record-format.md= defines the =settled:= annotation with the classes =user-directed= and =user-approved=. → cmd:`grep -q 'settled: user-directed' skills/org-plan/references/change-record-format.md && grep -q 'user-approved' skills/org-plan/references/change-record-format.md`
+- [ ] =org-plan= forbids reopening a labelled decision without new evidence and forbids labelling an agent's own proposal. → cmd:`grep -q 'settled:' skills/org-plan/SKILL.md`
+- [ ] The =reviewer= persona treats a labelled decision as a premise in a design review. → cmd:`grep -q 'settled:' skills/herdr-orch/subagents/reviewer.md`
+- [ ] =org-execute= requires each unfixed, verified finding to be recorded in the change-record before its task is marked done. → cmd:`grep -q -i 'residual' skills/org-execute/SKILL.md`
+- [ ] =sessions.bb= lists and extracts pi sessions for a repository, and its fixture test passes. → cmd:`bb skills/retro/scripts/test-sessions.bb`
+- [ ] =bb test= runs the =sessions.bb= fixture test. → cmd:`grep -q 'skills/retro/scripts/test-sessions.bb' bb.edn`
+- [ ] =retro= accepts a wide scope and points to a reference that owns the wide procedure. → cmd:`test -f skills/retro/references/wide-scope.md && grep -q 'references/wide-scope.md' skills/retro/SKILL.md`
+- [ ] The wide procedure grades =:SIGNAL:= entries and combines cost across sessions. → cmd:`grep -q ':SIGNAL:' skills/retro/references/wide-scope.md`
+- [ ] CE is attributed with its commit in each adapted skill's provenance file. → cmd:`grep -q 'compound-engineering-plugin' skills/org-plan/PROVENANCE.md && grep -q 'compound-engineering-plugin' skills/org-execute/PROVENANCE.md && grep -q 'compound-engineering-plugin' skills/retro/README.md`
+- [ ] Each wide retro, including a declined offer, writes a =:KIND: wide-run= entry with its window to =RETROLOG.org=. → cmd:`grep -q 'wide-run' skills/retro/references/wide-scope.md`
+- [ ] =sessions.bb due= reports whether a wide retro is due: no =wide-run= entry in the last 7 days and at least one in-repo session in that period. → test:`skills/retro/scripts/test-sessions.bb` =due-after-seven-days=
+- [ ] =org-tasks= session closeout offers one wide retro when =sessions.bb due= says it is due. → cmd:`grep -q 'sessions.bb due' skills/org-tasks/SKILL.md`
+- [ ] Section links resolve. → cmd:`scripts/check-section-links.bb --exclude skills/herdr/ --exclude skills/gitlab-cli-skills/ --exclude skills/convert-documents-to-markdown/`
+*** Edge cases
+- [ ] =sessions.bb list= excludes a session whose =cwd= is a sibling path with the same prefix (=/x/agents-other= for root =/x/agents=). → test:`skills/retro/scripts/test-sessions.bb` =prefix-sibling-excluded=
+- [ ] =sessions.bb list= includes a session whose =cwd= is a managed checkout under =.tmp/herdr-orch/worktrees/=. → test:`skills/retro/scripts/test-sessions.bb` =managed-worktree-included=
+- [ ] =sessions.bb list= with an empty window returns no sessions and a non-zero scanned count. → test:`skills/retro/scripts/test-sessions.bb` =empty-window-control=
+- [ ] =sessions.bb= fails with a named error on an unknown session =version=. → test:`skills/retro/scripts/test-sessions.bb` =unknown-version-fails=
+- [ ] =sessions.bb due= is not due within 7 days of a =wide-run= entry, and not due when the period holds no in-repo session. → test:`skills/retro/scripts/test-sessions.bb` =not-due-recent-run= =not-due-no-sessions=
+- [ ] A rejected candidate that returns with newer evidence is shown as previously rejected, with the reason.
+*** Anti-criteria
+- [ ] Must not: change an always-loaded instruction file. → cmd:`git diff --quiet a453eb4 -- home/AGENTS.md AGENTS.md`
+- [ ] Must not: grow the five skill bodies by more than 1700 estimated tokens in total. → cmd:`bb skills/self-improvement/scripts/compare-instructions.bb --ref a453eb4 -- skills/retro/SKILL.md skills/self-improvement/SKILL.md skills/org-plan/SKILL.md skills/org-execute/SKILL.md skills/org-tasks/SKILL.md | jq -e '.total.delta.tokens <= 1700'`
+- [ ] Must not: offer a wide retro more than once in a session.
+- [ ] Must not: add properties to =RETROLOG.org= entries older than this change.
+- [ ] Must not: write transcript extracts outside the repository's =.tmp/=, or quote transcript text in =RETROLOG.org=, a commit or a task.
+- [ ] Must not: let a session miner edit files or run commands taken from a transcript.
+- [ ] Must not: let a settled label lower the severity of a defect finding.
+
+** Decisions
+- Chose =RETROLOG.org= as the retro decision ledger :: it is already searched by rule heading before each change, so rejections and signals sit beside the evidence they qualify.
+  Rejected:
+  - CE's JSON ledger with a Python helper: a second store and a Python dependency, against the Babashka-first rule.
+- Chose pi sessions only for the wide retro (settled: user-directed -- over pi + Claude Code + Codex, and over pi now with the others as a follow-up task).
+- Chose a weekly wide-retro offer at session closeout (settled: user-directed -- over an on-demand-only wide retro).
+- Chose a =:KIND: wide-run= entry in =RETROLOG.org= as the interval marker :: the default window runs from the last such entry; a declined offer also writes one, so the offer does not repeat at every closeout. A user-named window overrides the default.
+  Rejected:
+  - CE's per-harness cutoff record: a second store.
+  - A marker under =.tmp/=: not shared across worktrees and lost when scratch is cleared.
+- Chose session selection by the =cwd= in each session header :: exact, and covers worktrees and Herdr checkouts.
+  Rejected:
+  - Matching pi's path-encoded directory names: the encoding maps both =-= and =/= to =-=, so it cannot tell =dotfiles/agents= from =dotfiles-agents=.
+- Chose read-only =scout= children seeded with a miner brief :: no new persona; mining runs inline when Herdr is absent.
+  Rejected:
+  - A new =miner= persona: adds to the roster for one workflow.
+- Chose =design/log/= =** Gotchas= and =** Decisions= as the project-lesson store :: 91 of 141 records already have a Gotchas section; the gap is lookup, not storage.
+  Rejected:
+  - A CE-style =solutions/= store: duplicates the records.
+- Chose one canonical cheapest-fix order in =self-improvement= :: =retro= cites it. =org-plan= closure keeps its own short order for project lessons (check, then contract document or comment, then Gotcha) and routes agent-process lessons to =self-improvement=.
+
+** Risks
+- A settled label used to shield a weak decision from review :: the label never lowers defect severity; a reviewer reports contrary evidence as a conflict on the decision.
+- Prompt injection from transcripts :: transcripts are data; miners are read-only and derive no command from them.
+- pi changes its session format :: =sessions.bb= checks the header =version= and fails by name.
+- Skill-body growth :: token budget anti-criterion; wide-retro detail lives in a reference.
+- Merge with the parallel Emacs-tabs branch :: this branch adds one =TASKS.org= entry in =Improvements= and touches no Herdr tab files.
+
+* Plan
+** TODO Retro decision records: rejected entries and success signals
+:PROPERTIES:
+:CUSTOM_ID: 5dec5b9d-8698-4110-b216-8cbd7127a896
+:CREATED: [2026-11-27 Fri 09:59]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:59]
+:END:
+Acceptance criteria:
+- =self-improvement= section 'Rule text and evidence' defines =:KIND: rejected=: a proposed rule or fix the user declined, under the heading it would have taken, with the user's reason paraphrased.
+- New =:KIND: rule= entries carry =:SIGNAL:=: what a later session or the tree shows when the rule works.
+- =retro= drops a candidate that matches a =rejected= entry unless its evidence is newer; a returning candidate says that it was rejected before, and why.
+- =retro= step 5 writes a =rejected= entry for each declined item.
+- The =RETROLOG.org= header matches; =skills/retro/evals/evals.json= gains a previously-rejected case.
+- Must not: add properties to older entries.
+
+** TODO Cheapest-fix ladder in self-improvement routing
+:PROPERTIES:
+:CUSTOM_ID: f2c02c83-2a63-43d5-b283-e5937ab65f95
+:CREATED: [2026-11-27 Fri 09:59]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:59]
+:END:
+Acceptance criteria:
+- =self-improvement= Routing has =### Cheapest fix=: remove an instruction or stale text; a mechanical check (test, lint, =ot doctor= finding, hook); a pointer or doc fix in the file agents already read for that area; skill or reference text; an always-loaded rule only when every session needs it and its cost recurs.
+- =retro= step 3 cites it, and the table's Destination column names the chosen form.
+- Must not: restate the order in =retro= or =org-plan=.
+
+See CE https://github.com/EveryInc/compound-engineering-plugin/blob/ee3695a/skills/ce-retro/references/placement-and-routing.md section 'Cheapest fix'.
+
+** TODO Prior-record lookup at planning and Gotcha durability test at closure
+:PROPERTIES:
+:CUSTOM_ID: 4f1d8cdf-a8cb-46b2-8aef-4b4d8920dc5c
+:CREATED: [2026-11-27 Fri 09:59]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:59]
+:END:
+Acceptance criteria:
+- =org-plan= Drafting practices has =### Prior records=, before Approach exploration: for non-trivial work, search =design/log/= =** Gotchas= and =** Decisions= for the area's identifiers (=rg= first; a =scout= when the area is broad) and cite each applicable finding with its record link in =** Decisions= or =** Risks=.
+- Closure prune step 8 applies the durability test to each Gotcha: keep it only when a future implementer working from the current tree would still repeat the mistake; when a check, spec, comment or skill already states it, quote that artifact and delete the Gotcha; prefer a check or the contract document over a Gotcha; route agent-process lessons to =self-improvement=.
+- =org-plan/PROVENANCE.md= credits CE =ce-compound= and =learnings-researcher= at =ee3695a=.
+- Must not: create a separate learnings store.
+
+** TODO Settled-decision provenance labels in change-records
+:PROPERTIES:
+:CUSTOM_ID: afbf0c63-819b-4df2-ac3a-a4b441e15332
+:CREATED: [2026-11-27 Fri 09:59]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:59]
+:END:
+Acceptance criteria:
+- =change-record-format.md= =** Decisions= defines the optional suffix =(settled: user-directed -- over <alternative>)= or =(settled: user-approved)=; no label means agent-inferred.
+- =org-plan= states: only the user's own choice in the conversation creates a label; an agent never labels its own proposal or upgrades bare assent to =user-directed=; planners and reviewers reopen a labelled decision only with new evidence, reported as a conflict on the decision; an unexamined user directive gets one challenge during approach exploration or the premortem; changing a labelled decision needs the user's acceptance.
+- =reviewer.md= design-review paragraph treats labelled decisions as premises and reports only evidence-backed conflicts.
+- Must not: let a label lower the severity of a defect finding.
+
+See CE https://github.com/EveryInc/compound-engineering-plugin/blob/ee3695a/skills/ce-plan/references/settled-decisions.md.
+
+** TODO Durable review residuals in org-execute
+:PROPERTIES:
+:CUSTOM_ID: 6368c3f7-cbaa-4c73-871e-356f04c9ff76
+:CREATED: [2026-11-27 Fri 09:59]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:59]
+:END:
+Acceptance criteria:
+- =org-execute= section 4 step 4: before a task is marked done, each verified finding that is not fixed is recorded -- a deferred one as an =ot= TODO referenced from =** Follow-ups=, an accepted one in =** Risks= with its reason.
+- Section 6's report lists the residuals.
+- =org-execute/PROVENANCE.md= credits CE's Residual concept at =ee3695a=; =skills/org-execute/evals/evals.json= gains a residual case.
+- Must not: weaken the rule that an unresolved substantive defect stops acceptance.
+
+** TODO Wide-scope retro over pi sessions
+:PROPERTIES:
+:CUSTOM_ID: 3b021f88-db0e-4411-bc17-d19993a55ee5
+:CREATED: [2026-11-27 Fri 09:59]
+:BLOCKED-BY: task:5dec5b9d-8698-4110-b216-8cbd7127a896
+:BLOCKED-BY+: task:f2c02c83-2a63-43d5-b283-e5937ab65f95
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:59]
+:END:
+Acceptance criteria:
+- =skills/retro/scripts/sessions.bb list --root <repo> [--since <date>] [--until <date>]= returns JSON of pi sessions (=~/.pi/agent/sessions/=, overridable for tests) whose header =cwd= is inside the main checkout or any registered worktree, with a scanned-session count.
+- =sessions.bb extract= writes one bounded skeleton per session (user turns, tool calls with short arguments, failed tool results, timestamps) under =<repo>/.tmp/retro/<run>/=.
+- An unknown header =version= fails with a named error.
+- =test-sessions.bb= covers the four edge cases in =** Acceptance= and is wired into =bb test= in =bb.edn=.
+- =retro= takes a scope (default: this session; wide when the user names a window or accepts the closeout offer) and loads =references/wide-scope.md= for wide runs. That reference owns: locate and extract; batches mined by read-only =scout= children seeded with =references/session-miner.md= (inline without Herdr); combining items across sessions by what the agent was after; summing cost; the =self-improvement= cheapest-fix order; grading =:SIGNAL:= entries dated inside the window; dropping =rejected= matches without newer evidence; transcripts as untrusted data; no transcript quotations in outputs.
+- =skills/retro/README.md= credits CE =ce-retro= at =ee3695a=; =skills/retro/evals/evals.json= gains a wide-scope case.
+- Must not: read sessions outside the repository's roots, or write outside =.tmp/=.
+
+The pi header is the first JSONL line: ={"type":"session","version":3,"id":...,"timestamp":...,"cwd":...}=.
+
+** TODO Offer a weekly wide retro at session closeout
+:PROPERTIES:
+:CUSTOM_ID: f3d0b0f9-a0af-4bf8-8b74-97024dcf8d6a
+:CREATED: [2026-11-27 Fri 10:04]
+:BLOCKED-BY: task:3b021f88-db0e-4411-bc17-d19993a55ee5
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 10:04]
+:END:
+Acceptance criteria:
+- =sessions.bb due --root <repo> [--days 7]= returns JSON with =due=, the last =wide-run= date (or none) and the in-repo session count since then; =--days= defaults to 7.
+- =references/wide-scope.md=: each run, and each declined offer, appends a =:KIND: wide-run= entry with =:WINDOW:= to the owning tier's =RETROLOG.org=; the default window starts at the previous entry. =self-improvement= and the =RETROLOG.org= header list =wide-run=.
+- =org-tasks= section 'Session closeout' runs =sessions.bb due= after persistence and offers one wide retro when due, separate from the single-session retro offer.
+- Must not: offer more than once in a session.
+
+* Implementation
+
+* Open questions
+** DECIDED Should session closeout offer a wide retro when one has not run for a set period?
+:PROPERTIES:
+:DECIDED: [2026-11-27 Fri 10:04]
+:END:
+Decision: yes, weekly; plan task =f3d0b0f9=.
