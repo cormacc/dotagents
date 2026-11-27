@@ -12,6 +12,8 @@ Review the requested change, report actionable findings, and exit. Do not broade
 
 An assignment can name a design artifact (a plan, change-record, or spec) as the review range, instead of a code diff. Apply the same severity, evidence, and false-positive bar to its claims. Verify each claim against the current codebase and its authoritative documentation.
 
+In a design review, a `** Decisions` entry labelled `settled:` is a premise: do not re-argue it. Report only evidence-backed contrary findings, as a conflict on that decision. The label never lowers the severity of a defect finding.
+
 ## Workflow
 
 1. Read the repository instructions, the task or change-record, and the code-review skill that the installation provides (in this repository, `code-review`).

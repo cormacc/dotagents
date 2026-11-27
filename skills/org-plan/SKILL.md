@@ -119,6 +119,10 @@ For MVP / production / critical work that can change durable behaviour, public A
 
 For an incoming request, overloaded terminology, unresolved multi-session decisions, a question-first prototype or a costly interface choice, read [references/discovery.md](references/discovery.md). Use its intake checks and bounded discovery only where they remove a real planning blocker; keep this skill's record, acceptance and approval contracts.
 
+### Prior records
+
+For non-trivial work, search `design/log/` `** Gotchas` and `** Decisions` for the area's identifiers before approach exploration: `rg` first, a read-only `scout` when the area is broad. Cite each applicable finding with its record link in `** Decisions` or `** Risks`. Do not create a separate learnings store.
+
 ### Approach exploration
 
 Before drafting `* Plan` for non-trivial changes, list 2--3 plausible approaches with real tradeoffs. Pick one; record the chosen approach in `** Decisions` with rejected alternatives bulleted underneath:
@@ -132,6 +136,8 @@ Before drafting `* Plan` for non-trivial changes, list 2--3 plausible approaches
 ```
 
 This preserves the rejected paths when re-litigation happens later.
+
+A `** Decisions` entry may carry a `settled:` label (see [references/change-record-format.md](references/change-record-format.md)). Only the user's own choice in the conversation creates one: never label your own proposal, and never upgrade bare assent to `user-directed`. Reopen a labelled decision only with new evidence, reported as a conflict on that decision; changing it needs the user's acceptance. Challenge an unexamined user directive once, during approach exploration or the premortem. A label never lowers the severity of a defect finding.
 
 ### The project constitution
 
@@ -303,7 +309,7 @@ Prune:
 5. Collapse the plan layer. `* Plan` is execution scaffolding: once every task is `DONE`, trim completed plan-task bodies to compact acceptance/audit value (`:LOGBOOK:` preserves timing; `* Implementation` captures outcomes). Keep the durable definition of done in `** Acceptance` (see *Two layers in one record*).
 6. Remove planning-flavoured Implementation subsections and condense useful content into outcomes, `** Gotchas`, or `** Decisions`.
 7. Cut change narration. Closure should shrink a record, not grow it: if `** Shipped` or `* Implementation` gained prose describing the *process* of delivery, reduce it to the end state a future reader needs. Prefer deleting a bullet to condensing it -- for a single-audience project, anything reconstructible from the commit or diff is not worth a line.
-8. Check that each Gotcha is a project-side surprise. Move library-level facts to the relevant skill/reference, or create follow-up work to do so.
+8. Check that each Gotcha is a project-side surprise. Move library-level facts to the relevant skill/reference, or create follow-up work to do so. Then apply the durability test to each Gotcha: keep it only when a future implementer working from the current tree would still repeat the mistake. When a check, spec, comment or skill already states it, quote that artifact and delete the Gotcha. Prefer a check, then a contract document or comment, then a Gotcha. Route agent-process lessons to [../self-improvement/SKILL.md#Cheapest fix](../self-improvement/SKILL.md#cheapest-fix).
 
 `* Intent` itself is not pruned -- it stays as the durable record of what this work was *for*. If Intent and Summary's effort line both still apply, the record passes the closure bar.
 

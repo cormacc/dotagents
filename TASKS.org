@@ -174,7 +174,7 @@ Follow-up from [[archive:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][Emacs tabs in Her
 :CUSTOM_ID: d6dd7ba3-71f5-43e7-8a60-83b87d9490e7
 :CREATED: [2026-11-27 Fri 09:50]
 :STARTED: [2026-11-27 Fri 10:14]
-:HANDOFF: Delegated execution (org-execute, serial). Round 4b235e0a-aa08-4338-9beb-c7b92536a35d (worker, tasks 5dec5b9d+f2c02c83), managed checkout .tmp/herdr-orch/worktrees/4b235e0a-aa08-4338-9beb-c7b92536a35d branch orch/4b235e0a base 0bcfbe6. Brief .tmp/exec/brief-t1-t2.md. Baseline: bb test green; section-link check 3 pre-existing TASKS.org problems (lines 16,25,27). Next: collect round, verify, integrate into feat/ce-adapt, then tasks 4f1d8cdf+afbf0c63.
+:HANDOFF: Delegated execution (org-execute, serial; batches 1+2 done in b76ff74). Round bf74f930-2ed7-4a07-b134-c9b8bb995605 (worker, tasks 4f1d8cdf+afbf0c63), managed checkout branch orch/bf74f930 base b76ff74. Brief .tmp/exec/brief-t3-t4.md. Baseline: bb test green; section-link check 3 pre-existing TASKS.org problems. Token budget used 360/1700. Next: collect, review, integrate (squash to conventional commit with status), then 6368c3f7.
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:50]

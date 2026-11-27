@@ -145,13 +145,17 @@ Acceptance criteria:
 
 See CE https://github.com/EveryInc/compound-engineering-plugin/blob/ee3695a/skills/ce-retro/references/placement-and-routing.md section 'Cheapest fix'.
 
-** TODO Prior-record lookup at planning and Gotcha durability test at closure
+** DONE Prior-record lookup at planning and Gotcha durability test at closure
+CLOSED: [2026-11-27 Fri 10:21]
 :PROPERTIES:
 :CUSTOM_ID: 4f1d8cdf-a8cb-46b2-8aef-4b4d8920dc5c
 :CREATED: [2026-11-27 Fri 09:59]
+:STARTED: [2026-11-27 Fri 10:20]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:59]
+- State "STARTED" from "TODO" [2026-11-27 Fri 10:20]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:21]
 :END:
 Acceptance criteria:
 - =org-plan= Drafting practices has =### Prior records=, before Approach exploration: for non-trivial work, search =design/log/= =** Gotchas= and =** Decisions= for the area's identifiers (=rg= first; a =scout= when the area is broad) and cite each applicable finding with its record link in =** Decisions= or =** Risks=.
@@ -159,13 +163,17 @@ Acceptance criteria:
 - =org-plan/PROVENANCE.md= credits CE =ce-compound= and =learnings-researcher= at =ee3695a=.
 - Must not: create a separate learnings store.
 
-** TODO Settled-decision provenance labels in change-records
+** DONE Settled-decision provenance labels in change-records
+CLOSED: [2026-11-27 Fri 10:21]
 :PROPERTIES:
 :CUSTOM_ID: afbf0c63-819b-4df2-ac3a-a4b441e15332
 :CREATED: [2026-11-27 Fri 09:59]
+:STARTED: [2026-11-27 Fri 10:20]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:59]
+- State "STARTED" from "TODO" [2026-11-27 Fri 10:20]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:21]
 :END:
 Acceptance criteria:
 - =change-record-format.md= =** Decisions= defines the optional suffix =(settled: user-directed -- over <alternative>)= or =(settled: user-approved)=; no label means agent-inferred.

@@ -9,3 +9,7 @@ The acceptance-criteria evidence rules (`test:` and `cmd:`) adapt the `acceptanc
 ## references/discovery.md
 
 Adapted from Matt Pocock's `triage`, `prototype`, `domain-modeling`, `wayfinder` and `codebase-design` (including `DESIGN-IT-TWICE.md`) under [skills/engineering](https://github.com/mattpocock/skills/tree/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/engineering) at that revision (MIT; [matt-pocock-LICENSE](references/matt-pocock-LICENSE)). Retains active terminology checks, decision-first discovery and alternative interfaces; uses existing Org memory and role permissions rather than tracker maps, compulsory document trees or fixed agent/session quotas.
+
+## Prior-record lookup, Gotcha durability test and settled-decision labels
+
+Adapted from the [compound-engineering-plugin](https://github.com/EveryInc/compound-engineering-plugin/tree/ee3695a) `ce-compound` skill, the `learnings-researcher` agent and `ce-plan`'s `settled-decisions.md` at that revision (MIT). Retains searching earlier lessons before planning, a keep-or-delete test for recorded lessons, and the two provenance classes with no self-settling; uses `design/log/` Gotchas and Decisions as the lesson store rather than a `solutions/` directory.
