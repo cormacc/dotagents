@@ -371,6 +371,16 @@
     (cond on true off false :else nil)))
 (defn retro-skill-path []
   (core/skill-path #(fs/exists? %) (ledger/assignment-root) (home-directory) "retro"))
+;; The org-tasks launcher's directory, so a child can run a bare `ot`. Same skill probe order
+;; as `retro-skill-path`; nil when no launcher resolves, which leaves PATH unchanged.
+(defn ot-launcher-directory []
+  (when-let [skill (core/skill-path #(fs/exists? %) (ledger/assignment-root) (home-directory) "org-tasks")]
+    (let [launcher (fs/path (fs/parent skill) "scripts" "ot")]
+      (when (fs/exists? launcher) (str (fs/parent launcher))))))
+(defn child-path []
+  (let [path (System/getenv "PATH")]
+    (when-let [dir (ot-launcher-directory)]
+      (if (str/blank? path) dir (str dir ":" path)))))
 (defn retro-policy [persona opts frontmatter]
   (let [skill (retro-skill-path)
         resolved (core/resolve-retro {:persona persona :flag (retro-flag opts) :frontmatter frontmatter :retro-skill skill})]
@@ -1646,6 +1656,7 @@
                   ;; leaving a grandchild on the harness default rather than a stale value.
                   ;; The routed canonical ID, never the alias: a same-kind grandchild
                   ;; inherits a concrete model and does not route again.
+                  (child-path) (assoc "PATH" (child-path))
                   model (assoc "HERDR_ORCH_MODEL" model-effective)
                   ;; The launch pool bounds a Pi child's quota recovery, which may then move
                   ;; down that pool's ranks. Without it, recovery keeps the model.

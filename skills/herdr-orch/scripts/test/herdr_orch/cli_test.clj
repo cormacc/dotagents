@@ -8596,6 +8596,25 @@
             (is (str/includes? prompt "Shared-root publication does not automatically stage changes"))
             (is (not (str/includes? prompt "create a checkpoint commit and move HEAD")))))))))
 
+(deftest child-path-exposes-the-org-tasks-launcher
+  (let [{:keys [env env-file dir]} (fake-env {})
+        proc (call! env "task" "run" "worker" "--task" "ot on path" "--timeout" "20")
+        expected-dir (str (fs/path dir "skills" "org-tasks" "scripts"))
+        child-path (injected-env env-file "PATH")]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (fs/exists? (fs/path expected-dir "ot")) "positive control: the fixture resolves a launcher")
+    (is (str/starts-with? child-path (str expected-dir ":")))
+    (is (str/ends-with? child-path (str ":" (get env "PATH"))))))
+
+(deftest ^:serial child-path-is-unchanged-without-an-org-tasks-launcher
+  (let [empty-dir (str (fs/create-temp-dir {:prefix "no-ot-"}))]
+    (is (some? (core/skill-path #(fs/exists? %) root (System/getProperty "user.home") "retro"))
+        "positive control: the probe finds a skill where one exists")
+    (with-redefs [ledger/assignment-root (constantly empty-dir)
+                  cli/home-directory (constantly empty-dir)]
+      (is (nil? (cli/ot-launcher-directory)))
+      (is (nil? (cli/child-path))))))
+
 (def ^:private compaction-condition "If your tools include `context_compact` (pi-context)")
 (def ^:private compaction-rule "Never compact to `root` or to a target before that checkpoint")
 
