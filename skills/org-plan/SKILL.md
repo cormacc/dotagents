@@ -137,7 +137,7 @@ Before drafting `* Plan` for non-trivial changes, list 2--3 plausible approaches
 
 This preserves the rejected paths when re-litigation happens later.
 
-A `** Decisions` entry may carry a `settled:` label (see [references/change-record-format.md](references/change-record-format.md)). Only the user's own choice in the conversation creates one: never label your own proposal, and never upgrade bare assent to `user-directed`. Reopen a labelled decision only with new evidence, reported as a conflict on that decision; changing it needs the user's acceptance. Challenge an unexamined user directive once, during approach exploration or the premortem. A label never lowers the severity of a defect finding.
+A `** Decisions` entry may carry a `settled:` label (see [references/change-record-format.md](references/change-record-format.md)). Only the user's choice or assent in the conversation creates one: never label a proposal that the user has not examined, and never upgrade bare assent to `user-directed`. Reopen a labelled decision only with new evidence, reported as a conflict on that decision; changing it needs the user's acceptance. Challenge an unexamined user directive once, during approach exploration or the premortem. A label never lowers the severity of a defect finding.
 
 ### The project constitution
 

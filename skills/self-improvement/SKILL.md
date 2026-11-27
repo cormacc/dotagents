@@ -80,6 +80,10 @@ Conceptual split:
 
 Within that tier, choose the narrowest canonical owner: a skill workflow belongs in that skill or its reference; a project convention belongs in the project `AGENTS.md`; executable or non-trivial work belongs in an `Agent feedback` TODO. Where a tier separates portable rules from project rules, route by whether the finding holds in *every* project: dotagents keeps portable rules in `home/AGENTS.md` (projected to `~/.pi/agent/AGENTS.md`) and its own maintenance rules in the repo-root `AGENTS.md`, so a rule that only makes sense while working on dotagents never belongs in the former. Read the target instructions before proposing changes, and do not invent harness-specific destinations that the repository does not declare. Keep the destination proportionate: `AGENTS.md` stays concise, and a skill body that outgrows itself moves detail into `references/` per [`skill-creator`](../skill-creator/SKILL.md).
 
+Ask once when ownership is ambiguous. If unresolved, use the current project and tag `tier_unknown`.
+
+Cross-project routing is a direct `ot --root <target> ...` operation. It does not depend on a live target agent session, `pi-intercom`, or optional pi task tools.
+
 ### Cheapest fix
 
 Choose the first form that fully prevents the failure:
@@ -89,10 +93,6 @@ Choose the first form that fully prevents the failure:
 3. Fix a pointer or document in the file that agents already read for that area.
 4. Add skill or reference text.
 5. Add an always-loaded rule only when every session needs it and its cost recurs.
-
-Ask once when ownership is ambiguous. If unresolved, use the current project and tag `tier_unknown`.
-
-Cross-project routing is a direct `ot --root <target> ...` operation. It does not depend on a live target agent session, `pi-intercom`, or optional pi task tools.
 
 ## Rule text and evidence
 
