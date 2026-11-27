@@ -49,6 +49,10 @@ Test the exact command used at that stage, including its wrapper and verdict par
 4. A below-threshold finding passes when the agreed policy permits it.
 5. A boundary or scope control proves that the check sees the changed entries it claims to cover, including untracked files when applicable.
 
+When an analyser or gate configuration changes, place known-bad controls in code that the change could exclude from analysis, for example inside preprocessor-guarded blocks, and compare the verdicts with those of the previous options. A control in unconditional code cannot detect a scope reduction. For example, adding a `-D` define to Cppcheck can switch it to single-configuration analysis.
+
+Before you claim that a randomised-order test gate passes, run more seeds than the one or two that CI uses, and record the seeds. Size the sweep to the cost of one run: many seeds when a run is cheap, for example re-running built test executables with different seeds, and only a few when each run needs a full build. An order-reversal probe is an alternative. Do not require a fixed large count of long-running builds.
+
 Inspect exit status and structured result status before interpreting fields. A successful report-generation command does not prove enforcement. Reuse existing reports when they are current and cover this change; do not rerun an expensive suite only to extract another number.
 
 Keep mutation and destructive controls in disposable targets with bounded execution and cleanup. Record supplied evidence as supplied; do not claim to have run commands that you only read. If a control cannot run, report the gate as unverified and state what would verify it.
