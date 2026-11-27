@@ -464,3 +464,55 @@ The agent hand-wrote =:BLOCKED-BY:= values in change-records as =[[task:<UUID>]]
 :SIGNAL_SOURCE: pi/claude-opus-5-5
 :END:
 The criterion "=emacs-tab --format json= prints the tab id and the pane or terminal id" cited one test, for the herdr-app terminal. A reused herdr TUI tab printed no pane id; the closure review found it, not the implementation task. First recorded miss for this rule.
+
+* 2026-11-27 Fri -- wide retro
+
+** Wide retro
+:PROPERTIES:
+:KIND: wide-run
+:WINDOW: 2026-11-20..2026-11-27
+:END:
+
+** Completion and pane safety (herdr-orch)
+:PROPERTIES:
+:KIND: miss
+:PREVENTS: closing a child whose capture was invalid before the recovery procedure is read, so its later valid result is lost to collect
+:SIGNAL_SOURCE: pi/claude-opus-5-5
+:END:
+During a wide-retro fan-in, =collect --any= captured one miner as =invalid= (its declared artifact did not exist). The root closed the round in the same scripted loop without reading =references/recovery.md=. The child then published a valid result, which only a direct read of its result file recovered. First recorded miss for this rule.
+
+** Prepare and dispatch (org-execute)
+:PROPERTIES:
+:KIND: rule
+:PREVENTS: delegated children and reviewers that iterate on the full test suite, with multi-minute waits per run
+:SIGNAL: a brief's Verification line names a focused suite, and the child runs the full suite once
+:SIGNAL_SOURCE: pi/claude-opus-5-5
+:END:
+Across about 11 sessions in the window, children ran =bb test= or a whole namespace of 2 to 6 minutes several times each, often because the brief named only =bb test=.
+
+** Session miner brief / Trust (retro wide scope)
+:PROPERTIES:
+:KIND: rule
+:PREVENTS: a read-only child that cannot hand back a report, and so declares a placeholder artifact that makes its capture invalid
+:SIGNAL: miner children publish a report artifact under =.tmp/= and capture validates
+:SIGNAL_SOURCE: pi/claude-opus-5-5
+:END:
+The miner brief and the root's assignment forbade writing any file, against the =read-only= trait, which allows reports under =.tmp/=. One miner declared a nonexistent artifact path.
+
+** Workflow (git-commit)
+:PROPERTIES:
+:KIND: rule
+:PREVENTS: ad-hoc patch editing and split scripts to stage part of a file
+:SIGNAL: partial staging uses one update-index --cacheinfo call with no failed apply
+:SIGNAL_SOURCE: pi/claude-opus-5-5
+:END:
+Two sessions spent about six calls each separating =TASKS.org= hunks into separate commits, with hand-made patches and =git apply --cached --recount=.
+
+** Constraints (herdr-orch reviewer)
+:PROPERTIES:
+:KIND: rule
+:PREVENTS: a baseline check run in a git archive export that silently checks the enclosing repository instead
+:SIGNAL: reviewers report baseline results from a named checkout or a git-initialised export with a matching file count
+:SIGNAL_SOURCE: pi/claude-opus-5-5
+:END:
+About five reviewer sessions in the window rebuilt baselines by hand from =git archive= exports; in one, a git-aware checker in the export ran against the enclosing worktree. The user ruled that a read-only reviewer writes only to =.tmp/= and does not create worktrees; the orchestrator supplies one when needed (task =5d2a9f5b=).

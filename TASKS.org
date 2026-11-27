@@ -237,3 +237,79 @@ Origin:
 Evidence:
 - design/log/2026-11-27-emacs-diff-review.org plan tasks carried [[task:...]] blockers (one line with two links); ot ready reported them [opaque] until rewritten with ot blocker add task:<UUID> (commit e12de09).
 - design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org still holds 5 such :BLOCKED-BY: lines.
+
+** TODO Let the Clojure test runner select single test vars :skill:org_tasks:skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 1123305c-03aa-4916-91ad-0106513e1de2
+:CREATED: [2026-11-27 Fri 17:48]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 17:48]
+:END:
+org-tasks.test-runner/run (used by bb test-clojure) accepts namespaces only. herdr-orch.cli-test takes about two minutes, so iteration on one failing test costs a full namespace run. Accept ns/var selectors (for example herdr-orch.cli-test/some-test) and document them in skills/herdr-orch/scripts/AGENTS.md section 'Tests'.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-27 Fri 17:48]
+- sender: agent (wide retro, window 2026-11-20..2026-11-27, approved by user)
+
+Evidence:
+Wide retro: full or whole-namespace runs of 2 to 6 minutes repeated across about 11 sessions in the window, with sleep waits and timeouts; agents built ad-hoc timing and reproduction scripts to isolate single tests.
+
+** TODO Clear HERDR_ORCH_* variables inside the test runners :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 72344444-0f23-44e8-b5af-63d813694ed7
+:CREATED: [2026-11-27 Fri 17:48]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 17:48]
+:END:
+Delegated children inherit HERDR_ORCH_* variables, and skills/herdr-orch/scripts/AGENTS.md section 'Tests' asks for a manual env -u prefix before a cited suite run. Make scripts/isolated-test-run.bb and the test-clojure task clear these variables themselves (tests that need round metadata set it explicitly), then remove the manual rule after reading its RETROLOG history.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-27 Fri 17:48]
+- sender: agent (wide retro, window 2026-11-20..2026-11-27, approved by user)
+
+Evidence:
+Wide retro: two sessions prefixed every test call with env -u for one or more HERDR_ORCH_* variables, and found the set by trial.
+
+** TODO Cut the repository test suite runtime drastically :skill:herdr_orch:skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 24b51eba-9ab9-42b2-8426-5169ca243d9d
+:CREATED: [2026-11-27 Fri 17:51]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 17:51]
+:END:
+bb test takes 3 to 6 minutes, and herdr-orch.cli-test alone about two minutes. At that speed the suite does not work as a unit test suite: agents cannot run it per change, so they either wait or skip it. Find where the time goes (per-namespace and per-var timings, process spawns, sleeps, fake Herdr round trips, git fixture setup) and make the default suite fast enough to run after each change; move slow integration cases to a separate opt-in task. Related: 1123305c (single-var selection), 72344444 (env scrub).
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-27 Fri 17:51]
+- sender: human (wide retro follow-up)
+
+Evidence:
+User direction after the 2026-11-27 wide retro: the suite is far too slow to be useful as a unit test suite. The retro found 2-6 minute runs repeated across about 11 sessions in one week.
+
+** TODO Orchestrator supplies reference worktrees to read-only reviewers :skill:herdr_orch:skill:org_execute:
+:PROPERTIES:
+:CUSTOM_ID: 5d2a9f5b-276a-4d6a-8270-3cc96875e3e5
+:CREATED: [2026-11-27 Fri 17:51]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 17:51]
+:END:
+A read-only reviewer must not create a worktree, but some reviews need a reference branch or baseline checked out (for example to run a suite at the base commit). Define in herdr-orch (workflow recipe or contract) and org-execute's review gate that the orchestrator creates a detached worktree for the named ref and passes its path in the assignment, and who removes it. The reviewer persona already asks for one instead of creating it.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-27 Fri 17:51]
+- sender: human (wide retro follow-up)
+
+Evidence:
+Wide retro 2026-11-27: reviewers rebuilt baselines by hand in about 5 sessions with git archive exports and ad-hoc runners; one git-aware check in an export silently ran against the enclosing worktree.

@@ -25,6 +25,7 @@ In a design review, a `** Decisions` entry labelled `settled:` is a premise: do 
 ## Constraints
 
 - Verify a stated baseline before you accept a failure attribution. The assignment or the evidence can say that a failure is pre-existing, environmental, or not caused by the reviewed change. Confirm that claim against the named baseline yourself, for example by running the suite at the cited commit. Do not accept the premise unverified.
+- Run baseline checks in the checkout that the assignment names for that ref. Without one, export the ref under `.tmp/` with `git archive`, then run `git init -q && git add -A -f` there before a git-aware check: in a bare export such a check resolves the enclosing repository. Confirm that `git rev-parse --show-toplevel` names the export, and compare its `git ls-files` count with `git ls-tree -r --name-only <ref>` (`export-ignore` files are absent). Do not create a worktree; ask the orchestrator for one.
 - Apply the skill's scope rule to naming, readability, and convention findings. Without such a skill, flag them only in changed code, and only when they have a concrete maintainability cost. Never flag a preference between equally clear alternatives, speculative scaling, or debt outside the functions and forms that the change modifies.
 
 ## Output

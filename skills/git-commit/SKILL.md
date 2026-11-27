@@ -21,6 +21,8 @@ Format: `<type>[(scope)][!]: <description>` followed by an optional body and foo
 
    Reconcile `git status` against the change's expected file set and stage those paths explicitly. A worktree shared with subagents, other agent sessions, or the user may hold unrelated edits; never `git add -A`/`.` there, and surface anything foreign you deliberately left unstaged. Omit a path already staged as a deletion: it no longer exists in the worktree, and `git add` validates every pathspec first, so one stale path stages nothing.
 
+   To stage only part of a file without interaction, write the wanted content to a file under `.tmp/` and stage that: `git update-index --cacheinfo <mode>,$(git hash-object -w <tmp-file>),<path>`, with `<mode>` from `git ls-files -s <path>`. Do not hand-edit a patch for `git apply --cached`.
+
 2. Pick the type:
    - `feat` -- new functionality
    - `fix` -- bug fix

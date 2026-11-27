@@ -49,6 +49,8 @@ Questions: route and stop conditions; no material scope or contract changes
 Report: changed files, acceptance evidence, commands/results, risks and artefacts
 ```
 
+In Verification, name the focused suite or namespace for iteration, and require one full-suite run before the report.
+
 Reference authoritative requirements instead of rephrasing their exact values. Include the relevant cross-task constraints and interfaces, not accumulated session history. Locate the implementation first; use the existing `scout` when necessary rather than sending a worker an unlocated change.
 
 Mark the assigned tasks started through `org-tasks`, then dispatch the existing `worker` through `oh`. Choose context and isolation under `herdr-orch`; use fresh context by default. The worker reads the canonical record but edits only its assigned checkout and files. For a worktree assignment, pass the brief's allowed files to `oh` as repeated `--scope` values, so that reconciliation reports writes outside them. Do not request an authored commit unless authorised; managed-checkout checkpoints remain the CLI's responsibility. Create the delivery branch and its worktree before the spawn, and never ask the worker to switch branches; see the `herdr-orch` Isolation rule. During delegated delivery, make change-record and `TASKS.org` edits on the delivery branch (the root's integration checkout), not in a checkout on another branch, and commit them with the delivery.
