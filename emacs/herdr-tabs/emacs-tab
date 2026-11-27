@@ -134,8 +134,14 @@
         tabs (:tabs (:result (run-json! [(herdr-bin) "tab" "list" "--workspace" workspace])))
         existing (first (filter #(= name (:label %)) tabs))]
     (if existing
-      (do (when focus? (run-json! [(herdr-bin) "tab" "focus" (:tab_id existing)]))
-          {:runtime "tui" :name name :created false :tab (:tab_id existing) :workspace workspace :warnings []})
+      (let [tab-id (:tab_id existing)
+            ;; The tab's first pane: the frame's pane unless the user split the tab.
+            pane-id (->> (:panes (:result (run-json! [(herdr-bin) "pane" "list" "--workspace" workspace])))
+                         (filter #(= tab-id (:tab_id %)))
+                         first
+                         :pane_id)]
+        (when focus? (run-json! [(herdr-bin) "tab" "focus" tab-id]))
+        {:runtime "tui" :name name :created false :tab tab-id :pane pane-id :workspace workspace :warnings []})
       (let [elisp (or elisp (default-elisp name cwd) (fail 2 (str "no default elisp for " name "; pass -- <elisp>")))
             result (:result (run-json! [(herdr-bin) "tab" "create" "--workspace" workspace "--cwd" cwd
                                         "--label" name (if focus? "--focus" "--no-focus")]))

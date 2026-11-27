@@ -109,9 +109,13 @@
   (let [[result calls] (open tui-env
                              {["herdr" "pane" "get"] tui-pane
                               ["herdr" "tab" "list"] (ok {:result {:tabs [{:tab_id "w1:t5" :label "magit"}]}})
+                              ["herdr" "pane" "list"] (ok {:result {:panes [{:pane_id "w1:p1" :tab_id "w1:t1"}
+                                                                              {:pane_id "w1:p7" :tab_id "w1:t5"}]}})
                               ["herdr" "tab" "focus"] (ok {:result {:tab {}}})}
                              ["magit"])]
     (is (false? (:created result)))
+    (testing "a reused tab reports its pane, as a new tab does"
+      (is (= "w1:p7" (:pane result))))
     (is (some #(= ["herdr" "tab" "focus" "w1:t5"] %) calls))
     (is (not-any? #(= ["herdr" "tab" "create"] (take 3 %)) calls))))
 
