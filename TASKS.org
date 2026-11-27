@@ -198,3 +198,27 @@ Evidence:
 - 2026-10-14: four batches paired an Edit with a grep or sed of the same file; each check read the pre-edit content, and one led the agent to report a remaining match that the edit had already removed.
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
+
+** TODO ot: flag and normalise task-link blockers that resolve as opaque text :skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: dc9c3128-c993-44e6-8736-c029ba6fbf54
+:CREATED: [2026-11-27 Fri 16:12]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 16:12]
+:END:
+A :BLOCKED-BY: value written as an org link ([[task:<UUID>]]), or as two links on one line, parses as one opaque human blocker, so ot ready never resolves it and the dependency is not enforced. ot blocker add with a [[task:<UUID>]] token stores it as "human: [[task:<UUID>]]". The org-tasks rule says to write task:<UUID>, but nothing catches a violation.
+
+Desired outcome:
+- ot doctor warns when an unresolved/opaque blocker contains a task: link or a full UUID, naming the task and the suggested task:<UUID> tokens.
+- ot blocker add normalises a [[task:<UUID>]] (or [[task:<UUID>][label]]) token to task:<UUID>, or rejects it with a validation error that names the accepted form.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-27 Fri 16:12]
+- sender: agent
+
+Evidence:
+- design/log/2026-11-27-emacs-diff-review.org plan tasks carried [[task:...]] blockers (one line with two links); ot ready reported them [opaque] until rewritten with ot blocker add task:<UUID> (commit e12de09).
+- design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org still holds 5 such :BLOCKED-BY: lines.

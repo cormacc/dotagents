@@ -446,3 +446,21 @@ A reviewer evaluated a worker's scratch snippet flake under that worker's =.tmp/
 :SIGNAL_SOURCE: pi/claude-opus-5-5
 :END:
 Asked for "the selected task", the root grepped =TASKS.org= for =SELECTED= before reading =org-tasks=; the keyword is in =TASKS.local.org= and =ot selected= resolves it. The cost was one extra command. First recorded miss for this rule.
+
+* 2026-11-27 Fri -- Emacs tabs in Herdr closure
+
+** Protocol summary (org-tasks)
+:PROPERTIES:
+:KIND: miss
+:PREVENTS: a task dependency that ot cannot resolve, so ot ready does not enforce it
+:SIGNAL_SOURCE: pi/claude-opus-5-5
+:END:
+The agent hand-wrote =:BLOCKED-BY:= values in change-records as =[[task:<UUID>]]= links, two on one line; =ot ready= reported them as opaque. A repair attempt passed =[[task:<UUID>]]= to =ot blocker add=, which stored =human: [[task:<UUID>]]=. First recorded miss for this rule. Mechanism change proposed in task =dc9c3128-c993-44e6-8736-c029ba6fbf54=.
+
+** Splitting test
+:PROPERTIES:
+:KIND: miss
+:PREVENTS: an acceptance criterion with alternatives that passes because its test covers only one alternative
+:SIGNAL_SOURCE: pi/claude-opus-5-5
+:END:
+The criterion "=emacs-tab --format json= prints the tab id and the pane or terminal id" cited one test, for the herdr-app terminal. A reused herdr TUI tab printed no pane id; the closure review found it, not the implementation task. First recorded miss for this rule.
