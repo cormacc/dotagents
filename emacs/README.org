@@ -3,3 +3,31 @@
 This directory contains the Emacs companion code for the org-tasks / org-plan protocol. These helpers are editor conveniences only; the pi tasks extension remains the standalone implementation for parsing, lifecycle writes, selection state, and archive flows.
 
 - =tasks-org/= — lightweight commands for finding =TASKS.org=, capturing new tasks, toggling between a task and its linked change-record, and toggling =TASKS.local.org= selection.
+- =herdr-tabs/= -- Emacs terminal frames as Herdr tabs. See [[*herdr-tabs]].
+
+* herdr-tabs
+
+=herdr-tabs/emacs-tab= is a Babashka CLI that focuses, or creates, a named Herdr tab in the caller's space. The tab runs =emacsclient -t -a '' --eval <elisp>= on the machine where the command runs, so a remote space uses that machine's Emacs server. =-a ''= starts a daemon when no server runs. Deleting the frame (=C-x 5 0=) closes the tab.
+
+#+BEGIN_SRC sh
+emacs-tab <name> [--runtime tui|hc] [--space ID] [--workspace ID] [--cwd DIR] [--no-focus] [--format text|json] [-- <elisp>]
+#+END_SRC
+
+- =--runtime= :: =tui= for herdr TUI, =hc= for herdr-app. Without it, =HC_TERMINAL_ID= selects =hc= and =HERDR_ENV=1= selects =tui=; both or neither is a usage error.
+- =--space=, =--workspace= :: the herdr-app space or the herdr TUI workspace that holds the tab. An empty value is unset.
+- =--format json= :: prints the result: the tab id, =created=, and the terminal id (=hc=) or the pane id (=tui=). For a reused herdr TUI tab, the pane id is the tab's first pane.
+- Exit status :: 0 success, 1 runtime failure, 2 usage error.
+
+The names =magit= and =plan= have default elisp. Other names need an explicit form after =--=. The defaults call these entry points in =herdr-tabs/herdr-tabs.el=:
+
+- =herdr-tabs-magit= :: shows =magit-status= for DIR as the only window of the frame.
+- =herdr-tabs-plan= :: shows the selected task's change-record from =ot show selected --format json=, else the project's =TASKS.org=.
+
+Both entry points remove side windows first, so a =display-buffer-alist= rule that sends Magit to a side window does not apply. The parent dotfiles =config.org= adds =herdr-tabs/= to =load-path=.
+
+Keys in both Herdr front ends call =emacs-tab= by absolute path, =$HOME/dotfiles/agents/emacs/herdr-tabs/emacs-tab=; it is not on =PATH=:
+
+- herdr TUI :: =prefix+m= (Magit) and =prefix+i= (Plan), from =keys.command= entries in [[file:../herdr/config.toml][herdr/config.toml]]. Run =herdr server reload-config= after you change them: a client restart does not apply them.
+- herdr-app :: see [[file:../herdr-app/README.md]] section 'Emacs tabs'.
+
+Run the tests with =bb test= from the repository root; the list includes =herdr-tabs/test-emacs-tab.bb= and =herdr-tabs/test-herdr-tabs.bb=.

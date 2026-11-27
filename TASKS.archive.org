@@ -6632,3 +6632,20 @@ Origin:
 - git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
 - timestamp: [2026-11-19 Thu 13:45]
 - sender: human+agent (session retro, approved by the user)
+
+** DONE Emacs tabs in Herdr: open emacsclient frames as tabs or panes on the space's machine :emacs:herdr_orch:
+CLOSED: [2026-11-27 Fri 16:08]
+:PROPERTIES:
+:CUSTOM_ID: b9d2a8f2-4380-492f-a8bc-9644afcba9c3
+:CREATED: [2026-11-27 Fri 09:38]
+:STARTED: [2026-11-27 Fri 09:59]
+:ARCHIVED: [2026-11-27 Fri 16:08]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 09:38]
+- State "STARTED" from "TODO" [2026-11-27 Fri 09:59]
+- State "DONE" from "STARTED" [2026-11-27 Fri 16:08]
+:END:
+#+IMPORT: [[plan:2026-11-27-herdr-emacs-tabs.org]]
+Precursor for the Emacs diff review (66fea944). One host-neutral way to open or focus a named Emacs tab running emacsclient -t on the machine that owns the space, in herdr TUI and herdr-app. Candidate uses: a Plan tab on the selected task's change-record, a Magit tab that could replace the herdr-app Changes panel, and the review frame. Needs its own change-record.

@@ -68,6 +68,19 @@ Activation links the platform's key table as `keys.json`. It binds `org-tasks.pi
 
 Linux does not use the `ctrl-shift-` forms of the macOS keys: the app's Linux defaults bind `ctrl-shift-t` to `tab.new` and `ctrl-shift-o` to `pane.split:right`. The `ctrl-alt-` chords do not take keys from terminal programs, such as `M-t` in readline and Emacs. The link is out-of-store, so key changes made in the app appear here for review. The app writes a default `keys.json` whenever the file is missing, so activation moves a plain file at that path aside as `keys.json.pre-hm-<time>` before it links the tracked file; a foreign symlink still fails activation.
 
+## Emacs tabs
+
+The `emacs-magit` and `emacs-plan` mods open, or focus, a `magit` or `plan` tab in the focused terminal's space. The tab runs an Emacs terminal frame from [emacs-tab](../emacs/README.org); see that file's section 'herdr-tabs' for the views. A key runs `mod.open`, which shows the mod as an overlay: the mod runs `emacs-tab` through `sh` in the focused terminal's folder, focuses the resulting tab and closes itself. The tab names match the terminal Herdr keys `prefix+m` and `prefix+i`:
+
+| Platform | Key table | `mod.open:emacs-magit` | `mod.open:emacs-plan` |
+|---|---|---|---|
+| macOS | [keys.darwin.json](keys.darwin.json) | `cmd-shift-m` | `cmd-shift-i` |
+| Linux | [keys.linux.json](keys.linux.json) | `ctrl-shift-m` | `ctrl-shift-i` |
+
+The mods run `$HOME/dotfiles/agents/emacs/herdr-tabs/emacs-tab` by absolute path. In a space on another machine, `sh` runs on that machine, so that machine needs the dotfiles checkout, `bb`, `hc` and `emacsclient`; the frame uses that machine's Emacs server. When `emacs-tab` cannot start, a notification shows `emacs-tab not installed at <path>`, or `<machine>:<path>` for another machine. A space on another machine is not verified.
+
+A key can name only an app command, and `mod.open` takes only a mod name, so each view is a separate mod. `herdr-app check` refuses a module outside the mod's folder, so `emacs-plan` holds byte-identical copies of `emacs-magit/state.js` and `emacs-magit/opener.js`; [tests/emacs-tabs.test.mjs](tests/emacs-tabs.test.mjs) fails when they differ.
+
 ## Refresh and limits
 
 Quota refresh starts on display, repeats every 60 seconds, and shares an in-flight request with the Refresh action. A failed request marks the last successful snapshot stale immediately; the popup shows its age and a safe failure category. After five minutes without a successful request, it shows unavailable instead. The mod passes the app's 30-second command limit explicitly. If a request has not settled after 35 seconds, the next refresh abandons it and starts a new command, and a late result from the abandoned request is ignored. The collector reads accounts in sequence, so many slow account reads can reach this limit; the UI then reports a failed or timed-out request, not partial numeric evidence.

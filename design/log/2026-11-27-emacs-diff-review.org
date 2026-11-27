@@ -12,7 +12,7 @@ Give pi a review loop in Emacs: walk the agent's diff in Magit, or any file such
 * Summary
 *Level:* MVP · *Tests:* thorough · *Docs:* README
 
-=/review [git-diff|last-commit|branch|<file>]= in pi opens the diff in Magit (or the file) and a notes buffer, in the Emacs server on the machine where pi runs, and waits. Outside Herdr the frame is a GUI frame; inside Herdr it is a terminal frame in an Emacs tab ([[task:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][precursor]]). The user annotates, then finishes (=C-c C-c=) or cancels (=C-c C-k=). Pi reads the notes file, builds a FIX / DISCUSS / mixed prompt and calls =ctx.ui.setEditorText=.
+=/review [git-diff|last-commit|branch|<file>]= in pi opens the diff in Magit (or the file) and a notes buffer, in the Emacs server on the machine where pi runs, and waits. Outside Herdr the frame is a GUI frame; inside Herdr it is a terminal frame in an Emacs tab ([[archive:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][precursor]]). The user annotates, then finishes (=C-c C-c=) or cancels (=C-c C-k=). Pi reads the notes file, builds a FIX / DISCUSS / mixed prompt and calls =ctx.ui.setEditorText=.
 
 ** Scope
 *** In scope
@@ -26,7 +26,7 @@ Give pi a review loop in Emacs: walk the agent's diff in Magit, or any file such
 - Two frame hosts: a GUI frame when pi is not in Herdr, and a Herdr Emacs tab when it is.
 - Contract docs: =pi/extensions/emacsclient/README.md= (=/review=, notes format) and =emacs/README.org= (Emacs-side keys).
 *** Out of scope
-- The Emacs-tab mechanism itself, Plan and Magit tabs, and any herdr-app Changes-panel replacement: owned by [[task:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][the precursor task]].
+- The Emacs-tab mechanism itself, Plan and Magit tabs, and any herdr-app Changes-panel replacement: owned by [[archive:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][the precursor task]].
 - A local Emacs serving a remote pi over SSH.
 - Starting a review from Emacs without pi.
 - Template shortcuts, submodule drill-down, side-by-side view.
@@ -89,7 +89,7 @@ Give pi a review loop in Emacs: walk the agent's diff in Magit, or any file such
 - =ctx.ui.setEditorText= may be a no-op in some RPC front ends. Accepted: the terminal TUI is the target.
 
 ** Follow-ups
-- [[task:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][Emacs tabs in Herdr]] (precursor for the Herdr frame host).
+- [[archive:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][Emacs tabs in Herdr]] (precursor for the Herdr frame host).
 
 * Plan
 ** TODO Review-notes contract and prompt builder
@@ -153,7 +153,7 @@ Inject =exec= and the file watcher for tests, as =emacsclient.ts= does for =exec
 :PROPERTIES:
 :CUSTOM_ID: 5a1e3490-2e59-467f-ad7d-72e837bd9476
 :CREATED: [2026-11-27 Fri 09:40]
-:BLOCKED-BY: [[task:ce3f398e-1fb6-4516-9920-8370dca9e015]] [[task:b9d2a8f2-4380-492f-a8bc-9644afcba9c3]]
+:BLOCKED-BY: [[task:ce3f398e-1fb6-4516-9920-8370dca9e015]] [[archive:b9d2a8f2-4380-492f-a8bc-9644afcba9c3]]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:40]

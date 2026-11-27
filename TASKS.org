@@ -159,18 +159,15 @@ skills/org-tasks/scripts/AGENTS.md (Workflows, Parity) asks that user-visible mu
 #+IMPORT: [[plan:2026-11-27-emacs-diff-review.org]]
 Port the pi-slopchop review workflow (https://github.com/robzolkos/pi-slopchop) to Emacs: annotate a diff in Emacs, stage the review prompt in pi's editor.
 
-** STARTED Emacs tabs in Herdr: open emacsclient frames as tabs or panes on the space's machine :emacs:herdr_orch:
+** TODO Verify Emacs tabs on remote hosts and with no Emacs server :emacs:herdr_orch:
 :PROPERTIES:
-:CUSTOM_ID: b9d2a8f2-4380-492f-a8bc-9644afcba9c3
-:CREATED: [2026-11-27 Fri 09:38]
-:STARTED: [2026-11-27 Fri 09:59]
+:CUSTOM_ID: b17d4a1e-419f-4e14-918b-07d56ea189dc
+:CREATED: [2026-11-27 Fri 16:08]
 :END:
 :LOGBOOK:
-- Created [2026-11-27 Fri 09:38]
-- State "STARTED" from "TODO" [2026-11-27 Fri 09:59]
+- Created [2026-11-27 Fri 16:08]
 :END:
-#+IMPORT: [[plan:2026-11-27-herdr-emacs-tabs.org]]
-Precursor for the Emacs diff review (66fea944). One host-neutral way to open or focus a named Emacs tab running emacsclient -t on the machine that owns the space, in herdr TUI and herdr-app. Candidate uses: a Plan tab on the selected task's change-record, a Magit tab that could replace the herdr-app Changes panel, and the review frame. Needs its own change-record.
+Follow-up from [[archive:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][Emacs tabs in Herdr]] (design/log/2026-11-27-herdr-emacs-tabs.org): three acceptance criteria were not verified. 1) herdr TUI on a remote host over SSH: prefix+m / prefix+i open a frame of that host's Emacs server. 2) A herdr-app space on another machine: ctrl-shift-m / cmd-shift-m create the tab in that space with that machine's Emacs server; record whether tab.rename and pane.focus reach the window, or come back as warnings. 3) With no Emacs server running, emacsclient -a "" starts one and the tab opens. Record results in the record's Validation section, or fix and record a Gotcha.
 
 * Fixes
 * Upstream issues
