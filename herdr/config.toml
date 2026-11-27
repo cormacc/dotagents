@@ -67,3 +67,18 @@ key = "prefix+ctrl+t"
 type = "plugin_action"
 command = "cormacc.herdr-orch.tree-toggle"
 description = "toggle the sidebar agent tree"
+
+# Emacs tabs: focus or create a tab that runs an Emacs terminal frame on this
+# machine (emacs/herdr-tabs/). Herdr gives custom commands the focused pane's
+# workspace and folder; emacs-tab treats an empty value as unset.
+[[keys.command]]
+key = "prefix+m"
+type = "shell"
+command = "\"$HOME/dotfiles/agents/emacs/herdr-tabs/emacs-tab\" magit --runtime tui --workspace \"$HERDR_ACTIVE_WORKSPACE_ID\" --cwd \"$HERDR_ACTIVE_PANE_CWD\""
+description = "Emacs: Magit tab"
+
+[[keys.command]]
+key = "prefix+i"
+type = "shell"
+command = "\"$HOME/dotfiles/agents/emacs/herdr-tabs/emacs-tab\" plan --runtime tui --workspace \"$HERDR_ACTIVE_WORKSPACE_ID\" --cwd \"$HERDR_ACTIVE_PANE_CWD\""
+description = "Emacs: Plan tab"

@@ -117,26 +117,32 @@
 
 ;; ── herdr TUI ─────────────────────────────────────────────────────
 
+(defn- herdr-bin
+  "Herdr gives custom key commands HERDR_BIN_PATH; a detached command's PATH can
+  lack the binary."
+  []
+  (or (not-empty (*env* "HERDR_BIN_PATH")) "herdr"))
+
 (defn- tui-pane []
   (let [pane-id (not-empty (*env* "HERDR_PANE_ID"))]
-    (:pane (:result (run-json! (if pane-id ["herdr" "pane" "get" pane-id] ["herdr" "pane" "current"]))))))
+    (:pane (:result (run-json! (if pane-id [(herdr-bin) "pane" "get" pane-id] [(herdr-bin) "pane" "current"]))))))
 
 (defn- tui-open! [{:keys [name workspace cwd elisp focus?]}]
   (let [pane (when-not (and workspace cwd) (tui-pane))
         workspace (or workspace (:workspace_id pane) (fail 2 "no Herdr workspace: pass --workspace"))
         cwd (or cwd (:cwd pane) (*env* "PWD"))
-        tabs (:tabs (:result (run-json! ["herdr" "tab" "list" "--workspace" workspace])))
+        tabs (:tabs (:result (run-json! [(herdr-bin) "tab" "list" "--workspace" workspace])))
         existing (first (filter #(= name (:label %)) tabs))]
     (if existing
-      (do (when focus? (run-json! ["herdr" "tab" "focus" (:tab_id existing)]))
+      (do (when focus? (run-json! [(herdr-bin) "tab" "focus" (:tab_id existing)]))
           {:runtime "tui" :name name :created false :tab (:tab_id existing) :workspace workspace :warnings []})
       (let [elisp (or elisp (default-elisp name cwd) (fail 2 (str "no default elisp for " name "; pass -- <elisp>")))
-            result (:result (run-json! ["herdr" "tab" "create" "--workspace" workspace "--cwd" cwd
+            result (:result (run-json! [(herdr-bin) "tab" "create" "--workspace" workspace "--cwd" cwd
                                         "--label" name (if focus? "--focus" "--no-focus")]))
             pane-id (get-in result [:root_pane :pane_id])]
         (when-not pane-id (fail 1 "herdr tab create returned no root pane"))
         ;; `exec` replaces the pane's shell, so deleting the frame closes the tab.
-        (run-json! ["herdr" "pane" "run" pane-id
+        (run-json! [(herdr-bin) "pane" "run" pane-id
                     (str "exec " (str/join " " (map shell-quote (frame-argv elisp))))])
         {:runtime "tui" :name name :created true :tab (get-in result [:tab :tab_id])
          :pane pane-id :workspace workspace :warnings []}))))
@@ -151,8 +157,9 @@
         (nil? a) (cond-> acc elisp (assoc :elisp elisp))
         (= a "--no-focus") (recur more (assoc acc :focus? false))
         (#{"--runtime" "--space" "--workspace" "--cwd" "--format"} a)
+        ;; A key binding passes Herdr's variables, which can be empty; empty means unset.
         (if (seq more)
-          (recur (rest more) (assoc acc (keyword (subs a 2)) (first more)))
+          (recur (rest more) (cond-> acc (not (str/blank? (first more))) (assoc (keyword (subs a 2)) (first more))))
           (fail 2 (str a " needs a value")))
         (str/starts-with? a "-") (fail 2 (str "unknown option: " a))
         (:name acc) (fail 2 (str "unexpected argument: " a))

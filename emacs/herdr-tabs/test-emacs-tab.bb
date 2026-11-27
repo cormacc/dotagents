@@ -124,6 +124,25 @@
                         ["magit" "--no-focus"])]
     (is (some #(and (= ["herdr" "tab" "create"] (take 3 %)) (= "--no-focus" (last %))) calls))))
 
+(deftest tui-key-binding-call
+  (testing "a custom key command passes workspace and cwd, and Herdr's binary path"
+    (let [[result calls] (open {"HERDR_BIN_PATH" "/opt/herdr"}
+                               {["/opt/herdr" "tab" "list"] (ok {:result {:tabs []}})
+                                ["/opt/herdr" "tab" "create"] (ok {:result {:tab {:tab_id "w2:t1"} :root_pane {:pane_id "w2:p1"}}})
+                                ["/opt/herdr" "pane" "run"] (ok {:result {}})}
+                               ["magit" "--runtime" "tui" "--workspace" "w2" "--cwd" "/proj"])]
+      (is (= "w2:t1" (:tab result)))
+      (is (not-any? #(= "pane" (second %)) (filter #(#{"get" "current"} (nth % 2 nil)) calls)))
+      (is (some #(= ["/opt/herdr" "tab" "create" "--workspace" "w2" "--cwd" "/proj"] (take 7 %)) calls))))
+  (testing "an empty --cwd from an unset variable falls back to the focused pane"
+    (let [[_ calls] (open {"HERDR_PANE_ID" "w1:p1"}
+                          {["herdr" "pane" "get"] tui-pane
+                           ["herdr" "tab" "list"] (ok {:result {:tabs []}})
+                           ["herdr" "tab" "create"] (ok {:result {:tab {:tab_id "w1:t2"} :root_pane {:pane_id "w1:p2"}}})
+                           ["herdr" "pane" "run"] (ok {:result {}})}
+                          ["magit" "--runtime" "tui" "--workspace" "" "--cwd" ""])]
+      (is (some #(= ["herdr" "tab" "create" "--workspace" "w1" "--cwd" "/repo"] (take 7 %)) calls)))))
+
 (deftest refusals
   (testing "outside Herdr: usage error and no runtime call"
     (let [[result calls] (open {} {} ["magit"])]

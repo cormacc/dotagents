@@ -118,14 +118,16 @@ Acceptance criteria:
 
 Pattern: =emacs/tasks-org/tasks-org.el=; it already finds =TASKS.org= with =tasks-org--project-root=.
 
-** TODO Herdr TUI bindings
+** STARTED Herdr TUI bindings
 :PROPERTIES:
 :CUSTOM_ID: 58015db2-a559-4e04-a365-3a34c5b3433c
 :CREATED: [2026-11-27 Fri 09:51]
 :BLOCKED-BY: [[task:712ccdac-59b9-44b6-a6b1-46f80d97455b]] [[task:0aa2d20e-94dd-4017-a44e-623a545e10f8]]
+:STARTED: [2026-11-27 Fri 11:11]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:51]
+- State "STARTED" from "TODO" [2026-11-27 Fri 11:11]
 :END:
 Acceptance criteria:
 - =herdr/config.toml= binds one key to =emacs-tab magit= and one to =emacs-tab plan=, as =type = "shell"= =keys.command= entries.
@@ -168,6 +170,7 @@ Acceptance criteria:
 - Live smoke on herdr-app (local): create, reuse (=created: false=, same terminal), tab named =smoke=, and =delete-frame= finished the terminal and removed the tab. The TUI path is covered by =emacs/herdr-tabs/test-emacs-tab.bb= against a fake runtime only; the live TUI check is in the documentation task.
 - =herdr-tabs--fill-frame= deletes side windows before =delete-other-windows= and sets the buffer with =set-window-buffer=. The first live Magit tab exited with =Cannot make side window the only window=, and a later one showed Magit in a right side window: the user's =display-buffer-alist= sends Magit buffers to a side window, and =switch-to-buffer= obeyed it. ERT regressions cover both.
 - Live smoke on herdr-app (local): =emacs-tab magit= showed =magit: agents= alone; =emacs-tab plan= with no selected task showed =TASKS.org= alone. Selection-to-record is covered by ERT with a stub =ot=.
+- herdr TUI keys (user's choice): =prefix+m= Magit, =prefix+i= Plan, as =type = "shell"= commands in =herdr/config.toml=. Herdr 0.9.5 gives custom commands =HERDR_BIN_PATH=, =HERDR_ACTIVE_WORKSPACE_ID= and =HERDR_ACTIVE_PANE_CWD= but not =HERDR_ENV=, so the bindings pass =--runtime tui=, =--workspace= and =--cwd=; =emacs-tab= runs Herdr from =HERDR_BIN_PATH= and treats an empty option value as unset. =herdr config check= accepts the file and rejects a deliberately bad =type=. Custom commands belong to the server: restarting the TUI client did not apply them, =herdr server reload-config= did. The user confirmed the keys work in herdr TUI.
 
 * Open questions
 ** DECIDED Keep the herdr-app Changes panel in the herdr-orch layout, or remove it once the Magit tab exists?
