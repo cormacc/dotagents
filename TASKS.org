@@ -184,6 +184,16 @@ CLOSED: [2026-11-27 Fri 11:09]
 #+IMPORT: [[plan:2026-11-27-retro-and-planning-learning-loop.org]]
 Adopt six ideas from the EveryInc compound-engineering-plugin (evaluated at commit ee3695a) into retro, self-improvement, org-plan and org-execute: retro decision records and success signals, a cheapest-fix ladder, prior-record lookup and a durability test, settled-decision labels, durable review residuals, and a wide-scope retro.
 
+** TODO Consider porting the design-source figma-cdp host code to Babashka :design_source:
+:PROPERTIES:
+:CUSTOM_ID: d7164fb4-a3e4-4dff-9077-8eda01617004
+:CREATED: [2026-11-27 Fri 18:10]
+:END:
+:LOGBOOK:
+- Created [2026-11-27 Fri 18:10]
+:END:
+skills/design-source/scripts/figma-cdp.mjs is Node host code (CDP transport, input, argument parsing, download polling); every function that runs in the Figma page is in figma-page-snippets.mjs. The repository prefers Babashka for automation, and bb 1.13 has babashka.http-client.websocket built in: a probe on 2026-11-27 sent a CDP Runtime.evaluate to a Figma tab and received the result. Decide whether to port the host to bb and keep the snippets module as JavaScript that the bb host reads and sends as source text. Weigh: one scripting language across the repository against a working, dependency-free Node host; how bb would read the snippet sources (e.g. run node once to list them, or parse the module); keeping the snippet isolation test. A port must repeat the live checks against a Figma tab: select, props, deep click, single and multiple export, search with select-results, comments.
+
 * Fixes
 * Upstream issues
 

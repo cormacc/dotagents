@@ -1,0 +1,37 @@
+#+TITLE: <Tool> values for <change>
+
+Values read from <where: e.g. the Figma Properties panel> (<access level: e.g. view-only collaborator, no Dev Mode>) on <YYYY-MM-DD>. File: "<file name>" (<file key or URL>), page "<page>", frames "<frame>", "<frame>". <Tool> reports sizes in <unit>. Reference images: [[file:<frame>.jpg]].
+
+* Palette sheet
+
+| Hex      | Use in the frames |
+|----------+-------------------|
+| =RRGGBB= |                   |
+
+Not on the palette sheet: <colour and where it appears>.
+
+* Typography
+
+| Role | Font | Weight / style | Size | Line height |
+|------+------+----------------+------+-------------|
+|      |      |                |      |             |
+
+* Components
+
+| Element | Size | Radius | Fill | Other (padding, gap, border, shadow) |
+|---------+------+--------+------+--------------------------------------|
+|         |      |        |      |                                      |
+
+* Icons
+
+Library: <name> <version that matched>, at <scale> scale, stroke <width>. Matched: <icon>, <icon>.
+
+| Layer name | Library name |
+|------------+--------------|
+|            |              |
+
+* Comments used
+
+| Id | Page | Author | Date | Content used |
+|----+------+--------+------+--------------|
+|    |      |        |      |              |

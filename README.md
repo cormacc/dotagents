@@ -174,7 +174,7 @@ npm run check
 The command (`scripts/check.sh`) does these steps:
 
 1. Installs the root, chromium and pi-clojure dependencies from the tracked locks with `npm ci --ignore-scripts`.
-2. Runs `bb test` in an isolated temporary root. This runs the org-tasks and herdr-orch Clojure suites, the herdr-orch Pi adapter suites inside the installed Pi runtime, and the repository and skill script tests (`scripts/test-*.bb` and the `test-*.bb` scripts of individual skills).
+2. Runs `bb test` in an isolated temporary root. This runs the org-tasks and herdr-orch Clojure suites, the herdr-orch Pi adapter suites inside the installed Pi runtime, and the repository and skill script tests (`scripts/test-*.bb` and the `test-*.bb` scripts of individual skills), and the design-source page-snippet test (`bb test-design-source`, which needs Node).
 3. Runs each `pi/extensions/*/test.sh`.
 4. Checks that section references resolve (`scripts/check-section-links.bb`).
 5. Validates skill frontmatter (`scripts/validate-skills.bb`), then compares skill-creator's Babashka validator with the upstream Python `quick_validate.py` in a clean Python venv (`scripts/test-validate-skills.bb`).

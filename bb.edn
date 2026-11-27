@@ -44,6 +44,9 @@
   test-pi-adapters {:doc  "Run the herdr-orch Pi adapter suites inside the installed Pi runtime (needs `pi` on PATH)"
                     :task (process/shell "skills/herdr-orch/scripts/pi/test.sh")}
 
+  test-design-source {:doc  "Check that the design-source Figma page snippets run without module scope (needs node)"
+                      :task (process/shell "node --test skills/design-source/scripts/test-figma-page-snippets.mjs")}
+
   ;; scripts/isolated-test-run.bb gives the run one temporary root, deletes it
   ;; afterwards, and fails if the run registers a git worktree or orch/* branch.
   test {:doc  "Run all Clojure and repository script tests in an isolated temporary root"
@@ -72,7 +75,8 @@
                     ["skills/docx/scripts/test-docx.bb"]
                     ["skills/ms365/scripts/test-graph.bb"]
                     ["skills/logic-pro/scripts/test-logic_extract_midi.bb"]
-                    ["skills/logic-pro/scripts/test-package.bb"]]))}
+                    ["skills/logic-pro/scripts/test-package.bb"]
+                    ["test-design-source"]]))}
 
   ;; Batch Emacs runs every `#+CALL:` in the README; the file's `:eval no` default keeps
   ;; every other block inert. A visiting Emacs holds a `.#README.org` lock (a dangling
