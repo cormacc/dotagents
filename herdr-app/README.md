@@ -13,7 +13,7 @@ The mods need the dotagents skills at `~/.agents/skills`: the quota mod runs `~/
    ```sh
    app="${HERDR_APP_HOME:-$HOME/.config/herdr-app}"
    mkdir -p "$app/mods" "$app/layouts"
-   for m in herdr-orch system org-tasks orch-spaces; do ln -s "$PWD/herdr-app/mods/$m" "$app/mods/$m"; done
+   for m in herdr-orch system org-tasks orch-spaces emacs-magit emacs-plan; do ln -s "$PWD/herdr-app/mods/$m" "$app/mods/$m"; done
    ln -s "$PWD/herdr-app/layouts/herdr-orch.json" "$app/layouts/herdr-orch.json"
    ```
 
@@ -22,7 +22,7 @@ The mods need the dotagents skills at `~/.agents/skills`: the quota mod runs `~/
 
 ### With the owner's Home Manager module
 
-1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks`, `mods/orch-spaces`, `layouts/herdr-orch.json` and the platform's key table (`keys.darwin.json` or `keys.linux.json`) as `keys.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
+1. Initialise the dotagents submodule and apply the parent dotfiles Home Manager configuration using the normal host procedure. It links only `mods/herdr-orch`, `mods/system`, `mods/org-tasks`, `mods/orch-spaces`, `mods/emacs-magit`, `mods/emacs-plan`, `layouts/herdr-orch.json` and the platform's key table (`keys.darwin.json` or `keys.linux.json`) as `keys.json` into `~/.config/herdr-app`; it rejects foreign occupants at those paths. It does not select a layout. Move any conflicting personal files yourself before applying.
 2. In Herdr app, explicitly select the `herdr-orch` layout. The existing layout remains selected until you do this.
 
 To remove the personal layout, select another layout in Herdr app first. In the parent `agents.nix`, empty the `herdrAppLeaves` list, which drives both the links and their `checkHerdrLeaves` guard, and remove the `keys.json` link and its guard lines. Then reapply the parent configuration using the normal host procedure. Do not remove app-owned directories or the source checkout.

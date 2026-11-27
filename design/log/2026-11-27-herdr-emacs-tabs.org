@@ -118,7 +118,8 @@ Acceptance criteria:
 
 Pattern: =emacs/tasks-org/tasks-org.el=; it already finds =TASKS.org= with =tasks-org--project-root=.
 
-** STARTED Herdr TUI bindings
+** DONE Herdr TUI bindings
+CLOSED: [2026-11-27 Fri 11:58]
 :PROPERTIES:
 :CUSTOM_ID: 58015db2-a559-4e04-a365-3a34c5b3433c
 :CREATED: [2026-11-27 Fri 09:51]
@@ -128,20 +129,25 @@ Pattern: =emacs/tasks-org/tasks-org.el=; it already finds =TASKS.org= with =task
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:51]
 - State "STARTED" from "TODO" [2026-11-27 Fri 11:11]
+- State "DONE" from "STARTED" [2026-11-27 Fri 11:58]
 :END:
 Acceptance criteria:
 - =herdr/config.toml= binds one key to =emacs-tab magit= and one to =emacs-tab plan=, as =type = "shell"= =keys.command= entries.
 - Each key works after =herdr server reload-config=.
 - Must not: reuse a key already bound in =herdr/config.toml=.
 
-** TODO herdr-app bindings
+** DONE herdr-app bindings
+CLOSED: [2026-11-27 Fri 13:51]
 :PROPERTIES:
 :CUSTOM_ID: d242c6ef-1aa4-4473-8872-1313b1ba626e
 :CREATED: [2026-11-27 Fri 09:51]
 :BLOCKED-BY: [[task:712ccdac-59b9-44b6-a6b1-46f80d97455b]] [[task:0aa2d20e-94dd-4017-a44e-623a545e10f8]]
+:STARTED: [2026-11-27 Fri 13:35]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:51]
+- State "STARTED" from "TODO" [2026-11-27 Fri 13:35]
+- State "DONE" from "STARTED" [2026-11-27 Fri 13:51]
 :END:
 Acceptance criteria:
 - =herdr-app/keys.linux.json= and =keys.darwin.json= each bind a Magit key and a Plan key that run =emacs-tab= in the focused space.
@@ -171,6 +177,9 @@ Acceptance criteria:
 - =herdr-tabs--fill-frame= deletes side windows before =delete-other-windows= and sets the buffer with =set-window-buffer=. The first live Magit tab exited with =Cannot make side window the only window=, and a later one showed Magit in a right side window: the user's =display-buffer-alist= sends Magit buffers to a side window, and =switch-to-buffer= obeyed it. ERT regressions cover both.
 - Live smoke on herdr-app (local): =emacs-tab magit= showed =magit: agents= alone; =emacs-tab plan= with no selected task showed =TASKS.org= alone. Selection-to-record is covered by ERT with a stub =ot=.
 - herdr TUI keys (user's choice): =prefix+m= Magit, =prefix+i= Plan, as =type = "shell"= commands in =herdr/config.toml=. Herdr 0.9.5 gives custom commands =HERDR_BIN_PATH=, =HERDR_ACTIVE_WORKSPACE_ID= and =HERDR_ACTIVE_PANE_CWD= but not =HERDR_ENV=, so the bindings pass =--runtime tui=, =--workspace= and =--cwd=; =emacs-tab= runs Herdr from =HERDR_BIN_PATH= and treats an empty option value as unset. =herdr config check= accepts the file and rejects a deliberately bad =type=. Custom commands belong to the server: restarting the TUI client did not apply them, =herdr server reload-config= did. The user confirmed the keys work in herdr TUI.
+- herdr-app keys: =ctrl-shift-m= / =ctrl-shift-i= (Linux) and =cmd-shift-m= / =cmd-shift-i= (macOS) run =mod.open:emacs-magit= / =mod.open:emacs-plan=, the TUI letters with the app's modifiers. =p= was preferred for Plan but rejected: =ctrl-shift-p= / =cmd-shift-p= open the palette, =ctrl-alt-p= is =org-tasks.pin=, and the free =ctrl-alt-shift-p= / =cmd-alt-shift-p= need three modifiers (user's decision). A key can name only an app command, =mod.open= takes only a name, and =<mod>.<command>= reaches shown copies only, so each view is its own overlay mod that runs =emacs-tab= with =exec= (=on= the space's machine), focuses the tab with =pane.focus= and closes itself.
+- =herdr-app check= refuses a module outside the mod's folder, symlinks included, so =emacs-plan= carries byte-identical copies of =emacs-magit/state.js= and =opener.js=; =herdr-app/tests/emacs-tabs.test.mjs= fails when they differ. =state.js= copies the org-tasks =project= rule, and the test compares the two.
+- Live on herdr-app (local): =mod.open emacs-magit= created a =magit= tab in the focused space, a second open reused and focused it. The first attempt, seconds after linking the mod folder, did nothing, probably because the app had not loaded the new mod yet; not reproduced.
 
 * Open questions
 ** DECIDED Keep the herdr-app Changes panel in the herdr-orch layout, or remove it once the Magit tab exists?

@@ -59,7 +59,9 @@
     "ctrl-9": "space.select:9",
     "cmd-shift-t": "org-tasks.select",
     "cmd-alt-t": "org-tasks.pin",
-    "cmd-shift-o": "layout.toggle:org-tasks"
+    "cmd-shift-o": "layout.toggle:org-tasks",
+    "cmd-shift-m": "mod.open:emacs-magit",
+    "cmd-shift-i": "mod.open:emacs-plan"
   },
   "terminal": {
     "cmd-c": "terminal.copy",

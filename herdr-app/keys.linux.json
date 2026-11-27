@@ -60,7 +60,9 @@
     "shift-f2": "space.rename",
     "ctrl-alt-t": "org-tasks.select",
     "ctrl-alt-p": "org-tasks.pin",
-    "ctrl-alt-shift-t": "layout.toggle:org-tasks"
+    "ctrl-alt-shift-t": "layout.toggle:org-tasks",
+    "ctrl-shift-m": "mod.open:emacs-magit",
+    "ctrl-shift-i": "mod.open:emacs-plan"
   },
   "terminal": {
     "ctrl-backspace": "send:\u0017",
