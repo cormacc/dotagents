@@ -6354,3 +6354,281 @@ CLOSED: [2026-11-26 Thu 22:15]
 On 2026-11-17 a Context management rule was added to home/AGENTS.md: if the context_checkpoint tool is available, read the context-management skill before multi-step work in a user-started session and at each task boundary. Reason: in root sessions from 2026-11-04 to 2026-11-17, claude-opus-5-5 read the skill in 1 of 56 sessions and compacted 5 times, against 13 of 13 sessions and 25 compactions for gpt-6.1-sol (see the outcome in task 14cd586c, archived). To evaluate: rerun .tmp/pi-context-eval-2026-11-17/scan.clj, agg.clj and weekly.clj (scratch; regenerate from the outcome if gone) on sessions started after the rule, and compare for claude-opus-5-5 root sessions: skill reads detected as toolCall lines that name context-management/SKILL.md (the skill path also appears in every system prompt, so a plain text match is not valid), pi-context compactions, root sessions above 200k peak context with no compaction, and mean context per request. If uptake stays low, consider the context-nudge extension option: a hook that adds a reminder above a context threshold.
 
 Outcome [2026-11-26 Thu]: the rule raised skill reads and checkpoints but not compaction. Data: 372 sessions from 2026-11-04 to 2026-11-26; scripts, rows and output in .tmp/pi-context-eval-2026-11-26/ (scratch). Pre-rule is before 2026-11-17 18:00, post-rule is from 2026-11-18; the transition evening is excluded because the rule was live in the working tree before commit `830b0ac` (23:47). Skill reads are toolCall arguments that name context-management/SKILL.md. claude-opus-5-5 root sessions, pre to post: 55 to 26 sessions; skill read in 1 (2%) to 20 (77%); sessions with a checkpoint 13 to 20, checkpoint calls 26 to 105; pi-context compactions 5 to 4 (`context_compact` calls equal compactions, so no failed attempts); sessions above 200k peak context 21 to 13, of which 18 and 10 never compacted; no native compactions in either period (the detector found 1 in the transition window, a positive control). Context per request rose (216k to 267k) and the median peak rose (148k to 216k), but the post period has fewer and longer sessions, so this does not isolate the rule. Pre-rule counts match the 2026-11-17 outcome (1 of 56 reads), which checks the scan. Unverified hypothesis: the skill's compact gate forbids compaction when a reply delivers a result and waits for the user, which is the normal end of an interactive turn, so Opus checkpoints but rarely finds a known continuation. Next step, if wanted: the context-nudge option, or a change to the gate for interactive sessions above a context threshold.
+
+** DONE Add a supported way to change a task heading :skill:org_tasks:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: 930c2230-4aa0-4dee-8ffd-3b09af82f313
+:CREATED: [2026-11-26 Thu 17:40]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-26 Thu 17:40]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+ot has no verb to change a task's summary, so a planner hand-edited the heading in TASKS.org. Desired: an ot retitle <id> <summary> command, or org-tasks states that a heading edit is sanctioned and how to keep the state token and tags.
+
+Origin:
+- cwd: /home/cormacc/dev/nix/nix-microchip
+- git: git@github.com:cormacc/nix-microchip @ master
+- timestamp: [2026-11-26 Thu 17:39]
+- sender: agent
+
+Evidence:
+- ot --help lists no rename/retitle verb (checked 2026-11-26).
+- Planner child f3c0743e renamed task 226f1ac9 by a hand edit.
+
+** DONE org-tasks: pass ID prefixes to ot and build task links only from IDs read in the same step :skill:org_tasks:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: 9fad8e90-8d9e-4b65-a26b-ef0836fa4d8f
+:CREATED: [2026-11-19 Thu 13:46]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:46]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+Mechanism change for the existing rules "Verify every identifier" (home/AGENTS.md) and "never invent IDs" (org-tasks), which did not prevent the failure. ot accepts any unique :CUSTOM_ID: prefix of 4+ characters, so commands need no full UUID. Proposed org-tasks rule: pass the 8-character prefix to ot; write a full UUID into a task: or archive: link only from the :CUSTOM_ID: value read in the same command (for example a grep of the property or ot show <prefix> --format json). Add a RETROLOG miss entry (done with this capture).
+
+Evidence:
+- Twice in one session the agent typed a guessed full UUID: once into a task: link in a change-record (fixed after a grep), once into ot status (unknown-task error). Both started from a correct 8-character prefix.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
+- timestamp: [2026-11-19 Thu 13:45]
+- sender: human+agent (session retro, approved by the user)
+
+** DONE State the five-item --finding limit in the injected publish instruction :skill:herdr_orch:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: 9d926e31-eda7-430e-877e-590ccbf01d2c
+:CREATED: [2026-11-26 Thu 17:40]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-26 Thu 17:40]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+task publish rejects more than five --finding items only at the final call. The injected prompt states the five-item limit for --process (cli.clj, 'at most five') but not for --finding. Desired: the publish instruction in cli.clj names the --finding limit too; update any prompt-text tests.
+
+Origin:
+- cwd: /home/cormacc/dev/nix/nix-microchip
+- git: git@github.com:cormacc/nix-microchip @ master
+- timestamp: [2026-11-26 Thu 17:39]
+- sender: agent
+
+Evidence:
+- core.clj max-findings 5 throws 'result envelope FINDINGS exceeds the five-item limit'.
+- Planner child f3c0743e had seven findings rejected at publish.
+
+** DONE Put ot on PATH for delegated children :skill:herdr_orch:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: 7f87508f-fa77-48dc-858d-edfb5f28e080
+:CREATED: [2026-11-26 Thu 17:40]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-26 Thu 17:40]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+A child that an assignment tells to run ot can fail with 'ot: command not found'. Desired: the oh launcher exports the org-tasks ot (or its directory) to the child environment, or the injected prompt names ~/.agents/skills/org-tasks/scripts/ot.
+
+Origin:
+- cwd: /home/cormacc/dev/nix/nix-microchip
+- git: git@github.com:cormacc/nix-microchip @ master
+- timestamp: [2026-11-26 Thu 17:39]
+- sender: agent
+
+Evidence:
+- Planner child f3c0743e reported 'ot: command not found' in its pane; ~/.agents/skills/org-tasks/scripts/ot worked. The parent pane has ot at ~/.local/bin/ot. The child's PATH was not inspected (attributed to the child).
+
+** DONE herdr-orch: create the delivery branch and worktree before a spawn :skill:herdr_orch:org_execute:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: a4734f1a-7017-49b1-a3f5-f6ed761caa06
+:CREATED: [2026-11-19 Thu 13:46]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:46]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+Proposed herdr-orch / org-execute rule: create the branch and worktree a child must deliver on before the spawn, and never ask a child to switch the branch of its worktree; run one live round per worktree. Document that oh refuses a detached-HEAD worktree (git symbolic-ref fails) and a worktree that a live round still references.
+
+Evidence:
+- A brief asked a worker to create and switch to a new branch in its existing worktree; every later WAITING/COMPLETE publication was refused because the ledger records the launch branch; the worker published from the old branch and named the delivery branch in its report.
+- oh task start refused a detached worktree (symbolic-ref) and a second child on a worktree with a live round.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
+- timestamp: [2026-11-19 Thu 13:45]
+- sender: human+agent (session retro, approved by the user)
+
+** DONE org-execute: keep the change-record and TASKS.org on the delivery branch :skill:org_execute:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: 6498ade3-dae6-48dc-abff-8170ee240c18
+:CREATED: [2026-11-19 Thu 13:46]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:46]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+Proposed org-execute rule: during delegated delivery, the root makes change-record and TASKS.org edits on the delivery branch (its integration checkout), not in a checkout that is on another branch. Commit them with the delivery.
+
+Evidence:
+- The planner wrote the record and TASKS.org into the primary checkout (on the base branch) while all delivery happened on another branch in worktrees. At the end the user found the primary checkout on the base branch holding uncommitted copies of files later committed on the delivery branch, and had to ask about it.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
+- timestamp: [2026-11-19 Thu 13:45]
+- sender: human+agent (session retro, approved by the user)
+
+** DONE herdr-orch: guard the repository config that managed worktrees share :skill:herdr_orch:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: d2500c31-3a28-442f-b4ce-4d6108638ced
+:CREATED: [2026-11-19 Thu 13:46]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:46]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+Linked worktrees share repository-local Git config, and tools that a child runs (a devShell hook that sets core.hooksPath, git submodule sync, project bootstrap scripts) write to it. Proposed herdr-orch rule: before delegating into managed worktrees, record the shared config (path and hash) and check it after each round; a brief must override, through GIT_CONFIG_COUNT/KEY/VALUE environment variables, any setting that a tool in the child environment would otherwise write. Consider a launcher-side check.
+
+Evidence:
+- A worker entered a Nix devShell in a managed worktree without the override; the shellHook (a consumer update script) set core.hooksPath in the shared config, which affected the primary checkout on another branch; the root found it by hash and restored it. Children also reported that git submodule sync and a bootstrap script write the same file.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
+- timestamp: [2026-11-19 Thu 13:45]
+- sender: human+agent (session retro, approved by the user)
+
+** DONE herdr-orch: share one devShell environment across children instead of re-entering a mutating shellHook :skill:herdr_orch:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: 8a72cfc6-1c44-477c-b93e-20d8911d17c2
+:CREATED: [2026-11-19 Thu 13:46]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:46]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+Proposed herdr-orch workflow-recipe guidance: when children run a flake devShell whose shellHook writes to the repository (config, managed files, generated files), enter it from the worktree root, or capture nix print-dev-env once and source it, instead of running nix develop many times concurrently or from an export directory. The primary checkout normally enters the devShell through direnv and is not affected.
+
+Evidence:
+- Concurrent nix develop runs in one worktree left a stale index.lock; nix develop run from an export directory let the shellHook rewrite that export's .gitlab-ci.yml; from a non-root cwd the hook could not find its script.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
+- timestamp: [2026-11-19 Thu 13:45]
+- sender: human+agent (session retro, approved by the user)
+
+** DONE quality-gates: size the seed sweep for a randomised-order gate to the run time :skill:quality_gates:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: 7a115d50-a4fe-4c5a-af38-9fa67002faab
+:CREATED: [2026-11-19 Thu 13:46]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:46]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+Proposed quality-gates rule: before claiming that a randomised-order test gate passes, run more than the one or two seeds that CI happens to use, but bound the sweep by cost: run many seeds where one run is cheap (for example re-running built test executables with different seeds), and only a few full builds where a run is slow; or use an order-reversal probe. Record the seeds. User constraint: do not require a fixed large count (for example 20) of long-running builds.
+
+Evidence:
+- A worker approved a shuffled CI gate on two seeds that both kept a fragile order; review found fixture leakage. A cheap sweep (re-running built executables for seeds 1-50) then found further order dependencies.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
+- timestamp: [2026-11-19 Thu 13:45]
+- sender: human+agent (session retro, approved by the user)
+
+** DONE quality-gates: seed controls where a configuration change could stop analysis :skill:quality_gates:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: ab22cead-1284-4f22-9628-8f1dee4692d1
+:CREATED: [2026-11-19 Thu 13:46]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:46]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+Proposed quality-gates rule: when an analyser or gate configuration changes, place known-bad controls in code that the change could exclude from analysis (for example inside preprocessor-guarded blocks), and compare the verdicts with the previous options; a control in unconditional code cannot detect a scope reduction.
+
+Evidence:
+- Adding a -D define to Cppcheck switched it to single-configuration analysis and dropped all #ifdef-gated code; the worker's seeded control was unconditional and passed; an independent reviewer found it, and --max-configs restored the scope.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
+- timestamp: [2026-11-19 Thu 13:45]
+- sender: human+agent (session retro, approved by the user)
+
+** DONE Run CI pipelines locally when possible, and only when the change affects them :agents_md:
+CLOSED: [2026-11-26 Thu 23:32]
+:PROPERTIES:
+:CUSTOM_ID: cf1b61d8-db22-48be-9f25-ab98b4b12f5d
+:CREATED: [2026-11-19 Thu 13:46]
+:STARTED: [2026-11-26 Thu 22:59]
+:ARCHIVED: [2026-11-26 Thu 23:32]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-19 Thu 13:46]
+- State "STARTED" from "TODO" [2026-11-26 Thu 22:59]
+- State "DONE" from "STARTED" [2026-11-26 Thu 23:32]
+:END:
+Rule for home/AGENTS.md (Verification discipline), as approved: "Run CI pipelines locally if possible, and only when impacted by the change." Desired outcome: an agent does not push-and-poll a remote pipeline for a commit that changes no file a job reads, and prefers running the job steps locally.
+
+Evidence:
+- The agent polled a GitLab pipeline for about 15 minutes after a commit that changed only TASKS.org and a change-record; the user stopped it as wasteful.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ framework-adoption
+- timestamp: [2026-11-19 Thu 13:45]
+- sender: human+agent (session retro, approved by the user)
