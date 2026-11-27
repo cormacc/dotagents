@@ -66,6 +66,7 @@
                     ["scripts/test-check-record-identifiers.bb"]
                     ["scripts/test-validate-skills.bb"]
                     ["skills/self-improvement/scripts/test-compare-instructions.bb"]
+                    ["skills/retro/scripts/test-sessions.bb"]
                     ["skills/doc-writing/scripts/test-unwrap.bb"]
                     ["skills/doc-writing/scripts/test-check-diagrams.bb"]
                     ["skills/docx/scripts/test-docx.bb"]

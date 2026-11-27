@@ -201,15 +201,19 @@ Acceptance criteria:
 - =org-execute/PROVENANCE.md= credits CE's Residual concept at =ee3695a=; =skills/org-execute/evals/evals.json= gains a residual case.
 - Must not: weaken the rule that an unresolved substantive defect stops acceptance.
 
-** TODO Wide-scope retro over pi sessions
+** DONE Wide-scope retro over pi sessions
+CLOSED: [2026-11-27 Fri 10:53]
 :PROPERTIES:
 :CUSTOM_ID: 3b021f88-db0e-4411-bc17-d19993a55ee5
 :CREATED: [2026-11-27 Fri 09:59]
 :BLOCKED-BY: task:5dec5b9d-8698-4110-b216-8cbd7127a896
 :BLOCKED-BY+: task:f2c02c83-2a63-43d5-b283-e5937ab65f95
+:STARTED: [2026-11-27 Fri 10:27]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:59]
+- State "STARTED" from "TODO" [2026-11-27 Fri 10:27]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:53]
 :END:
 Acceptance criteria:
 - =skills/retro/scripts/sessions.bb list --root <repo> [--since <date>] [--until <date>]= returns JSON of pi sessions (=~/.pi/agent/sessions/=, overridable for tests) whose header =cwd= is inside the main checkout or any registered worktree, with a scanned-session count.
@@ -222,14 +226,18 @@ Acceptance criteria:
 
 The pi header is the first JSONL line: ={"type":"session","version":3,"id":...,"timestamp":...,"cwd":...}=.
 
-** TODO Offer a weekly wide retro at session closeout
+** DONE Offer a weekly wide retro at session closeout
+CLOSED: [2026-11-27 Fri 10:53]
 :PROPERTIES:
 :CUSTOM_ID: f3d0b0f9-a0af-4bf8-8b74-97024dcf8d6a
 :CREATED: [2026-11-27 Fri 10:04]
 :BLOCKED-BY: task:3b021f88-db0e-4411-bc17-d19993a55ee5
+:STARTED: [2026-11-27 Fri 10:27]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 10:04]
+- State "STARTED" from "TODO" [2026-11-27 Fri 10:27]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:53]
 :END:
 Acceptance criteria:
 - =sessions.bb due --root <repo> [--days 7]= returns JSON with =due=, the last =wide-run= date (or none) and the in-repo session count since then; =--days= defaults to 7.

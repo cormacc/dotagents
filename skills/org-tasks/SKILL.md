@@ -152,7 +152,7 @@ When a record grows beyond cheap re-ingestion, split or archive completed histor
 
 ### Session closeout
 
-Persist accurate task status and handoff information before any session-learning follow-up. Closing or archiving a top-level task is the checkpoint at which to *check* for retro signals rather than wait for the user to remember: scan for the correction or friction signals defined by [`retro`](../retro/SKILL.md), and treat unscanned child `PROCESS` candidates captured from `herdr-orch` delegation as such a signal -- they die with the session unless a retro routes them. When signals exist, offer one retro after persistence. A bare `DONE`/`CANCELLED` with no signals still never triggers one.
+Persist accurate task status and handoff information before any session-learning follow-up. Closing or archiving a top-level task is the checkpoint at which to *check* for retro signals rather than wait for the user to remember: scan for the correction or friction signals defined by [`retro`](../retro/SKILL.md), and treat unscanned child `PROCESS` candidates captured from `herdr-orch` delegation as such a signal -- they die with the session unless a retro routes them. When signals exist, offer one retro after persistence. A bare `DONE`/`CANCELLED` with no signals still never triggers one. After persistence, run `bb <retro-skill-dir>/scripts/sessions.bb due --root <repo> --exclude-id "$PI_SESSION_ID"`; when it says `due`, offer one wide retro, separate from the retro offer above, at most once per session. Record a declined offer per [`retro`](../retro/references/wide-scope.md).
 
 ## Archiving
 

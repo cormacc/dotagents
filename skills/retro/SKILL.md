@@ -15,6 +15,10 @@ Proactively offer one retro only when a substantive session is ending and the sc
 
 **Non-interactive equivalent.** A delegated or otherwise non-interactive session receives one assignment prompt, so exchange count does not measure it: a session is substantive when it performed multi-step tool work that had to be diagnosed or corrected, or when it hit any signal in [#1. Detect signals](#1-detect-signals) at all. Below that, emit nothing -- silence is the correct outcome, not a failed retro.
 
+## Scope
+
+The scope is this session unless the user names a window or accepts the closeout offer. A wide scope mines the repository's pi sessions: load [references/wide-scope.md](references/wide-scope.md), which owns the procedure, and then continue at step 2. Read sessions only through `scripts/sessions.bb`.
+
 ## 1. Detect signals
 
 When the session delegated work through [`herdr-orch`](../herdr-orch/SKILL.md), fold in the children's own candidates as scan input alongside your own signals: each captured result envelope may carry a `PROCESS:` list of `signal → category → proposed rule` items, persisted on the ledger entry under `:envelope`, and each entry's `:child-session` records where the child's transcript lives for a manual read when the candidates are thin. A child performs steps 1--2 only; you still own steps 3--6, so route, dedup, and persist its candidates yourself. Candidates are testimony from an agent scanning itself: bound that verification by the [`herdr-orch`](../herdr-orch/SKILL.md) Class B probe policy (section 'Trusting a result') -- up to 3 targeted checks per candidate before it reaches the table below, attributing to the child rather than adopting as verified anything a probe can't settle -- and let near-duplicates from a fan-out collapse into single rows. You still own verification and persistence; a child never routes or files its own candidate.
