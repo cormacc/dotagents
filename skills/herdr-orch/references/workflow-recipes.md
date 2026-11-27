@@ -99,6 +99,17 @@ Add `--tab` or `--split` only when a read-only measurement monitor is useful. Th
 
 A measurement result proves only the configured execution. It is not an answer-quality score. `continue` and `poke` do not apply to a measurement.
 
+## Guard shared repository config and the devShell
+
+Linked worktrees share the repository-local Git config in `$(git rev-parse --git-common-dir)/config`. A tool that a child runs can write it: a devShell hook that sets `core.hooksPath`, `git submodule sync`, or a bootstrap script.
+
+1. Before you delegate into managed worktrees, record the path and a hash of the shared config, and keep a copy under `.tmp/`, for example `cfg="$(git rev-parse --path-format=absolute --git-common-dir)/config"; sha256sum "$cfg"; cp "$cfg" .tmp/shared-git-config.before`.
+2. After each round, hash it again. A changed hash means a child tool wrote the shared config. Diff it against the copy and restore the recorded values before the next round.
+3. For each setting that a tool in the child environment would otherwise write, put an override in the assignment's command environment: `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=<value>`. Git adds these pairs to its runtime configuration, above the config files and below `git -c` (`git help config`, section ENVIRONMENT).
+4. The override changes what Git reads. It does not stop `git config <key> <value>` from writing the file: measured with git 2.56.0, the write succeeded and the file changed, while `git config --get` kept returning the override. The hash check in step 2 stays necessary.
+
+When children run a flake devShell whose `shellHook` writes to the repository (config, managed files, generated files), do not run `nix develop` many times concurrently or from an export directory. Enter it once from the worktree root, or capture `nix print-dev-env` once and source that file in each child command. The primary checkout normally enters the devShell through direnv and is not affected.
+
 ## Guarded live context smoke -- approval required
 
 Do not run this smoke until the root explicitly approves a live provider request. It uses the existing guarded harness and requires a root Pi Herdr pane. The exact proposed invocation is:
