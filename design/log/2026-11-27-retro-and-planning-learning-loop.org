@@ -183,13 +183,17 @@ Acceptance criteria:
 
 See CE https://github.com/EveryInc/compound-engineering-plugin/blob/ee3695a/skills/ce-plan/references/settled-decisions.md.
 
-** TODO Durable review residuals in org-execute
+** DONE Durable review residuals in org-execute
+CLOSED: [2026-11-27 Fri 10:26]
 :PROPERTIES:
 :CUSTOM_ID: 6368c3f7-cbaa-4c73-871e-356f04c9ff76
 :CREATED: [2026-11-27 Fri 09:59]
+:STARTED: [2026-11-27 Fri 10:22]
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:59]
+- State "STARTED" from "TODO" [2026-11-27 Fri 10:22]
+- State "DONE" from "STARTED" [2026-11-27 Fri 10:26]
 :END:
 Acceptance criteria:
 - =org-execute= section 4 step 4: before a task is marked done, each verified finding that is not fixed is recorded -- a deferred one as an =ot= TODO referenced from =** Follow-ups=, an accepted one in =** Risks= with its reason.

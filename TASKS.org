@@ -174,7 +174,7 @@ Follow-up from [[archive:b9d2a8f2-4380-492f-a8bc-9644afcba9c3][Emacs tabs in Her
 :CUSTOM_ID: d6dd7ba3-71f5-43e7-8a60-83b87d9490e7
 :CREATED: [2026-11-27 Fri 09:50]
 :STARTED: [2026-11-27 Fri 10:14]
-:HANDOFF: Delegated execution (org-execute, serial; batches 1+2 done in b76ff74). Round bf74f930-2ed7-4a07-b134-c9b8bb995605 (worker, tasks 4f1d8cdf+afbf0c63), managed checkout branch orch/bf74f930 base b76ff74. Brief .tmp/exec/brief-t3-t4.md. Baseline: bb test green; section-link check 3 pre-existing TASKS.org problems. Token budget used 360/1700. Next: collect, review, integrate (squash to conventional commit with status), then 6368c3f7.
+:HANDOFF: Delegated execution (org-execute, serial). Done: 5dec5b9d+f2c02c83 (b76ff74), 4f1d8cdf+afbf0c63 (8019710). Active: round 17757d65-8cbf-47d7-8ed1-bad7a6c7bf80 (worker, task 6368c3f7), managed checkout .tmp/herdr-orch/worktrees/17757d65-8cbf-47d7-8ed1-bad7a6c7bf80 base 27ee1df (status-only commit on 8019710; squash at integration). Brief .tmp/exec/brief-t5.md. Baseline: bb test green; links 3 pre-existing TASKS.org problems; tokens 690/1700. Next: collect, verify, integrate; then 3b021f88, f3d0b0f9; final Class C validation + closure prune.
 :END:
 :LOGBOOK:
 - Created [2026-11-27 Fri 09:50]

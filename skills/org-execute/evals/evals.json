@@ -39,6 +39,19 @@
         "Pauses affected dependants and permits the independent documentation task only within existing authority.",
         "Keeps root-owned parent closure and the canonical task/record rather than inventing a new planning artefact."
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "Decide how to close this task under an accepted org-plan record. Do not run tools or change files. The review cycle bound has been reached. The reviewer's verified findings are: (1) a null check missing on a public entry point that crashes on valid input, which the worker could fix in scope; (2) a naming inconsistency that the user said, in this session, to leave for a later clean-up; (3) a verified warning that the user accepted as harmless because the code path is test-only. Tests pass and the worker says the task is done. Can you mark the task done, and what do you record?",
+      "expected_output": "Do not mark done while finding 1 is unresolved; return it to the worker. Record finding 2 as an ot TODO referenced from Follow-ups and finding 3 in Risks with the user's reason, before marking done, and list both residuals in the report.",
+      "files": [],
+      "expectations": [
+        "Treats finding 1 as an unresolved substantive defect that stops acceptance and does not record it as a residual.",
+        "Records the user-deferred finding as an ot TODO referenced from ** Follow-ups before the task is marked done.",
+        "Records the user-accepted finding in ** Risks with the user's reason.",
+        "Does not treat passing tests or the worker's claim as a reason to skip recording residuals.",
+        "Lists the residuals and where each is recorded in the final report."
+      ]
     }
   ]
 }
