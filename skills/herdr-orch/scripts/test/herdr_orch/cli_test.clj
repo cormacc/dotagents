@@ -1536,6 +1536,13 @@
     ;; `WORK-ROOT` adds one scalar line before `STATUS`, so the tail starts one line later.
     (is (= ["NEXT: none" "PROCESS:" "- wrong flag → guardrail → verify flags first" "- repeated probe → behavioral → cache the probe" "--- END HERDR RESULT ---"]
            (vec (drop 11 (str/split-lines (slurp target))))))
+    ;; Six findings publish in full and the publish result flags the overflow, unlike PROCESS.
+    (let [many (str (fs/path dir "many-findings.result"))
+          published (apply call! (merge base {"HERDR_ORCH_RESULT" many}) "task" "publish" "--status" "COMPLETE" "--summary" "done"
+                           (mapcat (fn [n] ["--finding" (str "finding " n)]) (range 6)))]
+      (is (zero? (:exit published)) (:err published))
+      (is (true? (get-in (result published) [:result :findings-overflow])))
+      (is (str/includes? (slurp many) "- finding 5\nNEXT: none")))
     ;; Six candidates are rejected at publish; the result file is never created.
     (let [over (str (fs/path dir "over.result"))
           rejected (apply call! (merge base {"HERDR_ORCH_RESULT" over}) "task" "publish" "--status" "COMPLETE" "--summary" "done"
@@ -1570,7 +1577,17 @@
     (is (= "COMPLETE" (:status entry)))
     (is (true? (:process-overflow entry)))
     (is (= 5 (count (get-in entry [:envelope :process]))))
-    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
+    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log))))
+  ;; Six findings are kept in full at capture and flagged on the entry and the result.
+  (let [{:keys [env dir]} (fake-env {"FAKE_PUBLISH_FINDINGS" (str/join "\n- " (map #(str "f" %) (range 6)))})
+        proc (call! env "task" "run" "worker" "--task" "findings overflow" "--timeout" "200")
+        task (get-in (result proc) [:result :task])
+        entry (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+    (is (true? (get-in (result proc) [:result :findings-overflow])))
+    (is (true? (:findings-overflow entry)))
+    (is (= (mapv #(str "f" %) (range 6)) (get-in entry [:envelope :findings])))))
 
 (defn- ledger-entry [dir task]
   (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true))
@@ -8587,6 +8604,7 @@
         (is (str/includes? prompt "immutable commit before the first publication"))
         (is (str/includes? prompt "baseline exports, diffs and regression controls"))
         (is (str/includes? prompt "do not resolve mutable HEAD after publication"))
+        (is (str/includes? prompt (str "`--finding` (aim for at most " core/max-findings ";")))
         (if worktree
           (do
             (is (str/includes? prompt "WAITING and terminal publications can stage nonignored changes"))

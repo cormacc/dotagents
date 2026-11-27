@@ -127,7 +127,7 @@ SUMMARY: fake completed
 ARTIFACTS:
 - ${FAKE_PUBLISH_ARTIFACT:-none}
 FINDINGS:
-- none
+- ${FAKE_PUBLISH_FINDINGS:-none}
 NEXT: none
 ${process_section}--- END HERDR RESULT ---
 EOF

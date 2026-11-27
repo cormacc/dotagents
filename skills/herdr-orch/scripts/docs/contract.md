@@ -346,14 +346,14 @@ SUMMARY: <single line>
 ARTIFACTS:
 - <path relative to WORK-ROOT :: purpose, or none>
 FINDINGS:
-- <at most five one-line items, or none>
+- <one-line items, preferably at most five, or none>
 NEXT: <one parent/user action, or none>
 PROCESS:
 - <at most five `signal → category → proposed rule` items>
 --- END HERDR RESULT ---
 ```
 
-`CHECKPOINT:` is optional and absent for shared-root publications. `PROCESS:` is optional retro annotation. Its writer emits it after `NEXT:`. Validation accepts it anywhere between the markers, truncates more than five items for collection, and records `:process-overflow` without demoting an otherwise valid envelope. `:child-session` is the best-effort durable transcript reference. A changed observed session moves the prior value to `:child-session-history` rather than discarding it. hc cannot observe another terminal's Pi session or transcript reference; a process witness or cached path is not a substitute. `:waiting-policy`, `:continues`, and `:closed-at` are round lifecycle fields. The ledger is shared across parent sessions: reads are global, while ownership governs close, continue, prune, compact, and fan-in candidacy.
+`CHECKPOINT:` is optional and absent for shared-root publications. Five `FINDINGS:` items is a soft limit, because each item enters the parent's context. Publication and validation keep every item and add `:findings-overflow true` to the publish result, the captured result and the ledger entry when there are more than five; they never refuse or truncate findings. `PROCESS:` is optional retro annotation. Its writer emits it after `NEXT:`. Validation accepts it anywhere between the markers, truncates more than five items for collection, and records `:process-overflow` without demoting an otherwise valid envelope. `:child-session` is the best-effort durable transcript reference. A changed observed session moves the prior value to `:child-session-history` rather than discarding it. hc cannot observe another terminal's Pi session or transcript reference; a process witness or cached path is not a substitute. `:waiting-policy`, `:continues`, and `:closed-at` are round lifecycle fields. The ledger is shared across parent sessions: reads are global, while ownership governs close, continue, prune, compact, and fan-in candidacy.
 
 For an entry carrying `:worktree`, publication orders every permanent refusal before git mutation: identity and artifact validation, `assert-publishable!`, WAITING throttle, undischarged children, and stream capacity. It then requires the complete final `{:path :branch :base :repository}` identity, proves the checkout's canonical root and repository equality, verifies that the recorded base resolves there, and verifies that HEAD is attached to the recorded branch. Legacy three-key identities remain readable for reconciliation but fail closed at publication. A read-only entry with dirt refuses with that finding and makes no commit. A clean read-only publication reports the current ref. A write-enabled entry stages tracked and untracked nonignored changes with `git add -A`, commits only when the index differs, obtains HEAD, serialises that authoritative ref as `CHECKPOINT:`, appends the item, then notifies. Ignored files remain uncommitted and visible through reconciliation.
 

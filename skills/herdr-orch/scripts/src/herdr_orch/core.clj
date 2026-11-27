@@ -21,11 +21,12 @@
 (def terminal-statuses #{"COMPLETE" "BLOCKED" "FAILED"})
 (defn terminal-status? [status] (contains? terminal-statuses status))
 (def policies #{"blocking" "non-blocking"})
+;; FINDINGS is a soft limit: the parent's context pays for every item, so the publish
+;; instruction asks for at most this many, but an extra finding is a result, not an
+;; annotation. Publication and validation keep every item and flag the overflow rather
+;; than refuse or truncate, so a long review is never lost at its final call.
 (def max-findings 5)
-(defn findings-limit! [findings]
-  (when (< max-findings (count findings))
-    (throw (ex-info "result envelope FINDINGS exceeds the five-item limit" {:count (count findings) :limit max-findings})))
-  findings)
+(defn findings-overflow? [findings] (< max-findings (count findings)))
 ;; PROCESS is an optional, discardable retro annotation. The cap is enforced hard here
 ;; (called only from `envelope`, i.e. at publish) and degraded silently at validation,
 ;; because a validation throw is recorded as the terminal ledger status `invalid` and a
@@ -625,7 +626,6 @@
     (single-line! (name k) v))
   (absolute-work-root! work-root)
   (when checkpoint (single-line! "checkpoint" checkpoint))
-  (findings-limit! findings)
   (process-limit! process)
   (doseq [v (concat artifacts findings process (when next [next]))] (single-line! "envelope item" v))
   (doseq [artifact artifacts] (artifact-relative-path (str artifact)))
@@ -807,11 +807,12 @@
       (when-not (= (str (get ledger key)) (get parsed key))
         (throw (ex-info "result envelope identity does not match ledger" {:field key :expected (get ledger key) :actual (get parsed key)}))))
     (when-not (statuses (:status parsed)) (throw (ex-info "invalid envelope status" {:status (:status parsed)})))
-    (findings-limit! (:findings parsed))
     (doseq [artifact (:artifacts parsed)] (artifact-relative-path artifact))
-    (if (< max-process (count (:process parsed)))
-      (assoc parsed :process (vec (take max-process (:process parsed))) :process-overflow true)
-      parsed)))
+    (cond-> parsed
+      (findings-overflow? (:findings parsed))
+      (assoc :findings-overflow true)
+      (< max-process (count (:process parsed)))
+      (assoc :process (vec (take max-process (:process parsed))) :process-overflow true))))
 (defn json-envelope
   "Encode a result or error with optional top-level counts and contextual help."
   [ok payload]

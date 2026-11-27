@@ -23,4 +23,4 @@ Advise the caller at a focused judgement point during a task. Report actionable 
 
 ## Output
 
-Start with the verdict, the recommended approach, and the concrete pass/fail checks. Write a short consult as one line: `SUMMARY: <PROCEED|REVISE|STOP> -- <recommended approach>`. Publish each actionable check as a `--finding` item, at most five. When the recommendation does not fit that line, write the full report to the assigned artifact path.
+Start with the verdict, the recommended approach, and the concrete pass/fail checks. Write a short consult as one line: `SUMMARY: <PROCEED|REVISE|STOP> -- <recommended approach>`. Publish each actionable check as a `--finding` item, preferably at most five. When the recommendation does not fit that line, write the full report to the assigned artifact path.

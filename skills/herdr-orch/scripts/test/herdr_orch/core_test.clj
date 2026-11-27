@@ -625,14 +625,19 @@
            (cli/parse-waiting-interval-min raw))
         (pr-str raw))))
 
-(deftest findings-limit-boundary
+(deftest findings-limit-is-soft-at-publish-and-validate
   (let [ledger {:child "child" :task "task" :result "/tmp/result" :work-root "/tmp/root"}
         mk (fn [n] (core/envelope (assoc ledger :status "COMPLETE" :summary "s" :artifacts []
-                                         :findings (mapv #(str "finding " %) (range n)) :next nil)))]
-    (is (= 5 (count (:findings (core/validate-envelope ledger (mk 5))))))
-    (is (thrown? Exception (mk 6)))
-    ;; A hand-written six-item envelope is rejected at validation too, not only at publish.
-    (is (thrown? Exception (core/validate-envelope ledger (str/replace (mk 5) "- finding 0" "- finding x\n- finding 0"))))))
+                                         :findings (mapv #(str "finding " %) (range n)) :next nil)))
+        at-limit (core/validate-envelope ledger (mk 5))
+        over (core/validate-envelope ledger (mk 6))]
+    (is (= 5 (count (:findings at-limit))))
+    (is (nil? (:findings-overflow at-limit)))
+    ;; Over the limit, every finding survives publish and validation, in order, and the
+    ;; envelope is flagged rather than refused or truncated.
+    (is (= (mapv #(str "finding " %) (range 6)) (:findings over)))
+    (is (true? (:findings-overflow over)))
+    (is (= "COMPLETE" (:status over)))))
 
 (def ^:private process-ledger {:child "child" :task "task" :result "/tmp/result" :work-root "/tmp/root"})
 (defn- process-envelope [n & {:keys [status findings] :or {status "COMPLETE" findings []}}]

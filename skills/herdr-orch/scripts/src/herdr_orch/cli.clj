@@ -311,7 +311,7 @@
 ;; Universal result-inbox routing belongs to the wrapper, which knows every child has one;
 ;; persona-local output sections keep only the role-specific definition of a key finding.
 (def ^:private publication-guidance
-  "Published `SUMMARY` must be a single line. Write multi-line detail to a distinct `.tmp/*-report.md` file, pass the report with `--artifact`, and emit each key finding with `--finding`, starting it with its evidence location (`path:line`, or a URL) when it has one; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Never use `HERDR_ORCH_RESULT` as a report file. Use `HERDR_ORCH_RESULT` only through `task publish`. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused.")
+  (str "Published `SUMMARY` must be a single line. Write multi-line detail to a distinct `.tmp/*-report.md` file, pass the report with `--artifact`, and emit each key finding with `--finding` (aim for at most " core/max-findings "; put the rest in the report, because publication keeps extra findings but flags them as overflow), starting it with its evidence location (`path:line`, or a URL) when it has one; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Never use `HERDR_ORCH_RESULT` as a report file. Use `HERDR_ORCH_RESULT` only through `task publish`. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused."))
 (defn- checkpoint-guidance [worktree]
   (str "\nFor Git baseline comparisons, resolve the baseline to an immutable commit before the first publication. Retain that commit for baseline exports, diffs and regression controls; do not resolve mutable HEAD after publication. "
        (if worktree
@@ -693,7 +693,7 @@
     (vec (:items entry))
     (cond-> []
       (:captured-at entry)
-      (conj (select-keys (assoc entry :item 1) [:item :result :captured-at :status :envelope :artifacts :artifact-links :process-overflow :invalid-reason :invalid-data])))))
+      (conj (select-keys (assoc entry :item 1) [:item :result :captured-at :status :envelope :artifacts :artifact-links :findings-overflow :process-overflow :invalid-reason :invalid-data])))))
 
 ;; This is the single stream predicate used by later capture and lifecycle operations: published
 ;; items come from immutable files, captured items from the ledger, and only a validated terminal
@@ -784,7 +784,7 @@
                  (:compacted-at entry) (update :envelope #(some-> % (dissoc :text))))
         records (conj (vec (remove #(= (:item item) (:item %)) (captured-items entry))) record)
         head (last records)
-        stable-keys [:status :captured-at :envelope :artifacts :artifact-links :process-overflow :invalid-reason :invalid-data]]
+        stable-keys [:status :captured-at :envelope :artifacts :artifact-links :findings-overflow :process-overflow :invalid-reason :invalid-data]]
     (-> (apply dissoc entry stable-keys)
         (assoc :items records)
         (merge (select-keys head stable-keys)))))
@@ -845,6 +845,7 @@
                                   (cond-> {:status (:status parsed) :captured-at (now)
                                            :envelope parsed :artifacts artifacts}
                                     links (assoc :artifact-links links)
+                                    (:findings-overflow parsed) (assoc :findings-overflow true)
                                     (:process-overflow parsed) (assoc :process-overflow true)))
             (captured (cond-> parsed links (assoc :artifact-links links)))))
         (catch Exception e
@@ -2377,6 +2378,7 @@
                                           :timeout (parse-notify-timeout (one opts :notify-timeout))}))]
         (cond-> {:task task :result (:result item) :status (:status body) :item (:item item)}
           checkpoint (assoc :checkpoint checkpoint)
+          (core/findings-overflow? (:findings body)) (assoc :findings-overflow true)
           notification (assoc :notification notification)
           push (assoc :parent-push push)
           (seq released-children) (assoc :released-children released-children))))))
